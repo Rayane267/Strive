@@ -78,7 +78,7 @@ const AuthScreen = () => {
         </LinearGradient>
 
         <Text style={styles.appName}>
-          VT<Text style={styles.appNameGreen}>Share</Text>
+          Str<Text style={styles.appNameGreen}>ive</Text>
         </Text>
       </View>
 
