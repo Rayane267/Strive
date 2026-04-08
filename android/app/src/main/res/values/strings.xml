@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">TestApp</string>
+    <string name="app_name">Strive</string>
+    <string name="accessibility_service_description">Strive utilise ce service pour scanner les courses VTC en un tap.</string>
 </resources>
