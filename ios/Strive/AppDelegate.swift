@@ -18,6 +18,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) -> Bool {
     FirebaseApp.configure()
 
+    // Push notifications
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+    application.registerForRemoteNotifications()
+    Messaging.messaging().delegate = self
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -35,7 +40,45 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     return true
   }
+
+  // MARK: - URL Scheme (strive://)
+
+  func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if url.scheme == "strive" {
+      // La Share Extension a ouvert l'app — le ScanBridgeModule
+      // va automatiquement lire le résultat depuis App Group
+      NotificationCenter.default.post(
+        name: UIApplication.didBecomeActiveNotification,
+        object: nil
+      )
+      return true
+    }
+    return false
+  }
+
+  // MARK: - Push Notifications
+
+  func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    Messaging.messaging().apnsToken = deviceToken
+  }
 }
+
+// MARK: - Firebase Messaging
+
+extension AppDelegate: MessagingDelegate {
+  func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    // Le token est géré côté JS par notificationService.ts
+  }
+}
+
+// MARK: - React Native
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
   override func sourceURL(for bridge: RCTBridge) -> URL? {

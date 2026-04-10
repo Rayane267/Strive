@@ -157,7 +157,6 @@ const DashboardScreen = () => {
   }, [user?.id, preferences]);
 
   const handleToggleScanner = async () => {
-    if (Platform.OS !== 'android') return;
     if (scannerActive) {
       await scannerService.stop();
       setScannerActive(false);

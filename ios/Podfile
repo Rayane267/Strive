@@ -32,3 +32,9 @@ target 'Strive' do
     )
   end
 end
+
+# Share Extension — analyse screenshots VTC via Vision OCR
+target 'StriveShareExtension' do
+  use_frameworks! :linkage => :static
+  # Pas de dépendances CocoaPods — utilise uniquement Vision framework natif
+end

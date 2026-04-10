@@ -1,0 +1,809 @@
+import UIKit
+import Social
+import MobileCoreServices
+import UniformTypeIdentifiers
+import Vision
+
+/// Share Extension — reçoit un screenshot depuis le Share Sheet et analyse la course VTC.
+/// Équivalent iOS de FloatingBubbleService.kt + StriveAccessibilityService.kt d'Android.
+///
+/// Flow : Screenshot → Share Sheet → "Analyser avec Strive" → Vision OCR → résultat affiché
+class ShareViewController: UIViewController {
+
+  // MARK: - App Group
+
+  private static let appGroupId = "group.com.strive.app"
+  private static let scanResultKey = "lastScanResult"
+  private static let scanTimestampKey = "lastScanTimestamp"
+
+  // MARK: - UI Elements
+
+  private let containerView = UIView()
+  private let headerView = UIView()
+  private let logoLabel = UILabel()
+  private let titleLabel = UILabel()
+  private let closeButton = UIButton(type: .system)
+  private let statusLabel = UILabel()
+  private let spinnerView = UIActivityIndicatorView(style: .medium)
+
+  // Résultat
+  private let resultContainer = UIView()
+  private let platformBadge = UILabel()
+  private let fareLabel = UILabel()
+  private let hourlyRateLabel = UILabel()
+  private let kmRateLabel = UILabel()
+  private let distanceLabel = UILabel()
+  private let durationLabel = UILabel()
+  private let verdictTriangle = UIView()
+  private let routeView = UIView()
+  private let pickupLabel = UILabel()
+  private let destinationLabel = UILabel()
+
+  // Couleurs (même thème que l'app)
+  private let bgColor = UIColor(red: 0.07, green: 0.07, blue: 0.10, alpha: 1.0)
+  private let surfaceColor = UIColor(red: 0.11, green: 0.11, blue: 0.15, alpha: 1.0)
+  private let primaryColor = UIColor(red: 0.0, green: 0.90, blue: 0.46, alpha: 1.0)
+  private let textMain = UIColor.white
+  private let textMuted = UIColor(white: 1.0, alpha: 0.55)
+  private let textDimmed = UIColor(white: 1.0, alpha: 0.35)
+
+  private let platformColors: [String: UIColor] = [
+    "UBER": .white,
+    "BOLT": UIColor(red: 0.20, green: 0.73, blue: 0.47, alpha: 1.0),
+    "HEETCH": UIColor(red: 1.0, green: 0.23, blue: 0.50, alpha: 1.0),
+    "UNKNOWN": UIColor(white: 1.0, alpha: 0.55),
+  ]
+
+  // MARK: - Lifecycle
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    setupUI()
+    processSharedImage()
+  }
+
+  // MARK: - UI Setup
+
+  private func setupUI() {
+    view.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+
+    // Container principal (bottom sheet)
+    containerView.backgroundColor = bgColor
+    containerView.layer.cornerRadius = 24
+    containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+    containerView.clipsToBounds = true
+    containerView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(containerView)
+
+    NSLayoutConstraint.activate([
+      containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      containerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      containerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 320),
+    ])
+
+    // Drag indicator
+    let dragIndicator = UIView()
+    dragIndicator.backgroundColor = UIColor(white: 1.0, alpha: 0.2)
+    dragIndicator.layer.cornerRadius = 2.5
+    dragIndicator.translatesAutoresizingMaskIntoConstraints = false
+    containerView.addSubview(dragIndicator)
+
+    NSLayoutConstraint.activate([
+      dragIndicator.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 10),
+      dragIndicator.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+      dragIndicator.widthAnchor.constraint(equalToConstant: 40),
+      dragIndicator.heightAnchor.constraint(equalToConstant: 5),
+    ])
+
+    // Header
+    headerView.translatesAutoresizingMaskIntoConstraints = false
+    containerView.addSubview(headerView)
+
+    NSLayoutConstraint.activate([
+      headerView.topAnchor.constraint(equalTo: dragIndicator.bottomAnchor, constant: 16),
+      headerView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+      headerView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+      headerView.heightAnchor.constraint(equalToConstant: 36),
+    ])
+
+    // Logo icon
+    logoLabel.text = "🏎️"
+    logoLabel.font = .systemFont(ofSize: 22)
+    logoLabel.translatesAutoresizingMaskIntoConstraints = false
+    headerView.addSubview(logoLabel)
+
+    titleLabel.text = "Strive"
+    titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
+    titleLabel.textColor = textMain
+    titleLabel.translatesAutoresizingMaskIntoConstraints = false
+    headerView.addSubview(titleLabel)
+
+    closeButton.setTitle("✕", for: .normal)
+    closeButton.setTitleColor(textMuted, for: .normal)
+    closeButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
+    closeButton.backgroundColor = surfaceColor
+    closeButton.layer.cornerRadius = 18
+    closeButton.translatesAutoresizingMaskIntoConstraints = false
+    closeButton.addTarget(self, action: #selector(dismissExtension), for: .touchUpInside)
+    headerView.addSubview(closeButton)
+
+    NSLayoutConstraint.activate([
+      logoLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+      logoLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+
+      titleLabel.leadingAnchor.constraint(equalTo: logoLabel.trailingAnchor, constant: 8),
+      titleLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+
+      closeButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+      closeButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+      closeButton.widthAnchor.constraint(equalToConstant: 36),
+      closeButton.heightAnchor.constraint(equalToConstant: 36),
+    ])
+
+    // Loading state
+    statusLabel.text = "Analyse en cours…"
+    statusLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+    statusLabel.textColor = textMuted
+    statusLabel.textAlignment = .center
+    statusLabel.translatesAutoresizingMaskIntoConstraints = false
+    containerView.addSubview(statusLabel)
+
+    spinnerView.color = primaryColor
+    spinnerView.startAnimating()
+    spinnerView.translatesAutoresizingMaskIntoConstraints = false
+    containerView.addSubview(spinnerView)
+
+    NSLayoutConstraint.activate([
+      spinnerView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 40),
+      spinnerView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+      statusLabel.topAnchor.constraint(equalTo: spinnerView.bottomAnchor, constant: 12),
+      statusLabel.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+      statusLabel.bottomAnchor.constraint(lessThanOrEqualTo: containerView.bottomAnchor, constant: -40),
+    ])
+
+    // Result container (hidden initially)
+    resultContainer.isHidden = true
+    resultContainer.translatesAutoresizingMaskIntoConstraints = false
+    containerView.addSubview(resultContainer)
+
+    NSLayoutConstraint.activate([
+      resultContainer.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 20),
+      resultContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+      resultContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+      resultContainer.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+    ])
+
+    setupResultUI()
+  }
+
+  private func setupResultUI() {
+    // Platform badge
+    platformBadge.font = .systemFont(ofSize: 13, weight: .heavy)
+    platformBadge.textAlignment = .center
+    platformBadge.layer.cornerRadius = 12
+    platformBadge.clipsToBounds = true
+    platformBadge.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(platformBadge)
+
+    // Fare (gros chiffre)
+    fareLabel.font = .systemFont(ofSize: 40, weight: .black)
+    fareLabel.textColor = textMain
+    fareLabel.textAlignment = .center
+    fareLabel.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(fareLabel)
+
+    // Hourly rate
+    hourlyRateLabel.font = .systemFont(ofSize: 22, weight: .bold)
+    hourlyRateLabel.textColor = primaryColor
+    hourlyRateLabel.textAlignment = .center
+    hourlyRateLabel.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(hourlyRateLabel)
+
+    // KM rate
+    kmRateLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+    kmRateLabel.textColor = textMuted
+    kmRateLabel.textAlignment = .center
+    kmRateLabel.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(kmRateLabel)
+
+    // Stats row (distance + durée)
+    let statsStack = UIStackView()
+    statsStack.axis = .horizontal
+    statsStack.distribution = .fillEqually
+    statsStack.spacing = 12
+    statsStack.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(statsStack)
+
+    distanceLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+    distanceLabel.textColor = textMain
+    distanceLabel.textAlignment = .center
+    let distCard = makeStatCard(icon: "📍", label: distanceLabel)
+    statsStack.addArrangedSubview(distCard)
+
+    durationLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+    durationLabel.textColor = textMain
+    durationLabel.textAlignment = .center
+    let durCard = makeStatCard(icon: "⏱", label: durationLabel)
+    statsStack.addArrangedSubview(durCard)
+
+    // Addresses
+    pickupLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    pickupLabel.textColor = textMuted
+    pickupLabel.numberOfLines = 1
+    pickupLabel.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(pickupLabel)
+
+    destinationLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    destinationLabel.textColor = textMuted
+    destinationLabel.numberOfLines = 1
+    destinationLabel.translatesAutoresizingMaskIntoConstraints = false
+    resultContainer.addSubview(destinationLabel)
+
+    // Open in app button
+    let openButton = UIButton(type: .system)
+    openButton.setTitle("Ouvrir dans Strive", for: .normal)
+    openButton.setTitleColor(bgColor, for: .normal)
+    openButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+    openButton.backgroundColor = primaryColor
+    openButton.layer.cornerRadius = 14
+    openButton.translatesAutoresizingMaskIntoConstraints = false
+    openButton.addTarget(self, action: #selector(openMainApp), for: .touchUpInside)
+    resultContainer.addSubview(openButton)
+
+    NSLayoutConstraint.activate([
+      platformBadge.topAnchor.constraint(equalTo: resultContainer.topAnchor),
+      platformBadge.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+      platformBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 70),
+      platformBadge.heightAnchor.constraint(equalToConstant: 24),
+
+      fareLabel.topAnchor.constraint(equalTo: platformBadge.bottomAnchor, constant: 12),
+      fareLabel.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+
+      hourlyRateLabel.topAnchor.constraint(equalTo: fareLabel.bottomAnchor, constant: 4),
+      hourlyRateLabel.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+
+      kmRateLabel.topAnchor.constraint(equalTo: hourlyRateLabel.bottomAnchor, constant: 2),
+      kmRateLabel.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+
+      statsStack.topAnchor.constraint(equalTo: kmRateLabel.bottomAnchor, constant: 16),
+      statsStack.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor),
+      statsStack.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor),
+      statsStack.heightAnchor.constraint(equalToConstant: 52),
+
+      pickupLabel.topAnchor.constraint(equalTo: statsStack.bottomAnchor, constant: 14),
+      pickupLabel.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor, constant: 4),
+      pickupLabel.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor, constant: -4),
+
+      destinationLabel.topAnchor.constraint(equalTo: pickupLabel.bottomAnchor, constant: 4),
+      destinationLabel.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor, constant: 4),
+      destinationLabel.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor, constant: -4),
+
+      openButton.topAnchor.constraint(equalTo: destinationLabel.bottomAnchor, constant: 18),
+      openButton.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor),
+      openButton.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor),
+      openButton.heightAnchor.constraint(equalToConstant: 50),
+      openButton.bottomAnchor.constraint(lessThanOrEqualTo: resultContainer.bottomAnchor),
+    ])
+  }
+
+  private func makeStatCard(icon: String, label: UILabel) -> UIView {
+    let card = UIView()
+    card.backgroundColor = surfaceColor
+    card.layer.cornerRadius = 12
+
+    let iconLabel = UILabel()
+    iconLabel.text = icon
+    iconLabel.font = .systemFont(ofSize: 16)
+    iconLabel.translatesAutoresizingMaskIntoConstraints = false
+    card.addSubview(iconLabel)
+
+    label.translatesAutoresizingMaskIntoConstraints = false
+    card.addSubview(label)
+
+    NSLayoutConstraint.activate([
+      iconLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+      iconLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+      label.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 6),
+      label.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+      label.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -12),
+    ])
+
+    return card
+  }
+
+  // MARK: - Image Processing
+
+  private func processSharedImage() {
+    guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
+          let attachments = extensionItem.attachments
+    else {
+      showError("Aucune image reçue")
+      return
+    }
+
+    // Chercher une image dans les attachments
+    let imageType = UTType.image.identifier
+
+    for attachment in attachments {
+      if attachment.hasItemConformingToTypeIdentifier(imageType) {
+        attachment.loadItem(forTypeIdentifier: imageType, options: nil) { [weak self] item, error in
+          DispatchQueue.main.async {
+            guard let self = self else { return }
+            if let error = error {
+              self.showError("Erreur : \(error.localizedDescription)")
+              return
+            }
+
+            var image: UIImage?
+
+            if let url = item as? URL, let data = try? Data(contentsOf: url) {
+              image = UIImage(data: data)
+            } else if let data = item as? Data {
+              image = UIImage(data: data)
+            } else if let img = item as? UIImage {
+              image = img
+            }
+
+            if let image = image {
+              self.analyzeImage(image)
+            } else {
+              self.showError("Format d'image non supporté")
+            }
+          }
+        }
+        return
+      }
+    }
+
+    showError("Aucune image trouvée dans le partage")
+  }
+
+  private func analyzeImage(_ image: UIImage) {
+    guard let cgImage = image.cgImage else {
+      showError("Image invalide")
+      return
+    }
+
+    let imageWidth = CGFloat(cgImage.width)
+    let imageHeight = CGFloat(cgImage.height)
+
+    let request = VNRecognizeTextRequest { [weak self] request, error in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+
+        if let error = error {
+          self.showError("OCR échoué : \(error.localizedDescription)")
+          return
+        }
+
+        guard let observations = request.results as? [VNRecognizedTextObservation],
+              !observations.isEmpty
+        else {
+          // Fallback Gemini
+          self.fallbackToGemini(image: image)
+          return
+        }
+
+        // Convertir en TextBlocks (même format que Android)
+        var blocks: [[String: Any]] = []
+        for observation in observations {
+          guard let candidate = observation.topCandidates(1).first else { continue }
+          let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+          if text.isEmpty { continue }
+
+          let bbox = observation.boundingBox
+          blocks.append([
+            "text": text,
+            "width": bbox.width * imageWidth,
+            "height": bbox.height * imageHeight,
+            "x": bbox.origin.x * imageWidth,
+            "y": (1 - bbox.origin.y - bbox.height) * imageHeight,
+          ])
+        }
+
+        // Parser les blocs (logique simplifiée — le vrai parsing est dans ocrParser.ts)
+        let result = self.parseBlocksLocally(blocks: blocks, screenHeight: imageHeight)
+
+        if let result = result {
+          self.showResult(result)
+          self.saveResultForMainApp(result)
+        } else {
+          // OCR a trouvé du texte mais pas de course → fallback Gemini
+          self.fallbackToGemini(image: image)
+        }
+      }
+    }
+
+    request.recognitionLevel = .accurate
+    request.recognitionLanguages = ["fr-FR", "en-US"]
+    request.usesLanguageCorrection = true
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+      try? handler.perform([request])
+    }
+  }
+
+  private func fallbackToGemini(image: UIImage) {
+    statusLabel.text = "Analyse IA en cours…"
+
+    // Charger la config Gemini depuis App Group
+    let defaults = UserDefaults(suiteName: Self.appGroupId)
+    let edgeUrl = defaults?.string(forKey: "geminiEdgeUrl")
+    let anonKey = defaults?.string(forKey: "geminiSupabaseKey")
+    let apiKey = defaults?.string(forKey: "geminiApiKey")
+
+    let service = GeminiVisionServiceLight()
+    service.edgeFunctionUrl = edgeUrl
+    service.supabaseAnonKey = anonKey
+    service.apiKey = apiKey
+
+    service.analyze(image: image) { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+        if let result = result {
+          self.showResult(result)
+          self.saveResultForMainApp(result)
+        } else {
+          self.showError("Impossible d'analyser cette image")
+        }
+      }
+    }
+  }
+
+  // MARK: - Local Parser (simplifié — le vrai parsing est côté JS)
+
+  private struct ParsedResult {
+    let platform: String
+    let fare: Double
+    let distanceKm: Double
+    let durationMin: Int?
+    let pickupAddress: String?
+    let destinationAddress: String?
+  }
+
+  private let platformKeywords: [String: [String]] = [
+    "UBER": ["uber"],
+    "BOLT": ["bolt"],
+    "HEETCH": ["heetch"],
+  ]
+
+  private let priceRegex = try! NSRegularExpression(pattern: #"(\d{1,3})[.,](\d{2})(?!\d)"#)
+  private let distRegex = try! NSRegularExpression(pattern: #"(\d{1,3}[.,]?\d{0,2})\s*km"#, options: .caseInsensitive)
+  private let durRegex = try! NSRegularExpression(pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
+
+  private func parseBlocksLocally(blocks: [[String: Any]], screenHeight: CGFloat) -> ParsedResult? {
+    let fullText = blocks.compactMap { $0["text"] as? String }.joined(separator: " ").lowercased()
+
+    // Platform
+    var platform = "UNKNOWN"
+    for (name, keywords) in platformKeywords {
+      if keywords.contains(where: { fullText.contains($0) }) {
+        platform = name
+        break
+      }
+    }
+
+    // Fare — trouver le plus gros prix dans la zone haute
+    var bestFare: Double?
+    var bestScore: Double = -1
+
+    for block in blocks {
+      guard let text = block["text"] as? String,
+            let height = block["height"] as? Double,
+            let y = block["y"] as? Double
+      else { continue }
+
+      let range = NSRange(text.startIndex..., in: text)
+      guard let match = priceRegex.firstMatch(in: text, range: range) else { continue }
+
+      let intPart = (text as NSString).substring(with: match.range(at: 1))
+      let decPart = (text as NSString).substring(with: match.range(at: 2))
+      let value = Double("\(intPart).\(decPart)") ?? 0
+
+      if value < 3 || value > 200 { continue }
+
+      var score = height * 1.5
+      if y < Double(screenHeight) * 0.55 { score += 30 }
+
+      if score > bestScore {
+        bestScore = score
+        bestFare = value
+      }
+    }
+
+    guard let fare = bestFare else { return nil }
+
+    // Distance
+    var distanceKm: Double?
+    for block in blocks {
+      guard let text = block["text"] as? String else { continue }
+      let range = NSRange(text.startIndex..., in: text)
+      if let match = distRegex.firstMatch(in: text, range: range) {
+        let raw = (text as NSString).substring(with: match.range(at: 1)).replacingOccurrences(of: ",", with: ".")
+        let val = Double(raw) ?? 0
+        if val >= 0.3 && val <= 150 { distanceKm = val; break }
+      }
+    }
+
+    guard let dist = distanceKm else { return nil }
+
+    // Sanity
+    let rate = fare / dist
+    if rate < 0.4 || rate > 12 { return nil }
+
+    // Duration
+    var durationMin: Int?
+    for block in blocks {
+      guard let text = block["text"] as? String else { continue }
+      let range = NSRange(text.startIndex..., in: text)
+      if let match = durRegex.firstMatch(in: text, range: range) {
+        let val = Int((text as NSString).substring(with: match.range(at: 1))) ?? 0
+        if val >= 1 && val <= 180 { durationMin = val; break }
+      }
+    }
+
+    // Addresses (simplifiés — les adresses détaillées sont dans ocrParser.ts)
+    let streetKeywords = ["rue", "avenue", "boulevard", "place", "impasse",
+                          "chemin", "route", "street", "road", "lane"]
+    let addressBlocks = blocks
+      .filter { block in
+        guard let text = (block["text"] as? String)?.lowercased(),
+              let y = block["y"] as? Double,
+              text.count >= 8, text.count <= 80,
+              y > Double(screenHeight) * 0.25
+        else { return false }
+        return streetKeywords.contains(where: { text.contains($0) }) ||
+               text.range(of: #"^\d{1,4}\s+[a-zà-ü]{5,}"#, options: .regularExpression) != nil
+      }
+      .sorted { ($0["y"] as? Double ?? 0) < ($1["y"] as? Double ?? 0) }
+
+    let pickup = (addressBlocks.first?["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let destination = (addressBlocks.count > 1) ? (addressBlocks[1]["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+
+    return ParsedResult(
+      platform: platform,
+      fare: fare,
+      distanceKm: dist,
+      durationMin: durationMin,
+      pickupAddress: pickup,
+      destinationAddress: destination
+    )
+  }
+
+  // MARK: - Display Result
+
+  private func showResult(_ result: ParsedResult) {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.isHidden = true
+    resultContainer.isHidden = false
+
+    let color = platformColors[result.platform] ?? textMuted
+
+    // Platform
+    platformBadge.text = "  \(result.platform)  "
+    platformBadge.textColor = bgColor
+    platformBadge.backgroundColor = color
+
+    // Fare
+    fareLabel.text = String(format: "%.2f €", result.fare)
+
+    // Rates
+    let durationMin = result.durationMin ?? Int(result.distanceKm / 25 * 60)
+    let hourlyRate = result.fare / (Double(durationMin) / 60.0)
+    let kmRate = result.fare / result.distanceKm
+
+    hourlyRateLabel.text = String(format: "%.0f €/h", hourlyRate)
+    kmRateLabel.text = String(format: "%.2f €/km", kmRate)
+
+    // Stats
+    distanceLabel.text = String(format: "%.1f km", result.distanceKm)
+    durationLabel.text = "\(durationMin) min"
+
+    // Addresses
+    if let pickup = result.pickupAddress {
+      pickupLabel.text = "📌 \(pickup)"
+    } else {
+      pickupLabel.text = ""
+    }
+    if let dest = result.destinationAddress {
+      destinationLabel.text = "🏁 \(dest)"
+    } else {
+      destinationLabel.text = ""
+    }
+
+    // Verdict color
+    let prefs = UserDefaults(suiteName: Self.appGroupId)
+    let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25
+    let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
+
+    let hrOk = hourlyRate >= minHourly
+    let kmOk = kmRate >= minKm
+
+    if hrOk && kmOk {
+      hourlyRateLabel.textColor = primaryColor
+      fareLabel.textColor = primaryColor
+    } else if hrOk || kmOk {
+      hourlyRateLabel.textColor = UIColor.orange
+      fareLabel.textColor = UIColor.orange
+    } else {
+      hourlyRateLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
+      fareLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
+    }
+  }
+
+  private func showError(_ message: String) {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.text = "✕ \(message)"
+    statusLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
+  }
+
+  // MARK: - App Group Communication
+
+  private func saveResultForMainApp(_ result: ParsedResult) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+
+    var body: [String: Any] = [
+      "platform": result.platform,
+      "fare": result.fare,
+      "distanceKm": result.distanceKm,
+    ]
+    if let dur = result.durationMin { body["durationMin"] = dur }
+    if let pickup = result.pickupAddress { body["pickupAddress"] = pickup }
+    if let dest = result.destinationAddress { body["destinationAddress"] = dest }
+
+    if let data = try? JSONSerialization.data(withJSONObject: body) {
+      defaults.set(data, forKey: Self.scanResultKey)
+      defaults.set(Date().timeIntervalSince1970, forKey: Self.scanTimestampKey)
+
+      // Notifier l'app principale via Darwin notification
+      let center = CFNotificationCenterGetDarwinNotifyCenter()
+      CFNotificationCenterPostNotification(center, CFNotificationName("com.strive.app.scanResult" as CFString), nil, nil, true)
+    }
+  }
+
+  // MARK: - Actions
+
+  @objc private func openMainApp() {
+    // Ouvrir l'app principale via URL scheme
+    guard let url = URL(string: "strive://scan-result") else {
+      dismissExtension()
+      return
+    }
+
+    var responder: UIResponder? = self
+    while responder != nil {
+      if let application = responder as? UIApplication {
+        application.open(url, options: [:], completionHandler: nil)
+        break
+      }
+      responder = responder?.next
+    }
+
+    // Alternative : utiliser openURL via le contexte d'extension
+    extensionContext?.open(url, completionHandler: { [weak self] _ in
+      self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    })
+  }
+
+  @objc private func dismissExtension() {
+    extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+  }
+}
+
+// MARK: - Gemini Service Light (pour la Share Extension — version simplifiée sans dépendance)
+
+private class GeminiVisionServiceLight {
+  var apiKey: String?
+  var edgeFunctionUrl: String?
+  var supabaseAnonKey: String?
+
+  struct Result {
+    let platform: String
+    let fare: Double
+    let distanceKm: Double
+    let durationMin: Int?
+    let pickupAddress: String?
+    let destinationAddress: String?
+  }
+
+  func analyze(image: UIImage, completion: @escaping (ShareViewController.ParsedResult?) -> Void) {
+    let maxWidth: CGFloat = 512
+    let scaledImage: UIImage
+    if image.size.width > maxWidth {
+      let scale = maxWidth / image.size.width
+      let newSize = CGSize(width: maxWidth, height: image.size.height * scale)
+      UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+      image.draw(in: CGRect(origin: .zero, size: newSize))
+      scaledImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+      UIGraphicsEndImageContext()
+    } else {
+      scaledImage = image
+    }
+
+    guard let jpegData = scaledImage.jpegData(compressionQuality: 0.8) else {
+      completion(nil)
+      return
+    }
+    let base64 = jpegData.base64EncodedString()
+    let prompt = """
+    Analyse cette capture d'écran d'une offre de course VTC (Uber, Bolt ou Heetch).
+    Retourne UNIQUEMENT un objet JSON avec ces champs :
+    {
+      "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
+      "fare": <nombre décimal en euros>,
+      "distance_km": <nombre décimal en km>,
+      "duration_min": <entier en minutes ou null>
+    }
+    Ne retourne rien d'autre que le JSON.
+    """
+
+    let request: URLRequest
+    if let edgeUrl = edgeFunctionUrl, let anonKey = supabaseAnonKey,
+       let url = URL(string: edgeUrl) {
+      var req = URLRequest(url: url)
+      req.httpMethod = "POST"
+      req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+      req.setValue(anonKey, forHTTPHeaderField: "apikey")
+      req.httpBody = try? JSONSerialization.data(withJSONObject: [
+        "imageBase64": base64, "prompt": prompt
+      ])
+      request = req
+    } else if let key = apiKey,
+              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)") {
+      var req = URLRequest(url: url)
+      req.httpMethod = "POST"
+      req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      req.httpBody = try? JSONSerialization.data(withJSONObject: [
+        "contents": [["parts": [
+          ["text": prompt],
+          ["inline_data": ["mime_type": "image/jpeg", "data": base64]]
+        ]]]
+      ])
+      request = req
+    } else {
+      completion(nil)
+      return
+    }
+
+    URLSession.shared.dataTask(with: request) { data, _, error in
+      guard error == nil, let data = data,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+      else {
+        completion(nil)
+        return
+      }
+
+      var text: String?
+      if let candidates = json["candidates"] as? [[String: Any]],
+         let content = candidates.first?["content"] as? [String: Any],
+         let parts = content["parts"] as? [[String: Any]],
+         let t = parts.first?["text"] as? String { text = t }
+      else if let t = json["result"] as? String { text = t }
+
+      guard let responseText = text,
+            let start = responseText.range(of: "{"),
+            let end = responseText.range(of: "}", options: .backwards)
+      else { completion(nil); return }
+
+      let jsonStr = String(responseText[start.lowerBound...end.upperBound])
+      guard let parsed = try? JSONSerialization.jsonObject(with: Data(jsonStr.utf8)) as? [String: Any],
+            let platform = parsed["platform"] as? String,
+            let fare = (parsed["fare"] as? NSNumber)?.doubleValue,
+            let distKm = (parsed["distance_km"] as? NSNumber)?.doubleValue,
+            fare >= 3, fare <= 200, distKm >= 0.3, distKm <= 150
+      else { completion(nil); return }
+
+      let durMin = (parsed["duration_min"] as? NSNumber)?.intValue
+
+      completion(ShareViewController.ParsedResult(
+        platform: platform, fare: fare, distanceKm: distKm,
+        durationMin: durMin, pickupAddress: nil, destinationAddress: nil
+      ))
+    }.resume()
+  }
+}

@@ -11,14 +11,16 @@ import { colors } from '../theme/colors';
 import { scannerService } from '../services/scanner';
 import type { PermissionsStatus } from '../services/scanner/types';
 
+const IS_IOS = Platform.OS === 'ios';
+
 // Android < 11 (API 30) a besoin d'une permission MediaProjection supplémentaire
 const NEEDS_MEDIA_PROJECTION = Platform.OS === 'android' && (Platform.Version as number) < 30;
 
 const defaultPerms: PermissionsStatus = {
-  overlay: false,
-  accessibility: false,
+  overlay: IS_IOS ? true : false,
+  accessibility: IS_IOS ? true : false,
   needsMediaProjection: NEEDS_MEDIA_PROJECTION,
-  mediaProjectionGranted: false,
+  mediaProjectionGranted: IS_IOS ? true : false,
 };
 
 const ScannerPermissionScreen = () => {
@@ -28,7 +30,6 @@ const ScannerPermissionScreen = () => {
   const [requestingProjection, setRequestingProjection] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (Platform.OS !== 'android') return;
     const result = await scannerService.checkPermissions();
     setPerms(result);
   }, []);
@@ -42,7 +43,8 @@ const ScannerPermissionScreen = () => {
     return () => sub.remove();
   }, [refresh]);
 
-  const allGranted =
+  // Sur iOS, les permissions sont toujours accordées (pas d'overlay/accessibility)
+  const allGranted = IS_IOS ? true :
     perms.overlay &&
     perms.accessibility &&
     (!perms.needsMediaProjection || perms.mediaProjectionGranted);
@@ -53,7 +55,6 @@ const ScannerPermissionScreen = () => {
       await scannerService.requestMediaProjectionPermission();
       await refresh();
     } catch {
-      // refusé par l'utilisateur — refresh pour refléter l'état
       await refresh();
     } finally {
       setRequestingProjection(false);
@@ -69,6 +70,104 @@ const ScannerPermissionScreen = () => {
     }
   };
 
+  // ── Rendu iOS ──────────────────────────────────────────────────────────────
+  if (IS_IOS) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Feather name="x" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('scanner.title')}</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <View style={styles.body}>
+          <MaterialCommunityIcons name="share-variant-outline" size={48} color={colors.primary} style={styles.icon} />
+          <Text style={styles.title}>{t('scanner.iosTitle', 'Scanner via partage')}</Text>
+          <Text style={styles.subtitle}>
+            {t('scanner.iosSubtitle', 'Prenez un screenshot de l\'offre VTC, puis partagez-le avec Strive pour l\'analyser automatiquement.')}
+          </Text>
+
+          {/* Étape 1 — Screenshot */}
+          <View style={[styles.step, styles.stepDone]}>
+            <View style={styles.stepLeft}>
+              <View style={[styles.stepIcon, styles.stepIconDone]}>
+                <Text style={[styles.stepNum, { color: colors.background }]}>1</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep1Title', 'Prenez un screenshot')}</Text>
+                <Text style={styles.stepDesc}>
+                  {t('scanner.iosStep1Desc', 'Power + Volume haut dans Uber, Bolt ou Heetch')}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.iosIconWrap}>
+              <Feather name="camera" size={18} color={colors.primary} />
+            </View>
+          </View>
+
+          {/* Étape 2 — Partager */}
+          <View style={[styles.step, styles.stepDone]}>
+            <View style={styles.stepLeft}>
+              <View style={[styles.stepIcon, styles.stepIconDone]}>
+                <Text style={[styles.stepNum, { color: colors.background }]}>2</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep2Title', 'Partagez avec Strive')}</Text>
+                <Text style={styles.stepDesc}>
+                  {t('scanner.iosStep2Desc', 'Appuyez sur le bouton partage, puis "Analyser avec Strive"')}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.iosIconWrap}>
+              <Feather name="share" size={18} color={colors.primary} />
+            </View>
+          </View>
+
+          {/* Étape 3 — Résultat */}
+          <View style={[styles.step, styles.stepDone]}>
+            <View style={styles.stepLeft}>
+              <View style={[styles.stepIcon, styles.stepIconDone]}>
+                <Text style={[styles.stepNum, { color: colors.background }]}>3</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep3Title', 'Résultat instantané')}</Text>
+                <Text style={styles.stepDesc}>
+                  {t('scanner.iosStep3Desc', 'Le prix, €/h et €/km sont analysés automatiquement')}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.iosIconWrap}>
+              <MaterialCommunityIcons name="check-decagram" size={20} color={colors.primary} />
+            </View>
+          </View>
+
+          <View style={styles.infoBox}>
+            <Feather name="info" size={13} color={colors.textDimmed} />
+            <Text style={styles.infoText}>
+              {t('scanner.iosInfoText', 'L\'analyse se fait directement sur votre iPhone, sans envoyer vos données. Si l\'OCR échoue, Gemini AI prend le relais.')}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.startBtn}
+            onPress={handleStart}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="line-scan" size={20} color={colors.background} />
+            <Text style={styles.startBtnText}>
+              {t('scanner.iosActivate', 'Activer le scanner')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Rendu Android (inchangé) ───────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
@@ -279,6 +378,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   stepBtnText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+
+  iosIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    justifyContent: 'center', alignItems: 'center',
+  },
 
   infoBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
