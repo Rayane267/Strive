@@ -454,7 +454,7 @@ class ShareViewController: UIViewController {
 
   // MARK: - Local Parser (simplifié — le vrai parsing est côté JS)
 
-  private struct ParsedResult {
+  struct ParsedResult {
     let platform: String
     let fare: Double
     let distanceKm: Double

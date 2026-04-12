@@ -14,12 +14,14 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { sha256 } from 'js-sha256';
 import appleAuth from '@invertase/react-native-apple-authentication';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 
 GoogleSignin.configure({
   webClientId: '397785965149-4gq72k418u7cd5rhf4mmkbvof2nclqsl.apps.googleusercontent.com',
+  iosClientId: '397785965149-7at5j010btil8a2vfbq6i3s7snu1ob15.apps.googleusercontent.com',
 });
 
 const AuthScreen = () => {
@@ -31,10 +33,16 @@ const AuthScreen = () => {
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
+      const rawNonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const hashedNonce = sha256(rawNonce);
+      const userInfo = await (GoogleSignin.signIn as any)({ nonce: hashedNonce });
       const idToken = userInfo.data?.idToken;
       if (idToken) {
-        const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+          nonce: rawNonce,
+        });
         if (error) throw error;
       }
     } catch (error: any) {

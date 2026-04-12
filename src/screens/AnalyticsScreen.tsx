@@ -11,9 +11,10 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
+import { BlurView } from '@react-native-community/blur';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -408,14 +409,27 @@ const AnalyticsScreen = () => {
           <>
             {/* ── HERO PROFIT CARD ── */}
             <AnimatedEntrance delay={0} slideFrom="bottom">
-            <LinearGradient
-              colors={['#0F2D1F', '#172C20', '#0A150E']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            <View
               style={styles.heroCard}
               accessible
               accessibilityLabel={`${t('analytics.netProfit')}: €${stats.totalProfit.toFixed(2)}`}
             >
+              {Platform.OS === 'ios' ? (
+                <>
+                  <BlurView
+                    style={StyleSheet.absoluteFill}
+                    blurType="chromeMaterialDark"
+                    blurAmount={28}
+                    reducedTransparencyFallbackColor="#0F2D1F"
+                  />
+                  <View style={[StyleSheet.absoluteFill, styles.heroGlassTint]} />
+                </>
+              ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0F2D1F' }]} />
+              )}
+              {/* top shimmer */}
+              <View style={styles.heroShimmer} />
+
               <View style={styles.heroTop}>
                 <Text style={styles.heroLabel}>{t('analytics.netProfit').toUpperCase()}</Text>
                 <Text style={styles.heroBefore}>{t('analytics.beforeTax')}</Text>
@@ -438,13 +452,22 @@ const AnalyticsScreen = () => {
                   <Text style={styles.heroStatLbl}>{t('analytics.activeHours')}</Text>
                 </View>
               </View>
-            </LinearGradient>
+            </View>
             </AnimatedEntrance>
 
             {/* ── KPI ROW ── */}
             <AnimatedEntrance delay={100} slideFrom="bottom">
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
+                {Platform.OS === 'ios' ? (
+                  <>
+                    <BlurView style={StyleSheet.absoluteFill} blurType="chromeMaterialDark" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
+                    <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
+                  </>
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
+                )}
+                <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
                   <MaterialCommunityIcons name="speedometer" size={22} color={colors.primary} />
                 </View>
@@ -454,6 +477,15 @@ const AnalyticsScreen = () => {
                 </View>
               </View>
               <View style={styles.kpiCard}>
+                {Platform.OS === 'ios' ? (
+                  <>
+                    <BlurView style={StyleSheet.absoluteFill} blurType="chromeMaterialDark" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
+                    <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
+                  </>
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
+                )}
+                <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
                   <MaterialCommunityIcons name="map-marker-distance" size={22} color={colors.primary} />
                 </View>
@@ -694,13 +726,31 @@ const styles = StyleSheet.create({
   },
   dateBtnText: { color: colors.textMain, fontSize: 15, fontWeight: '600', textTransform: 'capitalize' },
 
-  // Hero card
+  // Hero card — liquid glass
   heroCard: {
     borderRadius: 22,
     padding: 22,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,230,118,0.28)',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroGlassTint: {
+    backgroundColor: 'rgba(0, 230, 118, 0.07)',
+  },
+  heroShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 20,
+    right: 20,
+    height: 1,
+    backgroundColor: 'rgba(0,230,118,0.35)',
+    borderRadius: 1,
   },
   heroTop: {
     flexDirection: 'row',
@@ -724,20 +774,37 @@ const styles = StyleSheet.create({
   heroStatLbl: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textAlign: 'center' },
   heroStatDiv: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.08)' },
 
-  // KPI row
+  // KPI row — liquid glass
   kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   kpiCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    borderLeftWidth: 3,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderLeftWidth: 2,
     borderLeftColor: colors.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  kpiGlassTint: {
+    backgroundColor: 'rgba(10, 22, 15, 0.45)',
+  },
+  kpiShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 12,
+    right: 12,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 1,
   },
   kpiIconWrap: {
     width: 44, height: 44, borderRadius: 13,

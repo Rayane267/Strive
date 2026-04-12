@@ -6,11 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-
   Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
+import { BlurView } from '@react-native-community/blur';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -82,14 +82,22 @@ const ProfileScreen = () => {
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]} showsVerticalScrollIndicator={false}>
 
         {/* ── PROFILE CARD ── */}
-        <LinearGradient
-          colors={isPlus
-            ? ['#0F2D1F', '#182E22', '#0D1C14']
-            : ['#111E17', '#152019', '#0D1812']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.profileCard}
-        >
+        <View style={styles.profileCard}>
+          {Platform.OS === 'ios' ? (
+            <>
+              <BlurView
+                style={StyleSheet.absoluteFill}
+                blurType="chromeMaterialDark"
+                blurAmount={28}
+                reducedTransparencyFallbackColor="#0F2D1F"
+              />
+              <View style={[StyleSheet.absoluteFill, styles.profileGlassTint]} />
+            </>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0F2D1F' }]} />
+          )}
+          {/* shimmer line */}
+          <View style={styles.profileShimmer} />
           {/* Decorative glow for Plus */}
           {isPlus && <View style={styles.plusGlow} />}
 
@@ -121,7 +129,7 @@ const ProfileScreen = () => {
               <Text style={styles.upgradeLink}> · {t('profile.upgradeLink')}</Text>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
 
         {/* ── GENERAL SECTION ── */}
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
@@ -247,10 +255,26 @@ const styles = StyleSheet.create({
     padding: 28,
     marginBottom: 28,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,230,118,0.28)',
     overflow: 'hidden',
-    position: 'relative',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  profileGlassTint: {
+    backgroundColor: 'rgba(0, 230, 118, 0.06)',
+  },
+  profileShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 1,
+    backgroundColor: 'rgba(0,230,118,0.32)',
+    borderRadius: 1,
   },
   plusGlow: {
     position: 'absolute',
