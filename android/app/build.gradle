@@ -93,15 +93,29 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Lu depuis ~/.gradle/gradle.properties (hors-repo).
+            // Variables attendues : STRIVE_RELEASE_STORE_FILE, STRIVE_RELEASE_STORE_PASSWORD,
+            // STRIVE_RELEASE_KEY_ALIAS, STRIVE_RELEASE_KEY_PASSWORD.
+            if (project.hasProperty('STRIVE_RELEASE_STORE_FILE')) {
+                storeFile file(STRIVE_RELEASE_STORE_FILE)
+                storePassword STRIVE_RELEASE_STORE_PASSWORD
+                keyAlias STRIVE_RELEASE_KEY_ALIAS
+                keyPassword STRIVE_RELEASE_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (project.hasProperty('STRIVE_RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn('⚠️  STRIVE_RELEASE_STORE_FILE non défini — release signée avec debug.keystore (NON DÉPLOYABLE).')
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
