@@ -15,7 +15,7 @@ interface Props {
   style?: ViewStyle;
 }
 
-const AnimatedEntrance: React.FC<Props> = ({
+const AnimatedEntrance: React.FC<Props> = React.memo(({
   children,
   delay = 0,
   duration = 350,
@@ -42,6 +42,8 @@ const AnimatedEntrance: React.FC<Props> = ({
         friction: 8,
       }),
     ]).start();
+    // Animation d'entrée jouée une seule fois au mount — props ignorés volontairement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const transform =
@@ -56,6 +58,6 @@ const AnimatedEntrance: React.FC<Props> = ({
       {children}
     </Animated.View>
   );
-};
+});
 
 export default AnimatedEntrance;

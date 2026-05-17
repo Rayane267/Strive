@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,11 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabase';
 import { Toast, useToast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
-import { buyPlus, restorePurchases } from '../services/iapService';
+import { buyPlus, restorePurchases, getStorePrices, isIAPAvailable, IAP_PRODUCTS } from '../services/iapService';
+import { waitForProfileUpdate } from '../services/profileService';
+import { hapticSuccess, hapticError } from '../utils/haptics';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,22 @@ const SubscriptionScreen = () => {
   const { t } = useTranslation();
   const { user, refreshProfile } = useAuth();
   const [purchasing, setPurchasing] = useState(false);
+  const [storePrice, setStorePrice] = useState<string | null>(null);
   const { toast, showToast, dismissToast } = useToast();
+
+  // Fetch real price from store (App Store / Play Store) via RevenueCat.
+  // Tombe en silence si RC pas dispo / SKU pas créé → on garde le fallback i18n.
+  useEffect(() => {
+    if (!isIAPAvailable()) return;
+    getStorePrices()
+      .then(prices => {
+        const p = prices[IAP_PRODUCTS.PLUS_MONTHLY];
+        if (p) setStorePrice(p);
+      })
+      .catch(() => {});
+  }, []);
+
+  const plusPriceLabel = storePrice ?? t('subscription.plusPrice');
 
   const ROWS: { icon: string; label: string; free: RowVal; plus: RowVal }[] = [
     { icon: 'zap',         label: t('subscription.rows.scans.label'),     free: t('subscription.rows.scans.free'),     plus: t('subscription.rows.scans.plus')     },
@@ -50,10 +66,14 @@ const SubscriptionScreen = () => {
     setPurchasing(true);
     try {
       await buyPlus(user.id);
+      // Attend que le webhook RC ait propagé l'update du tier en DB.
+      await waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free');
       await refreshProfile();
+      hapticSuccess();
       navigation.goBack();
     } catch (e: any) {
       if (e?.message === 'CANCELLED') return;
+      hapticError();
       showToast({ type: 'error', title: t('subscription.errorTitle'), message: t('subscription.errorMsg') });
     } finally {
       setPurchasing(false);
@@ -65,7 +85,11 @@ const SubscriptionScreen = () => {
     setRestoring(true);
     try {
       const hasPlus = await restorePurchases(user.id);
+      if (hasPlus) {
+        await waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free');
+      }
       await refreshProfile();
+      if (hasPlus) hapticSuccess();
       showToast({
         type: 'success',
         title: hasPlus ? t('iap.restoreSuccess') : t('iap.restoreNone'),
@@ -73,6 +97,7 @@ const SubscriptionScreen = () => {
       });
       if (hasPlus) navigation.goBack();
     } catch {
+      hapticError();
       showToast({ type: 'error', title: t('common.error'), message: t('iap.restoreFail') });
     } finally {
       setRestoring(false);
@@ -133,7 +158,7 @@ const SubscriptionScreen = () => {
                 <MaterialCommunityIcons name="crown" size={10} color="#000" />
               </View>
               <Text style={styles.headerPlusTitle}>{t('subscription.plusHeader')}</Text>
-              <Text style={styles.headerPlusPrice}>{t('subscription.plusPrice')}</Text>
+              <Text style={styles.headerPlusPrice}>{plusPriceLabel}</Text>
               <Text style={styles.headerPlusFreq}>{t('subscription.plusFreq')}</Text>
             </LinearGradient>
           </View>
@@ -165,12 +190,12 @@ const SubscriptionScreen = () => {
 
                 {/* Plus cell */}
                 <View style={[styles.cell, styles.cellPlus, isLast && styles.cellPlusLastRadius]}>
-                  {row.plus === true ? (
-                    <View style={styles.checkBubble}>
-                      <Feather name="check" size={11} color="#000" />
+                  {row.plus === false ? (
+                    <View style={styles.lockWrap}>
+                      <Feather name="lock" size={13} color="rgba(255,255,255,0.18)" />
                     </View>
                   ) : (
-                    <Text style={styles.cellPlusText}>{row.plus as string}</Text>
+                    <Text style={styles.cellPlusText}>{row.plus}</Text>
                   )}
                 </View>
               </View>
@@ -202,7 +227,7 @@ const SubscriptionScreen = () => {
         {/* Price hint */}
         <View style={styles.priceHint}>
           <Text style={styles.priceHintLeft}>{t('subscription.priceLabel')}</Text>
-          <Text style={styles.priceHintRight}>{t('subscription.priceDetail')}</Text>
+          <Text style={styles.priceHintRight}>{t('subscription.priceDetail', { price: plusPriceLabel })}</Text>
         </View>
 
         {/* CTA button */}

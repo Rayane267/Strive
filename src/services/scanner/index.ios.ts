@@ -20,6 +20,13 @@ import { ScannerService, ScanResult } from './types';
 const { ScanBridge } = NativeModules;
 const emitter = ScanBridge ? new NativeEventEmitter(ScanBridge) : null;
 
+// Le bridge natif n'expose qu'une seule méthode pour les préférences scanner
+// (alignement avec App Group). On garde le dernier état JS pour pouvoir merger
+// les setters granulaires (setThresholds / setPreferences).
+let lastMinHourly: number | null = null;
+let lastMinKm: number | null = null;
+let lastIncludePickup: boolean | null = null;
+
 export const scannerService: ScannerService = {
   start: async () => {
     if (!ScanBridge) throw { code: 'MODULE_NOT_AVAILABLE' };
@@ -48,19 +55,60 @@ export const scannerService: ScannerService = {
     ScanBridge?.updateDuration(minutes);
   },
 
-  setGeminiApiKey: (key: string) => {
-    ScanBridge?.setGeminiApiKey(key);
+  updateMetrics: (hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number) => {
+    // Pousse la mise à jour vers la Live Activity (Dynamic Island).
+    // Pas de "platform" / "fare" disponible ici — l'activité a déjà ces valeurs
+    // depuis le start. Update partiel via les champs qui changent (TomTom).
+    ScanBridge?.updateLiveActivity({
+      hourlyRate, kmRate, durationMin, distanceKm,
+      // Réutilise les derniers reçus côté natif via App Group si dispo.
+      platform: 'UNKNOWN', fare: 0, verdictLevel: 0,
+    });
+  },
+
+  finalizeScan: (hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number, verdictLevel: number) => {
+    ScanBridge?.updateLiveActivity({
+      platform: 'UNKNOWN', fare: 0,
+      hourlyRate, kmRate, durationMin, distanceKm, verdictLevel,
+    });
   },
 
   setGeminiConfig: (edgeUrl: string, supabaseAnonKey: string) => {
     ScanBridge?.setGeminiConfig(edgeUrl, supabaseAnonKey);
   },
 
+  setSupabaseUserJwt: (jwt: string) => {
+    ScanBridge?.setSupabaseUserJwt(jwt);
+  },
+
   setParserConfig: (configJson: string) => {
     ScanBridge?.setParserConfig(configJson);
   },
 
-  checkPermissions: async () => {
+  setPreferences: (includePickup: boolean) => {
+    // Les valeurs sont mergées en App Group avec les seuils par setScannerPreferences.
+    // Si les seuils n'ont pas encore été poussés, on utilise des fallbacks par défaut.
+    const minHr = lastMinHourly ?? 25.0;
+    const minKm = lastMinKm ?? 1.2;
+    lastIncludePickup = includePickup;
+    ScanBridge?.setScannerPreferences(minHr, minKm, includePickup);
+  },
+
+  setThresholds: (minHourlyRate: number, minKmRate: number) => {
+    lastMinHourly = minHourlyRate;
+    lastMinKm = minKmRate;
+    ScanBridge?.setScannerPreferences(
+      minHourlyRate,
+      minKmRate,
+      lastIncludePickup ?? false,
+    );
+  },
+
+  setTomTomApiKey: (key: string) => {
+    ScanBridge?.setTomTomApiKey(key);
+  },
+
+checkPermissions: async () => {
     if (!ScanBridge) {
       return {
         overlay: true,

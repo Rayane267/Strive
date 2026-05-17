@@ -17,6 +17,8 @@ import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { hapticSuccess, hapticError } from '../utils/haptics';
+import BrandLoader from '../components/BrandLoader';
 
 const PreferencesScreen = () => {
   const { t } = useTranslation();
@@ -31,9 +33,9 @@ const PreferencesScreen = () => {
   const [saving, setSaving] = useState(false);
   const [minHr, setMinHr] = useState(25);
   const [minKm, setMinKm] = useState(1.25);
-  const [includePickup, setIncludePickup] = useState(true);
+  const [includePickup, setIncludePickup] = useState(false);
   const [isActive, setIsActive] = useState(true);
-  const [dayResetHour, setDayResetHour] = useState<0 | 3>(0);
+  const [dayResetHour, setDayResetHour] = useState<0 | 4>(0);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
 
   // --- CHARGEMENT DES DONNÉES ---
@@ -60,11 +62,11 @@ const PreferencesScreen = () => {
         setMinKm(Number(data.min_km_rate));
         setIncludePickup(data.include_pickup);
         setIsActive(data.is_active);
-        if (data.day_reset_hour === 3) setDayResetHour(3);
+        if (data.day_reset_hour === 4) setDayResetHour(4);
         else setDayResetHour(0);
       }
     } catch (error: any) {
-      console.error('Error fetching preferences:', error.message);
+      __DEV__ && console.error('Error fetching preferences:', error.message);
     } finally {
       setLoading(false);
     }
@@ -97,12 +99,14 @@ const PreferencesScreen = () => {
 
       if (error) throw error;
 
+      hapticSuccess();
       setStatusMessage({ text: t('preferences.saveSuccess', 'Préférences enregistrées avec succès.'), type: 'success' });
       setTimeout(() => navigation.goBack(), 1500);
 
     } catch (error: any) {
+      hapticError();
       setStatusMessage({ text: t('preferences.saveError', "Impossible d'enregistrer. Réessayez."), type: 'error' });
-      console.error(error.message);
+      __DEV__ && console.error(error.message);
     } finally {
       setSaving(false);
     }
@@ -111,7 +115,7 @@ const PreferencesScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <BrandLoader size={12} />
       </View>
     );
   }
@@ -241,20 +245,20 @@ const PreferencesScreen = () => {
         </View>
 
         <View style={styles.card}>
-          {/* Day reset at 3 AM toggle */}
+          {/* Day reset at 4 AM toggle */}
           <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(255,183,77,0.1)' }]}>
-              <Feather name="sunrise" size={18} color="#FFB74D" />
+            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(0,230,118,0.12)' }]}>
+              <Feather name="sunrise" size={18} color={colors.primary} />
             </View>
             <View style={styles.toggleTextBlock}>
-              <Text style={styles.toggleTitle}>{t('preferences.dayReset3am', 'Reset à 3h du matin')}</Text>
-              <Text style={styles.toggleSub}>{t('preferences.dayReset3amSub', 'Vos gains du jour se réinitialisent à 3h au lieu de minuit')}</Text>
+              <Text style={styles.toggleTitle}>{t('preferences.dayReset4am', 'Reset à 4h du matin')}</Text>
+              <Text style={styles.toggleSub}>{t('preferences.dayReset4amSub', 'Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit')}</Text>
             </View>
             <Switch
-              value={dayResetHour === 3}
-              onValueChange={(v) => setDayResetHour(v ? 3 : 0)}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(255,183,77,0.35)' }}
-              thumbColor={dayResetHour === 3 ? '#FFB74D' : colors.textDimmed}
+              value={dayResetHour === 4}
+              onValueChange={(v) => setDayResetHour(v ? 4 : 0)}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+              thumbColor={dayResetHour === 4 ? colors.primary : colors.textDimmed}
               ios_backgroundColor="rgba(255,255,255,0.08)"
             />
           </View>
@@ -278,6 +282,7 @@ const PreferencesScreen = () => {
               ios_backgroundColor="rgba(255,255,255,0.08)"
             />
           </View>
+
         </View>
 
         {/* ── STATUS MESSAGE ── */}

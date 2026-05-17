@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -23,9 +23,12 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 import { formatTimeAgo, getDayStart } from '../utils/dateUtils';
-import { getPlanTier } from '../services/subscriptionService';
+import { getEffectivePlanTier } from '../services/subscriptionService';
 import { effectiveFare } from '../services/ridesService';
 import { Ride } from '../types/database';
+import { withTimeout } from '../utils/withTimeout';
+import { cacheRides, getCachedRides } from '../services/offlineService';
+import BrandLoader from '../components/BrandLoader';
 
 LocaleConfig.locales['fr'] = {
   monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
@@ -48,7 +51,7 @@ const PLATFORM_CONFIG: Record<string, { accent: string; label: string }> = {
   HEETCH: { accent: '#FF3B80', label: 'Heetch' },
 };
 
-const RideCard = ({ ride, t }: { ride: Ride; t: any }) => {
+const RideCard = React.memo(({ ride, t }: { ride: Ride; t: any }) => {
   const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
   const isDeclined = ride.status === 'DECLINED';
   const isPending = ride.status === 'PENDING';
@@ -130,7 +133,7 @@ const RideCard = ({ ride, t }: { ride: Ride; t: any }) => {
       </View>
     </View>
   );
-};
+});
 
 type FilterType = 'all' | 'accepted' | 'declined';
 
@@ -140,7 +143,7 @@ const HistoryScreen = () => {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
 
-  const isPremium = getPlanTier(profile?.subscription_tier) !== 'free';
+  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
 
@@ -154,10 +157,10 @@ const HistoryScreen = () => {
     supabase
       .from('preferences')
       .select('day_reset_hour')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        const h = data?.day_reset_hour === 3 ? 3 : 0;
+        const h = data?.day_reset_hour === 4 ? 4 : 0;
         setResetHour(h);
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
@@ -177,8 +180,10 @@ const HistoryScreen = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
   const [modalAlert, setModalAlert] = useState('');
 
+  const fetchingRef = useRef(false);
   const fetchHistory = useCallback(async () => {
-    if (!user) return;
+    if (!user || fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       setLoading(true);
       setFetchError(false);
@@ -189,21 +194,36 @@ const HistoryScreen = () => {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
       rangeEnd.setHours(resetHour, 0, 0, 0);
 
-      const { data, error } = await supabase
-        .from('rides')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', rangeStart.toISOString())
-        .lte('created_at', rangeEnd.toISOString())
-        .order('created_at', { ascending: false });
+      const { data, error } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('rides')
+            .select('*')
+            .eq('user_id', user.id)
+            .gte('created_at', rangeStart.toISOString())
+            .lte('created_at', rangeEnd.toISOString())
+            .order('created_at', { ascending: false }),
+        ),
+        10_000,
+      );
 
       if (error) throw error;
-      setRides((data ?? []) as Ride[]);
+      const freshRides = (data ?? []) as Ride[];
+      setRides(freshRides);
+      cacheRides(freshRides);  // sauvegarde pour mode hors-ligne
     } catch (e) {
-      __DEV__ && console.error(e);
-      setFetchError(true);
+      __DEV__ && console.warn('[History] fetch KO, fallback cache', e);
+      // Fallback cache local si réseau/Supabase KO
+      const cached = await getCachedRides();
+      if (cached && cached.length > 0) {
+        setRides(cached);
+        setFetchError(false);
+      } else {
+        setFetchError(true);
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, [user, dateRange, resetHour]);
 
@@ -279,160 +299,181 @@ const HistoryScreen = () => {
     .filter(r => r.status === 'ACCEPTED')
     .reduce((sum, r) => sum + effectiveFare(r), 0);
 
-  const filteredRides = rides.filter(r => {
+  const filteredRides = useMemo(() => rides.filter(r => {
     if (filter === 'accepted') return r.status === 'ACCEPTED';
     if (filter === 'declined') return r.status === 'DECLINED';
     return true;
-  });
+  }), [rides, filter]);
+
+  const renderRideCard = useCallback(({ item }: { item: Ride }) => (
+    <RideCard ride={item} t={t} />
+  ), [t]);
 
   const todayDate = new Date().toLocaleDateString(i18n.language, {
     weekday: 'long', day: 'numeric', month: 'long',
   });
 
+  const listHeader = (
+    <View>
+      {/* ── HEADER ── */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('history.title')}</Text>
+        <Text style={styles.headerSub}>{todayDate}</Text>
+      </View>
+
+      {/* ── DATE SELECTOR (Plus only) ── */}
+      {isPremium ? (
+        <TouchableOpacity style={styles.dateBtn} onPress={() => {
+          setSelectionStep(0);
+          setTempStart(null);
+          setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
+          setModalVisible(true);
+        }} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel={t('history.selectDates', 'Select date range')}>
+          <View style={styles.dateBtnLeft}>
+            <View style={styles.dateBtnIcon}>
+              <Feather name="calendar" size={16} color={colors.primary} />
+            </View>
+            <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
+          </View>
+          <Feather name="chevron-down" size={18} color={colors.textDimmed} />
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={styles.upgradeBanner}
+          onPress={() => navigation.navigate('SubscriptionScreen')}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="crown" size={16} color={colors.primary} />
+          <Text style={styles.upgradeBannerText}>{t('history.upgradeForHistory', 'Passez Plus pour voir tout votre historique')}</Text>
+          <Feather name="chevron-right" size={14} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+
+      {/* ── ERROR STATE ── */}
+      {fetchError && (
+        <View style={styles.errorCard}>
+          <Feather name="alert-circle" size={18} color={colors.danger} />
+          <Text style={styles.errorText}>{t('errors.loadFailed', 'Erreur de chargement')}</Text>
+          <TouchableOpacity onPress={fetchHistory}>
+            <Text style={styles.errorRetry}>{t('errors.retry', 'Réessayer')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── HERO CARD ── */}
+      <LinearGradient
+        colors={['#0F2D1F', '#172C20', '#0A150E']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroCard}
+      >
+        <View style={styles.heroMain}>
+          <View>
+            <Text style={styles.heroLabel}>{t('history.earnings', 'Gains')}</Text>
+            <Text style={styles.heroAmount}>{dailyTotal.toFixed(2)}€</Text>
+          </View>
+          <View style={styles.acceptBlock}>
+            <Text style={styles.acceptValue}>{acceptRate}%</Text>
+            <Text style={styles.acceptLabel}>{t('history.acceptRate')}</Text>
+            <View style={styles.acceptBar}>
+              <View style={[styles.acceptFill, { width: `${acceptRate}%` as any }]} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.heroSep} />
+
+        <View style={styles.heroStats}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatVal}>{rides.length}</Text>
+            <Text style={styles.heroStatLbl}>{t('history.scanned')}</Text>
+          </View>
+          <View style={styles.heroStatDiv} />
+          <View style={styles.heroStat}>
+            <Text style={[styles.heroStatVal, { color: '#00E676' }]}>{accepted}</Text>
+            <Text style={styles.heroStatLbl}>{t('history.status.ACCEPTED')}</Text>
+          </View>
+          <View style={styles.heroStatDiv} />
+          <View style={styles.heroStat}>
+            <Text style={[styles.heroStatVal, declined > 0 ? { color: '#FF5252' } : {}]}>{declined}</Text>
+            <Text style={styles.heroStatLbl}>{t('history.status.DECLINED')}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* ── FILTER TABS ── */}
+      <View style={styles.filterRow}>
+        {(['all', 'accepted', 'declined'] as FilterType[]).map(f => {
+          const isActive = filter === f;
+          const tabStyle = isActive
+            ? f === 'accepted' ? styles.filterTabActiveAccepted
+            : f === 'declined' ? styles.filterTabActiveDeclined
+            : styles.filterTabActive
+            : null;
+          const textStyle = isActive
+            ? f === 'accepted' ? styles.filterTabTextActiveAccepted
+            : f === 'declined' ? styles.filterTabTextActiveDeclined
+            : styles.filterTabTextActive
+            : null;
+          return (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterTab, tabStyle]}
+              onPress={() => setFilter(f)}
+              activeOpacity={0.7}
+            >
+              {isActive && f !== 'all' && (
+                <View style={[styles.filterDot, { backgroundColor: f === 'accepted' ? '#00E676' : '#FF5252' }]} />
+              )}
+              <Text style={[styles.filterTabText, textStyle]}>
+                {f === 'all'
+                  ? t('history.filterAll', { count: rides.length })
+                  : f === 'accepted' ? `✓ ${accepted}`
+                  : `✕ ${declined}`}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ── LOADING / EMPTY ── */}
+      {loading && (
+        <BrandLoader style={{ marginTop: 40 }} />
+      )}
+      {!loading && filteredRides.length === 0 && (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconWrap}>
+            <MaterialCommunityIcons name="radar" size={32} color={colors.textDimmed} />
+          </View>
+          <Text style={styles.emptyTitle}>{t('history.empty')}</Text>
+          <Text style={styles.emptyHint}>{t('history.emptyHint', 'Vos scans apparaîtront ici.')}</Text>
+          <TouchableOpacity
+            style={styles.emptyCta}
+            onPress={() => navigation.navigate('Dashboard' as never)}
+            accessibilityRole="button"
+          >
+            <MaterialCommunityIcons name="line-scan" size={16} color={colors.background} />
+            <Text style={styles.emptyCtaText}>{t('history.emptyCta', 'Lancer un scan')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 16 }]}
+      <FlatList
+        data={loading ? [] : filteredRides}
+        keyExtractor={(item) => item.id}
+        renderItem={renderRideCard}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 16, paddingHorizontal: 20 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
-      >
-
-        {/* ── HEADER ── */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('history.title')}</Text>
-          <Text style={styles.headerSub}>{todayDate}</Text>
-        </View>
-
-        {/* ── DATE SELECTOR (Plus only) ── */}
-        {isPremium ? (
-          <TouchableOpacity style={styles.dateBtn} onPress={() => {
-            setSelectionStep(0);
-            setTempStart(null);
-            setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
-            setModalVisible(true);
-          }} activeOpacity={0.75}>
-            <View style={styles.dateBtnLeft}>
-              <View style={styles.dateBtnIcon}>
-                <Feather name="calendar" size={16} color={colors.primary} />
-              </View>
-              <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
-            </View>
-            <Feather name="chevron-down" size={18} color={colors.textDimmed} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.upgradeBanner}
-            onPress={() => navigation.navigate('SubscriptionScreen')}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons name="crown" size={16} color={colors.primary} />
-            <Text style={styles.upgradeBannerText}>{t('history.upgradeForHistory', 'Passez Plus pour voir tout votre historique')}</Text>
-            <Feather name="chevron-right" size={14} color={colors.primary} />
-          </TouchableOpacity>
-        )}
-
-        {/* ── ERROR STATE ── */}
-        {fetchError && (
-          <View style={styles.errorCard}>
-            <Feather name="alert-circle" size={18} color={colors.danger} />
-            <Text style={styles.errorText}>{t('errors.loadFailed', 'Erreur de chargement')}</Text>
-            <TouchableOpacity onPress={fetchHistory}>
-              <Text style={styles.errorRetry}>{t('errors.retry', 'Réessayer')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── HERO CARD ── */}
-        <LinearGradient
-          colors={['#0F2D1F', '#172C20', '#0A150E']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
-        >
-          <View style={styles.heroMain}>
-            <View>
-              <Text style={styles.heroLabel}>{t('history.earnings', 'Gains')}</Text>
-              <Text style={styles.heroAmount}>{dailyTotal.toFixed(2)}€</Text>
-            </View>
-            <View style={styles.acceptBlock}>
-              <Text style={styles.acceptValue}>{acceptRate}%</Text>
-              <Text style={styles.acceptLabel}>{t('history.acceptRate')}</Text>
-              <View style={styles.acceptBar}>
-                <View style={[styles.acceptFill, { width: `${acceptRate}%` as any }]} />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.heroSep} />
-
-          <View style={styles.heroStats}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatVal}>{rides.length}</Text>
-              <Text style={styles.heroStatLbl}>{t('history.scanned')}</Text>
-            </View>
-            <View style={styles.heroStatDiv} />
-            <View style={styles.heroStat}>
-              <Text style={[styles.heroStatVal, { color: '#00E676' }]}>{accepted}</Text>
-              <Text style={styles.heroStatLbl}>{t('history.status.ACCEPTED')}</Text>
-            </View>
-            <View style={styles.heroStatDiv} />
-            <View style={styles.heroStat}>
-              <Text style={[styles.heroStatVal, declined > 0 ? { color: '#FF5252' } : {}]}>{declined}</Text>
-              <Text style={styles.heroStatLbl}>{t('history.status.DECLINED')}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* ── FILTER TABS ── */}
-        <View style={styles.filterRow}>
-          {(['all', 'accepted', 'declined'] as FilterType[]).map(f => {
-            const isActive = filter === f;
-            const tabStyle = isActive
-              ? f === 'accepted' ? styles.filterTabActiveAccepted
-              : f === 'declined' ? styles.filterTabActiveDeclined
-              : styles.filterTabActive
-              : null;
-            const textStyle = isActive
-              ? f === 'accepted' ? styles.filterTabTextActiveAccepted
-              : f === 'declined' ? styles.filterTabTextActiveDeclined
-              : styles.filterTabTextActive
-              : null;
-            return (
-              <TouchableOpacity
-                key={f}
-                style={[styles.filterTab, tabStyle]}
-                onPress={() => setFilter(f)}
-                activeOpacity={0.7}
-              >
-                {isActive && f !== 'all' && (
-                  <View style={[styles.filterDot, { backgroundColor: f === 'accepted' ? '#00E676' : '#FF5252' }]} />
-                )}
-                <Text style={[styles.filterTabText, textStyle]}>
-                  {f === 'all'
-                    ? t('history.filterAll', { count: rides.length })
-                    : f === 'accepted' ? `✓ ${accepted}`
-                    : `✕ ${declined}`}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── RIDE LIST ── */}
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : filteredRides.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <MaterialCommunityIcons name="radar" size={32} color={colors.textDimmed} />
-            </View>
-            <Text style={styles.emptyTitle}>{t('history.empty')}</Text>
-          </View>
-        ) : (
-          filteredRides.map(ride => <RideCard key={ride.id} ride={ride} t={t} />)
-        )}
-
-      </ScrollView>
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+      />
 
       {/* ── CALENDAR MODAL (Plus only) ── */}
       <Modal
@@ -601,7 +642,19 @@ const styles = StyleSheet.create({
   metricSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 2 },
 
   // Empty state
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
+  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+  emptyHint: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', marginTop: -4 },
+  emptyCta: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  emptyCtaText: { color: colors.background, fontWeight: '700', fontSize: 13 },
   emptyIconWrap: {
     width: 72, height: 72, backgroundColor: colors.surface, borderRadius: 36,
     justifyContent: 'center', alignItems: 'center', marginBottom: 16,

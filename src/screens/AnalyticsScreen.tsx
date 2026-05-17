@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
+import LinearGradient from 'react-native-linear-gradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -22,13 +23,14 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { getPlanTier, getPlanLimits } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits } from '../services/subscriptionService';
 import { effectiveFare } from '../services/ridesService';
 import { useNavigation } from '@react-navigation/native';
 import { getDayStart } from '../utils/dateUtils';
 import EarningsChart from '../components/EarningsChart';
 import KpiTrendChart from '../components/KpiTrendChart';
 import AnimatedEntrance from '../components/AnimatedEntrance';
+import BrandLoader from '../components/BrandLoader';
 import { cacheStats, getCachedStats } from '../services/offlineService';
 
 LocaleConfig.locales['fr'] = {
@@ -70,10 +72,10 @@ const AnalyticsScreen = () => {
     supabase
       .from('preferences')
       .select('day_reset_hour')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        const h = data?.day_reset_hour === 3 ? 3 : 0;
+        const h = data?.day_reset_hour === 4 ? 4 : 0;
         setResetHour(h);
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
@@ -107,7 +109,10 @@ const AnalyticsScreen = () => {
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
 
+  const fetchingRef = useRef(false);
   const fetchAnalytics = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setLoading(true);
     setFetchError(false);
     try {
@@ -115,11 +120,11 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier')
+        .select('subscription_tier, subscription_expires_at')
         .eq('id', user.id)
         .single();
 
-      const planTier = getPlanTier(profileData?.subscription_tier);
+      const planTier = getEffectivePlanTier(profileData);
       getPlanLimits(planTier);
       const canAccessHistory = planTier !== 'free';
       setIsPremium(canAccessHistory);
@@ -131,22 +136,26 @@ const AnalyticsScreen = () => {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
       rangeEnd.setHours(resetHour, 0, 0, 0);
 
-      const { data: rides, error: ridesError } = await supabase
-        .from('rides')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', rangeStart.toISOString())
-        .lt('created_at', rangeEnd.toISOString());
+      // Parallélise rides + sessions (round-trips indépendants → -1 RTT)
+      const [
+        { data: rides, error: ridesError },
+        { data: sessionsData, error: sessionsError },
+      ] = await Promise.all([
+        supabase
+          .from('rides')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('created_at', rangeStart.toISOString())
+          .lt('created_at', rangeEnd.toISOString()),
+        supabase
+          .from('online_sessions')
+          .select('duration_seconds, start_at, end_at')
+          .eq('user_id', user.id)
+          .gte('start_at', rangeStart.toISOString())
+          .lt('start_at', rangeEnd.toISOString()),
+      ]);
 
       if (ridesError) throw ridesError;
-
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('online_sessions')
-        .select('duration_seconds, start_at, end_at')
-        .eq('user_id', user.id)
-        .gte('start_at', rangeStart.toISOString())
-        .lt('start_at', rangeEnd.toISOString());
-
       if (sessionsError) throw sessionsError;
 
       if (!rides || rides.length === 0) {
@@ -253,6 +262,7 @@ const AnalyticsScreen = () => {
       if (cached) setStats(cached);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, [user, dateRange, resetHour]);
 
@@ -400,9 +410,7 @@ const AnalyticsScreen = () => {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <View style={styles.loadingRing}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+            <BrandLoader size={12} />
             <Text style={styles.loadingText}>{t('analytics.loading')}</Text>
           </View>
         ) : (
@@ -425,7 +433,12 @@ const AnalyticsScreen = () => {
                   <View style={[StyleSheet.absoluteFill, styles.heroGlassTint]} />
                 </>
               ) : (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0F2D1F' }]} />
+                <LinearGradient
+                  colors={['#0F2D1F', '#0A1A12']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
               )}
               {/* top shimmer */}
               <View style={styles.heroShimmer} />
@@ -465,7 +478,12 @@ const AnalyticsScreen = () => {
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
+                  <LinearGradient
+                    colors={['#1A2A22', '#141E18']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
                 )}
                 <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
@@ -483,7 +501,12 @@ const AnalyticsScreen = () => {
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
+                  <LinearGradient
+                    colors={['#1A2A22', '#141E18']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
                 )}
                 <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
@@ -557,6 +580,10 @@ const AnalyticsScreen = () => {
                 {PLATFORMS.map(p => {
                   const pct = stats.appDistribution[p.key];
                   const earned = (stats.appEarnings as any)[p.key] as number;
+                  // À 0% on neutralise le badge (sinon Heetch/Bolt prennent leur couleur
+                  // brand même sans data — incohérent avec Uber blanc qui rend gris).
+                  const badgeBg = pct === 0 ? 'rgba(255,255,255,0.06)' : p.color + '22';
+                  const badgeFg = pct === 0 ? colors.textDimmed : p.color;
                   return (
                     <View key={p.key} style={styles.distItem}>
                       <View style={styles.distItemHeader}>
@@ -566,8 +593,8 @@ const AnalyticsScreen = () => {
                         </View>
                         <View style={styles.distItemRight}>
                           <Text style={styles.distEarning}>€{earned.toFixed(2)}</Text>
-                          <View style={[styles.distPctBadge, { backgroundColor: p.color + '22' }]}>
-                            <Text style={[styles.distPctText, { color: p.color }]}>{pct}%</Text>
+                          <View style={[styles.distPctBadge, { backgroundColor: badgeBg }]}>
+                            <Text style={[styles.distPctText, { color: badgeFg }]}>{pct}%</Text>
                           </View>
                         </View>
                       </View>
@@ -624,7 +651,7 @@ const AnalyticsScreen = () => {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.monthGrid}>
-                    {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m, idx) => {
+                    {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m: string, idx: number) => {
                       const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
                         && pickerYear === parseInt(currentMonth.split('-')[0]);
                       return (

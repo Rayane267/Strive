@@ -16,8 +16,13 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
-import { SCAN_PACKS, getPlanTier } from '../services/subscriptionService';
+import { SCAN_PACKS, getEffectivePlanTier } from '../services/subscriptionService';
 import { buyScanPack, restorePurchases, getStorePrices, isIAPAvailable } from '../services/iapService';
+import { waitForProfileUpdate } from '../services/profileService';
+
+// Flip à `true` quand la boutique sera prête. Tant que false, l'onglet reste
+// visible mais affiche un placeholder "Bientôt disponible".
+const SHOP_AVAILABLE = false;
 
 const ShopScreen = () => {
   const navigation = useNavigation<any>();
@@ -29,7 +34,7 @@ const ShopScreen = () => {
   const [storePrices, setStorePrices] = useState<Record<string, string>>({});
   const { toast, showToast, dismissToast } = useToast();
 
-  const tier = getPlanTier(profile?.subscription_tier);
+  const tier = getEffectivePlanTier(profile);
   const extraCredits = profile?.extra_scan_credits ?? 0;
 
   // Fetch real store prices from RevenueCat if available
@@ -45,7 +50,10 @@ const ShopScreen = () => {
     if (!user) return;
     setPurchasing(pack.id);
     try {
-      await buyScanPack(pack.productId, user.id, pack.quantity);
+      const before = profile?.extra_scan_credits ?? 0;
+      await buyScanPack(pack.productId);
+      // Attend que le webhook RC ait crédité les scans en DB.
+      await waitForProfileUpdate(user.id, p => (p.extra_scan_credits ?? 0) > before);
       await refreshProfile();
       showToast({
         type: 'success',
@@ -69,6 +77,9 @@ const ShopScreen = () => {
     setRestoring(true);
     try {
       const hasPlus = await restorePurchases(user.id);
+      if (hasPlus) {
+        await waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free');
+      }
       await refreshProfile();
       showToast({
         type: 'success',
@@ -81,6 +92,25 @@ const ShopScreen = () => {
       setRestoring(false);
     }
   };
+
+  if (!SHOP_AVAILABLE) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{t('shop.title')}</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: tabBarHeight }}>
+          <MaterialCommunityIcons name="storefront-outline" size={72} color={colors.primary} />
+          <Text style={{ color: colors.textMain, fontSize: 22, fontWeight: 'bold', marginTop: 20, textAlign: 'center' }}>
+            {t('shop.comingSoonTitle', 'Bientôt disponible')}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 10, textAlign: 'center', lineHeight: 21 }}>
+            {t('shop.comingSoonSub', 'La boutique de crédits sera bientôt accessible.')}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -101,7 +131,7 @@ const ShopScreen = () => {
             </View>
           </View>
           <View style={[styles.tierBadge, tier === 'premium' && styles.tierBadgePremium, tier === 'plus' && styles.tierBadgePlus]}>
-            <Text style={styles.tierBadgeText}>{tier.toUpperCase()}</Text>
+            <Text style={styles.tierBadgeText}>{(tier ?? 'free').toUpperCase()}</Text>
           </View>
         </View>
 
@@ -112,7 +142,7 @@ const ShopScreen = () => {
         <View style={styles.packsGrid}>
           {SCAN_PACKS.map(pack => {
             const isPurchasing = purchasing === pack.id;
-            const isBestValue = pack.id === 'scan_10';
+            const isBestValue = pack.id === 'pack_l';
 
             return (
               <TouchableOpacity

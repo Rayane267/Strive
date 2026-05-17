@@ -8,9 +8,13 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  TextInput,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
+import LinearGradient from 'react-native-linear-gradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +31,9 @@ const ProfileScreen = () => {
   const tabBarHeight = useBottomTabBarHeight();
   const { profile } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const tier = profile?.subscription_tier?.toLowerCase();
   const isPlus = tier === 'plus' || tier === 'pro' || tier === 'premium';
@@ -44,6 +51,35 @@ const ProfileScreen = () => {
     }
     const { error } = await supabase.auth.signOut();
     if (error) __DEV__ && console.error(error.message);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (deleteConfirmation.trim().toUpperCase() !== 'SUPPRIMER' &&
+        deleteConfirmation.trim().toUpperCase() !== 'DELETE') {
+      Alert.alert(
+        t('profile.deleteModal.errorTitle', 'Confirmation requise'),
+        t('profile.deleteModal.errorMessage', 'Tapez "SUPPRIMER" pour confirmer.'),
+      );
+      return;
+    }
+    setDeleting(true);
+    try {
+      // RPC Supabase : supprime profil + rides + preferences + auth.users
+      const { error } = await supabase.rpc('delete_account');
+      if (error) throw error;
+      // Sign out local
+      try { await GoogleSignin.signOut(); } catch {}
+      await supabase.auth.signOut();
+    } catch (e: any) {
+      Alert.alert(
+        t('profile.deleteModal.errorTitle', 'Erreur'),
+        e?.message ?? t('profile.deleteModal.errorGeneric', 'Suppression impossible. Réessayez ou contactez le support.'),
+      );
+    } finally {
+      setDeleting(false);
+      setIsDeleteModalVisible(false);
+      setDeleteConfirmation('');
+    }
   };
 
   const MENU_ITEMS = [
@@ -94,7 +130,12 @@ const ProfileScreen = () => {
               <View style={[StyleSheet.absoluteFill, styles.profileGlassTint]} />
             </>
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0F2D1F' }]} />
+            <LinearGradient
+              colors={['#0F2D1F', '#0A1A12']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
           )}
           {/* shimmer line */}
           <View style={styles.profileShimmer} />
@@ -135,13 +176,12 @@ const ProfileScreen = () => {
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
 
         {MENU_ITEMS.map((item, i) => (
-          <TouchableOpacity key={i} style={styles.menuItem} onPress={item.onPress}>
+          <TouchableOpacity key={i} style={styles.menuItem} onPress={item.onPress} accessibilityRole="button" accessibilityLabel={item.title}>
             <View style={styles.menuIconWrap}>
               <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.textMuted} />
             </View>
             <View style={styles.menuText}>
               <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuSub}>{item.sub}</Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.textDimmed} />
           </TouchableOpacity>
@@ -150,7 +190,7 @@ const ProfileScreen = () => {
         {/* ── RESOURCES ── */}
         <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t('profile.resources')}</Text>
 
-        <TouchableOpacity style={styles.menuItemHighlight} onPress={() => navigation.navigate('Tutorial')}>
+        <TouchableOpacity style={styles.menuItemHighlight} onPress={() => navigation.navigate('Tutorial')} accessibilityRole="button" accessibilityLabel={t('profile.tutorial')}>
           <View style={styles.highlightBar} />
           <View style={styles.menuIconWrapGreen}>
             <MaterialCommunityIcons name="school-outline" size={20} color={colors.primary} />
@@ -164,7 +204,7 @@ const ProfileScreen = () => {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Help')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Help')} accessibilityRole="button" accessibilityLabel={t('profile.help')}>
           <View style={styles.menuIconWrap}>
             <Feather name="help-circle" size={20} color={colors.textMuted} />
           </View>
@@ -182,12 +222,18 @@ const ProfileScreen = () => {
           <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
             onPress={() => changeLanguage('en')}
+            accessibilityRole="button"
+            accessibilityLabel="English"
+            accessibilityState={{ selected: i18n.language === 'en' }}
           >
             <Text style={styles.langBtnText}>🇬🇧 English</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
             onPress={() => changeLanguage('fr')}
+            accessibilityRole="button"
+            accessibilityLabel="Français"
+            accessibilityState={{ selected: i18n.language === 'fr' }}
           >
             <Text style={styles.langBtnText}>🇫🇷 Français</Text>
           </TouchableOpacity>
@@ -197,10 +243,33 @@ const ProfileScreen = () => {
         <TouchableOpacity
           style={styles.logoutBtn}
           onPress={() => setIsLogoutModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.logout')}
         >
           <Feather name="log-out" size={18} color={colors.danger} />
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
         </TouchableOpacity>
+
+        {/* ── DELETE ACCOUNT (obligatoire RGPD + stores) ── */}
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
+          onPress={() => setIsDeleteModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.deleteAccount', 'Supprimer mon compte')}
+        >
+          <Text style={styles.deleteAccountText}>{t('profile.deleteAccount', 'Supprimer mon compte')}</Text>
+        </TouchableOpacity>
+
+        {/* ── LEGAL LINKS ── */}
+        <View style={styles.legalLinksRow}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/privacy')}>
+            <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalSep}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/terms')}>
+            <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.versionText}>v2.4.1 (Build 204)</Text>
 
@@ -232,6 +301,53 @@ const ProfileScreen = () => {
                 onPress={confirmLogout}
               >
                 <Text style={styles.modalBtnConfirmText}>{t('profile.logoutModal.confirm')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── DELETE ACCOUNT MODAL ── */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={isDeleteModalVisible}
+        onRequestClose={() => { setIsDeleteModalVisible(false); setDeleteConfirmation(''); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
+              <Feather name="alert-triangle" size={26} color={colors.danger} />
+            </View>
+            <Text style={styles.modalTitle}>{t('profile.deleteModal.title', 'Supprimer le compte ?')}</Text>
+            <Text style={styles.modalMessage}>
+              {t('profile.deleteModal.message', 'Action irréversible : compte, préférences et historique des courses seront définitivement supprimés.')}
+            </Text>
+            <TextInput
+              style={styles.deleteInput}
+              placeholder={t('profile.deleteModal.placeholder', 'Tapez SUPPRIMER')}
+              placeholderTextColor={colors.textDimmed}
+              value={deleteConfirmation}
+              onChangeText={setDeleteConfirmation}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => { setIsDeleteModalVisible(false); setDeleteConfirmation(''); }}
+                disabled={deleting}
+              >
+                <Text style={styles.modalBtnCancelText}>{t('profile.logoutModal.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnConfirm, deleting && { opacity: 0.6 }]}
+                onPress={confirmDeleteAccount}
+                disabled={deleting}
+              >
+                <Text style={styles.modalBtnConfirmText}>
+                  {deleting ? '…' : t('profile.deleteModal.confirm', 'Supprimer')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -441,6 +557,42 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoutText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
+
+  deleteAccountBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  deleteAccountText: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+
+  legalLinksRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
+  legalSep: { color: colors.textDimmed, fontSize: 11 },
+
+  deleteInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: colors.textMain,
+    backgroundColor: 'rgba(239,68,68,0.05)',
+    marginBottom: 16,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
 
   versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
 

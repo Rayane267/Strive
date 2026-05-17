@@ -12,6 +12,14 @@ export interface ScanResult {
   pickupAddress?: string;
   /** Adresse de destination extraite par l'OCR */
   destinationAddress?: string;
+  /** Temps d'approche (min) extrait par l'OCR — ligne "X min • X.X km" sous l'adresse de pickup */
+  pickupDurationMin?: number;
+  /** Distance d'approche (km) extraite par l'OCR */
+  pickupDistanceKm?: number;
+  /** Image JPEG compressée en base64 — servie par le natif pour alimenter le fallback LLM JS */
+  imageBase64?: string;
+  /** Dump JSON des blocs ML Kit/Vision pour diagnostic — populé en DEV uniquement côté natif */
+  debugBlocks?: string;
 }
 
 /** Bloc texte brut retourné par ML Kit (Android) ou Vision (iOS) */
@@ -45,12 +53,22 @@ export interface ScannerService {
   showVerdict(level: number): void;
   /** Met à jour la durée affichée dans la bulle avec la valeur TomTom */
   updateDuration(minutes: number): void;
-  /** Initialise la clé API Gemini pour le fallback vision (dev uniquement) */
-  setGeminiApiKey(key: string): void;
+  /** Met à jour toutes les métriques affichées dans la bulle (après calcul pickup + TomTom) */
+  updateMetrics(hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number): void;
+  /** Transitionne la bulle de loading → résultat final avec valeurs TomTom + verdict. */
+  finalizeScan(hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number, verdictLevel: number): void;
   /** Configure l'edge function Supabase comme proxy Gemini (prod) */
   setGeminiConfig(edgeUrl: string, supabaseAnonKey: string): void;
+  /** JWT user — requis par l'edge function durcie (rate-limit + audit par user_id) */
+  setSupabaseUserJwt(jwt: string): void;
   /** Applique la remote config de parsing VTC depuis Supabase */
   setParserConfig(configJson: string): void;
+  /** Transmet les préférences utilisateur à la bulle native (calcul initial avec/sans pickup) */
+  setPreferences(includePickup: boolean): void;
+  /** Seuils verdict (€/h et €/km) synchronisés au natif pour calcul TomTom en background */
+  setThresholds(minHourlyRate: number, minKmRate: number): void;
+  /** Clé TomTom — permet au service natif de géocoder sans JS actif */
+  setTomTomApiKey(key: string): void;
   /** Vérifie l'état complet des permissions */
   checkPermissions(): Promise<PermissionsStatus>;
   /** Ouvre les paramètres overlay */

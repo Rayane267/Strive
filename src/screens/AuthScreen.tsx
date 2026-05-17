@@ -6,11 +6,16 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  Platform,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import Feather from 'react-native-vector-icons/Feather';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -18,30 +23,147 @@ import { sha256 } from 'js-sha256';
 import appleAuth from '@invertase/react-native-apple-authentication';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
+import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
+import { registerDeviceSignup } from '../utils/deviceId';
+import BrandLoader from '../components/BrandLoader';
 
 GoogleSignin.configure({
-  webClientId: '397785965149-4gq72k418u7cd5rhf4mmkbvof2nclqsl.apps.googleusercontent.com',
-  iosClientId: '397785965149-7at5j010btil8a2vfbq6i3s7snu1ob15.apps.googleusercontent.com',
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+  iosClientId: GOOGLE_IOS_CLIENT_ID,
 });
+
+type Mode = 'idle' | 'login' | 'signup' | 'reset';
 
 const AuthScreen = () => {
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<Mode>('idle');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
   const { t } = useTranslation();
+
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+  const isStrongEnough = (p: string) => p.length >= 8;
+
+  const generateSecureNonce = (): string => {
+    const bytes = new Uint8Array(32);
+    // crypto exposé par react-native-url-polyfill/auto importé dans services/supabase.ts
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const mapAuthError = (msg: string) => {
+    const m = msg.toLowerCase();
+    if (m.includes('disposable_email_not_allowed')) return t('auth.errors.disposable', 'Adresse email jetable non autorisée');
+    if (m.includes('invalid login') || m.includes('invalid credentials')) return t('auth.errors.invalidCreds', 'Email ou mot de passe incorrect');
+    if (m.includes('email not confirmed')) return t('auth.errors.notConfirmed', 'Confirmez votre email avant de vous connecter');
+    if (m.includes('user already registered') || m.includes('already exists') || m.includes('duplicate')) return t('auth.errors.alreadyExists', 'Un compte existe déjà avec cet email');
+    if (m.includes('rate limit')) return t('auth.errors.rateLimit', 'Trop de tentatives. Réessayez dans quelques minutes.');
+    if (m.includes('weak password')) return t('auth.errors.weakPassword', 'Mot de passe trop faible (minimum 8 caractères)');
+    return msg;
+  };
+
+  const handleEmailSignup = async () => {
+    if (!isValidEmail(email)) {
+      showToast({ type: 'error', title: t('auth.errors.signupTitle', 'Inscription'), message: t('auth.errors.invalidEmail', 'Email invalide') });
+      return;
+    }
+    if (!isStrongEnough(password)) {
+      showToast({ type: 'error', title: t('auth.errors.signupTitle', 'Inscription'), message: t('auth.errors.weakPassword', 'Mot de passe trop faible (minimum 8 caractères)') });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) throw error;
+      // Si confirm email actif → user créé mais session null tant que l'email n'est pas vérifié
+      if (data.user && !data.session) {
+        showToast({
+          type: 'success',
+          title: t('auth.signupSuccessTitle', 'Inscription réussie'),
+          message: t('auth.checkEmail', 'Vérifiez votre email pour confirmer votre compte'),
+        });
+        setMode('login');
+        setPassword('');
+      } else if (data.session) {
+        // Confirm email désactivé → log direct + register device
+        await registerDeviceSignup();
+      }
+    } catch (e: any) {
+      showToast({ type: 'error', title: t('auth.errors.signupTitle', 'Inscription'), message: mapAuthError(e?.message ?? '') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    if (!isValidEmail(email) || !password) {
+      showToast({ type: 'error', title: t('auth.errors.loginTitle', 'Connexion'), message: t('auth.errors.fillAllFields', 'Renseignez tous les champs') });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) throw error;
+    } catch (e: any) {
+      showToast({ type: 'error', title: t('auth.errors.loginTitle', 'Connexion'), message: mapAuthError(e?.message ?? '') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!isValidEmail(email)) {
+      showToast({ type: 'error', title: t('auth.errors.resetTitle', 'Réinitialisation'), message: t('auth.errors.invalidEmail', 'Email invalide') });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: 'strive://reset-password',
+      });
+      if (error) throw error;
+      showToast({
+        type: 'success',
+        title: t('auth.resetSentTitle', 'Email envoyé'),
+        message: t('auth.resetSent', 'Vérifiez votre boîte mail pour réinitialiser votre mot de passe'),
+      });
+      setMode('login');
+    } catch (e: any) {
+      showToast({ type: 'error', title: t('auth.errors.resetTitle', 'Réinitialisation'), message: mapAuthError(e?.message ?? '') });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
-      const rawNonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-      const hashedNonce = sha256(rawNonce);
-      const userInfo = await (GoogleSignin.signIn as any)({ nonce: hashedNonce });
+      // Nonce is only supported on iOS (native patch). Android's legacy
+      // GMS GoogleSignIn API ignores it, which causes Supabase token
+      // verification to fail. So we only use nonce on iOS.
+      const useNonce = Platform.OS === 'ios';
+      // CSPRNG via crypto.getRandomValues (polyfillé par react-native-url-polyfill/auto).
+      // Indispensable pour un nonce anti-replay : Math.random est prédictible.
+      const rawNonce = useNonce ? generateSecureNonce() : undefined;
+      const hashedNonce = rawNonce ? sha256(rawNonce) : undefined;
+      const userInfo = await (GoogleSignin.signIn as any)(
+        useNonce ? { nonce: hashedNonce } : {},
+      );
       const idToken = userInfo.data?.idToken;
       if (idToken) {
         const { error } = await supabase.auth.signInWithIdToken({
           provider: 'google',
           token: idToken,
-          nonce: rawNonce,
+          ...(rawNonce ? { nonce: rawNonce } : {}),
         });
         if (error) throw error;
       }
@@ -91,13 +213,13 @@ const AuthScreen = () => {
       </View>
 
       {/* ── BOUTONS ── */}
-      <View style={styles.actions}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.actions}>
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <BrandLoader size={12} />
             <Text style={styles.loadingText}>{t('auth.connecting')}</Text>
           </View>
-        ) : (
+        ) : mode === 'idle' ? (
           <>
             {/* Google */}
             <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogleLogin} activeOpacity={0.85}>
@@ -112,16 +234,119 @@ const AuthScreen = () => {
               <FontAwesome name="apple" size={20} color="#fff" />
               <Text style={styles.btnAppleText}>{t('auth.continueApple')}</Text>
             </TouchableOpacity>
+
+            {/* Séparateur */}
+            <View style={styles.separator}>
+              <View style={styles.separatorLine} />
+              <Text style={styles.separatorText}>{t('auth.or', 'ou')}</Text>
+              <View style={styles.separatorLine} />
+            </View>
+
+            {/* Email */}
+            <TouchableOpacity style={styles.btnEmail} onPress={() => setMode('login')} activeOpacity={0.85}>
+              <Feather name="mail" size={18} color={colors.textMain} />
+              <Text style={styles.btnEmailText}>{t('auth.continueEmail', 'Continuer avec email')}</Text>
+            </TouchableOpacity>
           </>
+        ) : (
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12 }}>
+            {/* Header retour */}
+            <TouchableOpacity onPress={() => { setMode('idle'); setPassword(''); }} style={styles.backBtn}>
+              <Feather name="chevron-left" size={20} color={colors.textMain} />
+              <Text style={styles.backText}>
+                {mode === 'signup' && t('auth.signup', 'Créer un compte')}
+                {mode === 'login' && t('auth.login', 'Connexion')}
+                {mode === 'reset' && t('auth.resetTitle', 'Réinitialiser le mot de passe')}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Email */}
+            <View style={styles.inputWrap}>
+              <Feather name="mail" size={16} color={colors.textDimmed} />
+              <TextInput
+                style={styles.input}
+                placeholder={t('auth.emailPlaceholder', 'Votre adresse email')}
+                placeholderTextColor={colors.textDimmed}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+              />
+            </View>
+
+            {/* Password (sauf en mode reset) */}
+            {mode !== 'reset' && (
+              <View style={styles.inputWrap}>
+                <Feather name="lock" size={16} color={colors.textDimmed} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.passwordPlaceholder', 'Mot de passe')}
+                  placeholderTextColor={colors.textDimmed}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete={mode === 'signup' ? 'password-new' : 'password'}
+                  textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(s => !s)}>
+                  <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color={colors.textDimmed} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* CTA principal */}
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={mode === 'signup' ? handleEmailSignup : mode === 'login' ? handleEmailLogin : handleResetPassword}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>
+                {mode === 'signup' && t('auth.signupCta', "S'inscrire")}
+                {mode === 'login' && t('auth.loginCta', 'Se connecter')}
+                {mode === 'reset' && t('auth.resetCta', "Envoyer l'email")}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Liens secondaires */}
+            <View style={styles.linksRow}>
+              {mode === 'login' && (
+                <>
+                  <TouchableOpacity onPress={() => setMode('reset')}>
+                    <Text style={styles.linkText}>{t('auth.forgotPassword', 'Mot de passe oublié ?')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setMode('signup'); setPassword(''); }}>
+                    <Text style={styles.linkText}>{t('auth.noAccount', "Pas encore de compte ?")}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {mode === 'signup' && (
+                <TouchableOpacity onPress={() => { setMode('login'); setPassword(''); }}>
+                  <Text style={styles.linkText}>{t('auth.haveAccount', 'Déjà un compte ? Se connecter')}</Text>
+                </TouchableOpacity>
+              )}
+              {mode === 'reset' && (
+                <TouchableOpacity onPress={() => setMode('login')}>
+                  <Text style={styles.linkText}>{t('auth.backToLogin', 'Retour à la connexion')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
         )}
 
-        <Text style={styles.footer}>
-          {t('auth.termsText')}{' '}
-          <Text style={styles.footerLink}>{t('auth.termsLink')}</Text>
-          {' '}{t('auth.andText')}{' '}
-          <Text style={styles.footerLink}>{t('auth.privacyLink')}</Text>
-        </Text>
-      </View>
+        {mode === 'idle' && (
+          <Text style={styles.footer}>
+            {t('auth.termsText')}{' '}
+            <Text style={styles.footerLink}>{t('auth.termsLink')}</Text>
+            {' '}{t('auth.andText')}{' '}
+            <Text style={styles.footerLink}>{t('auth.privacyLink')}</Text>
+          </Text>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -224,6 +449,96 @@ const styles = StyleSheet.create({
   footerLink: {
     color: colors.primary,
     fontWeight: '600',
+  },
+
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 4,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  separatorText: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  btnEmail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  btnEmailText: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  backText: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  input: {
+    flex: 1,
+    color: colors.textMain,
+    fontSize: 15,
+    padding: 0,
+  },
+
+  btnPrimary: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  btnPrimaryText: {
+    color: colors.background,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  linksRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 6,
+  },
+  linkText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

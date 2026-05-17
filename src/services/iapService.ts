@@ -1,38 +1,30 @@
-/**
- * IAP Service — RevenueCat wrapper
- *
- * Setup required before this works:
- *  1. npm install react-native-purchases
- *  2. iOS:  cd ios && pod install
- *  3. Android: no extra steps (auto-linked)
- *  4. Create a RevenueCat account at revenuecat.com
- *  5. Add to .env:
- *       REVENUECAT_API_KEY_ANDROID=appl_xxxxxxxx
- *       REVENUECAT_API_KEY_IOS=appl_xxxxxxxx
- *  6. Create products in Google Play Console + App Store Connect
- *     with the identifiers defined in IAP_PRODUCTS below
- *  7. Add those products + entitlements in the RevenueCat dashboard
- */
-
 import { Platform } from 'react-native';
-import { supabase } from './supabase';
+import * as Sentry from '@sentry/react-native';
 import { REVENUECAT_API_KEY_ANDROID, REVENUECAT_API_KEY_IOS } from '@env';
 
 // ─── Product identifiers ───────────────────────────────────────────────────────
-// These must match exactly what you create in:
-//   - Google Play Console → Monetize → In-app products (consumable)
-//   - App Store Connect → In-App Purchases (consumable)
-//   - RevenueCat dashboard → Products
+// Doit rester synchro avec public.subscription_products en DB.
+// La DB est la source de vérité finale (le webhook met à jour profiles via lookup).
 export const IAP_PRODUCTS = {
-  SCAN_1:       'strive_scan_1',
-  SCAN_3:       'strive_scan_3',
-  SCAN_5:       'strive_scan_5',
-  SCAN_10:      'strive_scan_10',
-  PLUS_MONTHLY: 'strive_plus_monthly',
+  // Subscriptions
+  PLUS_MONTHLY:    'strive_plus_monthly',
+  PLUS_YEARLY:     'strive_plus_yearly',
+  PREMIUM_MONTHLY: 'strive_premium_monthly',
+  PREMIUM_YEARLY:  'strive_premium_yearly',
+  // Consumables (packs scans)
+  SCAN_PACK_XS:    'strive_scan_pack_xs',  // 1 scan
+  SCAN_PACK_S:     'strive_scan_pack_s',   // 3 scans
+  SCAN_PACK_M:     'strive_scan_pack_m',   // 5 scans
+  SCAN_PACK_L:     'strive_scan_pack_l',   // 10 scans
 } as const;
 
-// RevenueCat entitlement ID (configure in RevenueCat dashboard)
+// Entitlements RC (à configurer dans RC dashboard)
 export const PLUS_ENTITLEMENT = 'plus';
+export const PREMIUM_ENTITLEMENT = 'premium';
+
+// Note : le caller (SubscriptionScreen, ShopScreen) doit utiliser
+// waitForProfileUpdate de profileService après chaque achat pour attendre
+// que le webhook RC ait propagé l'update en DB.
 
 // ─── Lazy-load RevenueCat (graceful fallback if package not installed) ─────────
 let _Purchases: any = null;
@@ -68,7 +60,9 @@ export function initPurchases(userId: string): void {
   }
 
   if (_initialized) {
-    Purchases.logIn(userId).catch(() => {});
+    Purchases.logIn(userId).catch((e: any) => {
+      Sentry.addBreadcrumb({ category: 'iap', message: `logIn failed: ${e?.message ?? e}`, level: 'warning' });
+    });
     return;
   }
 
@@ -101,12 +95,11 @@ function isPurchaseCancelledError(e: any): boolean {
   return e?.code === '1' || e?.userCancelled === true;
 }
 
-// ─── Purchase scan pack (consumable) ──────────────────────────────────────────
-export async function buyScanPack(
-  productId: string,
-  userId: string,
-  quantity: number,
-): Promise<void> {
+// ─── Purchase consumable pack (scans) ─────────────────────────────────────────
+// Le webhook RC reçoit NON_RENEWING_PURCHASE → apply_revenuecat_event
+// → incrémente profiles.extra_scan_credits selon scan_credits du SKU en DB.
+// Pas d'UPDATE direct côté client (bloqué par le trigger anti-tampering).
+export async function buyScanPack(productId: string): Promise<void> {
   const Purchases = rc();
   if (!Purchases) throw new Error('IAP_NOT_AVAILABLE');
 
@@ -116,33 +109,24 @@ export async function buyScanPack(
 
   try {
     await Purchases.purchasePackage(pkg);
+    Sentry.addBreadcrumb({ category: 'iap', message: `Purchased ${productId}`, level: 'info' });
   } catch (e: any) {
     if (isPurchaseCancelledError(e)) throw new Error('CANCELLED');
+    Sentry.captureException(e, { tags: { flow: 'iap_purchase', productId } });
     throw e;
   }
-
-  // Optimistic DB update — RevenueCat webhook is the source of truth in production
-  const { data } = await supabase
-    .from('profiles')
-    .select('extra_scan_credits')
-    .eq('id', userId)
-    .single();
-  const current = (data?.extra_scan_credits as number) ?? 0;
-  const { error } = await supabase
-    .from('profiles')
-    .update({ extra_scan_credits: current + quantity })
-    .eq('id', userId);
-  if (error) throw error;
 }
 
-// ─── Purchase Plus subscription ────────────────────────────────────────────────
-export async function buyPlus(userId: string): Promise<void> {
+// ─── Purchase subscription (Plus / Premium) ───────────────────────────────────
+// Le webhook RC reçoit INITIAL_PURCHASE → apply_revenuecat_event
+// → met à jour profiles.subscription_tier selon le mapping en DB.
+export async function buySubscription(productId: string): Promise<{ entitlement: string | null }> {
   const Purchases = rc();
   if (!Purchases) throw new Error('IAP_NOT_AVAILABLE');
 
   const packages = await getAllPackages();
-  const pkg = packages[IAP_PRODUCTS.PLUS_MONTHLY];
-  if (!pkg) throw new Error(`Product not found: ${IAP_PRODUCTS.PLUS_MONTHLY}`);
+  const pkg = packages[productId];
+  if (!pkg) throw new Error(`Product not found: ${productId}`);
 
   let customerInfo: any;
   try {
@@ -152,31 +136,54 @@ export async function buyPlus(userId: string): Promise<void> {
     throw e;
   }
 
-  if (customerInfo?.entitlements?.active?.[PLUS_ENTITLEMENT]) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ subscription_tier: 'plus' })
-      .eq('id', userId);
-    if (error) throw error;
-  }
+  const active = customerInfo?.entitlements?.active ?? {};
+  if (active[PREMIUM_ENTITLEMENT]) return { entitlement: PREMIUM_ENTITLEMENT };
+  if (active[PLUS_ENTITLEMENT]) return { entitlement: PLUS_ENTITLEMENT };
+  return { entitlement: null };
 }
 
-// ─── Restore purchases (required by App Store guidelines) ──────────────────────
-export async function restorePurchases(userId: string): Promise<boolean> {
+// Backcompat : conserve l'ancienne signature buyPlus utilisée par SubscriptionScreen
+export async function buyPlus(_userId: string): Promise<void> {
+  await buySubscription(IAP_PRODUCTS.PLUS_MONTHLY);
+}
+
+// ─── Restore purchases (obligatoire pour validation App Store) ────────────────
+// Renvoie true si au moins un entitlement actif est trouvé. Le webhook RC reçoit
+// les events de restore et met à jour la DB.
+const RESTORE_TIMEOUT_MS = 15_000;
+
+export async function restorePurchases(_userId?: string): Promise<boolean> {
   const Purchases = rc();
   if (!Purchases) throw new Error('IAP_NOT_AVAILABLE');
 
-  const customerInfo = await Purchases.restorePurchases();
-  const hasPlus = !!customerInfo?.entitlements?.active?.[PLUS_ENTITLEMENT];
-
-  if (hasPlus) {
-    await supabase
-      .from('profiles')
-      .update({ subscription_tier: 'plus' })
-      .eq('id', userId);
+  try {
+    const customerInfo = await Promise.race([
+      Purchases.restorePurchases(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('RESTORE_TIMEOUT')), RESTORE_TIMEOUT_MS),
+      ),
+    ]);
+    const active = customerInfo?.entitlements?.active ?? {};
+    const hasEntitlement = !!active[PLUS_ENTITLEMENT] || !!active[PREMIUM_ENTITLEMENT];
+    Sentry.addBreadcrumb({ category: 'iap', message: `Restore done (active=${hasEntitlement})`, level: 'info' });
+    return hasEntitlement;
+  } catch (e: any) {
+    Sentry.captureException(e, { tags: { flow: 'iap_restore' } });
+    throw e;
   }
+}
 
-  return hasPlus;
+// ─── Logout RC (à appeler au signOut Supabase pour éviter les fuites cross-comptes) ─
+export async function logoutPurchases(): Promise<void> {
+  const Purchases = rc();
+  if (!Purchases) return;
+  try {
+    await Purchases.logOut();
+  } catch (e: any) {
+    // Logout RC throw si pas connecté — pas grave, mais on log pour repérer
+    // les vrais bugs (ex: token corrompu, network erreur).
+    Sentry.addBreadcrumb({ category: 'iap', message: `logOut error: ${e?.message ?? e}`, level: 'info' });
+  }
 }
 
 // ─── Get real price label from store (optional enhancement) ───────────────────

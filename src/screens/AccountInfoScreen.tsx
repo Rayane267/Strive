@@ -22,6 +22,8 @@ import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 
 import AvatarView from '../components/AvatarView';
+import BrandLoader from '../components/BrandLoader';
+import { hapticSuccess, hapticError } from '../utils/haptics';
 
 interface InputFieldProps {
   label: string;
@@ -132,12 +134,14 @@ const AccountInfoScreen = () => {
       });
       if (error) throw error;
       if (refreshProfile) refreshProfile();
+      hapticSuccess();
       showToast({
         type: 'success',
         title: t('common.success'),
         message: t('carSettings.success.saved'),
       });
     } catch (error) {
+      hapticError();
       showToast({ type: 'error', title: t('common.error'), message: t('accountInfo.errorSave') });
       __DEV__ && console.error(error);
     } finally {
@@ -185,7 +189,7 @@ const AccountInfoScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top']}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <BrandLoader size={12} />
       </SafeAreaView>
     );
   }

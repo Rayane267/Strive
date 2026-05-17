@@ -1,8 +1,11 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
 import { fetchProfile } from '../services/profileService';
-import { initPurchases } from '../services/iapService';
+import { initPurchases, logoutPurchases } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
+import { registerDeviceSignup } from '../utils/deviceId';
+import { scannerService } from '../services/scanner';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '../types/database';
 
@@ -60,12 +63,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
+          Sentry.setUser({ id: initialSession.user.id, email: initialSession.user.email });
+          Sentry.addBreadcrumb({ category: 'auth', message: 'Session restored', level: 'info' });
+          // JWT au natif → édge function gemini-proxy autorise l'appel.
+          try { scannerService.setSupabaseUserJwt(initialSession.access_token); } catch {}
           initPurchases(initialSession.user.id);
           await loadProfile(initialSession.user.id);
-          registerPushToken(initialSession.user.id);
+          registerPushToken(initialSession.user.id).catch((e) =>
+            Sentry.captureException(e, { tags: { flow: 'push_token_init' } }),
+          );
           notifCleanupRef.current = setupNotificationListeners();
         }
       } catch (err) {
+        Sentry.captureException(err, { tags: { flow: 'auth_init' } });
         __DEV__ && console.error('[AUTH] Fatal error:', err);
       } finally {
         setLoading(false);
@@ -82,17 +92,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
+        Sentry.setUser({ id: currentSession.user.id, email: currentSession.user.email });
+        Sentry.addBreadcrumb({ category: 'auth', message: `Auth state: ${_event}`, level: 'info' });
+        // Sync JWT au natif à chaque event (SIGNED_IN, TOKEN_REFRESHED…).
+        try { scannerService.setSupabaseUserJwt(currentSession.access_token); } catch {}
+        // Anti-multi-comptes : enregistre le device au signup ou au tout 1er login.
+        // SIGNED_IN avec un user fraîchement créé → register_device_signup détecte
+        // côté serveur si ce device a déjà servi pour un autre compte.
+        if (_event === 'SIGNED_IN') {
+          registerDeviceSignup().catch(() => {});
+        }
         initPurchases(currentSession.user.id);
-        loadProfile(currentSession.user.id);
-        registerPushToken(currentSession.user.id);
+        loadProfile(currentSession.user.id).catch((e) =>
+          Sentry.captureException(e, { tags: { flow: 'profile_reload' } }),
+        );
+        registerPushToken(currentSession.user.id).catch((e) =>
+          Sentry.captureException(e, { tags: { flow: 'push_token_refresh' } }),
+        );
         if (!notifCleanupRef.current) {
           notifCleanupRef.current = setupNotificationListeners();
         }
       } else {
+        Sentry.setUser(null);
+        Sentry.addBreadcrumb({ category: 'auth', message: 'User signed out', level: 'info' });
+        // Purge le JWT côté natif au logout.
+        try { scannerService.setSupabaseUserJwt(''); } catch {}
         setProfile(null);
         setProfileError(false);
         notifCleanupRef.current?.();
         notifCleanupRef.current = null;
+        logoutPurchases();
       }
       setLoading(false);
     });

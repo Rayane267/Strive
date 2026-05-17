@@ -14,6 +14,9 @@ final class GeminiVisionService {
   var edgeFunctionUrl: String?
   var supabaseAnonKey: String?
 
+  /// JWT user — requis par l'edge function durcie (rate-limit + audit).
+  var supabaseUserJwt: String?
+
   struct GeminiResult {
     let platform: String   // UBER, BOLT, HEETCH, UNKNOWN
     let fare: Double
@@ -57,7 +60,14 @@ final class GeminiVisionService {
       var req = URLRequest(url: url)
       req.httpMethod = "POST"
       req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+      // JWT user si dispo (edge function durcie l'exige), sinon anon key.
+      let bearer: String
+      if let jwt = supabaseUserJwt, !jwt.isEmpty {
+        bearer = jwt
+      } else {
+        bearer = anonKey
+      }
+      req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
       req.setValue(anonKey, forHTTPHeaderField: "apikey")
       req.httpBody = try? JSONSerialization.data(withJSONObject: [
         "imageBase64": base64,
@@ -105,10 +115,12 @@ final class GeminiVisionService {
   Retourne UNIQUEMENT un objet JSON avec ces champs :
   {
     "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
-    "fare": <nombre décimal en euros>,
-    "distance_km": <nombre décimal en km>,
-    "duration_min": <entier en minutes ou null>
+    "fare": <montant en euros, ex: 12.50>,
+    "distance_km": <distance de la COURSE en km, ex: 11.8>,
+    "duration_min": <durée de la course en minutes ou null si non visible>
   }
+  IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
+  Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
   Ne retourne rien d'autre que le JSON.
   """
 
@@ -158,7 +170,7 @@ final class GeminiVisionService {
 
     // Sanity bounds (mêmes que Android)
     guard fare >= 3, fare <= 200,
-          distanceKm >= 0.3, distanceKm <= 150
+          distanceKm >= 0.3, distanceKm <= 1000
     else { return nil }
 
     return GeminiResult(

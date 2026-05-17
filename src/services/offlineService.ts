@@ -6,7 +6,11 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { Ride } from '../types/database';
+
+const CACHE_VERSION = 1;
+const CACHE_VERSION_KEY = '@strive_cache_version';
 
 const KEYS = {
   RIDES: '@strive_offline_rides',
@@ -14,6 +18,28 @@ const KEYS = {
   PREFERENCES: '@strive_offline_prefs',
   LAST_SYNC: '@strive_last_sync',
 } as const;
+
+/**
+ * Vérifie la version du cache. Si elle ne correspond pas,
+ * efface tout le cache pour éviter les erreurs de parsing.
+ */
+async function ensureCacheVersion(): Promise<void> {
+  try {
+    const stored = await AsyncStorage.getItem(CACHE_VERSION_KEY);
+    if (stored === null) {
+      // First run — just set version, no data to clear
+      await AsyncStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
+    } else if (stored !== String(CACHE_VERSION)) {
+      // Version changed — clear stale cache
+      await AsyncStorage.multiRemove(Object.values(KEYS));
+      await AsyncStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
+    }
+  } catch {
+    // Silent fail
+  }
+}
+
+let _versionChecked = false;
 
 interface CachedStats {
   totalProfit: number;
@@ -45,6 +71,7 @@ export async function cacheRides(rides: Ride[]): Promise<void> {
 
 export async function getCachedRides(): Promise<Ride[] | null> {
   try {
+    if (!_versionChecked) { await ensureCacheVersion(); _versionChecked = true; }
     const raw = await AsyncStorage.getItem(KEYS.RIDES);
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -104,15 +131,23 @@ export async function getLastSyncTime(): Promise<string | null> {
  * Queue une ride créée hors-ligne pour sync ultérieur.
  * Les rides sont ajoutées au cache local et marquées pour upload.
  */
+const MAX_QUEUE_SIZE = 100;
+const MAX_RETRY_COUNT = 5;
+const RETRY_KEY = '@strive_offline_retries';
+
 export async function queueOfflineRide(ride: Omit<Ride, 'id'>): Promise<void> {
   try {
     const QUEUE_KEY = '@strive_offline_queue';
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
     const queue: Omit<Ride, 'id'>[] = raw ? JSON.parse(raw) : [];
+    if (queue.length >= MAX_QUEUE_SIZE) {
+      Sentry.addBreadcrumb({ category: 'offline', message: `Queue full (${MAX_QUEUE_SIZE}), dropping oldest`, level: 'warning' });
+      queue.shift();
+    }
     queue.push(ride);
     await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch {
-    // Silent fail
+    // Silent fail — cache is best-effort
   }
 }
 
@@ -131,19 +166,48 @@ export async function syncOfflineQueue(
     const queue: Omit<Ride, 'id'>[] = JSON.parse(raw);
     if (queue.length === 0) return 0;
 
+    // Load retry counts
+    const retryRaw = await AsyncStorage.getItem(RETRY_KEY);
+    const retries: Record<number, number> = retryRaw ? JSON.parse(retryRaw) : {};
+
     let synced = 0;
     const failed: Omit<Ride, 'id'>[] = [];
+    const newRetries: Record<number, number> = {};
 
-    for (const ride of queue) {
+    for (let i = 0; i < queue.length; i++) {
+      const ride = queue[i];
+      const retryCount = retries[i] ?? 0;
+
+      // Drop rides that failed too many times
+      if (retryCount >= MAX_RETRY_COUNT) {
+        Sentry.captureMessage(`Offline ride dropped after ${MAX_RETRY_COUNT} retries`, {
+          level: 'warning',
+          tags: { flow: 'offline_sync' },
+          extra: { platform: ride.platform, fare: ride.fare_estimated },
+        });
+        continue;
+      }
+
       try {
         await uploadFn(ride);
         synced++;
       } catch {
+        // L'index ré-écrit doit correspondre à la position de la ride dans le
+        // tableau `failed` (qui devient le nouveau `queue`), pas à `failed.length`
+        // au moment du push (qui pointe sur l'élément suivant).
+        const newIndex = failed.length;
         failed.push(ride);
+        newRetries[newIndex] = retryCount + 1;
       }
     }
 
     await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
+    await AsyncStorage.setItem(RETRY_KEY, JSON.stringify(newRetries));
+
+    if (synced > 0) {
+      Sentry.addBreadcrumb({ category: 'offline', message: `Synced ${synced} ride(s), ${failed.length} remaining`, level: 'info' });
+    }
+
     return synced;
   } catch {
     return 0;
@@ -155,8 +219,8 @@ export async function syncOfflineQueue(
  */
 export async function clearOfflineCache(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove(Object.values(KEYS));
-    await AsyncStorage.removeItem('@strive_offline_queue');
+    await AsyncStorage.multiRemove([...Object.values(KEYS), '@strive_offline_queue', RETRY_KEY, CACHE_VERSION_KEY]);
+    _versionChecked = false;
   } catch {
     // Silent fail
   }

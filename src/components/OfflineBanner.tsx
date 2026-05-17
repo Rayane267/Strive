@@ -8,7 +8,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useTranslation } from 'react-i18next';
 
-const OfflineBanner: React.FC = () => {
+const OfflineBanner: React.FC = React.memo(() => {
   const { isConnected } = useNetworkStatus();
   const { t } = useTranslation();
 
@@ -20,7 +20,7 @@ const OfflineBanner: React.FC = () => {
       <Text style={styles.text}>{t('network.offline', 'No internet connection')}</Text>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   banner: {

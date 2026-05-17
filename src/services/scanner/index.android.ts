@@ -27,10 +27,20 @@ export const scannerService: ScannerService = {
 
   updateDuration: (minutes: number) => ScanBridge.updateDuration(minutes),
 
-  setGeminiApiKey: (key: string) => ScanBridge.setGeminiApiKey(key),
+  updateMetrics: (hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number) =>
+    ScanBridge.updateMetrics(hourlyRate, kmRate, durationMin, distanceKm),
+
+  finalizeScan: (hourlyRate: number, kmRate: number, durationMin: number, distanceKm: number, verdictLevel: number) =>
+    ScanBridge.finalizeScan(hourlyRate, kmRate, durationMin, distanceKm, verdictLevel),
+
   setGeminiConfig: (edgeUrl: string, supabaseAnonKey: string) =>
     ScanBridge.setGeminiConfig(edgeUrl, supabaseAnonKey),
+  setSupabaseUserJwt: (jwt: string) => ScanBridge.setSupabaseUserJwt(jwt),
   setParserConfig: (configJson: string) => ScanBridge.setParserConfig(configJson),
+  setPreferences: (includePickup: boolean) => ScanBridge.setPreferences(includePickup),
+  setThresholds: (minHourlyRate: number, minKmRate: number) =>
+    ScanBridge.setThresholds(minHourlyRate, minKmRate),
+  setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
 
   checkPermissions: () => ScanBridge.checkPermissions(),
 

@@ -18,7 +18,11 @@
   },
   "errors": {
     "profileLoadFailed": "Unable to load your profile.",
-    "saveFailed": "Unable to save. Please try again."
+    "saveFailed": "Unable to save. Please try again.",
+    "loadFailed": "Loading error",
+    "retry": "Retry",
+    "crashTitle": "Something went wrong",
+    "crashMessage": "An unexpected error occurred."
   },
   "nav": {
     "dashboard": "Home",
@@ -30,6 +34,24 @@
   "auth": {
     "continueGoogle": "Continue with Google",
     "continueApple": "Continue with Apple",
+    "continueEmail": "Continue with email",
+    "or": "or",
+    "login": "Sign in",
+    "signup": "Create account",
+    "loginCta": "Sign in",
+    "signupCta": "Sign up",
+    "resetTitle": "Reset password",
+    "resetCta": "Send email",
+    "emailPlaceholder": "Your email address",
+    "passwordPlaceholder": "Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "No account yet?",
+    "haveAccount": "Already have an account? Sign in",
+    "backToLogin": "Back to sign in",
+    "signupSuccessTitle": "Signup successful",
+    "checkEmail": "Check your email to confirm your account",
+    "resetSentTitle": "Email sent",
+    "resetSent": "Check your inbox to reset your password",
     "connecting": "Signing in…",
     "termsText": "By continuing, you agree to our",
     "termsLink": "Terms of Use",
@@ -37,7 +59,18 @@
     "privacyLink": "Privacy Policy",
     "errors": {
       "googleTitle": "Google Error",
-      "appleTitle": "Apple Error"
+      "appleTitle": "Apple Error",
+      "loginTitle": "Sign in",
+      "signupTitle": "Sign up",
+      "resetTitle": "Reset",
+      "invalidEmail": "Invalid email",
+      "weakPassword": "Password too weak (min 8 characters)",
+      "fillAllFields": "Please fill all fields",
+      "invalidCreds": "Wrong email or password",
+      "notConfirmed": "Please confirm your email before signing in",
+      "alreadyExists": "An account already exists with this email",
+      "rateLimit": "Too many attempts. Try again in a few minutes.",
+      "disposable": "Disposable email addresses not allowed"
     }
   },
   "profile": {
@@ -70,6 +103,18 @@
       "cancel": "Cancel",
       "confirm": "Log Out"
     },
+    "deleteAccount": "Delete my account",
+    "deleteModal": {
+      "title": "Delete account?",
+      "message": "This is irreversible: account, preferences, and ride history will be permanently deleted.",
+      "placeholder": "Type DELETE",
+      "confirm": "Delete",
+      "errorTitle": "Error",
+      "errorMessage": "Type \"DELETE\" to confirm.",
+      "errorGeneric": "Unable to delete. Please retry or contact support."
+    },
+    "privacy": "Privacy",
+    "terms": "Terms",
     "setup": {
       "title": "Create your profile",
       "subtitle": "This information is used to personalise your Strive experience.",
@@ -106,6 +151,8 @@
     "twoPerms": "2 permissions required",
     "threePerms": "3 permissions required",
     "subtitle": "These permissions allow the Strive bubble to appear over VTC apps and scan the screen.",
+    "disclosureTitle": "Why these permissions?",
+    "disclosureBody": "Strive uses the accessibility service and screen capture ONLY to analyze offers shown in Uber, Bolt, and Heetch via on-device OCR, each time you tap the scan button. No personal data is read or collected. Analysis runs locally on your device.",
     "overlayTitle": "Display over other apps",
     "overlayGranted": "Granted ✓",
     "overlayDesc": "Settings → Apps → Special access → Display over other apps → Strive → Enable",
@@ -121,7 +168,18 @@
     "allow": "Allow",
     "allowing": "…",
     "start": "Start scanner",
-    "waiting": "Waiting for permissions…"
+    "stop": "Stop scanner",
+    "waiting": "Waiting for permissions…",
+    "iosTitle": "Scan via Share",
+    "iosSubtitle": "Take a screenshot of the VTC offer, then share it with Strive to analyze it automatically.",
+    "iosStep1Title": "Take a screenshot",
+    "iosStep1Desc": "Power + Volume up in Uber, Bolt or Heetch",
+    "iosStep2Title": "Share with Strive",
+    "iosStep2Desc": "Tap the share button, then \"Analyze with Strive\"",
+    "iosStep3Title": "Instant result",
+    "iosStep3Desc": "Fare, €/h and €/km are analyzed automatically",
+    "iosInfoText": "Analysis runs directly on your iPhone without sending your data. If OCR fails, Gemini AI takes over.",
+    "iosActivate": "Activate scanner"
   },
   "dashboard": {
     "title": "Driver Profit",
@@ -152,6 +210,7 @@
     "time": "TIME",
     "decline": "Decline",
     "accept": "Accept",
+    "estimated": "est.",
     "status": {
       "accepted": "RIDE ACCEPTED",
       "declined": "RIDE DECLINED"
@@ -198,7 +257,9 @@
     "purchaseSuccess": "Purchase confirmed!",
     "creditsAdded": "{{count}} scan(s) added to your account.",
     "purchaseError": "Error",
-    "purchaseErrorMsg": "Unable to complete purchase. Please try again."
+    "purchaseErrorMsg": "Unable to complete purchase. Please try again.",
+    "comingSoonTitle": "Coming soon",
+    "comingSoonSub": "The credit shop will be available soon."
   },
   "analytics": {
     "title": "My Analytics",
@@ -221,7 +282,8 @@
     "dailyEarnings": "Earnings per day",
     "alerts": {
       "premiumTitle": "Plus Access",
-      "premiumRequired": "Historical and multi-day analysis is reserved for Plus members."
+      "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
+      "limitText": "Max 7 days."
     }
   },
   "history": {
@@ -233,12 +295,16 @@
     "dailyTotal": "Daily Total:",
     "prevSession": "PREVIOUS SESSION",
     "empty": "No rides scanned today.",
+    "emptyHint": "Your scans will appear here.",
+    "emptyCta": "Start a scan",
     "perHour": "/hr",
     "perKm": "/km",
     "min": "min",
     "km": "km",
     "acceptRate": "Accept. rate",
     "filterAll": "All · {{count}}",
+    "selectDates": "Select date range",
+    "upgradeForHistory": "Upgrade to Plus to see your full history",
     "status": {
       "ACCEPTED": "ACCEPTED",
       "DECLINED": "DECLINED"
@@ -270,7 +336,6 @@
     "fuel": {
       "essence": "Gasoline",
       "diesel": "Diesel",
-      "hybrid": "Hybrid",
       "electric": "Electric"
     }
   },
@@ -287,6 +352,8 @@
     "minKm": "Minimum $/km",
     "dayReset": "Day reset time",
     "dayResetSub": "Time at which your daily stats reset",
+    "dayReset4am": "Reset at 4 AM",
+    "dayReset4amSub": "For night drivers: your day starts at 4 AM local instead of midnight",
     "includePickup": "Include pickup in calculations",
     "includePickupSub": "Counts pickup time & distance in rates for a more accurate real earnings estimate.",
     "advanced": "Advanced Settings",
@@ -327,7 +394,7 @@
     "yearLabel": "Year",
     "fuelLabel": "Fuel type",
     "fuelPlaceholder": "Energy",
-    "regLabel": "License plate *",
+    "regLabel": "License plate",
     "regPlaceholder": "AB-123-CD",
     "consumption": "CONSUMPTION",
     "avgCons": "Average consumption",
@@ -346,7 +413,8 @@
     "noResult": "No results",
     "errors": {
       "required": "Please fill in all required fields.",
-      "saveFailed": "Unable to save data. Please try again."
+      "saveFailed": "Unable to save data. Please try again.",
+      "consInvalid": "Invalid consumption (between 0.1 and 99.9)."
     },
     "success": {
       "saved": "Profile updated successfully."
@@ -356,6 +424,7 @@
     "skip": "Skip",
     "next": "Next",
     "start": "Let's go",
+    "step": "STEP",
     "step1": { "title": "Welcome to Strive", "desc": "Maximize your earnings as a VTC driver. Strive analyzes every offer so you never accept an unprofitable ride." },
     "step2": { "title": "Set up the scanner", "desc": "Grant the accessibility and overlay permissions. A floating bubble will appear on top of your VTC app, ready to analyze offers." },
     "step3": { "title": "Accept or decline instantly", "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline." },
@@ -386,9 +455,7 @@
       "q4": "How do I change my minimum rates?",
       "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-km rate. Changes apply immediately.",
       "q5": "How do I cancel my Plus subscription?",
-      "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
-      "q6": "My credits aren't showing up",
-      "a6": "Pull down to refresh the Shop screen. If the issue persists, contact us at the address below."
+      "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel."
     }
   },
   "iap": {
@@ -402,7 +469,11 @@
   "accountInfo": {
     "informations": "INFORMATION",
     "driverDefault": "Driver",
-    "errorSave": "Unable to save changes."
+    "errorSave": "Unable to save changes.",
+    "errors": {
+      "emailInvalid": "Invalid email",
+      "phoneInvalid": "Invalid phone number"
+    }
   },
   "subscription": {
     "label": "STRIVE PLUS",
@@ -416,7 +487,7 @@
     "proofBold": "+10,000 drivers",
     "proofSuffix": "have already upgraded to Plus",
     "priceLabel": "Strive Plus",
-    "priceDetail": "€4.99 / month · no commitment",
+    "priceDetail": "{{price}} / month · no commitment",
     "cta": "Upgrade to Plus now",
     "restore": "Restore Purchases",
     "terms": "Terms",

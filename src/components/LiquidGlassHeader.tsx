@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
+import LinearGradient from 'react-native-linear-gradient';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors } from '../theme/colors';
 
@@ -35,7 +36,12 @@ const LiquidGlassHeader = ({ title, subtitle, onBack, right }: Props) => {
           <View style={[StyleSheet.absoluteFill, styles.tint]} />
         </>
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+        <LinearGradient
+          colors={[colors.background, '#0A1A12']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
       )}
 
       <View style={styles.row}>

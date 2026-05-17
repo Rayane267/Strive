@@ -1,15 +1,4 @@
-// Mock supabase to avoid import chain issues in test
-jest.mock('../supabase', () => ({
-  supabase: {
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn(),
-  },
-}));
-
-import { getPlanTier, getPlanLimits, getRemainingScans, PLAN_LIMITS } from '../subscriptionService';
+import { getPlanTier, getPlanLimits, getRemainingScans } from '../subscriptionService';
 
 describe('getPlanTier', () => {
   it('returns free by default', () => {
@@ -32,7 +21,7 @@ describe('getPlanTier', () => {
 describe('getPlanLimits', () => {
   it('returns correct limits for free tier', () => {
     const limits = getPlanLimits('free');
-    expect(limits.dailyScans).toBe(1);
+    expect(limits.dailyScans).toBe(3);
     expect(limits.analyticsRangeDays).toBe(1);
   });
 
@@ -55,13 +44,14 @@ describe('getRemainingScans', () => {
   });
 
   it('returns remaining from daily quota for free tier', () => {
-    expect(getRemainingScans('free', 0, 0)).toBe(1);
-    expect(getRemainingScans('free', 1, 0)).toBe(0);
+    expect(getRemainingScans('free', 0, 0)).toBe(3);
+    expect(getRemainingScans('free', 2, 0)).toBe(1);
+    expect(getRemainingScans('free', 3, 0)).toBe(0);
   });
 
   it('adds extra credits after daily quota exhausted', () => {
-    expect(getRemainingScans('free', 1, 5)).toBe(5);
-    expect(getRemainingScans('free', 0, 3)).toBe(4); // 1 from plan + 3 extra
+    expect(getRemainingScans('free', 3, 5)).toBe(5);
+    expect(getRemainingScans('free', 0, 3)).toBe(6); // 3 from plan + 3 extra
   });
 
   it('returns remaining for plus tier', () => {

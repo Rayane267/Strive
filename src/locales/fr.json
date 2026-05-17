@@ -18,7 +18,11 @@
   },
   "errors": {
     "profileLoadFailed": "Impossible de charger votre profil.",
-    "saveFailed": "Impossible de sauvegarder. Réessayez."
+    "saveFailed": "Impossible d'enregistrer. Réessayez.",
+    "loadFailed": "Erreur de chargement",
+    "retry": "Réessayer",
+    "crashTitle": "Une erreur est survenue",
+    "crashMessage": "Une erreur inattendue s'est produite."
   },
   "nav": {
     "dashboard": "Accueil",
@@ -30,6 +34,24 @@
   "auth": {
     "continueGoogle": "Continuer avec Google",
     "continueApple": "Continuer avec Apple",
+    "continueEmail": "Continuer avec email",
+    "or": "ou",
+    "login": "Connexion",
+    "signup": "Créer un compte",
+    "loginCta": "Se connecter",
+    "signupCta": "S'inscrire",
+    "resetTitle": "Réinitialiser le mot de passe",
+    "resetCta": "Envoyer l'email",
+    "emailPlaceholder": "Votre adresse email",
+    "passwordPlaceholder": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "noAccount": "Pas encore de compte ?",
+    "haveAccount": "Déjà un compte ? Se connecter",
+    "backToLogin": "Retour à la connexion",
+    "signupSuccessTitle": "Inscription réussie",
+    "checkEmail": "Vérifiez votre email pour confirmer votre compte",
+    "resetSentTitle": "Email envoyé",
+    "resetSent": "Vérifiez votre boîte mail pour réinitialiser votre mot de passe",
     "connecting": "Connexion en cours…",
     "termsText": "En continuant, vous acceptez nos",
     "termsLink": "Conditions d'utilisation",
@@ -37,7 +59,18 @@
     "privacyLink": "Politique de confidentialité",
     "errors": {
       "googleTitle": "Erreur Google",
-      "appleTitle": "Erreur Apple"
+      "appleTitle": "Erreur Apple",
+      "loginTitle": "Connexion",
+      "signupTitle": "Inscription",
+      "resetTitle": "Réinitialisation",
+      "invalidEmail": "Email invalide",
+      "weakPassword": "Mot de passe trop faible (minimum 8 caractères)",
+      "fillAllFields": "Renseignez tous les champs",
+      "invalidCreds": "Email ou mot de passe incorrect",
+      "notConfirmed": "Confirmez votre email avant de vous connecter",
+      "alreadyExists": "Un compte existe déjà avec cet email",
+      "rateLimit": "Trop de tentatives. Réessayez dans quelques minutes.",
+      "disposable": "Adresse email jetable non autorisée"
     }
   },
   "profile": {
@@ -70,6 +103,18 @@
       "cancel": "Annuler",
       "confirm": "Me déconnecter"
     },
+    "deleteAccount": "Supprimer mon compte",
+    "deleteModal": {
+      "title": "Supprimer le compte ?",
+      "message": "Action irréversible : compte, préférences et historique des courses seront définitivement supprimés.",
+      "placeholder": "Tapez SUPPRIMER",
+      "confirm": "Supprimer",
+      "errorTitle": "Erreur",
+      "errorMessage": "Tapez \"SUPPRIMER\" pour confirmer.",
+      "errorGeneric": "Suppression impossible. Réessayez ou contactez le support."
+    },
+    "privacy": "Confidentialité",
+    "terms": "CGU",
     "setup": {
       "title": "Créer votre profil",
       "subtitle": "Ces informations permettent de personnaliser votre expérience Strive.",
@@ -97,7 +142,7 @@
         "dobYearInvalid": "Année invalide",
         "dobNotExist": "Cette date n'existe pas",
         "dobMinAge": "Vous devez avoir au moins 18 ans",
-        "saveFailed": "Erreur lors de la sauvegarde"
+        "saveFailed": "Erreur lors de l'enregistrement"
       }
     }
   },
@@ -106,6 +151,8 @@
     "twoPerms": "2 autorisations nécessaires",
     "threePerms": "3 autorisations nécessaires",
     "subtitle": "Ces permissions permettent à la bulle Strive d'apparaître par-dessus les apps VTC et de scanner l'écran.",
+    "disclosureTitle": "Pourquoi ces permissions ?",
+    "disclosureBody": "Strive utilise le service d'accessibilité et la capture d'écran UNIQUEMENT pour analyser par OCR les offres affichées dans Uber, Bolt et Heetch, à chaque fois que vous appuyez sur le bouton scan. Aucune donnée personnelle n'est lue ni collectée. L'analyse est locale, sur votre appareil.",
     "overlayTitle": "Afficher par-dessus les apps",
     "overlayGranted": "Accordée ✓",
     "overlayDesc": "Paramètres → Applications → Accès spéciaux → Afficher par-dessus → Strive → Activer",
@@ -121,7 +168,18 @@
     "allow": "Autoriser",
     "allowing": "…",
     "start": "Démarrer le scanner",
-    "waiting": "En attente des autorisations…"
+    "stop": "Arrêter le scanner",
+    "waiting": "En attente des autorisations…",
+    "iosTitle": "Scanner via partage",
+    "iosSubtitle": "Prenez un screenshot de l'offre VTC, puis partagez-le avec Strive pour l'analyser automatiquement.",
+    "iosStep1Title": "Prenez un screenshot",
+    "iosStep1Desc": "Power + Volume haut dans Uber, Bolt ou Heetch",
+    "iosStep2Title": "Partagez avec Strive",
+    "iosStep2Desc": "Appuyez sur le bouton partage, puis \"Analyser avec Strive\"",
+    "iosStep3Title": "Résultat instantané",
+    "iosStep3Desc": "Le prix, €/h et €/km sont analysés automatiquement",
+    "iosInfoText": "L'analyse se fait directement sur votre iPhone, sans envoyer vos données. Si l'OCR échoue, Gemini AI prend le relais.",
+    "iosActivate": "Activer le scanner"
   },
   "dashboard": {
     "title": "Tableau de bord",
@@ -152,6 +210,7 @@
     "decline": "Refuser",
     "accept": "Accepter",
     "online": "En ligne",
+    "estimated": "est.",
     "status": {
       "accepted": "COURSE ACCEPTÉE",
       "declined": "COURSE REFUSÉE"
@@ -198,7 +257,9 @@
     "purchaseSuccess": "Achat confirmé !",
     "creditsAdded": "{{count}} scan(s) ajouté(s) à votre compte.",
     "purchaseError": "Erreur",
-    "purchaseErrorMsg": "Impossible de finaliser l'achat. Réessayez."
+    "purchaseErrorMsg": "Impossible de finaliser l'achat. Réessayez.",
+    "comingSoonTitle": "Bientôt disponible",
+    "comingSoonSub": "La boutique de crédits sera bientôt accessible."
   },
   "analytics": {
     "title": "Mes Statistiques",
@@ -221,7 +282,8 @@
     "dailyEarnings": "Gains par jour",
     "alerts": {
       "premiumTitle": "Accès Plus",
-      "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus."
+      "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus.",
+      "limitText": "Max 7 jours."
     }
   },
   "history": {
@@ -233,12 +295,16 @@
     "dailyTotal": "Total du jour :",
     "prevSession": "SESSION PRÉCÉDENTE",
     "empty": "Aucune course scannée aujourd'hui.",
+    "emptyHint": "Vos scans apparaîtront ici.",
+    "emptyCta": "Lancer un scan",
     "perHour": "/h",
     "perKm": "/km",
     "min": "min",
     "km": "km",
     "acceptRate": "Taux accept.",
     "filterAll": "Tout · {{count}}",
+    "selectDates": "Sélectionner les dates",
+    "upgradeForHistory": "Passez Plus pour voir tout votre historique",
     "status": {
       "ACCEPTED": "ACCEPTÉE",
       "DECLINED": "REFUSÉE"
@@ -266,11 +332,10 @@
     "feat2Sub": "Calcul d'usure selon votre modèle",
     "feat3Title": "Données API en direct",
     "feat3Sub": "Synchro avec trafic Waze/Google",
-    "save": "Sauvegarder",
+    "save": "Enregistrer",
     "fuel": {
       "essence": "Essence",
       "diesel": "Diesel",
-      "hybrid": "Hybride",
       "electric": "Électrique"
     }
   },
@@ -287,6 +352,8 @@
     "minKm": "Minimum $/km",
     "dayReset": "Reset de la journée",
     "dayResetSub": "Heure à laquelle vos stats du jour se réinitialisent",
+    "dayReset4am": "Reset à 4h du matin",
+    "dayReset4amSub": "Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit",
     "includePickup": "Inclure l'approche aux calculs",
     "includePickupSub": "Prend en compte le temps et la distance d'approche pour une estimation plus réaliste.",
     "advanced": "Paramètres Avancés",
@@ -327,7 +394,7 @@
     "yearLabel": "Année",
     "fuelLabel": "Carburant",
     "fuelPlaceholder": "Énergie",
-    "regLabel": "Immatriculation *",
+    "regLabel": "Immatriculation",
     "regPlaceholder": "AB-123-CD",
     "consumption": "CONSOMMATION",
     "avgCons": "Consommation Moyenne",
@@ -341,12 +408,13 @@
     "feat2Sub": "Calcul d'usure selon votre modèle",
     "feat3Title": "Données API en direct",
     "feat3Sub": "Synchro avec trafic Waze/Google",
-    "save": "Sauvegarder",
+    "save": "Enregistrer",
     "otherManual": "Autre (Saisir manuellement)",
     "noResult": "Aucun résultat",
     "errors": {
       "required": "Veuillez remplir tous les champs obligatoires.",
-      "saveFailed": "Impossible de sauvegarder les données. Réessayez."
+      "saveFailed": "Impossible d'enregistrer les données. Réessayez.",
+      "consInvalid": "Consommation invalide (entre 0.1 et 99.9)."
     },
     "success": {
       "saved": "Profil mis à jour avec succès."
@@ -356,6 +424,7 @@
     "skip": "Passer",
     "next": "Suivant",
     "start": "C'est parti",
+    "step": "ÉTAPE",
     "step1": { "title": "Bienvenue sur Strive", "desc": "Maximisez vos gains en tant que chauffeur VTC. Strive analyse chaque offre pour que vous n'acceptiez jamais une course non rentable." },
     "step2": { "title": "Configurez le scanner", "desc": "Accordez les permissions d'accessibilité et d'overlay. Une bulle flottante apparaîtra par-dessus votre app VTC, prête à analyser les offres." },
     "step3": { "title": "Acceptez ou refusez en un instant", "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser." },
@@ -386,9 +455,7 @@
       "q4": "Comment modifier mes seuils minimum ?",
       "a4": "Allez dans Profil → Préférences de trajet. Ajustez les curseurs pour le taux horaire et le taux au km. Les modifications s'appliquent immédiatement.",
       "q5": "Comment annuler mon abonnement Plus ?",
-      "a5": "Sur Android : Google Play → Abonnements. Sur iOS : Réglages → Votre nom → Abonnements. Trouvez Strive et appuyez sur Annuler.",
-      "q6": "Mes crédits n'apparaissent pas",
-      "a6": "Tirez vers le bas pour rafraîchir l'écran Boutique. Si le problème persiste, contactez-nous à l'adresse ci-dessous."
+      "a5": "Sur Android : Google Play → Abonnements. Sur iOS : Réglages → Votre nom → Abonnements. Trouvez Strive et appuyez sur Annuler."
     }
   },
   "iap": {
@@ -402,7 +469,11 @@
   "accountInfo": {
     "informations": "INFORMATIONS",
     "driverDefault": "Chauffeur",
-    "errorSave": "Impossible de sauvegarder les modifications."
+    "errorSave": "Impossible d'enregistrer les modifications.",
+    "errors": {
+      "emailInvalid": "Email invalide",
+      "phoneInvalid": "Numéro de téléphone invalide"
+    }
   },
   "subscription": {
     "label": "STRIVE PLUS",
@@ -416,7 +487,7 @@
     "proofBold": "+10 000 chauffeurs",
     "proofSuffix": "ont déjà passé à Plus",
     "priceLabel": "Strive Plus",
-    "priceDetail": "4,99€ / mois · sans engagement",
+    "priceDetail": "{{price}} / mois · sans engagement",
     "cta": "Passer à Plus maintenant",
     "restore": "Restaurer les achats",
     "terms": "CGU",

@@ -167,16 +167,17 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.instance?.updateVerdict(level)
     }
 
-    @ReactMethod
-    fun setGeminiApiKey(key: String) {
-        GeminiVisionService.apiKey = key
-    }
-
     /** Configure l'edge function Supabase comme proxy Gemini (recommandé en prod) */
     @ReactMethod
     fun setGeminiConfig(edgeUrl: String, supabaseAnonKey: String) {
         GeminiVisionService.edgeFunctionUrl = edgeUrl
         GeminiVisionService.supabaseAnonKey = supabaseAnonKey
+    }
+
+    /** JWT user — requis par l'edge function durcie (rate-limit + audit). */
+    @ReactMethod
+    fun setSupabaseUserJwt(jwt: String) {
+        GeminiVisionService.supabaseUserJwt = jwt
     }
 
     /** Applique la configuration de parsing VTC depuis Supabase (remote config) */
@@ -190,13 +191,47 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.instance?.updateDuration(minutes)
     }
 
-    // ─── Native → JS (events) ────────────────────────────────────────────────────
+    @ReactMethod
+    fun updateMetrics(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double) {
+        FloatingBubbleService.instance?.updateMetrics(hourlyRate, kmRate, durationMin, distanceKm)
+    }
+
+    /** Finalise l'affichage bulle avec les valeurs TomTom (appelé après réponse TomTom ou fallback). */
+    @ReactMethod
+    fun finalizeScan(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double, verdictLevel: Int) {
+        FloatingBubbleService.instance?.finalizeScan(hourlyRate, kmRate, durationMin, distanceKm, verdictLevel)
+    }
+
+    /** Préférences utilisateur — pilotent le calcul initial affiché par la bulle */
+    @ReactMethod
+    fun setPreferences(includePickup: Boolean) {
+        FloatingBubbleService.includePickup = includePickup
+    }
+
+    /** Seuils verdict utilisateur synchronisés au natif (utilisés pendant TomTom). */
+    @ReactMethod
+    fun setThresholds(minHourlyRate: Double, minKmRate: Double) {
+        FloatingBubbleService.minHourlyRate = minHourlyRate
+        FloatingBubbleService.minKmRate = minKmRate
+    }
+
+    /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
+    @ReactMethod
+    fun setTomTomApiKey(key: String) {
+        TomTomService.apiKey = key
+    }
+
+// ─── Native → JS (events) ────────────────────────────────────────────────────
 
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
         private var moduleInstance: ScanBridgeModule? = null
 
-        fun emitScanResult(result: OcrParser.ScanResult) {
+        fun emitScanResult(
+            result: OcrParser.ScanResult,
+            imageBase64: String? = null,
+            debugBlocks: String? = null,
+        ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
                 putDouble("fare", result.fare)
@@ -207,6 +242,16 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 else putNull("pickupAddress")
                 if (result.destinationAddress != null) putString("destinationAddress", result.destinationAddress)
                 else putNull("destinationAddress")
+                if (result.pickupDurationMin != null) putInt("pickupDurationMin", result.pickupDurationMin)
+                else putNull("pickupDurationMin")
+                if (result.pickupDistanceKm != null) putDouble("pickupDistanceKm", result.pickupDistanceKm)
+                else putNull("pickupDistanceKm")
+                // Image (JPEG compressée, base64) pour fallback Gemini côté JS
+                if (imageBase64 != null) putString("imageBase64", imageBase64)
+                else putNull("imageBase64")
+                // Dump des blocs ML Kit pour diagnostic (JSON) — consommé en DEV
+                if (debugBlocks != null) putString("debugBlocks", debugBlocks)
+                else putNull("debugBlocks")
             }
             emit("onScanResult", map)
         }

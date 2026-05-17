@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import i18n from '../i18n';
 import { colors } from '../theme/colors';
 
 interface Props {
@@ -32,12 +33,12 @@ class ErrorBoundary extends React.Component<Props, State> {
     return (
       <View style={styles.container}>
         <Text style={styles.icon}>⚠️</Text>
-        <Text style={styles.title}>Something went wrong</Text>
+        <Text style={styles.title}>{i18n.t('errors.crashTitle', 'Une erreur est survenue')}</Text>
         <Text style={styles.message}>
-          {this.state.error?.message ?? 'An unexpected error occurred.'}
+          {this.state.error?.message ?? i18n.t('errors.crashMessage', 'Une erreur inattendue s\'est produite.')}
         </Text>
-        <TouchableOpacity style={styles.button} onPress={this.reset}>
-          <Text style={styles.buttonText}>Try again</Text>
+        <TouchableOpacity style={styles.button} onPress={this.reset} accessibilityRole="button">
+          <Text style={styles.buttonText}>{i18n.t('common.retry', 'Réessayer')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -81,3 +82,19 @@ const styles = StyleSheet.create({
 });
 
 export default ErrorBoundary;
+
+/**
+ * HOC : wrappe un écran dans un ErrorBoundary isolé. Un crash dans cet écran
+ * n'affecte plus le reste de l'app (tabs et navigation restent fonctionnels).
+ */
+export function withErrorBoundary<P extends object>(
+  Component: React.ComponentType<P>,
+): React.ComponentType<P> {
+  const Wrapped: React.FC<P> = (props) => (
+    <ErrorBoundary>
+      <Component {...props} />
+    </ErrorBoundary>
+  );
+  Wrapped.displayName = `withErrorBoundary(${Component.displayName ?? Component.name ?? 'Component'})`;
+  return Wrapped;
+}

@@ -5,18 +5,17 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import Feather from 'react-native-vector-icons/Feather';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { getPlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
 
 interface PremiumBannerProps {
   todayScanCount: number;
   onPressUpgrade?: () => void;
-  onPressShop?: () => void;
 }
 
-export const PremiumBanner = ({ todayScanCount, onPressUpgrade, onPressShop }: PremiumBannerProps) => {
+export const PremiumBanner = React.memo(({ todayScanCount, onPressUpgrade }: PremiumBannerProps) => {
   const { t } = useTranslation();
   const { profile } = useAuth();
-  const tier = getPlanTier(profile?.subscription_tier);
+  const tier = getEffectivePlanTier(profile);
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
   const remaining = getRemainingScans(tier, todayScanCount, extraCredits);
@@ -31,7 +30,7 @@ export const PremiumBanner = ({ todayScanCount, onPressUpgrade, onPressShop }: P
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={isExhausted ? onPressShop : onPressUpgrade}
+      onPress={onPressUpgrade}
       style={styles.container}
     >
       <LinearGradient
@@ -62,19 +61,11 @@ export const PremiumBanner = ({ todayScanCount, onPressUpgrade, onPressShop }: P
           ) : null}
         </View>
 
-        {isExhausted && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.shopBtn} onPress={onPressShop}>
-              <MaterialCommunityIcons name="ticket-percent-outline" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!isExhausted && <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />}
+        <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />
       </LinearGradient>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -12,7 +12,7 @@ interface ScanButtonProps {
   onPress?: (event: GestureResponderEvent) => void;
 }
 
-const ScanButton = ({ onPress }: ScanButtonProps) => (
+const ScanButton = React.memo(({ onPress }: ScanButtonProps) => (
   <TouchableOpacity
     style={styles.container}
     onPress={onPress}
@@ -26,7 +26,7 @@ const ScanButton = ({ onPress }: ScanButtonProps) => (
       />
     </View>
   </TouchableOpacity>
-);
+));
 
 const styles = StyleSheet.create({
   container: {

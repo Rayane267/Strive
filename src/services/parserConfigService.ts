@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from './supabase';
 
 const CACHE_KEY = '@strive_parser_config';
@@ -29,7 +30,10 @@ export async function fetchParserConfig(): Promise<string | null> {
       .limit(1)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {
+      if (error) Sentry.addBreadcrumb({ category: 'parser', message: `fetchParserConfig failed: ${error.message}`, level: 'warning' });
+      return null;
+    }
 
     const configJson = JSON.stringify(data.config);
     const entry: CacheEntry = { configJson, timestamp: Date.now() };

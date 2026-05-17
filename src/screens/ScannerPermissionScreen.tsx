@@ -188,6 +188,20 @@ const ScannerPermissionScreen = () => {
         </Text>
         <Text style={styles.subtitle}>{t('scanner.subtitle')}</Text>
 
+        {/* Prominent disclosure — requis Google Play pour accessibility service */}
+        <View style={styles.disclosureBox}>
+          <View style={styles.disclosureHeader}>
+            <Feather name="shield" size={16} color={colors.primary} />
+            <Text style={styles.disclosureTitle}>{t('scanner.disclosureTitle', 'Pourquoi ces permissions ?')}</Text>
+          </View>
+          <Text style={styles.disclosureBody}>
+            {t(
+              'scanner.disclosureBody',
+              'Strive utilise le service d\'accessibilité et la capture d\'écran UNIQUEMENT pour analyser par OCR les offres affichées dans Uber, Bolt et Heetch, à chaque fois que vous appuyez sur le bouton scan. Aucune donnée personnelle n\'est lue ni collectée. L\'analyse est locale, sur votre appareil.',
+            )}
+          </Text>
+        </View>
+
         {/* Étape 1 — Overlay */}
         <View style={[styles.step, perms.overlay && styles.stepDone]}>
           <View style={styles.stepLeft}>
@@ -343,7 +357,25 @@ const styles = StyleSheet.create({
   title: { color: colors.textMain, fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
   subtitle: {
     color: colors.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 21,
-    marginBottom: 32, paddingHorizontal: 8,
+    marginBottom: 20, paddingHorizontal: 8,
+  },
+
+  disclosureBox: {
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 24,
+  },
+  disclosureHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8,
+  },
+  disclosureTitle: {
+    color: colors.primary, fontSize: 13, fontWeight: '700',
+  },
+  disclosureBody: {
+    color: colors.textMuted, fontSize: 12, lineHeight: 18,
   },
 
   step: {

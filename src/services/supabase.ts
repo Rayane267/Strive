@@ -1,10 +1,10 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY } from '@env';
 
-// Récupération des variables d'environnement Expo
-const supabaseUrl = process.env.PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.PUBLIC_SUPABASE_KEY!;
+const supabaseUrl = PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = PUBLIC_SUPABASE_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

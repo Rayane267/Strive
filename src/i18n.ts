@@ -1,11 +1,35 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 
 import en from './locales/en.json';
 import fr from './locales/fr.json';
 
 const STORE_LANGUAGE_KEY = 'user_language';
+
+/**
+ * Récupère la langue du système (sans dépendance externe).
+ * - iOS : NativeModules.SettingsManager.settings.AppleLocale ou AppleLanguages[0]
+ * - Android : NativeModules.I18nManager.localeIdentifier
+ * Renvoie un code ISO 2 lettres ('fr', 'en', etc.) ou 'en' par défaut.
+ */
+function getDeviceLanguage(): string {
+  try {
+    const raw =
+      Platform.OS === 'ios'
+        ? NativeModules.SettingsManager?.settings?.AppleLocale ||
+          NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
+        : NativeModules.I18nManager?.localeIdentifier;
+    if (typeof raw !== 'string') return 'en';
+    const lang = raw.toLowerCase().split(/[-_]/)[0];
+    return lang || 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+const SUPPORTED = ['fr', 'en'] as const;
 
 const languageDetectorPlugin = {
   type: 'languageDetector' as const,
@@ -13,17 +37,23 @@ const languageDetectorPlugin = {
   init: () => {},
   detect: async function (callback: (lang: string) => void) {
     try {
-      const language = await AsyncStorage.getItem(STORE_LANGUAGE_KEY);
-      if (language) return callback(language);
-      return callback('en');
-    } catch (error) {
+      // 1. Choix utilisateur explicite (sauvegardé)
+      const stored = await AsyncStorage.getItem(STORE_LANGUAGE_KEY);
+      if (stored && (SUPPORTED as readonly string[]).includes(stored)) {
+        return callback(stored);
+      }
+      // 2. Sinon, détection auto depuis la langue du téléphone
+      const device = getDeviceLanguage();
+      const detected = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
+      return callback(detected);
+    } catch {
       return callback('en');
     }
   },
   cacheUserLanguage: async function (language: string) {
     try {
       await AsyncStorage.setItem(STORE_LANGUAGE_KEY, language);
-    } catch (error) {}
+    } catch {}
   },
 };
 
@@ -38,7 +68,7 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    compatibilityJSON: 'v3',
+    compatibilityJSON: 'v4',
     interpolation: { escapeValue: false },
   });
 

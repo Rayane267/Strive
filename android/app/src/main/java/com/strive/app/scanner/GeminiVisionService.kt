@@ -1,12 +1,15 @@
 package com.strive.scanner
 
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 
 object GeminiVisionService {
 
@@ -19,29 +22,62 @@ object GeminiVisionService {
     /** URL de l'edge function Supabase (remplace l'appel direct en prod) */
     var edgeFunctionUrl: String = ""
 
-    /** Clé anon Supabase pour authentifier l'appel à l'edge function */
+    /** Clé anon Supabase (header `apikey` requis par PostgREST/edge runtime) */
     var supabaseAnonKey: String = ""
+
+    /** JWT user pour l'edge function durcie (rate-limit + audit par user_id) */
+    var supabaseUserJwt: String = ""
 
     private val useEdgeFunction get() = edgeFunctionUrl.isNotEmpty() && supabaseAnonKey.isNotEmpty()
 
     /** true si Gemini est configuré (edge function ou clé directe) */
     val isReady get() = useEdgeFunction || apiKey.isNotEmpty()
 
+    /** Hard deadline pour tout l'appel Gemini (incl. encode + write + read). */
+    private const val OVERALL_TIMEOUT_MS = 15_000L
+    /** Cap sur la taille de la réponse pour éviter une OOM en cas de payload malveillant ou buggé. */
+    private const val MAX_RESPONSE_CHARS = 256_000
+
     fun analyze(bitmap: Bitmap, callback: (OcrParser.ScanResult?) -> Unit) {
         if (!isReady) { callback(null); return }
 
-        Thread {
-            try {
-                val base64 = bitmapToBase64(bitmap)
-                val raw = callGemini(base64)
-                callback(parseResponse(raw))
-            } catch (e: Exception) {
+        // Wrapper Thread + watchdog : `outputStream.write()` n'a pas de timeout
+        // côté HttpURLConnection — un réseau qui se fige peut bloquer le thread
+        // indéfiniment. On l'interrompt à 15s pour libérer le scanner.
+        val done = AtomicBoolean(false)
+        val workerRef = arrayOfNulls<Thread>(1)
+        val watchdog = Handler(Looper.getMainLooper())
+        val timeoutRunnable = Runnable {
+            if (done.compareAndSet(false, true)) {
+                workerRef[0]?.interrupt()
                 callback(null)
             }
-        }.start()
+        }
+        watchdog.postDelayed(timeoutRunnable, OVERALL_TIMEOUT_MS)
+
+        val worker = Thread {
+            val result: OcrParser.ScanResult? = try {
+                val base64 = bitmapToBase64(bitmap)
+                val raw = callGemini(base64)
+                parseResponse(raw)
+            } catch (_: InterruptedException) {
+                null
+            } catch (_: Exception) {
+                null
+            }
+            if (done.compareAndSet(false, true)) {
+                watchdog.removeCallbacks(timeoutRunnable)
+                callback(result)
+            }
+        }
+        workerRef[0] = worker
+        worker.start()
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+    /** Encode public — utilisé pour pousser l'image au JS (fallback Gemini côté JS). */
+    fun encodeForBridge(bitmap: Bitmap): String = bitmapToBase64(bitmap)
 
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val maxW = 512
@@ -58,7 +94,10 @@ object GeminiVisionService {
     private fun callGemini(base64Image: String): String {
         val conn = if (useEdgeFunction) {
             (URL(edgeFunctionUrl).openConnection() as HttpURLConnection).also {
-                it.setRequestProperty("Authorization", "Bearer $supabaseAnonKey")
+                // JWT user si dispo (edge function durcie l'exige), sinon anon key.
+                val bearer = if (supabaseUserJwt.isNotEmpty()) supabaseUserJwt else supabaseAnonKey
+                it.setRequestProperty("Authorization", "Bearer $bearer")
+                it.setRequestProperty("apikey", supabaseAnonKey)
             }
         } else {
             URL("$DIRECT_URL?key=$apiKey").openConnection() as HttpURLConnection
@@ -76,10 +115,17 @@ object GeminiVisionService {
             Réponds UNIQUEMENT avec un objet JSON valide, sans markdown ni explication :
             {
               "platform": "UBER" ou "BOLT" ou "HEETCH" ou "UNKNOWN",
-              "fare": <montant en euros, ex: 12.50>,
-              "distance_km": <distance en km, ex: 8.3>,
-              "duration_min": <durée en minutes ou null si non visible>
+              "fare": <montant total en euros, chiffre affiché en gros>,
+              "distance_km": <distance TOTALE de la course, souvent libellée "Course de X km">,
+              "duration_min": <durée totale de la course en minutes ; null si non visible>,
+              "pickup_duration_min": <temps d'approche vers le client ; null si non visible>,
+              "pickup_distance_km": <distance d'approche vers le client ; null si non visible>
             }
+            IMPORTANT :
+            - distance_km et duration_min concernent la COURSE (trajet client → destination).
+            - pickup_* concerne l'APPROCHE (position actuelle → client), typiquement affichée "X min • Y km" ou "à X min (Y km)" sous l'adresse de prise en charge.
+            - Ne PAS confondre les deux. La distance de course est presque toujours plus grande que le pickup.
+            - Retourne les valeurs exactes lues à l'écran, ne devine pas.
             Si ce n'est pas un écran d'offre de course VTC, réponds : {"error": "not_a_ride"}
         """.trimIndent()
 
@@ -103,7 +149,18 @@ object GeminiVisionService {
 
         val code = conn.responseCode
         val stream = if (code == 200) conn.inputStream else conn.errorStream
-        return stream.bufferedReader().readText()
+        return stream.bufferedReader().use { reader ->
+            val sb = StringBuilder()
+            val buf = CharArray(4096)
+            var total = 0
+            while (total < MAX_RESPONSE_CHARS) {
+                val r = reader.read(buf)
+                if (r < 0) break
+                sb.append(buf, 0, r)
+                total += r
+            }
+            sb.toString()
+        }
     }
 
     private fun parseResponse(json: String): OcrParser.ScanResult? {
@@ -135,11 +192,22 @@ object GeminiVisionService {
             val distanceKm = data.getDouble("distance_km")
             val durationMin = if (data.isNull("duration_min")) null
                               else data.optInt("duration_min").takeIf { it > 0 }
+            val pickupDurationMin = if (data.isNull("pickup_duration_min")) null
+                                    else data.optInt("pickup_duration_min").takeIf { it in 1..60 }
+            val pickupDistanceKm = if (data.isNull("pickup_distance_km")) null
+                                   else data.optDouble("pickup_distance_km").takeIf { it in 0.1..30.0 }
 
             if (fare < 3 || fare > 200) return null
-            if (distanceKm < 0.3 || distanceKm > 150) return null
+            if (distanceKm < 0.3 || distanceKm > 1000) return null
 
-            OcrParser.ScanResult(platform, fare, distanceKm, durationMin)
+            OcrParser.ScanResult(
+                platform = platform,
+                fare = fare,
+                distanceKm = distanceKm,
+                durationMin = durationMin,
+                pickupDurationMin = pickupDurationMin,
+                pickupDistanceKm = pickupDistanceKm,
+            )
         } catch (e: Exception) {
             null
         }

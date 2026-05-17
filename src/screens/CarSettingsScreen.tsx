@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import LiquidGlassHeader from '../components/LiquidGlassHeader';
@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { hapticSuccess, hapticError } from '../utils/haptics';
 
 const YEARS = Array.from({ length: 17 }, (_, i) =>
   (new Date().getFullYear() - i).toString(),
@@ -80,23 +81,29 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
 const CarSettingsScreen = () => {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   const tier = profile?.subscription_tier?.toLowerCase();
   const isPremium = tier === 'plus' || tier === 'pro' || tier === 'premium';
 
-  const FUEL_TYPES = [
-    t('settings.fuel.essence'),
-    t('settings.fuel.diesel'),
-    t('settings.fuel.hybrid'),
-    t('settings.fuel.electric'),
-  ];
+  // Stocké en DB = clé stable ('essence'|'diesel'|'electric'), affiché en UI = label traduit.
+  // Permet de respecter le CHECK constraint Supabase et de switch FR↔EN sans perdre la valeur.
+  const FUEL_KEYS = ['essence', 'diesel', 'electric'] as const;
+  type FuelKey = typeof FUEL_KEYS[number];
+  const FUEL_LABEL: Record<FuelKey, string> = {
+    essence: t('settings.fuel.essence'),
+    diesel: t('settings.fuel.diesel'),
+    electric: t('settings.fuel.electric'),
+  };
+  const FUEL_TYPES = FUEL_KEYS.map(k => FUEL_LABEL[k]);
+  const labelToKey = (label: string): FuelKey =>
+    (FUEL_KEYS.find(k => FUEL_LABEL[k] === label) ?? 'essence');
 
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState('2022');
   const [regNum, setRegNum] = useState('');
-  const [fuelType, setFuelType] = useState(t('settings.fuel.hybrid'));
+  const [fuelType, setFuelType] = useState<FuelKey>('essence');
   const [avgCons, setAvgCons] = useState('');
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
   const [isSaving, setIsSaving] = useState(false);
@@ -112,7 +119,9 @@ const CarSettingsScreen = () => {
       if (profile.car_model) setModel(profile.car_model);
       if (profile.car_year) setYear(profile.car_year);
       if (profile.car_reg) setRegNum(profile.car_reg);
-      if (profile.fuel_type) setFuelType(profile.fuel_type);
+      if (profile.fuel_type && (FUEL_KEYS as readonly string[]).includes(profile.fuel_type)) {
+        setFuelType(profile.fuel_type as FuelKey);
+      }
       if (profile.avg_cons) setAvgCons(profile.avg_cons.toString());
     }
   }, [profile]);
@@ -121,7 +130,7 @@ const CarSettingsScreen = () => {
     const fetchMakes = async () => {
       setIsLoadingMakes(true);
       const { data, error } = await supabase.from('vehicles_db').select('make');
-      if (error) console.error('Erreur marques :', error);
+      if (error) __DEV__ && console.error('Erreur marques :', error);
       if (data) setAvailableMakes(Array.from(new Set(data.map(d => d.make))).sort() as string[]);
       setIsLoadingMakes(false);
     };
@@ -133,7 +142,7 @@ const CarSettingsScreen = () => {
       if (!make) { setAvailableModels([]); return; }
       setIsLoadingModels(true);
       const { data, error } = await supabase.from('vehicles_db').select('model').eq('make', make).order('model', { ascending: true });
-      if (error) console.error('Erreur modèles :', error);
+      if (error) __DEV__ && console.error('Erreur modèles :', error);
       if (data) setAvailableModels([...Array.from(new Set(data.map(d => d.model))), t('carSettings.otherManual')]);
       setIsLoadingModels(false);
     };
@@ -145,28 +154,45 @@ const CarSettingsScreen = () => {
   }, [make, model, avgCons]);
 
   const handleSave = async () => {
-    if (!avgCons || !make || !model) {
+    // Seuls make + model sont obligatoires. avgCons / year / fuelType / regNum optionnels.
+    if (!make || !model) {
+      hapticError();
       setStatusMessage({ text: t('carSettings.errors.required', 'Veuillez remplir tous les champs obligatoires.'), type: 'error' });
       return;
     }
-    const parsedCons = parseFloat(avgCons);
-    if (isNaN(parsedCons) || parsedCons <= 0 || parsedCons > 99.9) {
-      setStatusMessage({ text: t('carSettings.errors.consInvalid', 'Consommation invalide (entre 0.1 et 99.9).'), type: 'error' });
-      return;
+    // Si l'user a saisi une conso, on la valide. Sinon → null (optionnel).
+    let consToSave: number | null = null;
+    if (avgCons.trim() !== '') {
+      const parsedCons = parseFloat(avgCons.replace(',', '.'));
+      if (isNaN(parsedCons) || parsedCons <= 0 || parsedCons > 99.9) {
+        hapticError();
+        setStatusMessage({ text: t('carSettings.errors.consInvalid', 'Consommation invalide (entre 0.1 et 99.9).'), type: 'error' });
+        return;
+      }
+      consToSave = parsedCons;
     }
     setIsSaving(true);
     setStatusMessage({ text: '', type: null });
     try {
       if (!user) throw new Error('Non connecté');
       const { error } = await supabase.from('profiles').update({
-        car_make: make, car_model: model, car_year: year,
-        car_reg: regNum, fuel_type: fuelType, avg_cons: parseFloat(avgCons),
+        car_make: make,
+        car_model: model,
+        car_year: year || null,
+        car_reg: regNum || null,
+        fuel_type: fuelType || null,
+        avg_cons: consToSave,
       }).eq('id', user.id);
       if (error) throw error;
+      hapticSuccess();
+      // Rafraîchit le profile global pour que la prochaine ouverture pré-remplisse les champs.
+      if (refreshProfile) await refreshProfile();
       setStatusMessage({ text: t('carSettings.success.saved', 'Véhicule mis à jour avec succès.'), type: 'success' });
       setTimeout(() => navigation.goBack(), 1000);
-    } catch (error) {
-      setStatusMessage({ text: t('carSettings.errors.saveFailed', 'Impossible de sauvegarder. Réessayez.'), type: 'error' });
+    } catch (error: any) {
+      hapticError();
+      __DEV__ && console.error('[CAR_SAVE] error:', error?.code, error?.message, error?.details, error?.hint);
+      setStatusMessage({ text: t('carSettings.errors.saveFailed', 'Impossible d\'enregistrer. Réessayez.'), type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -178,7 +204,7 @@ const CarSettingsScreen = () => {
   const headerHeight = insets.top + 64;
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <View style={styles.container}>
       <LiquidGlassHeader
         title={t('settings.title', 'Mon véhicule')}
         subtitle={t('settings.subtitle', 'Informations du véhicule')}
@@ -195,7 +221,10 @@ const CarSettingsScreen = () => {
 
       <View style={{ flex: 1, position: 'relative' }}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: headerHeight + 12, paddingBottom: Math.max(insets.bottom, 20) + 30 },
+          ]}
           keyboardShouldPersistTaps="handled"
           onScroll={closeDropdowns}
           scrollEventThrottle={16}
@@ -251,11 +280,11 @@ const CarSettingsScreen = () => {
                     label={t('settings.fuelType', 'Carburant')}
                     placeholder={t('carSettings.fuelPlaceholder', 'Type...')}
                     data={FUEL_TYPES}
-                    value={fuelType}
+                    value={FUEL_LABEL[fuelType]}
                     isOpen={openDropdown === 'fuel'}
                     onOpen={() => setOpenDropdown('fuel')}
                     zIndex={1000}
-                    onSelect={(v: string) => { setFuelType(v); setOpenDropdown(null); }}
+                    onSelect={(v: string) => { setFuelType(labelToKey(v)); setOpenDropdown(null); }}
                   />
                 </View>
               </View>
@@ -284,7 +313,7 @@ const CarSettingsScreen = () => {
                 <View style={styles.consLeft}>
                   <View style={styles.consIconWrap}>
                     <MaterialCommunityIcons
-                      name={fuelType === t('settings.fuel.electric') ? 'lightning-bolt' : 'gas-station'}
+                      name={fuelType === 'electric' ? 'lightning-bolt' : 'gas-station'}
                       size={18}
                       color={colors.primary}
                     />
@@ -292,7 +321,7 @@ const CarSettingsScreen = () => {
                   <View>
                     <Text style={styles.consTitle}>{t('settings.avgCons', 'Consommation moy.')}</Text>
                     <Text style={styles.consSub}>
-                      {fuelType === t('settings.fuel.electric') ? 'kWh/100km' : 'L/100km'}
+                      {fuelType === 'electric' ? 'kWh/100km' : 'L/100km'}
                     </Text>
                   </View>
                 </View>
@@ -341,6 +370,9 @@ const CarSettingsScreen = () => {
               onPress={handleSave}
               disabled={isSaving}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.save', 'Enregistrer')}
+              accessibilityState={{ disabled: isSaving }}
             >
               {isSaving ? (
                 <ActivityIndicator color={colors.background} />
@@ -363,7 +395,7 @@ const CarSettingsScreen = () => {
           />
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -402,7 +434,7 @@ const styles = StyleSheet.create({
   planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   planBadgeTextPlus: { color: colors.background },
 
-  scroll: { paddingHorizontal: 20, paddingBottom: 50 },
+  scroll: { paddingHorizontal: 20 },
 
   sectionLabel: {
     flexDirection: 'row',

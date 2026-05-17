@@ -1,5 +1,7 @@
 package com.strive.scanner
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.*
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -14,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.strive.BuildConfig
 
 class FloatingBubbleService : Service() {
 
@@ -29,14 +32,24 @@ class FloatingBubbleService : Service() {
     private var verdictTriangleView: TextView? = null
     private var routeCarCircle: View? = null
     private var routeLine: View? = null
+    private var routeCenterDot: View? = null
     private var routeGpsCircle: View? = null
     private var durationView: TextView? = null
+    private var distanceView: TextView? = null
+    private var hourlyRateView: TextView? = null
+    private var kmRateView: TextView? = null
+    private var distancePulse: ObjectAnimator? = null
 
     companion object {
         private const val CHANNEL_ID = "strive_scanner_channel"
         private const val NOTIF_ID = 42
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
+        /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
+        var includePickup: Boolean = false
+        /** Seuils utilisateur pour le verdict natif (synchronisés depuis JS). */
+        var minHourlyRate: Double = 25.0
+        var minKmRate: Double = 1.2
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -67,8 +80,36 @@ class FloatingBubbleService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-        countdownTimer?.cancel()
+        // Purge tous les Runnables postDelayed (showIdleState après 2.5s, watchdog OCR, etc.)
+        // pour éviter qu'un callback ne tape sur des Views nullifiées après la destruction.
+        mainHandler.removeCallbacksAndMessages(null)
+        clearTransientState()
         if (::bubbleContainer.isInitialized) runCatching { windowManager.removeView(bubbleContainer) }
+    }
+
+    /**
+     * Annule tous les timers / animators en cours et nullifie les refs vers les
+     * sous-vues. À appeler avant chaque `removeAllViews()` pour éviter qu'un
+     * `ObjectAnimator` ou un `CountDownTimer` ne survive au changement d'état
+     * et n'écrive sur des Views détachées (ViewRootImpl exception, leaks).
+     */
+    private fun clearTransientState() {
+        countdownTimer?.cancel()
+        countdownTimer = null
+        distancePulse?.cancel()
+        distancePulse = null
+        distanceView?.alpha = 1f
+        fareBadgeView = null
+        verdictBarView = null
+        verdictTriangleView = null
+        routeCarCircle = null
+        routeLine = null
+        routeCenterDot = null
+        routeGpsCircle = null
+        durationView = null
+        distanceView = null
+        hourlyRateView = null
+        kmRateView = null
     }
 
     override fun onBind(intent: Intent?) = null
@@ -164,8 +205,9 @@ class FloatingBubbleService : Service() {
     }
 
     private fun runOcr(fullBitmap: Bitmap, w: Int, h: Int) {
-        // Downscale à 720px pour accélérer ML Kit (pas de crop — layout VTC peut changer)
-        val maxW = 720
+        // Downscale à 1440px — on privilégie la qualité (fidélité des glyphes fins
+        // comme "1" vs "l") plutôt que la vitesse. Sous 1440px on garde la res native.
+        val maxW = 1440
         val ocrBitmap = if (fullBitmap.width > maxW) {
             val r = maxW.toFloat() / fullBitmap.width
             Bitmap.createScaledBitmap(fullBitmap, maxW, (fullBitmap.height * r).toInt(), true)
@@ -177,10 +219,15 @@ class FloatingBubbleService : Service() {
             .addOnSuccessListener { visionText ->
                 ocrBitmap?.recycle()
                 val result = OcrParser.parse(visionText, w, h)
+                val debugBlocks = OcrParser.dumpBlocks(visionText)
                 if (result != null) {
+                    val base64 = GeminiVisionService.encodeForBridge(fullBitmap)
                     fullBitmap.recycle()
+                    // Affichage OCR instantané pour feedback utilisateur.
                     showResultState(result)
-                    ScanBridgeModule.emitScanResult(result)
+                    // debugBlocks n'est transmis qu'en debug build (diagnostic fragmentation ML Kit)
+                    val debug = if (BuildConfig.DEBUG) debugBlocks else null
+                    resolveTomTomAndEmit(result, base64, debug)
                     scanInProgress = false
                 } else {
                     fallbackGemini(fullBitmap)
@@ -195,12 +242,15 @@ class FloatingBubbleService : Service() {
     private fun fallbackGemini(bitmap: Bitmap) {
         if (GeminiVisionService.isReady) {
             showLoadingState()
+            // On encode d'abord : si Gemini natif réussit on transmettra aussi
+            // l'image au JS (il peut l'utiliser en retry sanity-check).
+            val base64 = GeminiVisionService.encodeForBridge(bitmap)
             GeminiVisionService.analyze(bitmap) { result ->
                 bitmap.recycle()
                 mainHandler.post {
                     if (result != null) {
                         showResultState(result)
-                        ScanBridgeModule.emitScanResult(result)
+                        ScanBridgeModule.emitScanResult(result, base64)
                     } else {
                         onScanError()
                         ScanBridgeModule.emitScanFailed()
@@ -221,6 +271,117 @@ class FloatingBubbleService : Service() {
         mainHandler.postDelayed({ showIdleState() }, 2500)
     }
 
+    /**
+     * Ouvre l'app Strive sur l'écran Historique via deep link `strive://history`.
+     * Utilisé quand l'utilisateur tape sur la bulle résultat pour voir la course
+     * qui vient d'être enregistrée.
+     */
+    private fun openAppHistory() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("strive://history")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            // Fallback : lance juste l'app via launcher intent
+            val launch = packageManager.getLaunchIntentForPackage(packageName)
+            launch?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            launch?.let { startActivity(it) }
+        }
+    }
+
+    /**
+     * Pulse alpha sur le chiffre distance pendant que TomTom tourne. Signal
+     * visuel discret que la valeur est en cours de vérification.
+     */
+    private fun startDistancePulse() {
+        val target = distanceView ?: return
+        stopDistancePulse()
+        distancePulse = ObjectAnimator.ofFloat(target, "alpha", 1f, 0.45f).apply {
+            duration = 700
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
+    }
+
+    private fun stopDistancePulse() {
+        distancePulse?.cancel()
+        distancePulse = null
+        distanceView?.alpha = 1f
+    }
+
+/**
+     * Enchaîne TomTom (natif) après OCR et met à jour la bulle + JS avec les
+     * valeurs finales. Fait tout côté natif pour rester réactif même quand JS
+     * est throttlé (app en background pendant le scan Uber/Bolt/Heetch).
+     */
+    private fun resolveTomTomAndEmit(
+        ocr: OcrParser.ScanResult,
+        base64: String,
+        debugBlocks: String?,
+    ) {
+        val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
+            ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
+            ?.trim() ?: ""
+        val dest = ocr.destinationAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
+            ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
+            ?.trim() ?: ""
+
+        if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
+            // Pas d'adresses ou pas de clé → émet direct les valeurs OCR.
+            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks)
+            return
+        }
+
+        mainHandler.post { startDistancePulse() }
+        TomTomService.calculateRoute(pickup, dest) { route ->
+            val finalResult = if (route != null && route.distanceKm in 0.3..1000.0) {
+                
+                // 1. On vérifie si l'utilisateur veut inclure le trajet d'approche
+                val useApproach = includePickup
+                    && ocr.pickupDurationMin != null
+                    && ocr.pickupDistanceKm != null
+
+                // ✅ RÈGLE V2 : TomTom est le ROI. 
+                // Distance = Course TomTom + Approche OCR (si activée)
+                val totalDistance = if (useApproach)
+                    route.distanceKm + (ocr.pickupDistanceKm ?: 0.0)
+                else route.distanceKm
+
+                // Durée = Course TomTom + Approche OCR (si activée)
+                val totalDuration = if (useApproach)
+                    route.durationMin + (ocr.pickupDurationMin ?: 0)
+                else route.durationMin
+
+                // Recalcul de la vraie rentabilité
+                val hourlyRate = if (totalDuration > 0) ocr.fare / (totalDuration / 60.0) else 0.0
+                val kmRate = if (totalDistance > 0) ocr.fare / totalDistance else 0.0
+                val hrOk = hourlyRate >= minHourlyRate
+                val kmOk = kmRate >= minKmRate
+                val level = if (hrOk && kmOk) 2 else if (hrOk || kmOk) 1 else 0
+
+                mainHandler.post {
+                    stopDistancePulse()
+                    updateMetrics(hourlyRate, kmRate, totalDuration, totalDistance)
+                    updateVerdict(level)
+                }
+
+                // ScanResult mis à jour pour la base de données : on écrase avec les valeurs TomTom
+                ocr.copy(
+                    distanceKm = route.distanceKm,
+                    durationMin = route.durationMin,
+                )
+            } else {
+                // 🚨 FALLBACK : TomTom a échoué (réseau, adresse introuvable). 
+                // On garde 100% des valeurs OCR de la plateforme !
+                mainHandler.post { stopDistancePulse() }
+                ocr
+            }
+            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks)
+        }
+    }
+
     // ─── Verdict ─────────────────────────────────────────────────────────────────
 
     /** @param level 0=rouge (nul), 1=orange (moyen), 2=vert (bien) */
@@ -238,9 +399,10 @@ class FloatingBubbleService : Service() {
             fareBadgeView?.background = GradientDrawable().apply { setColor(color); cornerRadius = r }
             // Triangle
             verdictTriangleView?.setTextColor(color)
-            // Route : cercle voiture + ligne + cercle GPS
+            // Route : cercle voiture + ligne + dot central + cercle warning
             routeCarCircle?.background = GradientDrawable().apply { setColor(color); cornerRadius = rc }
             routeLine?.setBackgroundColor(color)
+            routeCenterDot?.background = GradientDrawable().apply { setColor(color); cornerRadius = dpToPx(5).toFloat() }
             routeGpsCircle?.background = GradientDrawable().apply { setColor(color); cornerRadius = rc }
             // Countdown bar
             verdictBarView?.background = GradientDrawable().apply {
@@ -255,13 +417,44 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    /**
+     * Met à jour toutes les métriques après calcul final JS (pickup + TomTom).
+     * Appelé depuis ScanBridge.updateMetrics.
+     */
+    fun updateMetrics(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double) {
+        mainHandler.post {
+            hourlyRateView?.text = "€%.0f".format(hourlyRate)
+            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            durationView?.text = "${durationMin}min"
+            distanceView?.text = "%.1f km".format(distanceKm)
+        }
+    }
+
+    /**
+     * Met à jour la bulle avec les valeurs finales TomTom + verdict en un appel.
+     */
+    fun finalizeScan(
+        hourlyRate: Double,
+        kmRate: Double,
+        durationMin: Int,
+        distanceKm: Double,
+        verdictLevel: Int,
+    ) {
+        mainHandler.post {
+            hourlyRateView?.text = "€%.0f".format(hourlyRate)
+            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            durationView?.text = "${durationMin}min"
+            distanceView?.text = "%.1f km".format(distanceKm)
+            updateVerdict(verdictLevel)
+        }
+    }
+
     // ─── UI States ────────────────────────────────────────────────────────────────
 
     private fun dpToPx(dp: Int) = (dp * resources.displayMetrics.density).toInt()
 
     private fun showIdleState() {
-        countdownTimer?.cancel()
-        fareBadgeView = null; verdictBarView = null; verdictTriangleView = null; routeCarCircle = null; routeLine = null; routeGpsCircle = null; durationView = null
+        clearTransientState()
         bubbleContainer.removeAllViews()
 
         val pill = LinearLayout(this).apply {
@@ -292,7 +485,7 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showLoadingState() {
-        fareBadgeView = null; verdictBarView = null; verdictTriangleView = null; routeCarCircle = null; routeLine = null; routeGpsCircle = null; durationView = null
+        clearTransientState()
         bubbleContainer.removeAllViews()
 
         val pill = LinearLayout(this).apply {
@@ -326,15 +519,30 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showResultState(result: OcrParser.ScanResult) {
-        fareBadgeView = null; verdictBarView = null; verdictTriangleView = null; routeCarCircle = null; routeLine = null; routeGpsCircle = null; durationView = null
+        clearTransientState()
         bubbleContainer.removeAllViews()
 
         val screenWidth = getScreenWidth()
-        val cardW = (screenWidth * 0.93f).toInt().coerceAtMost(dpToPx(400))
+        val cardW = (screenWidth * 0.76f).toInt().coerceAtMost(dpToPx(320))
 
-        val estimatedDuration = result.durationMin?.toDouble() ?: (result.distanceKm / 25.0 * 60.0)
-        val hourlyRate = if (estimatedDuration > 0) result.fare / (estimatedDuration / 60.0) else 0.0
-        val kmRate = if (result.distanceKm > 0) result.fare / result.distanceKm else 0.0
+        // Métriques provisoires affichées *tant que TomTom n'a pas répondu*.
+        // Respecte la préférence include_pickup_location : si ON et les champs pickup
+        // sont présents, on ajoute le trajet d'approche au total.
+        val useApproach = includePickup
+            && result.pickupDurationMin != null
+            && result.pickupDistanceKm != null
+
+        val courseDuration = result.durationMin?.toDouble() ?: (result.distanceKm / 25.0 * 60.0)
+        val totalDuration = if (useApproach)
+            courseDuration + (result.pickupDurationMin?.toDouble() ?: 0.0)
+        else courseDuration
+
+        val totalDistance = if (useApproach)
+            result.distanceKm + (result.pickupDistanceKm ?: 0.0)
+        else result.distanceKm
+
+        val hourlyRate = if (totalDuration > 0) result.fare / (totalDuration / 60.0) else 0.0
+        val kmRate = if (totalDistance > 0) result.fare / totalDistance else 0.0
 
         val pColor = when (result.platform) {
             OcrParser.Platform.UBER   -> "#FFFFFF"
@@ -347,116 +555,112 @@ class FloatingBubbleService : Service() {
         // ── Card ──
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(14), dpToPx(10), dpToPx(14), dpToPx(10))
+            setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#F01A1A1A"))
-                cornerRadius = dpToPx(22).toFloat()
+                cornerRadius = dpToPx(18).toFloat()
             }
-            elevation = dpToPx(12).toFloat()
+            elevation = dpToPx(10).toFloat()
+            // Tap sur la bulle → ouvre l'app sur l'écran Historique
+            isClickable = true
+            setOnClickListener { openAppHistory() }
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // ROW 1 : Platform | €XX/h ▼ | [€XX] | ↑€X.XX/km ▼ | | Xmin
+        // ROW 1 : Platform | €XX/h | [€XX pill] | ↑€X.XX/km | ▼
         // ═══════════════════════════════════════════════════════════════
         val row1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Platform
-        row1.addView(TextView(this).apply {
+        // ── Zone GAUCHE : Platform + €/h ──
+        val leftZone = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        }
+        leftZone.addView(TextView(this).apply {
             text = result.platform.name.let { it[0] + it.substring(1).lowercase() }
-            textSize = 14f; setTextColor(pColorInt)
+            textSize = 15f; setTextColor(pColorInt)
             typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginEnd = dpToPx(10) })
-
-        // €/h — large white
-        row1.addView(TextView(this).apply {
+        ).apply { marginEnd = dpToPx(6) })
+        val hourlyRateTv = TextView(this).apply {
             text = "€%.0f".format(hourlyRate)
-            textSize = 22f; setTextColor(Color.WHITE)
+            textSize = 21f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
-        })
-        row1.addView(TextView(this).apply {
+            includeFontPadding = false
+        }
+        hourlyRateView = hourlyRateTv
+        leftZone.addView(hourlyRateTv)
+        leftZone.addView(TextView(this).apply {
             text = "/h"
-            textSize = 12f; setTextColor(Color.parseColor("#999999"))
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginEnd = dpToPx(10) })
+            textSize = 13f; setTextColor(Color.parseColor("#999999"))
+            includeFontPadding = false
+        })
+        row1.addView(leftZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Fare badge
+        // ── Zone MILIEU : Fare pill ──
+        val middleZone = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
         val fareBadge = TextView(this).apply {
             text = "€%.0f".format(result.fare)
             textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(dpToPx(12), dpToPx(5), dpToPx(12), dpToPx(5))
+            setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4))
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#CC3333"))
-                cornerRadius = dpToPx(12).toFloat()
+                cornerRadius = dpToPx(11).toFloat()
             }
+            includeFontPadding = false
         }
         fareBadgeView = fareBadge
-        row1.addView(fareBadge, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginEnd = dpToPx(10) })
+        middleZone.addView(fareBadge)
+        row1.addView(middleZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // ↑€/km — white
-        row1.addView(TextView(this).apply {
+        // ── Zone DROITE : ↑€/km + ▼ ──
+        val rightZone = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+        }
+        val kmRateTv = TextView(this).apply {
             text = "↑€%.2f/km".format(kmRate)
-            textSize = 12f; setTextColor(Color.WHITE)
+            textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
-        })
-
-        // ▼ verdict triangle
+            includeFontPadding = false
+        }
+        kmRateView = kmRateTv
+        rightZone.addView(kmRateTv)
         val triangle = TextView(this).apply {
-            text = "▼"; textSize = 10f
+            text = "▼"; textSize = 11f
             setTextColor(Color.parseColor("#666666"))
+            includeFontPadding = false
         }
         verdictTriangleView = triangle
-        row1.addView(triangle, LinearLayout.LayoutParams(
-            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        rightZone.addView(triangle, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { marginStart = dpToPx(4) })
-
-        // Vertical separator
-        row1.addView(View(this).apply {
-            setBackgroundColor(Color.parseColor("#333333"))
-        }, LinearLayout.LayoutParams(dpToPx(1), dpToPx(32)).apply {
-            marginEnd = dpToPx(10)
-        })
-
-        // Duration + distance
-        val rightCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        val durationTv = TextView(this).apply {
-            text = if (result.durationMin != null) "${result.durationMin}min" else "—min"
-            textSize = 14f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
-        }
-        durationView = durationTv
-        rightCol.addView(durationTv)
-        rightCol.addView(TextView(this).apply {
-            text = "%.1f km".format(result.distanceKm)
-            textSize = 11f; setTextColor(Color.parseColor("#888888"))
-        })
-        row1.addView(rightCol)
+        row1.addView(rightZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         card.addView(row1, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dpToPx(8) })
 
         // ═══════════════════════════════════════════════════════════════
-        // ROW 2 : [🚗 circle] ———— line ———— [📍 circle]
-        //   All in neutral gray — verdict will recolor them
+        // ROW 2 : [🚗] —— ● —— [29min / 12.9km] [ⓘ]
+        //   Circles, line, dot recolor via updateVerdict
         // ═══════════════════════════════════════════════════════════════
         val neutralColor = Color.parseColor("#555555")
         val circleSize = dpToPx(18)
+        val dotSize = dpToPx(10)
 
         val row2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(4), 0, dpToPx(4), 0)
         }
 
         // Car circle (pickup)
@@ -464,53 +668,74 @@ class FloatingBubbleService : Service() {
             background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = circleSize / 2f }
         }
         carView.addView(TextView(this).apply {
-            text = "▶"; textSize = 7f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            text = "▶"; textSize = 8f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            includeFontPadding = false
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ).apply { gravity = Gravity.CENTER })
         routeCarCircle = carView
         row2.addView(carView, LinearLayout.LayoutParams(circleSize, circleSize))
 
-        // Connecting line
+        // Connecting line with center dot overlay
+        val lineWrapper = FrameLayout(this)
         val lineView = View(this).apply { setBackgroundColor(neutralColor) }
         routeLine = lineView
-        row2.addView(lineView, LinearLayout.LayoutParams(0, dpToPx(2), 1f))
+        lineWrapper.addView(lineView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(2)
+        ).apply { gravity = Gravity.CENTER_VERTICAL })
+        val centerDot = View(this).apply {
+            background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = dotSize / 2f }
+        }
+        routeCenterDot = centerDot
+        lineWrapper.addView(centerDot, FrameLayout.LayoutParams(dotSize, dotSize).apply {
+            gravity = Gravity.CENTER
+        })
+        row2.addView(lineWrapper, LinearLayout.LayoutParams(
+            0, circleSize, 1f
+        ).apply { marginStart = dpToPx(4); marginEnd = dpToPx(8) })
 
-        // GPS circle (destination)
-        val gpsView = FrameLayout(this).apply {
+        // Duration + distance column (right side)
+        val rightCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+        }
+        val durationTv = TextView(this).apply {
+            text = if (result.durationMin != null || useApproach)
+                "${totalDuration.toInt()}min"
+            else "—min"
+            textSize = 14f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+        }
+        durationView = durationTv
+        rightCol.addView(durationTv)
+        val distanceTv = TextView(this).apply {
+            text = "%.1f km".format(totalDistance)
+            textSize = 12f; setTextColor(Color.parseColor("#888888"))
+            includeFontPadding = false
+        }
+        distanceView = distanceTv
+        rightCol.addView(distanceTv)
+        row2.addView(rightCol, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = dpToPx(6) })
+
+        // Warning circle (end of row)
+        val warnView = FrameLayout(this).apply {
             background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = circleSize / 2f }
         }
-        gpsView.addView(TextView(this).apply {
-            text = "◉"; textSize = 8f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        warnView.addView(TextView(this).apply {
+            text = "!"; textSize = 12f; setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+            includeFontPadding = false
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ).apply { gravity = Gravity.CENTER })
-        routeGpsCircle = gpsView
-        row2.addView(gpsView, LinearLayout.LayoutParams(circleSize, circleSize))
+        routeGpsCircle = warnView
+        row2.addView(warnView, LinearLayout.LayoutParams(circleSize, circleSize))
 
         card.addView(row2, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(4) })
-
-        // ── Countdown bar ──
-        val trackW = cardW - dpToPx(28)
-        val timerTrack = FrameLayout(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#2A2A2A"))
-                cornerRadius = dpToPx(2).toFloat()
-            }
-        }
-        val timerBar = View(this).apply {
-            background = GradientDrawable().apply {
-                setColor(neutralColor)
-                cornerRadius = dpToPx(2).toFloat()
-            }
-        }
-        verdictBarView = timerBar
-        timerTrack.addView(timerBar, FrameLayout.LayoutParams(trackW, dpToPx(3)))
-        card.addView(timerTrack, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(3)
-        ))
+        ).apply { bottomMargin = dpToPx(6) })
 
         bubbleContainer.addView(card, FrameLayout.LayoutParams(cardW, LayoutParams.WRAP_CONTENT))
         animateTo(cardW, LayoutParams.WRAP_CONTENT)
@@ -522,23 +747,16 @@ class FloatingBubbleService : Service() {
             runCatching { windowManager.updateViewLayout(bubbleContainer, bubbleParams) }
         }
 
-        // Countdown 15s
+        // Countdown 15s (sans barre visuelle — juste dismiss à la fin)
         countdownTimer?.cancel()
-        countdownTimer = object : CountDownTimer(COUNTDOWN_MS, 50) {
-            override fun onTick(millisLeft: Long) {
-                val newW = (trackW * millisLeft.toFloat() / COUNTDOWN_MS).toInt()
-                mainHandler.post {
-                    timerBar.layoutParams = (timerBar.layoutParams as FrameLayout.LayoutParams)
-                        .apply { width = newW }
-                    timerBar.requestLayout()
-                }
-            }
+        countdownTimer = object : CountDownTimer(COUNTDOWN_MS, COUNTDOWN_MS) {
+            override fun onTick(millisLeft: Long) {}
             override fun onFinish() { mainHandler.post { showIdleState() } }
         }.start()
     }
 
     private fun showErrorState() {
-        fareBadgeView = null; verdictBarView = null; verdictTriangleView = null; routeCarCircle = null; routeLine = null; routeGpsCircle = null; durationView = null; countdownTimer?.cancel()
+        clearTransientState()
         bubbleContainer.removeAllViews()
 
         val pill = LinearLayout(this).apply {

@@ -16,11 +16,18 @@ import { BlurView } from '@react-native-community/blur';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 
-import DashboardScreen from '../screens/DashboardScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import AnalyticsScreen from '../screens/AnalyticsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import ShopScreen from '../screens/ShopScreen';
+import DashboardScreenRaw from '../screens/DashboardScreen';
+import HistoryScreenRaw from '../screens/HistoryScreen';
+import AnalyticsScreenRaw from '../screens/AnalyticsScreen';
+import ProfileScreenRaw from '../screens/ProfileScreen';
+import { withErrorBoundary } from '../components/ErrorBoundary';
+
+// Chaque tab isolé dans son ErrorBoundary : un crash dans Analytics ne
+// blanchit pas Dashboard/History/etc.
+const DashboardScreen = withErrorBoundary(DashboardScreenRaw);
+const HistoryScreen = withErrorBoundary(HistoryScreenRaw);
+const AnalyticsScreen = withErrorBoundary(AnalyticsScreenRaw);
+const ProfileScreen = withErrorBoundary(ProfileScreenRaw);
 
 const Tab = createBottomTabNavigator();
 
@@ -28,7 +35,6 @@ const TAB_ICONS: Record<string, (color: string, size: number) => React.ReactNode
   Dashboard: (c, s) => <MaterialCommunityIcons name="view-dashboard"    size={s} color={c} />,
   History:   (c, s) => <MaterialCommunityIcons name="history"           size={s} color={c} />,
   Analytics: (c, s) => <MaterialCommunityIcons name="google-analytics"  size={s} color={c} />,
-  Shop:      (c, s) => <MaterialCommunityIcons name="storefront-outline" size={s} color={c} />,
   Profile:   (c, s) => <FontAwesome5           name="user"              size={s - 2} color={c} />,
 };
 
@@ -37,15 +43,13 @@ const INDICATOR_INSET_V = 5;
 // Horizontal padding between indicator edge and tab cell edge
 const INDICATOR_INSET_H = 4;
 
-const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const numTabs = state.routes.length;
 
-  // Measure the row width so we can compute exact tab cell width
   const [rowWidth, setRowWidth] = useState(0);
   const tabWidth = rowWidth > 0 ? rowWidth / numTabs : 0;
 
-  // Single animated value tracking the active index
   const animIndex = useRef(new Animated.Value(state.index)).current;
 
   useEffect(() => {
@@ -58,8 +62,6 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
     }).start();
   }, [state.index]);
 
-  // translateX for the sliding indicator
-  // starts at left = INDICATOR_INSET_H, slides by tabWidth per step
   const indicatorX = animIndex.interpolate({
     inputRange: state.routes.map((_, i) => i),
     outputRange: state.routes.map((_, i) => i * tabWidth),
@@ -72,28 +74,19 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
       pointerEvents="box-none"
     >
       <View style={styles.pill}>
-        {/* --- Background glass layer --- */}
-        {Platform.OS === 'ios' ? (
-          <>
-            <BlurView
-              style={StyleSheet.absoluteFill}
-              blurType="chromeMaterialDark"
-              blurAmount={40}
-              reducedTransparencyFallbackColor="rgba(10,20,14,0.92)"
-            />
-            <View style={[StyleSheet.absoluteFill, styles.tintOverlay]} />
-            <View style={styles.shimmer} />
-          </>
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.androidBg]} />
-        )}
+        <BlurView
+          style={StyleSheet.absoluteFill}
+          blurType="chromeMaterialDark"
+          blurAmount={40}
+          reducedTransparencyFallbackColor="rgba(10,20,14,0.92)"
+        />
+        <View style={[StyleSheet.absoluteFill, styles.tintOverlay]} />
+        <View style={styles.shimmer} />
 
-        {/* --- Tab row --- */}
         <View
           style={styles.row}
           onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
         >
-          {/* Single sliding indicator — rendered once, positioned absolutely */}
           {tabWidth > 0 && (
             <Animated.View
               style={[
@@ -111,20 +104,16 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
                 },
               ]}
             >
-              {/* iOS: nested blur for true glass-on-glass look */}
-              {Platform.OS === 'ios' && (
-                <BlurView
-                  style={StyleSheet.absoluteFill}
-                  blurType="light"
-                  blurAmount={12}
-                  reducedTransparencyFallbackColor="rgba(255,255,255,0.15)"
-                />
-              )}
+              <BlurView
+                style={StyleSheet.absoluteFill}
+                blurType="light"
+                blurAmount={12}
+                reducedTransparencyFallbackColor="rgba(255,255,255,0.15)"
+              />
               <View style={[StyleSheet.absoluteFill, styles.indicatorTint]} />
             </Animated.View>
           )}
 
-          {/* Tab items */}
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];
             const focused = state.index === index;
@@ -167,6 +156,56 @@ const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => 
   );
 };
 
+const AndroidTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.androidBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {state.routes.map((route, index) => {
+        const { options } = descriptors[route.key];
+        const focused = state.index === index;
+        const iconColor = focused ? colors.primary : 'rgba(255,255,255,0.42)';
+        const label = (options.tabBarLabel as string) ?? route.name;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={onPress}
+            activeOpacity={0.75}
+            style={styles.androidItem}
+            accessibilityRole="button"
+            accessibilityLabel={options.tabBarAccessibilityLabel}
+          >
+            {focused && <View style={styles.androidActiveIndicator} />}
+            {TAB_ICONS[route.name]?.(iconColor, 22)}
+            <Text
+              style={[styles.label, { color: iconColor }]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const CustomTabBar = (props: BottomTabBarProps) => {
+  return Platform.OS === 'ios' ? <IOSTabBar {...props} /> : <AndroidTabBar {...props} />;
+};
+
 const TabNavigator = () => {
   const { t } = useTranslation();
 
@@ -174,7 +213,6 @@ const TabNavigator = () => {
     Dashboard: t('nav.dashboard'),
     History:   t('nav.history'),
     Analytics: t('nav.analytics'),
-    Shop:      t('nav.shop'),
     Profile:   t('nav.profile'),
   };
 
@@ -183,7 +221,7 @@ const TabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { position: 'absolute' },
+        ...(Platform.OS === 'ios' ? { tabBarStyle: { position: 'absolute' } } : {}),
       }}
     >
       {Object.keys(labels).map((name) => {
@@ -191,7 +229,6 @@ const TabNavigator = () => {
           Dashboard: DashboardScreen,
           History:   HistoryScreen,
           Analytics: AnalyticsScreen,
-          Shop:      ShopScreen,
           Profile:   ProfileScreen,
         };
         return (
@@ -291,6 +328,31 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 0.1,
+  },
+
+  // Android classic tab bar
+  androidBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 8,
+  },
+  androidItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 4,
+    position: 'relative',
+  },
+  androidActiveIndicator: {
+    position: 'absolute',
+    top: -8,
+    width: 32,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
   },
 });
 

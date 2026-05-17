@@ -19,12 +19,18 @@ RCT_EXTERN_METHOD(showVerdict:(nonnull NSNumber *)level)
 
 RCT_EXTERN_METHOD(updateDuration:(nonnull NSNumber *)minutes)
 
-RCT_EXTERN_METHOD(setGeminiApiKey:(NSString *)key)
-
 RCT_EXTERN_METHOD(setGeminiConfig:(NSString *)edgeUrl
                   supabaseAnonKey:(NSString *)supabaseAnonKey)
 
+RCT_EXTERN_METHOD(setSupabaseUserJwt:(NSString *)jwt)
+
 RCT_EXTERN_METHOD(setParserConfig:(NSString *)configJson)
+
+RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
+
+RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
+                  minKmRate:(nonnull NSNumber *)minKmRate
+                  includePickup:(BOOL)includePickup)
 
 RCT_EXTERN_METHOD(openOverlayPermissionSettings)
 
@@ -35,6 +41,17 @@ RCT_EXTERN_METHOD(requestMediaProjectionPermission:(RCTPromiseResolveBlock)resol
 
 RCT_EXTERN_METHOD(analyzeImage:(NSString *)imageUri
                   resolve:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(startLiveActivity:(NSDictionary *)payload
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(updateLiveActivity:(NSDictionary *)payload
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopLiveActivity:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end

@@ -12,7 +12,13 @@ class ScanBridgeModule: RCTEventEmitter {
 
   // MARK: - App Group (partage données avec Share Extension)
 
-  static let appGroupId = "group.com.strive.app"
+  /// Lu depuis Info.plist (`StriveAppGroupId`) — fallback hardcodé pour les
+  /// targets qui ne l'auraient pas encore configuré. Centralise la valeur pour
+  /// éviter la dérive entre app principale et Share Extension.
+  static let appGroupId: String = {
+    Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+      ?? "group.com.strive.app"
+  }()
   static let scanResultKey = "lastScanResult"
   static let scanTimestampKey = "lastScanTimestamp"
 
@@ -154,13 +160,6 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.set(minutes.intValue, forKey: "lastDurationMin")
   }
 
-  @objc func setGeminiApiKey(_ key: String) {
-    GeminiVisionService.shared.apiKey = key
-    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
-      defaults.set(key, forKey: "geminiApiKey")
-    }
-  }
-
   @objc func setGeminiConfig(_ edgeUrl: String, supabaseAnonKey: String) {
     GeminiVisionService.shared.edgeFunctionUrl = edgeUrl
     GeminiVisionService.shared.supabaseAnonKey = supabaseAnonKey
@@ -170,9 +169,38 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// JWT user — requis par l'edge function durcie (rate-limit + audit).
+  /// Stocké dans App Group pour que la Share Extension l'utilise aussi.
+  @objc func setSupabaseUserJwt(_ jwt: String) {
+    GeminiVisionService.shared.supabaseUserJwt = jwt
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(jwt, forKey: "supabaseUserJwt")
+    }
+  }
+
   @objc func setParserConfig(_ configJson: String) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(configJson, forKey: "parserConfig")
+    }
+  }
+
+  /// Clé TomTom — partagée avec l'AppIntent (Shortcut) et la Share Extension
+  /// via App Group, pour que TomTomService puisse géocoder hors process JS.
+  @objc func setTomTomApiKey(_ key: String) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(key, forKey: "tomTomApiKey")
+    }
+  }
+
+  /// Préférences utilisateur pour le verdict natif (seuils + include pickup).
+  /// Lus par AnalyzeRideIntent au moment du calcul de rentabilité.
+  @objc func setScannerPreferences(_ minHourlyRate: NSNumber,
+                                    minKmRate: NSNumber,
+                                    includePickup: Bool) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(minHourlyRate.doubleValue, forKey: "minHourlyRate")
+      defaults.set(minKmRate.doubleValue, forKey: "minKmRate")
+      defaults.set(includePickup, forKey: "includePickup")
     }
   }
 
@@ -187,6 +215,52 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func requestMediaProjectionPermission(_ resolve: @escaping RCTPromiseResolveBlock,
                                               rejecter reject: @escaping RCTPromiseRejectBlock) {
     // No-op sur iOS
+    resolve(nil)
+  }
+
+  // MARK: - Live Activity (Dynamic Island)
+
+  @objc func startLiveActivity(_ payload: NSDictionary,
+                               resolve: @escaping RCTPromiseResolveBlock,
+                               rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 16.2, *) {
+      let started = LiveActivityManager.shared.start(
+        platform: (payload["platform"] as? String) ?? "UNKNOWN",
+        fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+        hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+        kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+        distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+        durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+        verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+      )
+      resolve(started)
+    } else {
+      resolve(false)
+    }
+  }
+
+  @objc func updateLiveActivity(_ payload: NSDictionary,
+                                resolve: @escaping RCTPromiseResolveBlock,
+                                rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.update(
+        platform: (payload["platform"] as? String) ?? "UNKNOWN",
+        fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+        hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+        kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+        distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+        durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+        verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+      )
+    }
+    resolve(nil)
+  }
+
+  @objc func stopLiveActivity(_ resolve: @escaping RCTPromiseResolveBlock,
+                              rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.stop()
+    }
     resolve(nil)
   }
 

@@ -10,14 +10,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Animated,
-  Image,
-  Platform,
   Modal,
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors } from '../theme/colors';
@@ -26,33 +23,22 @@ import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare
 import { fetchParserConfig } from '../services/parserConfigService';
 import { useTranslation } from 'react-i18next';
 import { Ride } from '../types/database';
-import { formatTimeAgo, formatDuration, getDayStart } from '../utils/dateUtils';
+import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 import { PremiumBanner } from '../components/PremiumBanner';
-import { getPlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY } from '@env';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
-import { calculateRouteDuration } from '../services/tomtomService';
+import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
-import { cacheRides } from '../services/offlineService';
-import { registerPushToken, setupNotificationListeners, shouldAlertLowCredits } from '../services/notificationService';
-import AnimatedEntrance from '../components/AnimatedEntrance';
-
-const platformBackgrounds: Record<string, any> = {
-  UBER:   require('../images/uber-bg.png'),
-  BOLT:   require('../images/bolt-bg.png'),
-  HEETCH: require('../images/heetch-bg.png'),
-};
-
-const PLATFORM_COLORS: Record<string, string> = {
-  UBER:   '#FFFFFF',
-  BOLT:   '#34BB78',
-  HEETCH: '#FF3B80',
-};
+import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
+import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
+import DashboardRideCard from '../components/DashboardRideCard';
+import BrandLoader from '../components/BrandLoader';
 
 const DashboardScreen = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
@@ -60,9 +46,9 @@ const DashboardScreen = () => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2 });
+  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: false });
 
-  const tier = getPlanTier(profile?.subscription_tier);
+  const tier = getEffectivePlanTier(profile);
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
   const remaining = getRemainingScans(tier, rides.length, extraCredits);
@@ -88,60 +74,175 @@ const DashboardScreen = () => {
     return cleanup;
   }, [user?.id]);
 
-  // ── Config scanner (edge function Gemini + remote config OCR) ────────────
+  // ── Config scanner (edge function Gemini + remote config OCR + TomTom) ──
   useEffect(() => {
     scannerService.setGeminiConfig(
       `${PUBLIC_SUPABASE_URL}/functions/v1/gemini-proxy`,
       PUBLIC_SUPABASE_KEY,
     );
+    // Clé TomTom au natif : permet geocoding + routing pendant scan en background
+    if (TOMTOM_API_KEY) scannerService.setTomTomApiKey(TOMTOM_API_KEY);
     fetchParserConfig().then(config => {
       if (config) scannerService.setParserConfig(config);
     });
-  }, []);
+// Sync timezone du téléphone vers profile (reset quota au midnight local)
+    if (user?.id) {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) {
+          supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
+        }
+      } catch {}
+    }
+  }, [user?.id]);
+
+  // ── Propage préférences + seuils à la bulle native ──────────────────────
+  useEffect(() => {
+    scannerService.setPreferences(preferences.include_pickup);
+    scannerService.setThresholds(preferences.min_hourly_rate, preferences.min_km_rate);
+  }, [preferences.include_pickup, preferences.min_hourly_rate, preferences.min_km_rate]);
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
+  const lastScanTsRef = useRef(0);
   useEffect(() => {
-    const subResult = scannerService.onScanResult(async (result) => {
+    const subResult = scannerService.onScanResult(async (nativeResult) => {
       if (!user?.id) return;
-      // 1. Calculer les metriques
-      const durationMin = result.durationMin ?? Math.round(result.distanceKm / 25 * 60);
-      const hourlyRate = result.fare / (durationMin / 60);
-      const kmRate = result.fare / result.distanceKm;
+      // Rate limit côté JS : ignore les events dupliqués <1s (défense en plus
+      // du `scanInProgress` natif). Évite les double-inserts DB sur event RN
+      // flaky.
+      const now = Date.now();
+      if (now - lastScanTsRef.current < 1000) {
+        __DEV__ && console.warn('[Scanner] event dupliqué ignoré (<1s)');
+        return;
+      }
+      lastScanTsRef.current = now;
 
-      // 2. Verdict vs preferences (0=rouge, 1=orange, 2=vert)
+      __DEV__ && console.info(
+        '[Scanner:Start] résultat natif reçu —',
+        { platform: nativeResult.platform, hasImage: !!nativeResult.imageBase64 },
+      );
+      __DEV__ && console.info('[Scanner:OCR] résultat OCR local :', {
+        platform: nativeResult.platform,
+        fare: nativeResult.fare,
+        distanceKm: nativeResult.distanceKm,
+        durationMin: nativeResult.durationMin,
+        pickupAddress: nativeResult.pickupAddress,
+        destinationAddress: nativeResult.destinationAddress,
+        pickupDurationMin: nativeResult.pickupDurationMin,
+        pickupDistanceKm: nativeResult.pickupDistanceKm,
+      });
+      // Diagnostic : dump brut des blocs ML Kit — permet de voir comment la
+      // capture est fragmentée et d'affiner les heuristiques anti-fragmentation.
+      if (__DEV__ && nativeResult.debugBlocks) {
+        try {
+          console.info('[Scanner:Debug] blocs ML Kit bruts :', JSON.parse(nativeResult.debugBlocks));
+        } catch {
+          console.info('[Scanner:Debug] blocs ML Kit bruts (raw) :', nativeResult.debugBlocks);
+        }
+      }
+
+      // Le natif a déjà appelé TomTom et mis à jour la bulle. Ici on :
+      //  - fallback Gemini si l'OCR est totalement vide (cas extrême)
+      //  - ajoute le trajet d'approche (pickup) si la pref est active
+      //  - consolide les valeurs pour la DB
+      const ocrLooksBad =
+        !Number.isFinite(nativeResult.fare) || nativeResult.fare <= 0 ||
+        !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
+
+      let result = nativeResult;
+      if (ocrLooksBad && nativeResult.imageBase64) {
+        __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
+        const gemini = await extractWithGemini(nativeResult.imageBase64);
+        if (gemini) result = { ...gemini, imageBase64: undefined };
+      }
+
+      const includePickup = preferences.include_pickup
+        && result.pickupDurationMin != null
+        && result.pickupDistanceKm != null;
+
+      const courseDuration = result.durationMin ?? Math.round(result.distanceKm / 25 * 60);
+      const totalDuration = includePickup
+        ? (result.pickupDurationMin as number) + courseDuration
+        : courseDuration;
+      const totalDistance = includePickup
+        ? (result.pickupDistanceKm as number) + result.distanceKm
+        : result.distanceKm;
+
+      const hourlyRate = result.fare / (totalDuration / 60);
+      const kmRate = result.fare / totalDistance;
       const hrOk = hourlyRate >= preferences.min_hourly_rate;
       const kmOk = kmRate >= preferences.min_km_rate;
       const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
-      scannerService.showVerdict(level);
-      hapticHeavy(); // Feedback haptique à chaque scan reçu
 
-      // 3. Logger dans Supabase
+      hapticHeavy();
+
+      __DEV__ && console.info('[Scanner:Final] valeurs DB :', {
+        platform: result.platform,
+        fare: result.fare,
+        distanceKm: totalDistance,
+        durationMin: totalDuration,
+        hourlyRate,
+        kmRate,
+        verdict: level,
+        includePickup,
+      });
+
+      // ── Log en DB (valeurs finales). Si Supabase tombe, on queue hors-ligne
+      // pour garantir zéro scan perdu — useOfflineSync re-tente à la reconnexion.
       try {
         const newRide = await createRide({
           userId: user.id,
           platform: result.platform,
           fare: result.fare,
-          distanceKm: result.distanceKm,
-          durationMin,
+          distanceKm: totalDistance,
+          durationMin: totalDuration,
           hourlyRate,
           kmRate,
         });
         setRides(prev => [newRide, ...prev]);
-        setStats(prev => ({
-          ...prev,
-          scans: prev.scans + 1,
-        }));
+        setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
+        // Trigger flush queue offline : si des rides sont coincés, on profite
+        // que le réseau marche pour les vider maintenant.
+        syncOfflineQueue(async (queuedRide) => {
+          await createRide({
+            userId: user.id,
+            platform: queuedRide.platform,
+            fare: queuedRide.fare_estimated,
+            distanceKm: queuedRide.distance_km,
+            durationMin: queuedRide.duration_min,
+            hourlyRate: queuedRide.hourly_rate,
+            kmRate: queuedRide.km_rate,
+          });
+        }).catch(() => {});
       } catch (e) {
-        __DEV__ && console.error('[SCAN] createRide error', e);
-      }
-
-      // 4. Calcul durée réelle via TomTom (async — met à jour la bulle quand disponible)
-      if (result.pickupAddress && result.destinationAddress) {
-        calculateRouteDuration(result.pickupAddress, result.destinationAddress)
-          .then(minutes => {
-            if (minutes !== null) scannerService.updateDuration(minutes);
-          })
-          .catch(() => {});
+        __DEV__ && console.warn('[SCAN] createRide KO — queue offline', e);
+        await queueOfflineRide({
+          user_id: user.id,
+          platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
+          status: 'PENDING',
+          fare_estimated: result.fare,
+          fare_final: null,
+          distance_km: totalDistance,
+          duration_min: totalDuration,
+          hourly_rate: hourlyRate,
+          km_rate: kmRate,
+          created_at: new Date().toISOString(),
+        });
+        // Affiche localement pour retour utilisateur (ID temporaire)
+        setRides(prev => [{
+          id: `offline-${Date.now()}`,
+          user_id: user.id,
+          platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
+          status: 'PENDING',
+          fare_estimated: result.fare,
+          fare_final: null,
+          distance_km: totalDistance,
+          duration_min: totalDuration,
+          hourly_rate: hourlyRate,
+          km_rate: kmRate,
+          created_at: new Date().toISOString(),
+        }, ...prev]);
+        setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
       }
     });
 
@@ -184,7 +285,7 @@ const DashboardScreen = () => {
     }
   }, [isOnline, pulseAnim]);
 
-  const handleStatusUpdate = async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
+  const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
     setRides(prev => prev.map(r => (r.id === id ? { ...r, status: newStatus } : r)));
     setTimeout(() => {
@@ -195,11 +296,15 @@ const DashboardScreen = () => {
     } catch {
       fetchData();
     }
-  };
+  }, [fetchData]);
 
-  const handleAcceptPress = (id: string) => {
+  const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
-  };
+  }, []);
+
+  const handleDeclinePress = useCallback((id: string) => {
+    handleStatusUpdate(id, 'DECLINED');
+  }, [handleStatusUpdate]);
 
   const handleConfirmYes = () => {
     if (!confirmModal) return;
@@ -279,18 +384,20 @@ const DashboardScreen = () => {
     }
   };
 
+  const fetchingRef = useRef(false);
   const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       setLoading(true);
       setFetchError(false);
       const { data: prefsData } = await supabase
         .from('preferences')
-        .select('min_hourly_rate, min_km_rate, day_reset_hour')
+        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup')
         .eq('id', user.id)
         .maybeSingle();
 
-      const resetHour = prefsData?.day_reset_hour === 3 ? 3 : 0;
+      const resetHour = prefsData?.day_reset_hour === 4 ? 4 : 0;
       const resetTime = getDayStart(resetHour);
 
       if (prefsData) {
@@ -299,6 +406,7 @@ const DashboardScreen = () => {
         setPreferences({
           min_hourly_rate: Number.isFinite(minHourly) ? minHourly : 25,
           min_km_rate: Number.isFinite(minKm) ? minKm : 1.2,
+          include_pickup: Boolean(prefsData.include_pickup),
         });
       }
 
@@ -341,6 +449,7 @@ const DashboardScreen = () => {
       setFetchError(true);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, [user?.id]);
 
@@ -460,7 +569,6 @@ const DashboardScreen = () => {
         <PremiumBanner
           todayScanCount={rides.length}
           onPressUpgrade={() => navigation.navigate('SubscriptionScreen')}
-          onPressShop={() => navigation.navigate('Shop')}
         />
 
         {/* ── PENDING SCANS HEADER ── */}
@@ -474,12 +582,9 @@ const DashboardScreen = () => {
             <MaterialCommunityIcons name="shield-lock-outline" size={28} color={colors.danger} style={{ marginBottom: 10 }} />
             <Text style={styles.scanLimitTitle}>{t('dashboard.scanLimit.cardTitle', 'Quota journalier atteint')}</Text>
             <Text style={styles.scanLimitText}>
-              {t('dashboard.scanLimit.cardText', "Vous avez utilisé vos {{count}} scans d'aujourd'hui.", { count: dailyScans })}
+              {t('dashboard.scanLimit.cardText', "Vous avez utilisé vos {{count}} scans d'aujourd'hui.", { count: dailyScans ?? 0 })}
             </Text>
             <View style={styles.scanLimitActions}>
-              <TouchableOpacity style={styles.scanLimitBtnSecondary} onPress={() => navigation.navigate('Shop')}>
-                <Text style={styles.scanLimitBtnSecondaryText}>{t('dashboard.scanLimit.buyCredits', 'Acheter des crédits')}</Text>
-              </TouchableOpacity>
               <TouchableOpacity style={styles.scanLimitBtnPrimary} onPress={() => navigation.navigate('SubscriptionScreen')}>
                 <Text style={styles.scanLimitBtnPrimaryText}>{t('dashboard.scanLimit.upgrade', 'Passer Plus')}</Text>
               </TouchableOpacity>
@@ -489,130 +594,18 @@ const DashboardScreen = () => {
 
         {/* ── RIDES ── */}
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
+          <BrandLoader style={{ marginTop: 30 }} />
         ) : pendingRides.length > 0 ? (
-          pendingRides.map((ride, rideIndex) => {
-            const rawPlatform = ride.platform ? ride.platform.toString().toUpperCase().trim() : 'UBER';
-            const isPending = ride.status === 'PENDING';
-            const distance = Number(ride.distance_km) || 0;
-            const fare = effectiveFare(ride);
-            const fareIsConfirmed = ride.fare_final != null;
-            const hourlyRate = Number(ride.hourly_rate || 0);
-            const kmRate = Number(ride.km_rate || 0);
-            const platformColor = PLATFORM_COLORS[rawPlatform] ?? '#FFFFFF';
-            const bgImage = platformBackgrounds[rawPlatform] ?? platformBackgrounds.UBER;
-            const rateOk = hourlyRate >= preferences.min_hourly_rate;
-            const platformLabel = rawPlatform.charAt(0) + rawPlatform.slice(1).toLowerCase();
-
-            return (
-              <AnimatedEntrance key={ride.id} delay={rideIndex * 80} slideFrom="bottom" slideDistance={30}>
-              <View style={[styles.rideCard, !isPending && { opacity: 0.5 }]}>
-
-                {/* ── IMAGE SECTION ── */}
-                <View style={styles.rideImageWrap}>
-                  <Image source={bgImage} style={styles.rideImage} resizeMode="cover" />
-                  <LinearGradient
-                    colors={['transparent', colors.surface]}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                  {/* Overlaid badges — top */}
-                  <View style={styles.imageBadgesRow}>
-                    <View style={styles.platformPill}>
-                      <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
-                      <Text style={styles.platformPillText}>{platformLabel}</Text>
-                    </View>
-                    <View style={[styles.ratePill, rateOk && styles.ratePillGood]}>
-                      <Feather name="trending-up" size={12} color={rateOk ? colors.background : colors.textMuted} />
-                      <Text style={[styles.ratePillText, rateOk && styles.ratePillTextGood]}>
-                        {hourlyRate.toFixed(0)}€/h
-                      </Text>
-                    </View>
-                    <View style={styles.timeAgoPill}>
-                      <Text style={styles.timeAgoText}>{formatTimeAgo(ride.created_at, t)}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* ── CONTENT ── */}
-                <View style={styles.rideContent}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={styles.fareLabel}>{t('dashboard.estFare')}</Text>
-                    {!fareIsConfirmed && (
-                      <View style={styles.estBadge}>
-                        <Text style={styles.estBadgeText}>{t('dashboard.estimated', 'est.')}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.fareRow}>
-                    <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fare.toFixed(2)}€</Text>
-                    <View style={styles.tripMetrics}>
-                      <View style={styles.tripMetricCol}>
-                        <Text style={styles.tripMetricLabel}>{t('dashboard.distance')}</Text>
-                        <View style={styles.tripMetricItem}>
-                          <MaterialCommunityIcons name="map-marker" size={14} color={colors.primary} />
-                          <Text style={styles.tripMetricText}>{distance} km</Text>
-                        </View>
-                      </View>
-                      <View style={styles.tripMetricCol}>
-                        <Text style={styles.tripMetricLabel}>{t('dashboard.time')}</Text>
-                        <View style={styles.tripMetricItem}>
-                          <MaterialCommunityIcons name="clock-outline" size={14} color={colors.primary} />
-                          <Text style={styles.tripMetricText}>{Number(ride.duration_min || 0)} min</Text>
-                        </View>
-                      </View>
-                      <View style={styles.tripMetricCol}>
-                        <Text style={styles.tripMetricLabel}>{t('dashboard.kmRate')}</Text>
-                        <View style={styles.tripMetricItem}>
-                          <Feather name="navigation" size={13} color={colors.primary} />
-                          <Text style={styles.tripMetricText}>{kmRate.toFixed(2)}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Actions */}
-                  {isPending ? (
-                    <View style={styles.actionsRow}>
-                      <TouchableOpacity
-                        style={styles.btnDecline}
-                        onPress={() => handleStatusUpdate(ride.id, 'DECLINED')}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('dashboard.decline', 'Decline')}
-                      >
-                        <Feather name="x" size={18} color="#FF5A5A" />
-                        <Text style={styles.btnDeclineText}>{t('dashboard.decline', 'Decline')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.btnAcceptGood}
-                        onPress={() => handleAcceptPress(ride.id)}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('dashboard.accept', 'Accept')}
-                      >
-                        <Feather name="check" size={18} color={colors.background} />
-                        <Text style={styles.btnAcceptTextGood}>
-                          {t('dashboard.accept', 'Accept')}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.statusResult}>
-                      <Feather
-                        name={ride.status === 'ACCEPTED' ? 'check-circle' : 'slash'}
-                        size={16}
-                        color={ride.status === 'ACCEPTED' ? colors.primary : '#FF5252'}
-                      />
-                      <Text style={{ color: ride.status === 'ACCEPTED' ? colors.primary : '#FF5252', fontWeight: '700', fontSize: 14 }}>
-                        {ride.status === 'ACCEPTED' ? t('dashboard.status.accepted') : t('dashboard.status.declined')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-              </AnimatedEntrance>
-            );
-          })
+          pendingRides.map((ride, rideIndex) => (
+            <DashboardRideCard
+              key={ride.id}
+              ride={ride}
+              index={rideIndex}
+              preferences={preferences}
+              onAccept={handleAcceptPress}
+              onDecline={handleDeclinePress}
+            />
+          ))
         ) : (
           <View style={styles.waitingContainer}>
             <MaterialCommunityIcons name="radar" size={32} color="rgba(0,230,118,0.3)" />
@@ -890,103 +883,10 @@ const styles = StyleSheet.create({
   },
   scanLimitBtnPrimaryText: { color: colors.background, fontSize: 13, fontWeight: '700' },
 
-  // RIDE CARD
-  rideCard: {
-    backgroundColor: '#111E18',
-    borderRadius: 22, marginBottom: 18,
-    overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  rideImageWrap: { height: 130, position: 'relative' },
-  rideImage: { width: '100%', height: '100%' },
-  imageBadgesRow: {
-    position: 'absolute', top: 10, left: 10, right: 10,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  platformPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.6, shadowRadius: 6, elevation: 6,
-  },
-  platformDot: { width: 8, height: 8, borderRadius: 4 },
-  platformPillText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  ratePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-  },
-  ratePillGood: {
-    backgroundColor: colors.primary, borderColor: colors.primary,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.6, shadowRadius: 8, elevation: 6,
-  },
-  ratePillText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  ratePillTextGood: { color: colors.background },
-  timeAgoPill: {
-    marginLeft: 'auto',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-  },
-  timeAgoText: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '500' },
-
-  rideContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
-  fareLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '500', marginBottom: 2 },
-  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  fareValue: { color: '#fff', fontSize: 42, fontWeight: '900', letterSpacing: -1.5 },
-  tripMetrics: { flexDirection: 'row', gap: 16, alignItems: 'flex-end' },
-  tripMetricCol: { alignItems: 'flex-start' },
-  tripMetricLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 4 },
-  tripMetricItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tripMetricText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-
-  actionsRow: { flexDirection: 'row', gap: 10 },
-  btnDecline: {
-    flex: 1, height: 54, borderRadius: 14,
-    borderWidth: 1.5, borderColor: 'rgba(255,90,90,0.45)',
-    backgroundColor: 'rgba(255,90,90,0.08)',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
-  btnDeclineText: { color: '#FF5A5A', fontSize: 16, fontWeight: '700' },
-  btnAcceptGood: {
-    flex: 1, height: 54, borderRadius: 14,
-    backgroundColor: colors.primary,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  btnAcceptTextGood: { color: colors.background, fontSize: 16, fontWeight: '800' },
-
-  statusResult: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    paddingVertical: 12, gap: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', borderRadius: 12,
-  },
-
   // WAITING
   waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 14 },
   waitingTitle: { color: colors.textDimmed, fontSize: 14 },
 
-  // ESTIMATED BADGE
-  estBadge: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  estBadgeText: { color: colors.textDimmed, fontSize: 10, fontWeight: '600' },
 
   // ERROR STATE
   errorCard: {

@@ -12,7 +12,12 @@ class ShareViewController: UIViewController {
 
   // MARK: - App Group
 
-  private static let appGroupId = "group.com.strive.app"
+  /// Lu depuis Info.plist (`StriveAppGroupId`) — fallback hardcodé pour
+  /// fiabilité. Doit matcher la même clé dans l'app principale.
+  private static let appGroupId: String = {
+    Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+      ?? "group.com.strive.app"
+  }()
   private static let scanResultKey = "lastScanResult"
   private static let scanTimestampKey = "lastScanTimestamp"
 
@@ -314,6 +319,11 @@ class ShareViewController: UIViewController {
 
   // MARK: - Image Processing
 
+  // Garde-fou : `loadItem` peut invoquer son completion plusieurs fois (timeout
+  // interne, retry du provider…). Sans ce flag, on lance plusieurs analyses
+  // Gemini en parallèle pour la même image → coûts dupliqués + UI flicker.
+  private var hasProcessed = false
+
   private func processSharedImage() {
     guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
           let attachments = extensionItem.attachments
@@ -322,15 +332,17 @@ class ShareViewController: UIViewController {
       return
     }
 
-    // Chercher une image dans les attachments
     let imageType = UTType.image.identifier
 
     for attachment in attachments {
       if attachment.hasItemConformingToTypeIdentifier(imageType) {
         attachment.loadItem(forTypeIdentifier: imageType, options: nil) { [weak self] item, error in
           DispatchQueue.main.async {
-            guard let self = self else { return }
+            guard let self = self, !self.hasProcessed else { return }
+
             if let error = error {
+              // Pas de set hasProcessed=true : si loadItem retry et réussit,
+              // on veut pouvoir traiter cette 2e tentative.
               self.showError("Erreur : \(error.localizedDescription)")
               return
             }
@@ -346,6 +358,7 @@ class ShareViewController: UIViewController {
             }
 
             if let image = image {
+              self.hasProcessed = true
               self.analyzeImage(image)
             } else {
               self.showError("Format d'image non supporté")
@@ -360,84 +373,54 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
-    guard let cgImage = image.cgImage else {
-      showError("Image invalide")
-      return
-    }
-
-    let imageWidth = CGFloat(cgImage.width)
-    let imageHeight = CGFloat(cgImage.height)
-
-    let request = VNRecognizeTextRequest { [weak self] request, error in
-      DispatchQueue.main.async {
-        guard let self = self else { return }
-
-        if let error = error {
-          self.showError("OCR échoué : \(error.localizedDescription)")
-          return
+    // Pipeline strictement identique à AnalyzeRideIntent (Shortcut) et Android.
+    // Affiche la valeur provisoire immédiatement, puis update avec TomTom.
+    ScanProcessor.shared.process(
+      image: image,
+      onProvisional: { [weak self] provisional in
+        DispatchQueue.main.async {
+          self?.showResult(from: provisional)
         }
+      },
+      onFinal: { [weak self] finalResult in
+        DispatchQueue.main.async {
+          guard let self = self else { return }
+          guard let result = finalResult else {
+            // OCR a échoué ou pas de course détectée → fallback Gemini
+            self.fallbackToGemini(image: image)
+            return
+          }
+          self.showResult(from: result)
+          self.saveSharedResult(result)
 
-        guard let observations = request.results as? [VNRecognizedTextObservation],
-              !observations.isEmpty
-        else {
-          // Fallback Gemini
-          self.fallbackToGemini(image: image)
-          return
-        }
-
-        // Convertir en TextBlocks (même format que Android)
-        var blocks: [[String: Any]] = []
-        for observation in observations {
-          guard let candidate = observation.topCandidates(1).first else { continue }
-          let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-          if text.isEmpty { continue }
-
-          let bbox = observation.boundingBox
-          blocks.append([
-            "text": text,
-            "width": bbox.width * imageWidth,
-            "height": bbox.height * imageHeight,
-            "x": bbox.origin.x * imageWidth,
-            "y": (1 - bbox.origin.y - bbox.height) * imageHeight,
-          ])
-        }
-
-        // Parser les blocs (logique simplifiée — le vrai parsing est dans ocrParser.ts)
-        let result = self.parseBlocksLocally(blocks: blocks, screenHeight: imageHeight)
-
-        if let result = result {
-          self.showResult(result)
-          self.saveResultForMainApp(result)
-        } else {
-          // OCR a trouvé du texte mais pas de course → fallback Gemini
-          self.fallbackToGemini(image: image)
+          // Aussi déclencher la Live Activity sur iOS 16.2+
+          if #available(iOS 16.2, *) {
+            LiveActivityManager.shared.start(
+              platform: result.scan.platform.rawValue,
+              fare: result.scan.fare,
+              hourlyRate: result.hourlyRate,
+              kmRate: result.kmRate,
+              distanceKm: result.totalDistanceKm,
+              durationMin: result.totalDurationMin,
+              verdictLevel: result.verdictLevel
+            )
+          }
         }
       }
-    }
-
-    request.recognitionLevel = .accurate
-    request.recognitionLanguages = ["fr-FR", "en-US"]
-    request.usesLanguageCorrection = true
-
-    DispatchQueue.global(qos: .userInitiated).async {
-      let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-      try? handler.perform([request])
-    }
+    )
   }
 
   private func fallbackToGemini(image: UIImage) {
     statusLabel.text = "Analyse IA en cours…"
 
-    // Charger la config Gemini depuis App Group
+    // Charger la config Gemini depuis App Group — l'app principale a écrit ces
+    // clés via `ScanBridge.setGeminiConfig` / `setSupabaseUserJwt`.
     let defaults = UserDefaults(suiteName: Self.appGroupId)
-    let edgeUrl = defaults?.string(forKey: "geminiEdgeUrl")
-    let anonKey = defaults?.string(forKey: "geminiSupabaseKey")
-    let apiKey = defaults?.string(forKey: "geminiApiKey")
-
     let service = GeminiVisionServiceLight()
-    service.edgeFunctionUrl = edgeUrl
-    service.supabaseAnonKey = anonKey
-    service.apiKey = apiKey
+    service.edgeFunctionUrl = defaults?.string(forKey: "geminiEdgeUrl")
+    service.supabaseAnonKey = defaults?.string(forKey: "geminiSupabaseKey")
+    service.apiKey = defaults?.string(forKey: "geminiApiKey")
+    service.supabaseUserJwt = defaults?.string(forKey: "supabaseUserJwt")
 
     service.analyze(image: image) { [weak self] result in
       DispatchQueue.main.async {
@@ -452,7 +435,11 @@ class ShareViewController: UIViewController {
     }
   }
 
-  // MARK: - Local Parser (simplifié — le vrai parsing est côté JS)
+  // MARK: - Adapter pour les anciennes vues du résultat (struct Light)
+  //
+  // Les vues SwiftUI/UIKit du Share Extension ont été écrites avant le port de
+  // OcrParser.swift. On garde la struct legacy pour ne pas tout réécrire — elle
+  // n'est plus alimentée que par l'adapter ci-dessous.
 
   struct ParsedResult {
     let platform: String
@@ -463,113 +450,43 @@ class ShareViewController: UIViewController {
     let destinationAddress: String?
   }
 
-  private let platformKeywords: [String: [String]] = [
-    "UBER": ["uber"],
-    "BOLT": ["bolt"],
-    "HEETCH": ["heetch"],
-  ]
-
-  private let priceRegex = try! NSRegularExpression(pattern: #"(\d{1,3})[.,](\d{2})(?!\d)"#)
-  private let distRegex = try! NSRegularExpression(pattern: #"(\d{1,3}[.,]?\d{0,2})\s*km"#, options: .caseInsensitive)
-  private let durRegex = try! NSRegularExpression(pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
-
-  private func parseBlocksLocally(blocks: [[String: Any]], screenHeight: CGFloat) -> ParsedResult? {
-    let fullText = blocks.compactMap { $0["text"] as? String }.joined(separator: " ").lowercased()
-
-    // Platform
-    var platform = "UNKNOWN"
-    for (name, keywords) in platformKeywords {
-      if keywords.contains(where: { fullText.contains($0) }) {
-        platform = name
-        break
-      }
-    }
-
-    // Fare — trouver le plus gros prix dans la zone haute
-    var bestFare: Double?
-    var bestScore: Double = -1
-
-    for block in blocks {
-      guard let text = block["text"] as? String,
-            let height = block["height"] as? Double,
-            let y = block["y"] as? Double
-      else { continue }
-
-      let range = NSRange(text.startIndex..., in: text)
-      guard let match = priceRegex.firstMatch(in: text, range: range) else { continue }
-
-      let intPart = (text as NSString).substring(with: match.range(at: 1))
-      let decPart = (text as NSString).substring(with: match.range(at: 2))
-      let value = Double("\(intPart).\(decPart)") ?? 0
-
-      if value < 3 || value > 200 { continue }
-
-      var score = height * 1.5
-      if y < Double(screenHeight) * 0.55 { score += 30 }
-
-      if score > bestScore {
-        bestScore = score
-        bestFare = value
-      }
-    }
-
-    guard let fare = bestFare else { return nil }
-
-    // Distance
-    var distanceKm: Double?
-    for block in blocks {
-      guard let text = block["text"] as? String else { continue }
-      let range = NSRange(text.startIndex..., in: text)
-      if let match = distRegex.firstMatch(in: text, range: range) {
-        let raw = (text as NSString).substring(with: match.range(at: 1)).replacingOccurrences(of: ",", with: ".")
-        let val = Double(raw) ?? 0
-        if val >= 0.3 && val <= 150 { distanceKm = val; break }
-      }
-    }
-
-    guard let dist = distanceKm else { return nil }
-
-    // Sanity
-    let rate = fare / dist
-    if rate < 0.4 || rate > 12 { return nil }
-
-    // Duration
-    var durationMin: Int?
-    for block in blocks {
-      guard let text = block["text"] as? String else { continue }
-      let range = NSRange(text.startIndex..., in: text)
-      if let match = durRegex.firstMatch(in: text, range: range) {
-        let val = Int((text as NSString).substring(with: match.range(at: 1))) ?? 0
-        if val >= 1 && val <= 180 { durationMin = val; break }
-      }
-    }
-
-    // Addresses (simplifiés — les adresses détaillées sont dans ocrParser.ts)
-    let streetKeywords = ["rue", "avenue", "boulevard", "place", "impasse",
-                          "chemin", "route", "street", "road", "lane"]
-    let addressBlocks = blocks
-      .filter { block in
-        guard let text = (block["text"] as? String)?.lowercased(),
-              let y = block["y"] as? Double,
-              text.count >= 8, text.count <= 80,
-              y > Double(screenHeight) * 0.25
-        else { return false }
-        return streetKeywords.contains(where: { text.contains($0) }) ||
-               text.range(of: #"^\d{1,4}\s+[a-zà-ü]{5,}"#, options: .regularExpression) != nil
-      }
-      .sorted { ($0["y"] as? Double ?? 0) < ($1["y"] as? Double ?? 0) }
-
-    let pickup = (addressBlocks.first?["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let destination = (addressBlocks.count > 1) ? (addressBlocks[1]["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
-
-    return ParsedResult(
-      platform: platform,
-      fare: fare,
-      distanceKm: dist,
-      durationMin: durationMin,
-      pickupAddress: pickup,
-      destinationAddress: destination
+  /// Adapter ScanProcessor.FinalResult → ancienne struct utilisée par showResult.
+  private func showResult(from final: ScanProcessor.FinalResult) {
+    let legacy = ParsedResult(
+      platform: final.scan.platform.rawValue,
+      fare: final.scan.fare,
+      distanceKm: final.totalDistanceKm,
+      durationMin: final.totalDurationMin,
+      pickupAddress: final.scan.pickupAddress,
+      destinationAddress: final.scan.destinationAddress
     )
+    showResult(legacy)
+  }
+
+  /// Sauve le résultat pour que l'app principale puisse le picker au foreground.
+  private func saveSharedResult(_ final: ScanProcessor.FinalResult) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    var body: [String: Any] = [
+      "platform": final.scan.platform.rawValue,
+      "fare": final.scan.fare,
+      "distanceKm": final.totalDistanceKm,
+      "durationMin": final.totalDurationMin,
+      "hourlyRate": final.hourlyRate,
+      "kmRate": final.kmRate,
+      "verdictLevel": final.verdictLevel,
+    ]
+    if let pickup = final.scan.pickupAddress { body["pickupAddress"] = pickup }
+    if let dest = final.scan.destinationAddress { body["destinationAddress"] = dest }
+    if let data = try? JSONSerialization.data(withJSONObject: body) {
+      defaults.set(data, forKey: Self.scanResultKey)
+      defaults.set(Date().timeIntervalSince1970, forKey: Self.scanTimestampKey)
+      let center = CFNotificationCenterGetDarwinNotifyCenter()
+      CFNotificationCenterPostNotification(
+        center,
+        CFNotificationName("com.strive.app.scanResult" as CFString),
+        nil, nil, true
+      )
+    }
   }
 
   // MARK: - Display Result
@@ -668,25 +585,16 @@ class ShareViewController: UIViewController {
   // MARK: - Actions
 
   @objc private func openMainApp() {
-    // Ouvrir l'app principale via URL scheme
+    // Apple rejette en review tout walk de la responder-chain pour récupérer
+    // UIApplication depuis une extension. La seule API publique pour ouvrir
+    // l'app hôte est `extensionContext.open(_:completionHandler:)`.
     guard let url = URL(string: "strive://scan-result") else {
       dismissExtension()
       return
     }
-
-    var responder: UIResponder? = self
-    while responder != nil {
-      if let application = responder as? UIApplication {
-        application.open(url, options: [:], completionHandler: nil)
-        break
-      }
-      responder = responder?.next
-    }
-
-    // Alternative : utiliser openURL via le contexte d'extension
-    extensionContext?.open(url, completionHandler: { [weak self] _ in
+    extensionContext?.open(url) { [weak self] _ in
       self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-    })
+    }
   }
 
   @objc private func dismissExtension() {
@@ -695,20 +603,20 @@ class ShareViewController: UIViewController {
 }
 
 // MARK: - Gemini Service Light (pour la Share Extension — version simplifiée sans dépendance)
+//
+// FIX DÉFINITIF ATTENDU : ajouter Target Membership `StriveShareExtension` sur
+// `ios/Strive/ScanBridge/GeminiVisionService.swift` (Xcode → File Inspector),
+// puis supprimer cette classe et appeler `GeminiVisionService.shared` ici.
+// Tant que la passe Xcode n'est pas faite, toute modif du prompt / parsing /
+// auth dans le service principal DOIT être répercutée ci-dessous, et inversement.
 
 private class GeminiVisionServiceLight {
   var apiKey: String?
   var edgeFunctionUrl: String?
   var supabaseAnonKey: String?
-
-  struct Result {
-    let platform: String
-    let fare: Double
-    let distanceKm: Double
-    let durationMin: Int?
-    let pickupAddress: String?
-    let destinationAddress: String?
-  }
+  /// JWT user — exigé par l'edge function durcie (rate-limit + audit par user_id).
+  /// Sans ça, l'edge function rejette la requête en 401/403.
+  var supabaseUserJwt: String?
 
   func analyze(image: UIImage, completion: @escaping (ShareViewController.ParsedResult?) -> Void) {
     let maxWidth: CGFloat = 512
@@ -734,10 +642,12 @@ private class GeminiVisionServiceLight {
     Retourne UNIQUEMENT un objet JSON avec ces champs :
     {
       "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
-      "fare": <nombre décimal en euros>,
-      "distance_km": <nombre décimal en km>,
-      "duration_min": <entier en minutes ou null>
+      "fare": <montant en euros, ex: 12.50>,
+      "distance_km": <distance de la COURSE en km, ex: 11.8>,
+      "duration_min": <durée de la course en minutes ou null si non visible>
     }
+    IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
+    Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
     Ne retourne rien d'autre que le JSON.
     """
 
@@ -747,7 +657,10 @@ private class GeminiVisionServiceLight {
       var req = URLRequest(url: url)
       req.httpMethod = "POST"
       req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+      // JWT user si dispo (edge function durcie l'exige), sinon anon key.
+      // Doit rester aligné avec GeminiVisionService.swift de l'app principale.
+      let bearer = (supabaseUserJwt?.isEmpty == false ? supabaseUserJwt! : anonKey)
+      req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
       req.setValue(anonKey, forHTTPHeaderField: "apikey")
       req.httpBody = try? JSONSerialization.data(withJSONObject: [
         "imageBase64": base64, "prompt": prompt

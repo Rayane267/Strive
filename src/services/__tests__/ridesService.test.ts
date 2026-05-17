@@ -1,11 +1,11 @@
 // Mock supabase to avoid import chain issues in test
-const mockSingle = jest.fn();
-const mockOrder = jest.fn(() => ({ data: [], error: null }));
-const mockGte = jest.fn(() => ({ order: mockOrder }));
-const mockEq = jest.fn(() => ({ gte: mockGte, data: null, error: null }));
-const mockSelect = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
-const mockInsert = jest.fn(() => ({ select: mockSelect }));
-const mockUpdate = jest.fn(() => ({ eq: mockEq }));
+const mockSingle: jest.Mock = jest.fn();
+const mockOrder: jest.Mock = jest.fn(() => ({ data: [], error: null }));
+const mockGte: jest.Mock = jest.fn(() => ({ order: mockOrder }));
+const mockEq: jest.Mock = jest.fn(() => ({ gte: mockGte, data: null, error: null }));
+const mockSelect: jest.Mock = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
+const mockInsert: jest.Mock = jest.fn(() => ({ select: mockSelect }));
+const mockUpdate: jest.Mock = jest.fn(() => ({ eq: mockEq }));
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -21,7 +21,7 @@ jest.mock('../supabase', () => ({
   },
 }));
 
-import { effectiveFare, fetchRides, createRide, updateRideStatus } from '../ridesService';
+import { effectiveFare, fetchRides, createRide } from '../ridesService';
 import { supabase } from '../supabase';
 
 beforeEach(() => {

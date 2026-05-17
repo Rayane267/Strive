@@ -1,3 +1,8 @@
+jest.mock('@sentry/react-native', () => ({
+  addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
+}));
+
 import {
   cacheRides,
   getCachedRides,
@@ -168,6 +173,44 @@ describe('offlineService — offline queue', () => {
     const synced = await syncOfflineQueue(uploadFn);
     expect(synced).toBe(0);
     expect(uploadFn).not.toHaveBeenCalled();
+  });
+
+  it('caps queue at 100 rides, dropping oldest', async () => {
+    // Fill queue to 100
+    for (let i = 0; i < 100; i++) {
+      await queueOfflineRide({ ...mockRide, fare_estimated: i });
+    }
+    const rawBefore = mockStorage['@strive_offline_queue'];
+    expect(JSON.parse(rawBefore)).toHaveLength(100);
+
+    // Add one more — should drop the oldest (fare_estimated: 0)
+    await queueOfflineRide({ ...mockRide, fare_estimated: 999 });
+    const rawAfter = mockStorage['@strive_offline_queue'];
+    const queue = JSON.parse(rawAfter);
+    expect(queue).toHaveLength(100);
+    expect(queue[0].fare_estimated).toBe(1); // oldest (0) was dropped
+    expect(queue[99].fare_estimated).toBe(999);
+  });
+
+  it('drops rides after 5 failed retries', async () => {
+    await queueOfflineRide(mockRide);
+
+    const alwaysFail = jest.fn().mockRejectedValue(new Error('fail'));
+
+    // Simulate 5 sync attempts that all fail
+    for (let i = 0; i < 5; i++) {
+      await syncOfflineQueue(alwaysFail);
+    }
+
+    // 6th attempt: ride should be dropped (not retried)
+    alwaysFail.mockClear();
+    const synced = await syncOfflineQueue(alwaysFail);
+    expect(synced).toBe(0);
+    expect(alwaysFail).not.toHaveBeenCalled();
+
+    // Queue should be empty
+    const raw = mockStorage['@strive_offline_queue'];
+    expect(JSON.parse(raw)).toHaveLength(0);
   });
 });
 
