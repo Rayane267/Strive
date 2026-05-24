@@ -28,6 +28,7 @@ final class LiveActivityManager {
     verdictLevel: Int
   ) -> Bool {
     guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+      NSLog("[Strive] LiveActivity disabled — Settings → Strive → Live Activities OFF")
       return false
     }
 
