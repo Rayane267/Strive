@@ -5,48 +5,29 @@ import BrandLoader from './BrandLoader';
 
 /**
  * Splash de chargement affiché pendant la restauration de session.
- * Style "premium fintech" — wordmark centré + tagline + loader discret.
- * Inspiré de l'esthétique Uber / Bolt / Linear.
+ * Le wordmark + accent bar reprennent strictement la composition du
+ * LaunchScreen.storyboard natif (mêmes couleurs, taille, position) pour que
+ * la transition bootsplash → JS soit invisible. Seul le loader fade-in,
+ * puisqu'il n'existe pas côté natif.
  */
 const SplashScreen: React.FC = () => {
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(20)).current;
   const loaderFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slide, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Loader entre après le wordmark pour laisser l'œil se poser
     Animated.timing(loaderFade, {
       toValue: 1,
       duration: 500,
       delay: 400,
       useNativeDriver: true,
     }).start();
-  }, [fade, slide, loaderFade]);
+  }, [loaderFade]);
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.brandWrap,
-          { opacity: fade, transform: [{ translateY: slide }] },
-        ]}
-      >
+      <View style={styles.brandWrap}>
         <Text style={styles.wordmark}>Strive</Text>
         <View style={styles.accentBar} />
-      </Animated.View>
+      </View>
 
       <Animated.View style={[styles.loaderWrap, { opacity: loaderFade }]}>
         <BrandLoader size={9} />

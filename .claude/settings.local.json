@@ -102,7 +102,11 @@
       "Bash(grep -nA 8 \"  statCard:\\\\|  statRow:\" /Users/strive/Downloads/Strive/src/screens/DashboardScreen.tsx)",
       "Bash(system_profiler SPUSBDataType)",
       "Bash(open ios/Strive.xcworkspace)",
-      "Bash(xcodebuild -workspace Strive.xcworkspace -scheme StriveWidgetExtension -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build)"
+      "Bash(xcodebuild -workspace Strive.xcworkspace -scheme StriveWidgetExtension -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build)",
+      "Bash(where ruby *)",
+      "Bash(where bundle *)",
+      "Bash(bundle --version)",
+      "PowerShell(Get-Command *)"
     ]
   },
   "enableAllProjectMcpServers": true,
