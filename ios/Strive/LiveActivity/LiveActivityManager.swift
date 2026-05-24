@@ -2,6 +2,13 @@ import Foundation
 import ActivityKit
 import UIKit
 
+// Sentry n'est linké que dans le target principal (via RNSentry).
+// `canImport` permet à ce fichier de rester compilable depuis la Share
+// Extension où Sentry n'est pas dispo : les calls deviennent no-ops là-bas.
+#if canImport(Sentry)
+import Sentry
+#endif
+
 /// Gestionnaire Live Activity Strive — démarre, met à jour et termine l'activité
 /// affichée dans la Dynamic Island et le Lock Screen pendant un scan.
 ///
@@ -29,6 +36,13 @@ final class LiveActivityManager {
   ) -> Bool {
     guard ActivityAuthorizationInfo().areActivitiesEnabled else {
       NSLog("[Strive] LiveActivity disabled — Settings → Strive → Live Activities OFF")
+      #if canImport(Sentry)
+      SentrySDK.capture(message: "LiveActivity not started: areActivitiesEnabled=false") { scope in
+        scope.setLevel(.warning)
+        scope.setTag(value: "live-activity", key: "feature")
+        scope.setTag(value: "auth-disabled", key: "reason")
+      }
+      #endif
       return false
     }
 
@@ -59,9 +73,32 @@ final class LiveActivityManager {
         content: content,
         pushType: nil
       )
+      #if canImport(Sentry)
+      SentrySDK.addBreadcrumb({
+        let b = Breadcrumb(level: .info, category: "live-activity")
+        b.message = "started"
+        b.data = [
+          "platform": platform,
+          "fare": fare,
+          "hourlyRate": hourlyRate,
+          "verdictLevel": verdictLevel,
+        ]
+        return b
+      }())
+      #endif
       return true
     } catch {
       NSLog("[Strive] LiveActivity start failed: \(error.localizedDescription)")
+      #if canImport(Sentry)
+      SentrySDK.capture(error: error) { scope in
+        scope.setTag(value: "live-activity", key: "feature")
+        scope.setTag(value: "activity-request-failed", key: "reason")
+        scope.setContext(value: [
+          "platform": platform,
+          "verdictLevel": verdictLevel,
+        ], key: "live-activity-payload")
+      }
+      #endif
       return false
     }
   }
