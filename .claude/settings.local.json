@@ -100,7 +100,9 @@
       "Bash(sips -Z 500 /tmp/strive_dash.png --out /tmp/strive_dash_s.png)",
       "Bash(grep -nB 1 \"statValue:\\\\|statLabel:\" /Users/strive/Downloads/Strive/src/screens/DashboardScreen.tsx)",
       "Bash(grep -nA 8 \"  statCard:\\\\|  statRow:\" /Users/strive/Downloads/Strive/src/screens/DashboardScreen.tsx)",
-      "Bash(system_profiler SPUSBDataType)"
+      "Bash(system_profiler SPUSBDataType)",
+      "Bash(open ios/Strive.xcworkspace)",
+      "Bash(xcodebuild -workspace Strive.xcworkspace -scheme StriveWidgetExtension -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build)"
     ]
   },
   "enableAllProjectMcpServers": true,
