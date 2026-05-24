@@ -17,7 +17,7 @@ object TomTomService {
     private const val BASE_SEARCH  = "https://api.tomtom.com/search/2/geocode"
     private const val BASE_ROUTING = "https://api.tomtom.com/routing/1/calculateRoute"
     private const val COUNTRY_SET  = "FR,BE,CH,LU,GB,DE,ES,IT,NL,PT,AT,IE,PL"
-    private const val TIMEOUT_MS   = 6_000
+    private const val TIMEOUT_MS   = 4_000
     private const val TAG          = "TomTomService"
 
     /** Clé API TomTom — renseignée depuis JS au démarrage via setTomTomApiKey. */
@@ -47,8 +47,18 @@ object TomTomService {
 
         Thread {
             try {
-                val from = geocodeBestVariant(pickupAddress)
-                val to = geocodeBestVariant(destinationAddress)
+                // Geocoding pickup + destination en parallèle — chacun fait jusqu'à
+                // 3 variantes d'adresse en série, donc parallèliser les 2 colonnes
+                // divise potentiellement par 2 le temps total avant routing.
+                var fromHit: GeocodeHit? = null
+                var toHit: GeocodeHit? = null
+                val tFrom = Thread { fromHit = geocodeBestVariant(pickupAddress) }
+                val tTo = Thread { toHit = geocodeBestVariant(destinationAddress) }
+                tFrom.start(); tTo.start()
+                tFrom.join(); tTo.join()
+
+                val from = fromHit
+                val to = toHit
                 if (from == null || to == null) {
                     Log.w(TAG, "geocode failed pickup=$from dest=$to")
                     callback(null); return@Thread
@@ -105,10 +115,14 @@ object TomTomService {
     }
 
     private fun geocode(address: String): GeocodeHit? {
+        // Cache local — les coords GPS d'une adresse sont stables dans le temps.
+        // Hit cache → 0 requête TomTom. Voir GeocodeCache pour la normalisation.
+        GeocodeCache.get(address)?.let { return it }
+
         val encoded = URLEncoder.encode(address, "UTF-8")
         val url = "$BASE_SEARCH/$encoded.json?key=$apiKey&language=fr-FR&countrySet=$COUNTRY_SET&limit=1"
         val json = httpGet(url) ?: return null
-        return try {
+        val hit = try {
             val results = JSONObject(json).optJSONArray("results") ?: return null
             if (results.length() == 0) return null
             val first = results.getJSONObject(0)
@@ -118,6 +132,11 @@ object TomTomService {
         } catch (e: Exception) {
             Log.w(TAG, "geocode parse", e); null
         }
+        // Persiste uniquement les résultats fiables — un faux match (score
+        // bas) cacherait à vie un mauvais POI. Le seuil MIN_SCORE est aussi
+        // celui utilisé par geocodeBestVariant pour décider si on continue.
+        if (hit != null && hit.score >= MIN_SCORE) GeocodeCache.put(address, hit)
+        return hit
     }
 
     // ─── Routing ──────────────────────────────────────────────────────────────────

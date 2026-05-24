@@ -1,12 +1,15 @@
 /**
- * Device ID stable utilisé pour anti-multi-comptes.
+ * Device ID stable utilisé pour quota anti-multi-comptes au SIGNUP uniquement.
+ * Au login, le device_id n'est plus utilisé — un user existant ne sera donc
+ * jamais bloqué par cette mécanique.
  *
- * Génère un UUID v4 au 1er lancement de l'app et le stocke dans AsyncStorage.
- * Persiste tant que l'utilisateur ne désinstalle pas l'app.
+ * Politique côté serveur : 5 signups max par device sur une fenêtre rolling
+ * de 60 jours. Au-delà → erreur claire affichée à l'utilisateur.
  *
- * Limite connue : un user qui désinstalle/réinstalle obtient un nouveau UUID.
- * Pour persistance plus dure, utiliser DeviceInfo.getUniqueId() côté natif (ANDROID_ID
- * sur Android, identifierForVendor sur iOS), mais ça nécessite une lib de plus.
+ * Limite connue : désinstaller l'app vide l'AsyncStorage → nouveau UUID au
+ * prochain lancement → quota reset. Accepté : on dissuade, on n'empêche pas
+ * absolument. Les protections complémentaires (confirm email, normalize,
+ * disposable blocklist, cooldown 60s) couvrent les flux résiduels.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,7 +18,6 @@ import { supabase } from '../services/supabase';
 const DEVICE_ID_KEY = '@strive_device_id';
 
 function uuidV4(): string {
-  // RFC 4122 v4 sans dépendance externe (Math.random suffit pour notre usage)
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -23,7 +25,6 @@ function uuidV4(): string {
   });
 }
 
-/** Récupère l'UUID stable du device. Génère + stocke au 1er appel. */
 export async function getOrCreateDeviceId(): Promise<string> {
   try {
     const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
@@ -32,31 +33,34 @@ export async function getOrCreateDeviceId(): Promise<string> {
     await AsyncStorage.setItem(DEVICE_ID_KEY, fresh);
     return fresh;
   } catch {
-    // Si AsyncStorage est cassé, on génère un volatile (pire UX mais pas crash)
     return uuidV4();
   }
 }
 
 /**
- * Appelle la RPC Supabase register_device_signup. À appeler IMMÉDIATEMENT
- * après une session Supabase nouvellement établie (signup ou 1er login).
+ * À appeler AVANT `supabase.auth.signUp()`. Throw une erreur typée si le
+ * device a déjà créé 5+ comptes dans les 60 derniers jours. Le caller affiche
+ * alors un message clair et N'envoie PAS la requête signUp.
  *
- * Si le device a déjà été utilisé pour créer un compte, le serveur restreint
- * automatiquement le free tier de ce nouveau compte (audit_log + extra_credits=0).
+ * Politique fail-closed : si la RPC échoue (réseau, DB down…), on bloque le
+ * signup. Si Supabase est inaccessible, le signUp suivant échouerait de toute
+ * façon — on évite ainsi un contournement du quota anti-spam par DoS DB.
+ *
+ * Types d'erreurs (via err.message) :
+ *   - 'device_signup_limit_reached'  : quota dépassé
+ *   - 'invalid_device_id'            : device_id < 16 chars
+ *   - 'signup_quota_check_failed'    : RPC injoignable (réseau, Supabase down)
  */
-export async function registerDeviceSignup(): Promise<{ multiAccount: boolean }> {
-  try {
-    const deviceId = await getOrCreateDeviceId();
-    const { data, error } = await supabase.rpc('register_device_signup', {
-      p_device_id: deviceId,
-    });
-    if (error) {
-      __DEV__ && console.warn('[deviceId] register failed', error);
-      return { multiAccount: false };
+export async function enforceSignupQuota(): Promise<void> {
+  const deviceId = await getOrCreateDeviceId();
+  const { error } = await supabase.rpc('check_and_register_device_signup', {
+    p_device_id: deviceId,
+  });
+  if (error) {
+    const msg = error.message ?? '';
+    if (msg.includes('device_signup_limit_reached') || msg.includes('invalid_device_id')) {
+      throw new Error('device_signup_limit_reached');
     }
-    return { multiAccount: !!(data as any)?.multi_account };
-  } catch (e) {
-    __DEV__ && console.warn('[deviceId] exception', e);
-    return { multiAccount: false };
+    throw new Error('signup_quota_check_failed');
   }
 }

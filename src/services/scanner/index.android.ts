@@ -41,6 +41,7 @@ export const scannerService: ScannerService = {
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
+  setQuotaReached: (reached: boolean) => ScanBridge.setQuotaReached(reached),
 
   checkPermissions: () => ScanBridge.checkPermissions(),
 

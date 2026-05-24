@@ -7,14 +7,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
-  Platform,
   TextInput,
   Linking,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from '@react-native-community/blur';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -25,11 +23,21 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
 
+type MenuItem = {
+  icon: string;
+  iconLib?: 'feather' | 'mc';
+  title: string;
+  sub?: string;
+  onPress: () => void;
+  badge?: string;
+  accent?: boolean;
+};
+
 const ProfileScreen = () => {
   const navigation = useNavigation<any>();
   const { t, i18n } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -64,10 +72,8 @@ const ProfileScreen = () => {
     }
     setDeleting(true);
     try {
-      // RPC Supabase : supprime profil + rides + preferences + auth.users
       const { error } = await supabase.rpc('delete_account');
       if (error) throw error;
-      // Sign out local
       try { await GoogleSignin.signOut(); } catch {}
       await supabase.auth.signOut();
     } catch (e: any) {
@@ -82,14 +88,13 @@ const ProfileScreen = () => {
     }
   };
 
-  const MENU_ITEMS = [
+  const accountItems: MenuItem[] = [
     {
       icon: 'account-outline',
       iconLib: 'mc',
       title: t('profile.account'),
       sub: t('profile.accountSub'),
       onPress: () => navigation.navigate('AccountInfo'),
-      accent: false,
     },
     {
       icon: 'car-outline',
@@ -97,7 +102,6 @@ const ProfileScreen = () => {
       title: t('profile.car'),
       sub: t('profile.carSub'),
       onPress: () => navigation.navigate('CarSettings'),
-      accent: false,
     },
     {
       icon: 'tune-vertical',
@@ -105,9 +109,71 @@ const ProfileScreen = () => {
       title: t('preferences.title'),
       sub: t('preferences.subtitle'),
       onPress: () => navigation.navigate('Preferences'),
-      accent: false,
     },
   ];
+
+  const resourceItems: MenuItem[] = [
+    {
+      icon: 'school-outline',
+      iconLib: 'mc',
+      title: t('profile.tutorial'),
+      sub: t('profile.tutorialSub'),
+      onPress: () => navigation.navigate('Tutorial'),
+      badge: 'NEW',
+      accent: true,
+    },
+    {
+      icon: 'help-circle',
+      iconLib: 'feather',
+      title: t('profile.help'),
+      sub: t('profile.helpSub'),
+      onPress: () => navigation.navigate('Help'),
+    },
+  ];
+
+  const renderIcon = (item: MenuItem) => {
+    const color = item.accent ? colors.primary : colors.textMuted;
+    if (item.iconLib === 'feather') {
+      return <Feather name={item.icon as any} size={20} color={color} />;
+    }
+    return <MaterialCommunityIcons name={item.icon as any} size={20} color={color} />;
+  };
+
+  const renderMenuGroup = (items: MenuItem[]) => (
+    <View style={styles.menuGroup}>
+      {items.map((item, i) => (
+        <TouchableOpacity
+          key={i}
+          style={[styles.menuRow, i < items.length - 1 && styles.menuRowDivider]}
+          onPress={item.onPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={item.title}
+        >
+          <View style={[styles.menuIconWrap, item.accent && styles.menuIconWrapAccent]}>
+            {renderIcon(item)}
+          </View>
+          <View style={styles.menuText}>
+            <Text style={[styles.menuTitle, item.accent && { color: colors.textMain }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {item.sub ? (
+              <Text style={[styles.menuSub, item.accent && { color: colors.primary }]} numberOfLines={1}>
+                {item.sub}
+              </Text>
+            ) : null}
+          </View>
+          {item.badge ? (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>{item.badge}</Text>
+            </View>
+          ) : (
+            <Feather name="chevron-right" size={18} color={colors.textDimmed} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -115,152 +181,134 @@ const ProfileScreen = () => {
         <Text style={styles.headerTitle}>{t('profile.title')}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* ── PROFILE CARD ── */}
-        <View style={styles.profileCard}>
-          {Platform.OS === 'ios' ? (
-            <>
-              <BlurView
-                style={StyleSheet.absoluteFill}
-                blurType="chromeMaterialDark"
-                blurAmount={28}
-                reducedTransparencyFallbackColor="#0F2D1F"
+        <SafeGradient
+          colors={['#0F2D1F', '#0A150E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileCard}
+        >
+          <View style={styles.profileContent}>
+            {isPlus && <View style={styles.plusGlow} />}
+            <View style={styles.profileShimmer} />
+
+            <View style={styles.avatarContainer}>
+              <AvatarView
+                avatarId="generic"
+                size={84}
+                borderColor={colors.primary}
               />
-              <View style={[StyleSheet.absoluteFill, styles.profileGlassTint]} />
-            </>
-          ) : (
-            <LinearGradient
-              colors={['#0F2D1F', '#0A1A12']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
-          {/* shimmer line */}
-          <View style={styles.profileShimmer} />
-          {/* Decorative glow for Plus */}
-          {isPlus && <View style={styles.plusGlow} />}
-
-          <View style={styles.avatarContainer}>
-            <AvatarView
-              avatarId="generic"
-              size={84}
-              borderColor={colors.primary}
-            />
-          </View>
-
-          <Text style={styles.userName}>
-            {profile?.first_name
-              ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
-              : t('dashboard.greetingDefault')}
-          </Text>
-
-          {isPlus ? (
-            <View style={styles.tierBadgePlus}>
-              <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
-              <Text style={styles.tierBadgePlusText}>PLUS</Text>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.upgradeRow}
-              onPress={() => navigation.navigate('SubscriptionScreen')}
-            >
-              <Text style={styles.freeText}>{t('profile.free')}</Text>
-              <Text style={styles.upgradeLink}> · {t('profile.upgradeLink')}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        {/* ── GENERAL SECTION ── */}
+            <Text style={styles.userName} numberOfLines={1}>
+              {profile?.first_name
+                ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
+                : t('dashboard.greetingDefault')}
+            </Text>
+
+            {user?.email ? (
+              <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
+            ) : null}
+
+            {isPlus ? (
+              <View style={styles.tierBadgePlus}>
+                <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
+                <Text style={styles.tierBadgePlusText}>PLUS</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.upgradeBtn}
+                onPress={() => navigation.navigate('SubscriptionScreen')}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="crown-outline" size={14} color={colors.primary} />
+                <Text style={styles.upgradeBtnText}>{t('profile.upgradeLink')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeGradient>
+
+        {/* ── ACCOUNT SECTION ── */}
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
+        {renderMenuGroup(accountItems)}
 
-        {MENU_ITEMS.map((item, i) => (
-          <TouchableOpacity key={i} style={styles.menuItem} onPress={item.onPress} accessibilityRole="button" accessibilityLabel={item.title}>
-            <View style={styles.menuIconWrap}>
-              <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.textMuted} />
-            </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color={colors.textDimmed} />
-          </TouchableOpacity>
-        ))}
+        {/* ── RESOURCES SECTION ── */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.resources')}</Text>
+        {renderMenuGroup(resourceItems)}
 
-        {/* ── RESOURCES ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t('profile.resources')}</Text>
-
-        <TouchableOpacity style={styles.menuItemHighlight} onPress={() => navigation.navigate('Tutorial')} accessibilityRole="button" accessibilityLabel={t('profile.tutorial')}>
-          <View style={styles.highlightBar} />
-          <View style={styles.menuIconWrapGreen}>
-            <MaterialCommunityIcons name="school-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.menuText}>
-            <Text style={styles.menuTitle}>{t('profile.tutorial')}</Text>
-            <Text style={[styles.menuSub, { color: colors.primary }]}>{t('profile.tutorialSub')}</Text>
-          </View>
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>NEW</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Help')} accessibilityRole="button" accessibilityLabel={t('profile.help')}>
-          <View style={styles.menuIconWrap}>
-            <Feather name="help-circle" size={20} color={colors.textMuted} />
-          </View>
-          <View style={styles.menuText}>
-            <Text style={styles.menuTitle}>{t('profile.help')}</Text>
-            <Text style={styles.menuSub}>{t('profile.helpSub')}</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={colors.textDimmed} />
-        </TouchableOpacity>
-
-        {/* ── LANGUAGE ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t('profile.language')}</Text>
-
+        {/* ── LANGUAGE SECTION ── */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.language')}</Text>
         <View style={styles.langRow}>
           <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
             onPress={() => changeLanguage('en')}
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="English"
             accessibilityState={{ selected: i18n.language === 'en' }}
           >
-            <Text style={styles.langBtnText}>🇬🇧 English</Text>
+            <Text style={styles.langFlag}>🇬🇧</Text>
+            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
             onPress={() => changeLanguage('fr')}
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Français"
             accessibilityState={{ selected: i18n.language === 'fr' }}
           >
-            <Text style={styles.langBtnText}>🇫🇷 Français</Text>
+            <Text style={styles.langFlag}>🇫🇷</Text>
+            <Text style={[styles.langBtnText, i18n.language === 'fr' && styles.langBtnTextActive]}>Français</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── LOGOUT ── */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => setIsLogoutModalVisible(true)}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.logout')}
-        >
-          <Feather name="log-out" size={18} color={colors.danger} />
-          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
-        </TouchableOpacity>
+        {/* ── DANGER ZONE ── */}
+        <View style={[styles.dangerGroup, { marginTop: 22 }]}>
+          <TouchableOpacity
+            style={[styles.menuRow, styles.menuRowDivider]}
+            onPress={() => setIsLogoutModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.logout')}
+          >
+            <View style={styles.menuIconWrapDanger}>
+              <Feather name="log-out" size={20} color={colors.danger} />
+            </View>
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, { color: colors.danger }]}>{t('profile.logout')}</Text>
+              <Text style={styles.menuSub}>{t('profile.logoutModal.message')}</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.textDimmed} />
+          </TouchableOpacity>
 
-        {/* ── DELETE ACCOUNT (obligatoire RGPD + stores) ── */}
-        <TouchableOpacity
-          style={styles.deleteAccountBtn}
-          onPress={() => setIsDeleteModalVisible(true)}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.deleteAccount', 'Supprimer mon compte')}
-        >
-          <Text style={styles.deleteAccountText}>{t('profile.deleteAccount', 'Supprimer mon compte')}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => setIsDeleteModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.deleteAccount', 'Supprimer mon compte')}
+          >
+            <View style={styles.menuIconWrapDanger}>
+              <Feather name="trash-2" size={20} color={colors.danger} />
+            </View>
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, { color: colors.danger }]}>
+                {t('profile.deleteAccount', 'Supprimer mon compte')}
+              </Text>
+              <Text style={styles.menuSub}>
+                {t('profile.deleteAccountSub', 'Action irréversible')}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.textDimmed} />
+          </TouchableOpacity>
+        </View>
 
-        {/* ── LEGAL LINKS ── */}
+        {/* ── FOOTER ── */}
         <View style={styles.legalLinksRow}>
           <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/privacy')}>
             <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
@@ -270,9 +318,7 @@ const ProfileScreen = () => {
             <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
           </TouchableOpacity>
         </View>
-
         <Text style={styles.versionText}>v2.4.1 (Build 204)</Text>
-
       </ScrollView>
 
       {/* ── LOGOUT MODAL ── */}
@@ -360,28 +406,22 @@ const ProfileScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
-  header: { paddingHorizontal: 20, paddingVertical: 15 },
-  headerTitle: { color: colors.textMain, fontSize: 24, fontWeight: 'bold' },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  headerTitle: { color: colors.textMain, fontSize: 28, fontWeight: '900' },
 
   scrollContent: { paddingHorizontal: 20 },
 
   // Profile card
   profileCard: {
     borderRadius: 24,
-    padding: 28,
     marginBottom: 28,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,230,118,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.18)',
     overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 6,
   },
-  profileGlassTint: {
-    backgroundColor: 'rgba(0, 230, 118, 0.06)',
+  profileContent: {
+    padding: 24,
+    alignItems: 'center',
   },
   profileShimmer: {
     position: 'absolute',
@@ -390,151 +430,139 @@ const styles = StyleSheet.create({
     right: 24,
     height: 1,
     backgroundColor: 'rgba(0,230,118,0.32)',
-    borderRadius: 1,
   },
   plusGlow: {
     position: 'absolute',
     top: -40,
     right: -40,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(0,230,118,0.07)',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  avatarContainer: { position: 'relative', marginBottom: 14 },
-  avatarRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.12)',
-    padding: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarRingPlus: { borderColor: colors.primary },
-  avatarImage: { width: 90, height: 90, borderRadius: 45 },
-  editBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: colors.primary,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
+  avatarContainer: { marginBottom: 14 },
   userName: {
     color: colors.textMain,
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 20,
+    fontWeight: '800',
     textAlign: 'center',
+  },
+  userEmail: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 14,
   },
   tierBadgePlus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.primary,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
+    marginTop: 4,
   },
   tierBadgePlusText: {
     color: colors.background,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1,
   },
-  upgradeRow: { flexDirection: 'row', alignItems: 'center' },
-  freeText: { color: colors.textMuted, fontSize: 14 },
-  upgradeLink: { color: colors.primary, fontSize: 14, fontWeight: '600' },
+  upgradeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.3)',
+    marginTop: 4,
+  },
+  upgradeBtnText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
 
   // Section title
   sectionTitle: {
     color: colors.textDimmed,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 1.2,
     marginBottom: 10,
-    marginTop: 4,
+    marginLeft: 4,
     textTransform: 'uppercase',
   },
+  dangerSectionTitle: { color: colors.danger, opacity: 0.7 },
 
-  // Menu items
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Menu group (iOS settings-like card)
+  menuGroup: {
     backgroundColor: colors.surface,
-    padding: 15,
     borderRadius: 16,
-    marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
   },
-  menuItemHighlight: {
+  dangerGroup: {
+    backgroundColor: 'rgba(255,77,77,0.04)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.18)',
+    overflow: 'hidden',
+  },
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceLight,
-    padding: 15,
-    borderRadius: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.2)',
-    overflow: 'hidden',
-    position: 'relative',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  highlightBar: {
-    position: 'absolute',
-    left: 0,
-    top: 12,
-    bottom: 12,
-    width: 3,
-    backgroundColor: colors.primary,
-    borderTopRightRadius: 3,
-    borderBottomRightRadius: 3,
+  menuRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   menuIconWrap: {
     width: 38,
     height: 38,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-  menuIconWrapGreen: {
+  menuIconWrapAccent: {
+    backgroundColor: 'rgba(0,230,118,0.1)',
+  },
+  menuIconWrapDanger: {
     width: 38,
     height: 38,
-    backgroundColor: 'rgba(0,230,118,0.1)',
+    backgroundColor: 'rgba(255,77,77,0.1)',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   menuText: { flex: 1 },
-  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  menuSub: { color: colors.textDimmed, fontSize: 12 },
+  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
   newBadge: {
     backgroundColor: colors.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    marginRight: 4,
   },
   newBadgeText: { color: colors.background, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
 
   // Language
-  langRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  langRow: { flexDirection: 'row', gap: 10 },
   langBtn: {
     flex: 1,
-    backgroundColor: colors.surface,
-    padding: 14,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    paddingVertical: 13,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
   },
@@ -542,42 +570,22 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  langBtnText: { color: colors.textMain, fontSize: 15, fontWeight: '600' },
+  langFlag: { fontSize: 18 },
+  langBtnText: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
+  langBtnTextActive: { color: colors.textMain },
 
-  // Logout
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.25)',
-    padding: 15,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  logoutText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
-
-  deleteAccountBtn: {
-    alignItems: 'center',
-    paddingVertical: 10,
-    marginBottom: 6,
-  },
-  deleteAccountText: {
-    color: colors.textDimmed,
-    fontSize: 12,
-    textDecorationLine: 'underline',
-  },
-
+  // Footer
   legalLinksRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 10,
+    marginTop: 28,
+    marginBottom: 8,
   },
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
+  versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
 
   deleteInput: {
     width: '100%',
@@ -593,8 +601,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
   },
-
-  versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
 
   // Modal
   modalOverlay: {

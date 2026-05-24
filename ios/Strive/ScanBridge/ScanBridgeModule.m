@@ -28,6 +28,8 @@ RCT_EXTERN_METHOD(setParserConfig:(NSString *)configJson)
 
 RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
 
+RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached)
+
 RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
                   minKmRate:(nonnull NSNumber *)minKmRate
                   includePickup:(BOOL)includePickup)

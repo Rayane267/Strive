@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 export type PlanTier = 'free' | 'plus' | 'premium';
 
 export interface PlanLimits {
@@ -5,11 +7,49 @@ export interface PlanLimits {
   analyticsRangeDays: number | null; // null = unlimited
 }
 
-export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
+// Fallback hardcodé — utilisé tant que `fetchPlanLimits()` n'a pas répondu
+// (1er démarrage offline, DB injoignable, etc.). La table Supabase
+// `plan_limits` est la source de vérité finale ; ces valeurs sont là pour
+// garder une UX correcte en degraded mode.
+const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
   free: { dailyScans: 3, analyticsRangeDays: 1 },
-  plus: { dailyScans: 50, analyticsRangeDays: 7 },
+  plus: { dailyScans: 15, analyticsRangeDays: 7 },
   premium: { dailyScans: null, analyticsRangeDays: null },
 };
+
+// Cache mémoire des limites fetched depuis la DB. Préchauffé au démarrage
+// via `fetchPlanLimits()` ; getPlanLimits() lit ce cache en priorité.
+let _runtimeLimits: Record<PlanTier, PlanLimits> | null = null;
+
+/** @deprecated Conservé pour compat — préfère getPlanLimits(tier) qui lit le runtime. */
+export const PLAN_LIMITS = FALLBACK_LIMITS;
+
+/**
+ * Fetch les limites depuis Supabase et les met en cache mémoire.
+ * À appeler au démarrage (AuthContext) et à chaque refresh profil.
+ * Silencieux : si fetch échoue, on garde le fallback.
+ */
+export async function fetchPlanLimits(): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('plan_limits')
+      .select('tier, daily_scans');
+    if (error || !data) return;
+
+    const next = { ...FALLBACK_LIMITS };
+    for (const row of data as Array<{ tier: string; daily_scans: number | null }>) {
+      if (row.tier === 'free' || row.tier === 'plus' || row.tier === 'premium') {
+        next[row.tier] = {
+          dailyScans: row.daily_scans,
+          analyticsRangeDays: FALLBACK_LIMITS[row.tier].analyticsRangeDays,
+        };
+      }
+    }
+    _runtimeLimits = next;
+  } catch {
+    // Fail-silent : on garde le fallback
+  }
+}
 
 // Doit rester synchro avec public.subscription_products (seed migration).
 // quantity/price/priceLabel sont des fallbacks UI — la source de vérité finale
@@ -46,7 +86,7 @@ export function getEffectivePlanTier(profile?: {
 }
 
 export function getPlanLimits(tier: PlanTier): PlanLimits {
-  return PLAN_LIMITS[tier];
+  return (_runtimeLimits ?? FALLBACK_LIMITS)[tier];
 }
 
 /** Returns remaining scans (null = unlimited). Counts extra credits after daily limit exhausted. */
@@ -55,7 +95,7 @@ export function getRemainingScans(
   todayCount: number,
   extraCredits: number,
 ): number | null {
-  const { dailyScans } = PLAN_LIMITS[tier];
+  const { dailyScans } = getPlanLimits(tier);
   if (dailyScans === null) return null;
   // Clamp inputs : un compteur négatif ou NaN ne doit pas créditer de scans bonus.
   const safeToday = Number.isFinite(todayCount) ? Math.max(0, todayCount) : 0;

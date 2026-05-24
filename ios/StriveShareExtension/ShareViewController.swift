@@ -16,7 +16,7 @@ class ShareViewController: UIViewController {
   /// fiabilité. Doit matcher la même clé dans l'app principale.
   private static let appGroupId: String = {
     Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
-      ?? "group.com.strive.app"
+      ?? "group.com.striveapp.app"
   }()
   private static let scanResultKey = "lastScanResult"
   private static let scanTimestampKey = "lastScanTimestamp"
@@ -325,6 +325,14 @@ class ShareViewController: UIViewController {
   private var hasProcessed = false
 
   private func processSharedImage() {
+    // Court-circuit : quota journalier atteint → on n'engage ni Vision ni
+    // TomTom ni Gemini (zéro coût). L'utilisateur voit un message dédié.
+    let defaults = UserDefaults(suiteName: Self.appGroupId)
+    if defaults?.bool(forKey: "scanQuotaReached") == true {
+      showQuotaReached()
+      return
+    }
+
     guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
           let attachments = extensionItem.attachments
     else {
@@ -373,41 +381,34 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
-    // Pipeline strictement identique à AnalyzeRideIntent (Shortcut) et Android.
-    // Affiche la valeur provisoire immédiatement, puis update avec TomTom.
-    ScanProcessor.shared.process(
-      image: image,
-      onProvisional: { [weak self] provisional in
-        DispatchQueue.main.async {
-          self?.showResult(from: provisional)
+    // L'UI reste en loading (spinner + "Analyse en cours…") jusqu'à ce que
+    // TomTom ait répondu — ou que le fallback OCR/Gemini ait été appliqué.
+    // Évite de flasher des valeurs provisoires qui changeraient juste après.
+    ScanProcessor.shared.process(image: image) { [weak self] finalResult in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+        guard let result = finalResult else {
+          // OCR a échoué ou pas de course détectée → fallback Gemini
+          self.fallbackToGemini(image: image)
+          return
         }
-      },
-      onFinal: { [weak self] finalResult in
-        DispatchQueue.main.async {
-          guard let self = self else { return }
-          guard let result = finalResult else {
-            // OCR a échoué ou pas de course détectée → fallback Gemini
-            self.fallbackToGemini(image: image)
-            return
-          }
-          self.showResult(from: result)
-          self.saveSharedResult(result)
+        self.showResult(from: result)
+        self.saveSharedResult(result)
 
-          // Aussi déclencher la Live Activity sur iOS 16.2+
-          if #available(iOS 16.2, *) {
-            LiveActivityManager.shared.start(
-              platform: result.scan.platform.rawValue,
-              fare: result.scan.fare,
-              hourlyRate: result.hourlyRate,
-              kmRate: result.kmRate,
-              distanceKm: result.totalDistanceKm,
-              durationMin: result.totalDurationMin,
-              verdictLevel: result.verdictLevel
-            )
-          }
+        // Déclenche la Live Activity sur iOS 16.2+ avec les valeurs finales
+        if #available(iOS 16.2, *) {
+          LiveActivityManager.shared.start(
+            platform: result.scan.platform.rawValue,
+            fare: result.scan.fare,
+            hourlyRate: result.hourlyRate,
+            kmRate: result.kmRate,
+            distanceKm: result.totalDistanceKm,
+            durationMin: result.totalDurationMin,
+            verdictLevel: result.verdictLevel
+          )
         }
       }
-    )
+    }
   }
 
   private func fallbackToGemini(image: UIImage) {
@@ -483,7 +484,7 @@ class ShareViewController: UIViewController {
       let center = CFNotificationCenterGetDarwinNotifyCenter()
       CFNotificationCenterPostNotification(
         center,
-        CFNotificationName("com.strive.app.scanResult" as CFString),
+        CFNotificationName("com.striveapp.app.scanResult" as CFString),
         nil, nil, true
       )
     }
@@ -551,6 +552,15 @@ class ShareViewController: UIViewController {
     }
   }
 
+  private func showQuotaReached() {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.text = "🔒  Quota journalier atteint\nOuvrez Strive pour passer Plus"
+    statusLabel.numberOfLines = 0
+    statusLabel.textAlignment = .center
+    statusLabel.textColor = UIColor(red: 1.0, green: 0.60, blue: 0.0, alpha: 1.0)
+  }
+
   private func showError(_ message: String) {
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
@@ -578,7 +588,7 @@ class ShareViewController: UIViewController {
 
       // Notifier l'app principale via Darwin notification
       let center = CFNotificationCenterGetDarwinNotifyCenter()
-      CFNotificationCenterPostNotification(center, CFNotificationName("com.strive.app.scanResult" as CFString), nil, nil, true)
+      CFNotificationCenterPostNotification(center, CFNotificationName("com.striveapp.app.scanResult" as CFString), nil, nil, true)
     }
   }
 

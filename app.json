@@ -1,5 +1,16 @@
 {
   "name": "Strive",
   "displayName": "Strive",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "extra": {
+    "eas": {
+      "projectId": "1c03856b-2aa9-40e5-9e1f-b961ac80d08c"
+    }
+  },
+  "runtimeVersion": "1.0.0",
+  "updates": {
+    "url": "https://u.expo.dev/1c03856b-2aa9-40e5-9e1f-b961ac80d08c"
+  },
+  "android": {},
+  "ios": {}
 }

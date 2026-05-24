@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, AppState, AppStateStatus, Platform,
+  View, Text, StyleSheet, TouchableOpacity, AppState, AppStateStatus, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -72,6 +72,30 @@ const ScannerPermissionScreen = () => {
 
   // ── Rendu iOS ──────────────────────────────────────────────────────────────
   if (IS_IOS) {
+    // URL iCloud d'un raccourci pré-construit ("Prendre une capture" + "Analyser
+    // une course avec Strive"). Si renseignée, le tap ouvre directement la fiche
+    // d'import du raccourci dans l'app Raccourcis — un tap pour l'installer.
+    // Sinon, fallback sur l'app Raccourcis vide où l'utilisateur compose le sien.
+    const PREBUILT_SHORTCUT_URL: string | null = null; // ex: 'https://www.icloud.com/shortcuts/<id>'
+
+    const openShortcutsApp = () => {
+      if (PREBUILT_SHORTCUT_URL) {
+        Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => Linking.openURL('shortcuts://'));
+        return;
+      }
+      Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
+    };
+
+    const openIosAccessibility = () => {
+      // Drill direct vers Réglages → Accessibilité → Toucher → Toucher l'arrière.
+      // Le schéma `App-prefs:` avec `&path=` fonctionne iOS 14+ ; cascade de
+      // fallbacks si une version d'iOS rejette la route profonde.
+      Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH/BackTap')
+        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH'))
+        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY'))
+        .catch(() => Linking.openSettings());
+    };
+
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.header}>
@@ -83,70 +107,72 @@ const ScannerPermissionScreen = () => {
         </View>
 
         <View style={styles.body}>
-          <MaterialCommunityIcons name="share-variant-outline" size={48} color={colors.primary} style={styles.icon} />
-          <Text style={styles.title}>{t('scanner.iosTitle', 'Scanner via partage')}</Text>
+          <MaterialCommunityIcons name="gesture-double-tap" size={48} color={colors.primary} style={styles.icon} />
+          <Text style={styles.title}>{t('scanner.iosTitle', 'Scanner via raccourci')}</Text>
           <Text style={styles.subtitle}>
-            {t('scanner.iosSubtitle', 'Prenez un screenshot de l\'offre VTC, puis partagez-le avec Strive pour l\'analyser automatiquement.')}
+            {t('scanner.iosSubtitle', 'Configurez un raccourci une seule fois — ensuite, double-tapez le dos de votre iPhone pour analyser une offre depuis Uber, Bolt ou Heetch.')}
           </Text>
 
-          {/* Étape 1 — Screenshot */}
-          <View style={[styles.step, styles.stepDone]}>
+          {/* Étape 1 — Créer le raccourci */}
+          <View style={styles.step}>
             <View style={styles.stepLeft}>
-              <View style={[styles.stepIcon, styles.stepIconDone]}>
-                <Text style={[styles.stepNum, { color: colors.background }]}>1</Text>
+              <View style={styles.stepIcon}>
+                <Text style={styles.stepNum}>1</Text>
               </View>
               <View style={styles.stepText}>
-                <Text style={styles.stepTitle}>{t('scanner.iosStep1Title', 'Prenez un screenshot')}</Text>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep1Title', 'Créez le raccourci')}</Text>
                 <Text style={styles.stepDesc}>
-                  {t('scanner.iosStep1Desc', 'Power + Volume haut dans Uber, Bolt ou Heetch')}
+                  {t('scanner.iosStep1Desc', 'Dans Raccourcis : « Prendre une capture d\'écran » puis « Analyser une course avec Strive ».')}
                 </Text>
               </View>
             </View>
-            <View style={styles.iosIconWrap}>
-              <Feather name="camera" size={18} color={colors.primary} />
-            </View>
+            <TouchableOpacity style={styles.stepBtn} onPress={openShortcutsApp}>
+              <Text style={styles.stepBtnText}>{t('scanner.iosOpenShortcuts', 'Ouvrir Raccourcis')}</Text>
+              <Feather name="chevron-right" size={14} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
-          {/* Étape 2 — Partager */}
-          <View style={[styles.step, styles.stepDone]}>
+          {/* Étape 2 — Assigner au Back Tap */}
+          <View style={styles.step}>
             <View style={styles.stepLeft}>
-              <View style={[styles.stepIcon, styles.stepIconDone]}>
-                <Text style={[styles.stepNum, { color: colors.background }]}>2</Text>
+              <View style={styles.stepIcon}>
+                <Text style={styles.stepNum}>2</Text>
               </View>
               <View style={styles.stepText}>
-                <Text style={styles.stepTitle}>{t('scanner.iosStep2Title', 'Partagez avec Strive')}</Text>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep2Title', 'Assignez au double-tap')}</Text>
                 <Text style={styles.stepDesc}>
-                  {t('scanner.iosStep2Desc', 'Appuyez sur le bouton partage, puis "Analyser avec Strive"')}
+                  {t('scanner.iosStep2Desc', 'Réglages → Accessibilité → Toucher → Toucher l\'arrière → Toucher deux fois : choisissez votre raccourci.')}
                 </Text>
               </View>
             </View>
-            <View style={styles.iosIconWrap}>
-              <Feather name="share" size={18} color={colors.primary} />
-            </View>
+            <TouchableOpacity style={styles.stepBtn} onPress={openIosAccessibility}>
+              <Text style={styles.stepBtnText}>{t('scanner.iosOpenAccessibility', 'Ouvrir Réglages')}</Text>
+              <Feather name="chevron-right" size={14} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
-          {/* Étape 3 — Résultat */}
-          <View style={[styles.step, styles.stepDone]}>
+          {/* Étape 3 — Résultat Dynamic Island */}
+          <View style={styles.step}>
             <View style={styles.stepLeft}>
-              <View style={[styles.stepIcon, styles.stepIconDone]}>
-                <Text style={[styles.stepNum, { color: colors.background }]}>3</Text>
+              <View style={styles.stepIcon}>
+                <Text style={styles.stepNum}>3</Text>
               </View>
               <View style={styles.stepText}>
-                <Text style={styles.stepTitle}>{t('scanner.iosStep3Title', 'Résultat instantané')}</Text>
+                <Text style={styles.stepTitle}>{t('scanner.iosStep3Title', 'Résultat dans la Dynamic Island')}</Text>
                 <Text style={styles.stepDesc}>
-                  {t('scanner.iosStep3Desc', 'Le prix, €/h et €/km sont analysés automatiquement')}
+                  {t('scanner.iosStep3Desc', 'Depuis Uber/Bolt/Heetch, tapez deux fois le dos de l\'iPhone. Le verdict s\'affiche en direct dans la Dynamic Island.')}
                 </Text>
               </View>
             </View>
             <View style={styles.iosIconWrap}>
-              <MaterialCommunityIcons name="check-decagram" size={20} color={colors.primary} />
+              <MaterialCommunityIcons name="dock-top" size={20} color={colors.primary} />
             </View>
           </View>
 
           <View style={styles.infoBox}>
             <Feather name="info" size={13} color={colors.textDimmed} />
             <Text style={styles.infoText}>
-              {t('scanner.iosInfoText', 'L\'analyse se fait directement sur votre iPhone, sans envoyer vos données. Si l\'OCR échoue, Gemini AI prend le relais.')}
+              {t('scanner.iosInfoText', 'L\'analyse tourne localement sur votre iPhone (Vision + Gemini en fallback). Aucune donnée personnelle n\'est collectée.')}
             </Text>
           </View>
         </View>
@@ -154,12 +180,12 @@ const ScannerPermissionScreen = () => {
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.startBtn}
-            onPress={handleStart}
+            onPress={() => navigation.goBack()}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="line-scan" size={20} color={colors.background} />
+            <Feather name="check" size={20} color={colors.background} />
             <Text style={styles.startBtnText}>
-              {t('scanner.iosActivate', 'Activer le scanner')}
+              {t('scanner.iosActivate', 'J\'ai compris')}
             </Text>
           </TouchableOpacity>
         </View>

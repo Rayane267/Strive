@@ -70,7 +70,9 @@
       "notConfirmed": "Confirmez votre email avant de vous connecter",
       "alreadyExists": "Un compte existe déjà avec cet email",
       "rateLimit": "Trop de tentatives. Réessayez dans quelques minutes.",
-      "disposable": "Adresse email jetable non autorisée"
+      "disposable": "Adresse email jetable non autorisée",
+      "deviceSignupLimit": "Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement.",
+      "signupQuotaCheckFailed": "Impossible de vérifier votre device. Vérifiez votre connexion et réessayez."
     }
   },
   "profile": {
@@ -170,16 +172,18 @@
     "start": "Démarrer le scanner",
     "stop": "Arrêter le scanner",
     "waiting": "En attente des autorisations…",
-    "iosTitle": "Scanner via partage",
-    "iosSubtitle": "Prenez un screenshot de l'offre VTC, puis partagez-le avec Strive pour l'analyser automatiquement.",
-    "iosStep1Title": "Prenez un screenshot",
-    "iosStep1Desc": "Power + Volume haut dans Uber, Bolt ou Heetch",
-    "iosStep2Title": "Partagez avec Strive",
-    "iosStep2Desc": "Appuyez sur le bouton partage, puis \"Analyser avec Strive\"",
-    "iosStep3Title": "Résultat instantané",
-    "iosStep3Desc": "Le prix, €/h et €/km sont analysés automatiquement",
-    "iosInfoText": "L'analyse se fait directement sur votre iPhone, sans envoyer vos données. Si l'OCR échoue, Gemini AI prend le relais.",
-    "iosActivate": "Activer le scanner"
+    "iosTitle": "Scanner via raccourci",
+    "iosSubtitle": "Configurez un raccourci une seule fois — ensuite, double-tapez le dos de votre iPhone pour analyser une offre depuis Uber, Bolt ou Heetch.",
+    "iosStep1Title": "Créez le raccourci",
+    "iosStep1Desc": "Dans Raccourcis : « Prendre une capture d'écran » puis « Analyser une course avec Strive ».",
+    "iosStep2Title": "Assignez au double-tap",
+    "iosStep2Desc": "Réglages → Accessibilité → Toucher → Toucher l'arrière → Toucher deux fois : choisissez votre raccourci.",
+    "iosStep3Title": "Résultat dans la Dynamic Island",
+    "iosStep3Desc": "Depuis Uber/Bolt/Heetch, tapez deux fois le dos de l'iPhone. Le verdict s'affiche en direct dans la Dynamic Island.",
+    "iosInfoText": "L'analyse tourne localement sur votre iPhone (Vision + Gemini en fallback). Aucune donnée personnelle n'est collectée.",
+    "iosActivate": "J'ai compris",
+    "iosOpenShortcuts": "Ouvrir Raccourcis",
+    "iosOpenAccessibility": "Ouvrir Réglages"
   },
   "dashboard": {
     "title": "Tableau de bord",
@@ -239,7 +243,8 @@
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
       "buyCredits": "Acheter des crédits",
-      "upgrade": "Passer Plus"
+      "upgrade": "Passer Plus",
+      "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     }
   },
   "shop": {
@@ -425,17 +430,74 @@
     "next": "Suivant",
     "start": "C'est parti",
     "step": "ÉTAPE",
+    "openShortcuts": "Ouvrir Raccourcis",
+    "openAccessibility": "Ouvrir Accessibilité",
     "step1": { "title": "Bienvenue sur Strive", "desc": "Maximisez vos gains en tant que chauffeur VTC. Strive analyse chaque offre pour que vous n'acceptiez jamais une course non rentable." },
     "step2": { "title": "Configurez le scanner", "desc": "Accordez les permissions d'accessibilité et d'overlay. Une bulle flottante apparaîtra par-dessus votre app VTC, prête à analyser les offres." },
+    "step2_ios": { "title": "Installez le raccourci", "desc": "Un tap pour ajouter le raccourci « Analyser une course » à votre app Raccourcis. Déjà pré-configuré, prêt à l'emploi." },
+    "iosPreview": {
+      "title": "Voici ce que vous verrez",
+      "subtitle": "Le verdict apparaît dans la Dynamic Island, en direct par-dessus votre app VTC.",
+      "verdictTake": "PRENDRE",
+      "verdictThreshold": "Les deux métriques dépassent vos seuils ✓",
+      "glance": "Ce que vous voyez en un coup d'œil :",
+      "metricHr": "€/h",
+      "metricHrSub": "Taux horaire (avec pickup)",
+      "metricKm": "€/km",
+      "metricKmSub": "Tarif par km parcouru",
+      "metricTotal": "Total",
+      "metricTotalSub": "Gains totaux de la course",
+      "customizeCta": "Personnaliser mes seuils"
+    },
+    "iosInstall": {
+      "step1": "Tapez « Obtenir le raccourci » ci-dessous",
+      "step2": "Tapez « Ajouter le raccourci » dans l'app Raccourcis",
+      "step3": "Revenez ici et appuyez sur Continuer",
+      "cta": "Obtenir le raccourci",
+      "warning": "Vous devez d'abord installer le raccourci."
+    },
     "step3": { "title": "Acceptez ou refusez en un instant", "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser." },
+    "step3_ios": { "title": "Choisissez votre déclencheur", "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?" },
+    "iosTrigger": {
+      "backTap": {
+        "label": "Toucher l'arrière",
+        "desc": "Double ou triple tap au dos de l'iPhone. Geste invisible, marche à travers une coque fine.",
+        "preview": "Touchez le dos de l'iPhone",
+        "step1": "Ouvrir Réglages → Accessibilité → Toucher",
+        "step2": "Tapez sur « Toucher l'arrière » puis « Toucher deux fois »",
+        "step3": "Choisissez le raccourci Strive dans la liste"
+      },
+      "assistive": {
+        "label": "AssistiveTouch",
+        "desc": "Bouton flottant à l'écran, toujours visible. Un tap pour analyser.",
+        "preview": "Bouton flottant",
+        "step1": "Ouvrir Réglages → Accessibilité → Toucher",
+        "step2": "Activez AssistiveTouch (interrupteur en haut)",
+        "step3": "Actions personnalisées → Toucher unique → choisir le raccourci Strive"
+      },
+      "homeScreen": {
+        "label": "Écran d'accueil",
+        "desc": "Une icône sur votre écran d'accueil. Tapez-la pour lancer l'analyse.",
+        "preview": "Icône d'app",
+        "step1": "Ouvrez l'app Raccourcis",
+        "step2": "Touchez et maintenez votre raccourci → Détails",
+        "step3": "« Ajouter à l'écran d'accueil »"
+      },
+      "cta": "Ouvrir les réglages d'Accessibilité",
+      "doneCta": "C'est configuré"
+    },
     "step4": { "title": "Suivez vos performances", "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables." },
     "step5": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences, puis démarrez le scanner depuis l'Accueil. Bonne route !" },
+    "step5_ios": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences. Plus besoin de démarrer quoi que ce soit — votre raccourci est prêt. Bonne route !" },
     "tips": {
       "step1": "Strive fonctionne avec Uber, Bolt et Heetch. D'autres plateformes arrivent bientôt.",
       "step2": "Vous devrez accorder 2 permissions : overlay et accessibilité. Suivez le guide étape par étape.",
+      "step2_ios": "Vous pouvez aussi assigner le raccourci au bouton Action (iPhone 15 Pro+) ou à AssistiveTouch.",
       "step3": "Astuce : tapez la bulle quand l'offre apparaît sur votre écran VTC. Pas besoin de changer d'app.",
+      "step3_ios": "Astuce : le double-tap au dos fonctionne même avec une coque (fine). Pas besoin de changer d'app.",
       "step4": "L'onglet Stats montre vos gains par jour, par plateforme et votre taux horaire en temps réel.",
-      "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
+      "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
+      "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
     }
   },
   "help": {
@@ -477,30 +539,71 @@
   },
   "subscription": {
     "label": "STRIVE PLUS",
-    "heroTitle": "Passez au niveau\nsupérieur.",
-    "heroSub": "50 scans par jour, statistiques avancées et suivi de carburant — tout ce qu'il faut pour maximiser chaque course.",
+    "heroTitle": "Sache.\nDécide. Gagne.",
+    "heroSub": "Toutes les courses ne se valent pas. Avec Strive Plus, sois sûr avant d'accepter.",
+    "values": {
+      "scan": {
+        "title": "Scan en 2 secondes",
+        "sub": "Capture l'offre → verdict instantané sur ton écran."
+      },
+      "hourly": {
+        "title": "€/h en direct",
+        "sub": "Vois ton taux horaire réel sur chaque course."
+      },
+      "filter": {
+        "title": "Refuse les pièges",
+        "sub": "Sache quelles courses te font perdre du temps."
+      },
+      "threshold": {
+        "title": "Ton seuil, tes règles",
+        "sub": "Définis ton €/h minimum, Strive fait le tri."
+      }
+    },
+    "trust": {
+      "cancel": "Annulation 1-clic",
+      "secure": "Paiement Apple",
+      "commitment": "Sans engagement"
+    },
+    "faq": {
+      "title": "Questions fréquentes",
+      "q1": "Comment fonctionne l'essai gratuit de 3 jours ?",
+      "a1": "Les 3 premiers jours sont 100% gratuits. Tu peux annuler à tout moment depuis Réglages iOS avant la fin de la période — tu ne seras pas facturé. Sinon, l'abonnement se renouvelle automatiquement au tarif normal.",
+      "q2": "Puis-je annuler à tout moment ?",
+      "a2": "Oui. En 1 clic depuis Réglages iOS → Apple ID → Abonnements. Pas de question, pas de friction, pas d'engagement.",
+      "q3": "Strive marche avec quelles apps de course ?",
+      "a3": "Uber, Bolt, Heetch et toutes les apps VTC qui affichent l'offre de course à l'écran. Strive scanne n'importe quelle capture pour en extraire le prix, la distance et le temps.",
+      "q4": "Mes données sont-elles privées ?",
+      "a4": "Tout est chiffré et stocké de manière sécurisée. Aucune donnée vendue, aucune publicité, aucun tracking tiers. Tu peux supprimer ton compte à tout moment depuis l'app."
+    },
     "freeHeader": "Gratuit",
-    "freePrice": "0€",
     "plusHeader": "Plus",
-    "plusPrice": "4,99€",
-    "plusFreq": "/mois",
-    "proofBold": "+10 000 chauffeurs",
-    "proofSuffix": "ont déjà passé à Plus",
-    "priceLabel": "Strive Plus",
-    "priceDetail": "{{price}} / mois · sans engagement",
-    "cta": "Passer à Plus maintenant",
+    "monthlyTab": "Mensuel",
+    "yearlyTab": "Annuel",
+    "monthlyFallbackPrice": "9,99 €",
+    "yearlyFallbackPrice": "79,99 €",
+    "perMonthShort": "/mois",
+    "perYearShort": "/an",
+    "perMonthEquiv": "soit {{price}}/mois",
+    "switchYearlyHint": "Passe en annuel pour économiser {{percent}}%",
+    "trialBadge": "3 JOURS D'ESSAI GRATUIT",
+    "ctaTrial": "Commencer mes 3 jours gratuits",
+    "ctaSubscribe": "S'abonner maintenant",
+    "ctaHintTrial": "Puis {{price}}{{cycle}}. Annulation à tout moment, sans frais.",
+    "ctaHintNoTrial": "Facturé {{cycle}}. Annulation à tout moment dans l'App Store.",
+    "cycleMonthly": " chaque mois",
+    "cycleYearly": " chaque année",
     "restore": "Restaurer les achats",
     "terms": "CGU",
     "privacy": "Confidentialité",
     "errorTitle": "Erreur",
     "errorMsg": "Impossible de finaliser l'abonnement. Réessayez.",
     "rows": {
-      "scans": { "label": "Scans journaliers", "free": "1 / jour", "plus": "50 / jour" },
-      "dashboard": { "label": "Dashboard", "free": "Basique", "plus": "Complet + Live" },
+      "scans": { "label": "Scans journaliers", "free": "1 / jour", "plus": "Illimités" },
+      "dashboard": { "label": "Dashboard", "free": "Basique", "plus": "Complet" },
       "fuel": { "label": "Conso. carburant", "plus": "Par modèle" },
       "goal": { "label": "Objectif / jour", "plus": "Personnalisable" },
-      "history": { "label": "Historique", "free": "Auj. seul.", "plus": "7 jours" },
-      "hourly": { "label": "Taux horaire", "plus": "€/h en direct" },
+      "history": { "label": "Historique courses", "free": "Auj. seul.", "plus": "Illimité" },
+      "hourly": { "label": "Taux horaire €/h", "plus": "En direct" },
       "support": { "label": "Support", "plus": "Prioritaire" }
     }
   },

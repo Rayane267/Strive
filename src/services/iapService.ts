@@ -142,9 +142,80 @@ export async function buySubscription(productId: string): Promise<{ entitlement:
   return { entitlement: null };
 }
 
-// Backcompat : conserve l'ancienne signature buyPlus utilisée par SubscriptionScreen
-export async function buyPlus(_userId: string): Promise<void> {
-  await buySubscription(IAP_PRODUCTS.PLUS_MONTHLY);
+// Backcompat : conserve l'ancienne signature buyPlus utilisée par SubscriptionScreen.
+// productId par défaut = monthly (anciens callers). Le nouveau paywall passe yearly/monthly explicitement.
+export async function buyPlus(_userId: string, productId: string = IAP_PRODUCTS.PLUS_MONTHLY): Promise<void> {
+  await buySubscription(productId);
+}
+
+// ─── Plus packages (monthly + yearly) avec prix réels du store ────────────────
+export type PlusPackage = {
+  productId: string;
+  priceString: string;            // ex: "9,99 €" — formaté par le store local
+  pricePerMonthString?: string;   // pour yearly : ex: "6,67 €" (price/12, format local)
+  rawPrice: number;               // valeur numérique pour calculs (économies, etc.)
+  currencyCode: string;
+};
+
+export async function getPlusPackages(): Promise<{ monthly: PlusPackage | null; yearly: PlusPackage | null }> {
+  const Purchases = rc();
+  if (!Purchases) return { monthly: null, yearly: null };
+
+  try {
+    const packages = await getAllPackages();
+    const toPackage = (productId: string, isYearly: boolean): PlusPackage | null => {
+      const pkg = packages[productId];
+      if (!pkg?.product) return null;
+      const p = pkg.product;
+      const out: PlusPackage = {
+        productId,
+        priceString: p.priceString ?? '',
+        rawPrice: typeof p.price === 'number' ? p.price : 0,
+        currencyCode: p.currencyCode ?? 'EUR',
+      };
+      if (isYearly && out.rawPrice > 0) {
+        // Format le prix mensuel équivalent avec la locale courante.
+        try {
+          const formatter = new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: out.currencyCode,
+            maximumFractionDigits: 2,
+          });
+          out.pricePerMonthString = formatter.format(out.rawPrice / 12);
+        } catch {
+          out.pricePerMonthString = `${(out.rawPrice / 12).toFixed(2)} ${out.currencyCode}`;
+        }
+      }
+      return out;
+    };
+    return {
+      monthly: toPackage(IAP_PRODUCTS.PLUS_MONTHLY, false),
+      yearly: toPackage(IAP_PRODUCTS.PLUS_YEARLY, true),
+    };
+  } catch {
+    return { monthly: null, yearly: null };
+  }
+}
+
+// ─── Trial eligibility (per product) ──────────────────────────────────────────
+// Apple : 1 essai par "subscription group" par compte iCloud. Donc si l'user a
+// déjà testé Plus monthly, il sera inéligible aussi pour Plus yearly (même groupe).
+// Renvoie un map productId → boolean. En cas d'erreur ou RC indispo, renvoie {} (= traité comme non éligible).
+export async function checkTrialEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+  const Purchases = rc();
+  if (!Purchases || productIds.length === 0) return {};
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+    const out: Record<string, boolean> = {};
+    // RC enum: 0=unknown, 1=ineligible, 2=eligible, 3=no_intro_offer
+    for (const id of productIds) {
+      const status = result?.[id]?.status;
+      out[id] = status === 2;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 // ─── Restore purchases (obligatoire pour validation App Store) ────────────────

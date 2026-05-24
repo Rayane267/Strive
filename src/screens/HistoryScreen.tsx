@@ -13,7 +13,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -179,6 +179,8 @@ const HistoryScreen = () => {
   const [tempStart, setTempStart] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
   const [modalAlert, setModalAlert] = useState('');
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
 
   const fetchingRef = useRef(false);
   const fetchHistory = useCallback(async () => {
@@ -260,27 +262,59 @@ const HistoryScreen = () => {
 
   const getMarkedDates = () => {
     const marks: any = {};
-    const primary = colors.primary;
-    const mid = 'rgba(0,230,118,0.15)';
+    const edge = colors.primary;
+    const edgeText = '#06140C';
+    const mid = 'rgba(0,230,118,0.20)';
+    const midText = colors.textMain;
     if (selectionStep === 1 && tempStart) {
-      marks[tempStart] = { startingDay: true, endingDay: true, color: primary, textColor: '#000' };
+      marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
     } else if (dateRange.start && dateRange.end) {
       const startStr = dateRange.start.toISOString().split('T')[0];
       const endStr = dateRange.end.toISOString().split('T')[0];
       if (startStr === endStr) {
-        marks[startStr] = { startingDay: true, endingDay: true, color: primary, textColor: '#000' };
+        marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
       } else {
         let curr = new Date(startStr);
         while (curr <= new Date(endStr)) {
           const ds = curr.toISOString().split('T')[0];
-          if (ds === startStr)     marks[ds] = { startingDay: true, color: primary, textColor: '#000' };
-          else if (ds === endStr)  marks[ds] = { endingDay: true, color: primary, textColor: '#000' };
-          else                     marks[ds] = { color: mid, textColor: colors.textMain };
+          if (ds === startStr)     marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
+          else if (ds === endStr)  marks[ds] = { endingDay: true, color: edge, textColor: edgeText };
+          else                     marks[ds] = { color: mid, textColor: midText };
           curr.setDate(curr.getDate() + 1);
         }
       }
     }
     return marks;
+  };
+
+  const changeMonth = (offset: number) => {
+    const d = new Date(currentMonth);
+    d.setMonth(d.getMonth() + offset);
+    setCurrentMonth(d.toISOString().split('T')[0]);
+  };
+
+  const renderCustomHeader = (date: any) => {
+    const locale = LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'];
+    const d = new Date(date.getTime());
+    return (
+      <View style={styles.calHeaderRow}>
+        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="chevron-left" size={18} color={colors.textMain} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.calMonthBtn}
+          onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}
+          accessibilityRole="button"
+          accessibilityLabel={t('history.changeMonth', 'Changer le mois')}
+        >
+          <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
+          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="chevron-right" size={18} color={colors.textMain} />
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   const getHeaderDateText = () => {
@@ -361,20 +395,28 @@ const HistoryScreen = () => {
       )}
 
       {/* ── HERO CARD ── */}
-      <LinearGradient
-        colors={['#0F2D1F', '#172C20', '#0A150E']}
+      <SafeGradient
+        colors={['#0F2D1F', '#0A150E']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.heroCard}
       >
+        <View style={styles.heroContent}>
         <View style={styles.heroMain}>
-          <View>
+          <View style={styles.heroLeft}>
             <Text style={styles.heroLabel}>{t('history.earnings', 'Gains')}</Text>
-            <Text style={styles.heroAmount}>{dailyTotal.toFixed(2)}€</Text>
+            <Text
+              style={styles.heroAmount}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {dailyTotal.toFixed(2)}€
+            </Text>
           </View>
           <View style={styles.acceptBlock}>
-            <Text style={styles.acceptValue}>{acceptRate}%</Text>
-            <Text style={styles.acceptLabel}>{t('history.acceptRate')}</Text>
+            <Text style={styles.acceptValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{acceptRate}%</Text>
+            <Text style={styles.acceptLabel} numberOfLines={1}>{t('history.acceptRate')}</Text>
             <View style={styles.acceptBar}>
               <View style={[styles.acceptFill, { width: `${acceptRate}%` as any }]} />
             </View>
@@ -386,20 +428,21 @@ const HistoryScreen = () => {
         <View style={styles.heroStats}>
           <View style={styles.heroStat}>
             <Text style={styles.heroStatVal}>{rides.length}</Text>
-            <Text style={styles.heroStatLbl}>{t('history.scanned')}</Text>
+            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.scanned')}</Text>
           </View>
           <View style={styles.heroStatDiv} />
           <View style={styles.heroStat}>
             <Text style={[styles.heroStatVal, { color: '#00E676' }]}>{accepted}</Text>
-            <Text style={styles.heroStatLbl}>{t('history.status.ACCEPTED')}</Text>
+            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.status.ACCEPTED')}</Text>
           </View>
           <View style={styles.heroStatDiv} />
           <View style={styles.heroStat}>
             <Text style={[styles.heroStatVal, declined > 0 ? { color: '#FF5252' } : {}]}>{declined}</Text>
-            <Text style={styles.heroStatLbl}>{t('history.status.DECLINED')}</Text>
+            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.status.DECLINED')}</Text>
           </View>
         </View>
-      </LinearGradient>
+        </View>
+      </SafeGradient>
 
       {/* ── FILTER TABS ── */}
       <View style={styles.filterRow}>
@@ -484,32 +527,69 @@ const HistoryScreen = () => {
       >
         <Pressable style={styles.overlay} onPress={() => { setModalVisible(false); setModalAlert(''); }}>
           <Pressable style={styles.modalCard} onPress={e => e.stopPropagation()}>
-            {modalAlert ? (
-              <View style={styles.modalAlertRow}>
-                <Feather name="alert-circle" size={14} color="#FFCA28" />
-                <Text style={styles.modalAlertText}>{modalAlert}</Text>
+            {showMonthPicker ? (
+              <View>
+                <View style={styles.calHeaderRow}>
+                  <TouchableOpacity onPress={() => setPickerYear(y => y - 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.yearNavText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.calMonthText}>{pickerYear}</Text>
+                  <TouchableOpacity onPress={() => setPickerYear(y => y + 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.yearNavText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.monthGrid}>
+                  {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m: string, idx: number) => {
+                    const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
+                      && pickerYear === parseInt(currentMonth.split('-')[0]);
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.monthCell, active && styles.monthCellActive]}
+                        onPress={() => {
+                          setCurrentMonth(`${pickerYear}-${String(idx + 1).padStart(2, '0')}-01`);
+                          setShowMonthPicker(false);
+                        }}
+                      >
+                        <Text style={[styles.monthCellText, active && styles.monthCellTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
-            ) : null}
-            <Calendar
-              current={currentMonth}
-              onMonthChange={(m: any) => setCurrentMonth(m.dateString)}
-              firstDay={1}
-              hideExtraDays
-              onDayPress={handleDayPress}
-              markingType="period"
-              markedDates={getMarkedDates()}
-              theme={{
-                calendarBackground: colors.surface,
-                textSectionTitleColor: colors.textMuted,
-                todayTextColor: colors.primary,
-                dayTextColor: colors.textMain,
-                textDisabledColor: colors.surfaceLight,
-                textDayFontWeight: '500',
-                textDayHeaderFontWeight: '600',
-                textDayFontSize: 15,
-                textDayHeaderFontSize: 13,
-              }}
-            />
+            ) : (
+              <>
+                {modalAlert ? (
+                  <View style={styles.modalAlertRow}>
+                    <Feather name="alert-circle" size={14} color="#FFCA28" />
+                    <Text style={styles.modalAlertText}>{modalAlert}</Text>
+                  </View>
+                ) : null}
+                <Calendar
+                  key={currentMonth}
+                  current={currentMonth}
+                  onMonthChange={(m: any) => setCurrentMonth(m.dateString)}
+                  firstDay={1}
+                  hideExtraDays
+                  hideArrows
+                  renderHeader={renderCustomHeader}
+                  onDayPress={handleDayPress}
+                  markingType="period"
+                  markedDates={getMarkedDates()}
+                  theme={{
+                    calendarBackground: 'transparent',
+                    textSectionTitleColor: colors.textMuted,
+                    todayTextColor: colors.primary,
+                    dayTextColor: colors.textMain,
+                    textDisabledColor: colors.surfaceLight,
+                    textDayFontWeight: '500',
+                    textDayHeaderFontWeight: '600',
+                    textDayFontSize: 15,
+                    textDayHeaderFontSize: 13,
+                  }}
+                />
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -562,25 +642,31 @@ const styles = StyleSheet.create({
 
   // Hero
   heroCard: {
-    borderRadius: 24, padding: 22, marginBottom: 18,
+    borderRadius: 24, marginBottom: 18,
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    overflow: 'hidden',
+    backgroundColor: '#0A150E',
+  },
+  heroContent: {
+    padding: 20,
   },
   heroMain: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-end', marginBottom: 20,
+    alignItems: 'flex-end', marginBottom: 20, gap: 12,
   },
+  heroLeft: { flex: 1, minWidth: 0 },
   heroLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
-  heroAmount: { color: colors.textMain, fontSize: 48, fontWeight: '900', letterSpacing: -1.5 },
-  acceptBlock: { alignItems: 'flex-end' },
-  acceptValue: { color: colors.primary, fontSize: 34, fontWeight: '900' },
-  acceptLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '600', letterSpacing: 0.4, marginBottom: 8 },
+  heroAmount: { color: colors.textMain, fontSize: 36, fontWeight: '900', letterSpacing: -1 },
+  acceptBlock: { alignItems: 'flex-end', flexShrink: 0, maxWidth: 100 },
+  acceptValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },
+  acceptLabel: { color: colors.textDimmed, fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginBottom: 8 },
   acceptBar: { width: 72, height: 4, backgroundColor: 'rgba(0,230,118,0.15)', borderRadius: 2, overflow: 'hidden' },
   acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
   heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 16 },
   heroStats: { flexDirection: 'row' },
   heroStat: { flex: 1, alignItems: 'center', gap: 4 },
   heroStatVal: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
-  heroStatLbl: { color: colors.textDimmed, fontSize: 9, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase', textAlign: 'center' },
+  heroStatLbl: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center' },
   heroStatDiv: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 4 },
 
   // Filter tabs
@@ -668,10 +754,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', padding: 20,
   },
   modalCard: {
-    backgroundColor: colors.surface, borderRadius: 22, padding: 16, width: '100%',
+    backgroundColor: colors.surface, borderRadius: 22, padding: 18, width: '100%',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4, shadowRadius: 16, elevation: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
+  modalClose: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  modalPresets: {
+    flexDirection: 'row', gap: 8, marginBottom: 12,
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 9, paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+  },
+  presetChipText: {
+    color: colors.textMain, fontSize: 11, fontWeight: '700',
+    textAlign: 'center',
   },
   modalAlertRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -680,6 +792,57 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,202,40,0.2)',
   },
   modalAlertText: { color: '#FFCA28', fontSize: 12, flex: 1, lineHeight: 17 },
+
+  calHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 10,
+    gap: 14,
+  },
+  calMonthBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderWidth: 1, borderColor: 'rgba(0,230,118,0.18)',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+  },
+  calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  yearNavBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  yearNavText: { color: colors.textMain, fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  calNavBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  monthCell: {
+    width: '30%',
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  monthCellActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  monthCellText: { color: colors.textMain, fontSize: 13, fontWeight: '700' },
+  monthCellTextActive: { color: '#06140C', fontWeight: '900' },
 });
 
 export default HistoryScreen;

@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Feather from 'react-native-vector-icons/Feather';
@@ -24,7 +24,7 @@ import appleAuth from '@invertase/react-native-apple-authentication';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
-import { registerDeviceSignup } from '../utils/deviceId';
+import { enforceSignupQuota } from '../utils/deviceId';
 import BrandLoader from '../components/BrandLoader';
 
 GoogleSignin.configure({
@@ -61,6 +61,8 @@ const AuthScreen = () => {
     if (m.includes('user already registered') || m.includes('already exists') || m.includes('duplicate')) return t('auth.errors.alreadyExists', 'Un compte existe déjà avec cet email');
     if (m.includes('rate limit')) return t('auth.errors.rateLimit', 'Trop de tentatives. Réessayez dans quelques minutes.');
     if (m.includes('weak password')) return t('auth.errors.weakPassword', 'Mot de passe trop faible (minimum 8 caractères)');
+    if (m.includes('device_signup_limit_reached')) return t('auth.errors.deviceSignupLimit', 'Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement.');
+    if (m.includes('signup_quota_check_failed')) return t('auth.errors.signupQuotaCheckFailed', 'Impossible de vérifier votre device. Vérifiez votre connexion et réessayez.');
     return msg;
   };
 
@@ -75,6 +77,11 @@ const AuthScreen = () => {
     }
     setLoading(true);
     try {
+      // Quota device : max 5 signups par device sur fenêtre rolling 60j.
+      // Throw 'device_signup_limit_reached' si dépassé → on n'envoie même
+      // pas la requête signUp à Supabase Auth.
+      await enforceSignupQuota();
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -89,10 +96,9 @@ const AuthScreen = () => {
         });
         setMode('login');
         setPassword('');
-      } else if (data.session) {
-        // Confirm email désactivé → log direct + register device
-        await registerDeviceSignup();
       }
+      // Si data.session existe (confirm email désactivé), AuthContext prend
+      // le relais via onAuthStateChange — rien à faire ici.
     } catch (e: any) {
       showToast({ type: 'error', title: t('auth.errors.signupTitle', 'Inscription'), message: mapAuthError(e?.message ?? '') });
     } finally {
@@ -200,12 +206,12 @@ const AuthScreen = () => {
 
       {/* ── LOGO + NOM ── */}
       <View style={styles.hero}>
-        <LinearGradient
+        <SafeGradient
           colors={['rgba(0,230,118,0.18)', 'rgba(0,230,118,0.04)']}
           style={styles.logoWrap}
         >
           <MaterialCommunityIcons name="steering" size={40} color={colors.primary} />
-        </LinearGradient>
+        </SafeGradient>
 
         <Text style={styles.appName}>
           Str<Text style={styles.appNameGreen}>ive</Text>

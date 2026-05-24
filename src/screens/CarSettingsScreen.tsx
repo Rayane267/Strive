@@ -9,10 +9,9 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import LiquidGlassHeader from '../components/LiquidGlassHeader';
 import { colors } from '../theme/colors';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -201,29 +200,32 @@ const CarSettingsScreen = () => {
   const closeDropdowns = () => { setOpenDropdown(null); Keyboard.dismiss(); };
 
   const insets = useSafeAreaInsets();
-  const headerHeight = insets.top + 64;
 
   return (
-    <View style={styles.container}>
-      <LiquidGlassHeader
-        title={t('settings.title', 'Mon véhicule')}
-        subtitle={t('settings.subtitle', 'Informations du véhicule')}
-        onBack={() => navigation.goBack()}
-        right={
-          <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-            {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
-            <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
-              {isPremium ? 'PLUS' : 'FREE'}
-            </Text>
-          </View>
-        }
-      />
+    <SafeAreaView style={styles.container} edges={['top']}>
+
+      {/* ── HEADER ── */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t('common.back', 'Retour')}>
+          <Feather name="arrow-left" size={22} color={colors.textMain} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{t('settings.title', 'Mon véhicule')}</Text>
+          <Text style={styles.headerSub}>{t('settings.subtitle', 'Informations du véhicule')}</Text>
+        </View>
+        <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
+          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
+          <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
+            {isPremium ? 'PLUS' : 'FREE'}
+          </Text>
+        </View>
+      </View>
 
       <View style={{ flex: 1, position: 'relative' }}>
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingTop: headerHeight + 12, paddingBottom: Math.max(insets.bottom, 20) + 30 },
+            { paddingBottom: Math.max(insets.bottom, 20) + 30 },
           ]}
           keyboardShouldPersistTaps="handled"
           onScroll={closeDropdowns}
@@ -395,7 +397,7 @@ const CarSettingsScreen = () => {
           />
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -405,6 +407,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
   },

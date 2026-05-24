@@ -17,7 +17,7 @@ class ScanBridgeModule: RCTEventEmitter {
   /// éviter la dérive entre app principale et Share Extension.
   static let appGroupId: String = {
     Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
-      ?? "group.com.strive.app"
+      ?? "group.com.striveapp.app"
   }()
   static let scanResultKey = "lastScanResult"
   static let scanTimestampKey = "lastScanTimestamp"
@@ -61,7 +61,7 @@ class ScanBridgeModule: RCTEventEmitter {
           module.handleShareExtensionResult()
         }
       },
-      "com.strive.app.scanResult" as CFString,
+      "com.striveapp.app.scanResult" as CFString,
       nil,
       .deliverImmediately
     )
@@ -189,6 +189,14 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func setTomTomApiKey(_ key: String) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(key, forKey: "tomTomApiKey")
+    }
+  }
+
+  /// Quota journalier atteint — sync via App Group pour que la Share Extension
+  /// et l'AppIntent puissent court-circuiter le scan sans appeler TomTom/Gemini.
+  @objc func setQuotaReached(_ reached: Bool) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(reached, forKey: "scanQuotaReached")
     }
   }
 

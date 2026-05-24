@@ -17,7 +17,7 @@ final class TomTomService {
   private static let baseSearch  = "https://api.tomtom.com/search/2/geocode"
   private static let baseRouting = "https://api.tomtom.com/routing/1/calculateRoute"
   private static let countrySet  = "FR,BE,CH,LU,GB,DE,ES,IT,NL,PT,AT,IE,PL"
-  private static let timeoutSec: TimeInterval = 6
+  private static let timeoutSec: TimeInterval = 4
   private static let minScore: Double = 3.0
 
   /// Stockée dans App Group par `ScanBridge.setTomTomApiKey`.
@@ -26,7 +26,7 @@ final class TomTomService {
   private func apiKey() -> String? {
     if let k = cachedKey, !k.isEmpty { return k }
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
-      ?? "group.com.strive.app"
+      ?? "group.com.striveapp.app"
     let k = UserDefaults(suiteName: appGroupId)?.string(forKey: "tomTomApiKey")
     cachedKey = k
     return (k?.isEmpty == false) ? k : nil
@@ -52,9 +52,25 @@ final class TomTomService {
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self = self else { completion(nil); return }
-      guard let from = self.geocodeBestVariant(pickup),
-            let to = self.geocodeBestVariant(dest)
-      else {
+      // Geocoding pickup + destination en parallèle — divise par ~2 le temps
+      // total. Chaque variant chain reste séquentiel à l'intérieur d'une
+      // adresse (early-exit sur bon score), seuls les 2 fronts sont lancés.
+      let group = DispatchGroup()
+      var fromHit: GeocodeHit?
+      var toHit: GeocodeHit?
+      group.enter()
+      DispatchQueue.global(qos: .userInitiated).async {
+        fromHit = self.geocodeBestVariant(pickup)
+        group.leave()
+      }
+      group.enter()
+      DispatchQueue.global(qos: .userInitiated).async {
+        toHit = self.geocodeBestVariant(dest)
+        group.leave()
+      }
+      group.wait()
+
+      guard let from = fromHit, let to = toHit else {
         completion(nil); return
       }
       let route = self.getRoute(from: from.coords, to: to.coords)
@@ -106,6 +122,10 @@ final class TomTomService {
   }
 
   private func geocode(_ address: String) -> GeocodeHit? {
+    // Cache local — les coords GPS d'une adresse sont stables dans le temps.
+    // Hit cache → 0 requête TomTom. Voir GeocodeCache pour la normalisation.
+    if let cached = GeocodeCache.shared.get(address: address) { return cached }
+
     guard let key = apiKey(),
           let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
     else { return nil }
@@ -121,7 +141,11 @@ final class TomTomService {
           let lon = (pos["lon"] as? NSNumber)?.doubleValue
     else { return nil }
     let score = (first["score"] as? NSNumber)?.doubleValue ?? 0
-    return GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score)
+    let hit = GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score)
+    // Persiste uniquement les résultats fiables — un faux match (score bas)
+    // cacherait à vie un mauvais POI. Seuil aligné sur geocodeBestVariant.
+    if score >= Self.minScore { GeocodeCache.shared.put(address: address, hit: hit) }
+    return hit
   }
 
   // MARK: - Routing

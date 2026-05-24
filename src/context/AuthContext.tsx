@@ -2,9 +2,9 @@ import React, { createContext, useState, useEffect, useContext, useRef } from 'r
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
 import { fetchProfile } from '../services/profileService';
+import { fetchPlanLimits } from '../services/subscriptionService';
 import { initPurchases, logoutPurchases } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
-import { registerDeviceSignup } from '../utils/deviceId';
 import { scannerService } from '../services/scanner';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '../types/database';
@@ -67,6 +67,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           Sentry.addBreadcrumb({ category: 'auth', message: 'Session restored', level: 'info' });
           // JWT au natif → édge function gemini-proxy autorise l'appel.
           try { scannerService.setSupabaseUserJwt(initialSession.access_token); } catch {}
+          // Préchauffe le cache des limites tier (free=3, plus=15, premium=null).
+          // Silencieux : si fetch échoue, fallback hardcodé pris.
+          fetchPlanLimits().catch(() => {});
           initPurchases(initialSession.user.id);
           await loadProfile(initialSession.user.id);
           registerPushToken(initialSession.user.id).catch((e) =>
@@ -94,23 +97,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (currentSession?.user) {
         Sentry.setUser({ id: currentSession.user.id, email: currentSession.user.email });
         Sentry.addBreadcrumb({ category: 'auth', message: `Auth state: ${_event}`, level: 'info' });
-        // Sync JWT au natif à chaque event (SIGNED_IN, TOKEN_REFRESHED…).
+        // Sync JWT au natif à chaque event (SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED…) :
+        // pas cher, et indispensable pour que la bulle scanner ait toujours un JWT frais.
         try { scannerService.setSupabaseUserJwt(currentSession.access_token); } catch {}
-        // Anti-multi-comptes : enregistre le device au signup ou au tout 1er login.
-        // SIGNED_IN avec un user fraîchement créé → register_device_signup détecte
-        // côté serveur si ce device a déjà servi pour un autre compte.
+
+        // Heavy ops UNIQUEMENT sur SIGNED_IN : TOKEN_REFRESHED arrive ~1× / heure
+        // et n'a pas besoin de relancer RevenueCat / FCM / profile. initAuth() a
+        // déjà fait le boot initial pour les sessions restorées.
         if (_event === 'SIGNED_IN') {
-          registerDeviceSignup().catch(() => {});
-        }
-        initPurchases(currentSession.user.id);
-        loadProfile(currentSession.user.id).catch((e) =>
-          Sentry.captureException(e, { tags: { flow: 'profile_reload' } }),
-        );
-        registerPushToken(currentSession.user.id).catch((e) =>
-          Sentry.captureException(e, { tags: { flow: 'push_token_refresh' } }),
-        );
-        if (!notifCleanupRef.current) {
-          notifCleanupRef.current = setupNotificationListeners();
+          fetchPlanLimits().catch(() => {});
+          initPurchases(currentSession.user.id);
+          loadProfile(currentSession.user.id).catch((e) =>
+            Sentry.captureException(e, { tags: { flow: 'profile_reload' } }),
+          );
+          registerPushToken(currentSession.user.id).catch((e) =>
+            Sentry.captureException(e, { tags: { flow: 'push_token_refresh' } }),
+          );
+          if (!notifCleanupRef.current) {
+            notifCleanupRef.current = setupNotificationListeners();
+          }
         }
       } else {
         Sentry.setUser(null);

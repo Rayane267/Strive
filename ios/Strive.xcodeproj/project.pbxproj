@@ -10,6 +10,7 @@
 		0652756B8822DA9650AF94FF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		21AE19B012C3F8C5CB08A988 /* Pods_Strive.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09E3798515C9FE3B8FA01BD7 /* Pods_Strive.framework */; };
+		5F3B05ACB769F59111645C16 /* AnalyzeRideIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D4F42FECCD48841FFAF058 /* AnalyzeRideIntent.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		AA00010000000000000000A2 /* ScanBridgeModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00010000000000000000A1 /* ScanBridgeModule.swift */; };
@@ -19,6 +20,20 @@
 		BB00010000000000000000A2 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010000000000000000A1 /* ShareViewController.swift */; };
 		BB000F0000000000000000A1 /* StriveShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = BB00030000000000000000A1 /* StriveShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CC00010000000000000000A2 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = CC00010000000000000000A1 /* GoogleService-Info.plist */; };
+		DD00010000000000000000A2 /* ScanProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00010000000000000000A1 /* ScanProcessor.swift */; };
+		DD00010000000000000000A3 /* ScanProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00010000000000000000A1 /* ScanProcessor.swift */; };
+		DD00020000000000000000A2 /* OcrParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00020000000000000000A1 /* OcrParser.swift */; };
+		DD00020000000000000000A3 /* OcrParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00020000000000000000A1 /* OcrParser.swift */; };
+		DD00030000000000000000A2 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00030000000000000000A1 /* ScanModels.swift */; };
+		DD00030000000000000000A3 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00030000000000000000A1 /* ScanModels.swift */; };
+		DD00040000000000000000A2 /* TomTomService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00040000000000000000A1 /* TomTomService.swift */; };
+		DD00040000000000000000A3 /* TomTomService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00040000000000000000A1 /* TomTomService.swift */; };
+		DD00050000000000000000A2 /* GeocodeCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00050000000000000000A1 /* GeocodeCache.swift */; };
+		DD00050000000000000000A3 /* GeocodeCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00050000000000000000A1 /* GeocodeCache.swift */; };
+		EE00010000000000000000A2 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00010000000000000000A1 /* LiveActivityManager.swift */; };
+		EE00010000000000000000A3 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00010000000000000000A1 /* LiveActivityManager.swift */; };
+		EE00020000000000000000A2 /* StriveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00020000000000000000A1 /* StriveActivityAttributes.swift */; };
+		EE00020000000000000000A3 /* StriveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00020000000000000000A1 /* StriveActivityAttributes.swift */; };
 		FE89B5BD3B09A90CC7E2F5B4 /* Pods_StriveShareExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2570F217FC1E29C4A871C5B8 /* Pods_StriveShareExtension.framework */; };
 /* End PBXBuildFile section */
 
@@ -55,6 +70,7 @@
 		2570F217FC1E29C4A871C5B8 /* Pods_StriveShareExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_StriveShareExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		322EA9D4547CAF332ED18779 /* Pods-StriveShareExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-StriveShareExtension.debug.xcconfig"; path = "Target Support Files/Pods-StriveShareExtension/Pods-StriveShareExtension.debug.xcconfig"; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-TestApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TestApp.debug.xcconfig"; path = "Target Support Files/Pods-TestApp/Pods-TestApp.debug.xcconfig"; sourceTree = "<group>"; };
+		40D4F42FECCD48841FFAF058 /* AnalyzeRideIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AnalyzeRideIntent.swift; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-TestApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TestApp.release.xcconfig"; path = "Target Support Files/Pods-TestApp/Pods-TestApp.release.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Strive/AppDelegate.swift; sourceTree = "<group>"; };
 		7FD0B9D4B205952A18B21621 /* Pods-Strive.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Strive.release.xcconfig"; path = "Target Support Files/Pods-Strive/Pods-Strive.release.xcconfig"; sourceTree = "<group>"; };
@@ -69,8 +85,15 @@
 		BB00020000000000000000A1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB00030000000000000000A1 /* StriveShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StriveShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC00010000000000000000A1 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Strive/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		DD00010000000000000000A1 /* ScanProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanProcessor.swift; sourceTree = "<group>"; };
+		DD00020000000000000000A1 /* OcrParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcrParser.swift; sourceTree = "<group>"; };
+		DD00030000000000000000A1 /* ScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanModels.swift; sourceTree = "<group>"; };
+		DD00040000000000000000A1 /* TomTomService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomTomService.swift; sourceTree = "<group>"; };
+		DD00050000000000000000A1 /* GeocodeCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodeCache.swift; sourceTree = "<group>"; };
 		EC13873C2A2BE5BFD4C09F8D /* Pods-StriveShareExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-StriveShareExtension.release.xcconfig"; path = "Target Support Files/Pods-StriveShareExtension/Pods-StriveShareExtension.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		EE00010000000000000000A1 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		EE00020000000000000000A1 /* StriveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StriveActivityAttributes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +120,8 @@
 			isa = PBXGroup;
 			children = (
 				AA00060000000000000000A1 /* ScanBridge */,
+				DD00060000000000000000A1 /* Scanner */,
+				EE00030000000000000000A1 /* LiveActivity */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				AA00050000000000000000A1 /* Strive-Bridging-Header.h */,
@@ -104,6 +129,7 @@
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				CC00010000000000000000A1 /* GoogleService-Info.plist */,
+				2F743DA7EE01000AB0B44FF4 /* AppIntents */,
 			);
 			name = Strive;
 			sourceTree = "<group>";
@@ -116,6 +142,15 @@
 				2570F217FC1E29C4A871C5B8 /* Pods_StriveShareExtension.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		2F743DA7EE01000AB0B44FF4 /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				40D4F42FECCD48841FFAF058 /* AnalyzeRideIntent.swift */,
+			);
+			name = AppIntents;
+			path = Strive/AppIntents;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -181,6 +216,29 @@
 				EC13873C2A2BE5BFD4C09F8D /* Pods-StriveShareExtension.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		DD00060000000000000000A1 /* Scanner */ = {
+			isa = PBXGroup;
+			children = (
+				DD00010000000000000000A1 /* ScanProcessor.swift */,
+				DD00020000000000000000A1 /* OcrParser.swift */,
+				DD00030000000000000000A1 /* ScanModels.swift */,
+				DD00040000000000000000A1 /* TomTomService.swift */,
+				DD00050000000000000000A1 /* GeocodeCache.swift */,
+			);
+			name = Scanner;
+			path = Strive/Scanner;
+			sourceTree = "<group>";
+		};
+		EE00030000000000000000A1 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				EE00010000000000000000A1 /* LiveActivityManager.swift */,
+				EE00020000000000000000A1 /* StriveActivityAttributes.swift */,
+			);
+			name = LiveActivity;
+			path = Strive/LiveActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -404,6 +462,14 @@
 				AA00020000000000000000A2 /* ScanBridgeModule.m in Sources */,
 				AA00030000000000000000A2 /* VisionOCRService.swift in Sources */,
 				AA00040000000000000000A2 /* GeminiVisionService.swift in Sources */,
+				DD00010000000000000000A2 /* ScanProcessor.swift in Sources */,
+				DD00020000000000000000A2 /* OcrParser.swift in Sources */,
+				DD00030000000000000000A2 /* ScanModels.swift in Sources */,
+				DD00040000000000000000A2 /* TomTomService.swift in Sources */,
+				DD00050000000000000000A2 /* GeocodeCache.swift in Sources */,
+				EE00010000000000000000A2 /* LiveActivityManager.swift in Sources */,
+				EE00020000000000000000A2 /* StriveActivityAttributes.swift in Sources */,
+				5F3B05ACB769F59111645C16 /* AnalyzeRideIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,6 +478,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB00010000000000000000A2 /* ShareViewController.swift in Sources */,
+				DD00010000000000000000A3 /* ScanProcessor.swift in Sources */,
+				DD00020000000000000000A3 /* OcrParser.swift in Sources */,
+				DD00030000000000000000A3 /* ScanModels.swift in Sources */,
+				DD00040000000000000000A3 /* TomTomService.swift in Sources */,
+				DD00050000000000000000A3 /* GeocodeCache.swift in Sources */,
+				EE00010000000000000000A3 /* LiveActivityManager.swift in Sources */,
+				EE00020000000000000000A3 /* StriveActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,7 +521,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.strive.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.striveapp.app;
 				PRODUCT_NAME = Strive;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OBJC_BRIDGING_HEADER = "Strive/Strive-Bridging-Header.h";
@@ -480,7 +553,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.strive.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.striveapp.app;
 				PRODUCT_NAME = Strive;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OBJC_BRIDGING_HEADER = "Strive/Strive-Bridging-Header.h";
@@ -689,7 +762,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.strive.app.share;
+				PRODUCT_BUNDLE_IDENTIFIER = com.striveapp.app.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -717,7 +790,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.strive.app.share;
+				PRODUCT_BUNDLE_IDENTIFIER = com.striveapp.app.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

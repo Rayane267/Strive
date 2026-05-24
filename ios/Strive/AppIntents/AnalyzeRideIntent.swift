@@ -32,54 +32,39 @@ struct AnalyzeRideIntent: AppIntent {
       throw IntentError.invalidImage
     }
 
-    // Pipeline complet via ScanProcessor (OCR + parsing identique Android +
-    // TomTom). On enchaîne les deux callbacks (provisoire puis final) sur la
-    // Live Activity pour donner le feedback immédiat. Wrappé dans un TaskGroup
-    // qui race contre un timeout global pour ne jamais hang le Shortcut.
+    // Pipeline complet via ScanProcessor (OCR + parsing + TomTom). La Live
+    // Activity n'est démarrée qu'au callback final pour éviter de flasher des
+    // valeurs provisoires qui changeraient après TomTom. Wrappé dans un
+    // TaskGroup qui race contre un timeout global pour ne jamais hang le Shortcut.
     let summary: String = try await withThrowingTaskGroup(of: String.self) { group in
       group.addTask {
         try await withCheckedThrowingContinuation { cont in
-          ScanProcessor.shared.process(
-            image: image,
-            onProvisional: { provisional in
-              // 1. Démarre la Live Activity avec les valeurs OCR.
-              LiveActivityManager.shared.start(
-                platform: provisional.scan.platform.rawValue,
-                fare: provisional.scan.fare,
-                hourlyRate: provisional.hourlyRate,
-                kmRate: provisional.kmRate,
-                distanceKm: provisional.totalDistanceKm,
-                durationMin: provisional.totalDurationMin,
-                verdictLevel: provisional.verdictLevel
-              )
-            },
-            onFinal: { finalResult in
-              guard let result = finalResult else {
-                cont.resume(throwing: IntentError.noRideDetected)
-                return
-              }
-              // 2. Update avec les valeurs TomTom (ou identiques si fallback OCR).
-              LiveActivityManager.shared.update(
-                platform: result.scan.platform.rawValue,
-                fare: result.scan.fare,
-                hourlyRate: result.hourlyRate,
-                kmRate: result.kmRate,
-                distanceKm: result.totalDistanceKm,
-                durationMin: result.totalDurationMin,
-                verdictLevel: result.verdictLevel
-              )
-
-              // 3. Persiste pour que l'app principale picke le résultat.
-              self.saveResultForMainApp(result)
-
-              let line = String(
-                format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
-                result.scan.platform.rawValue, result.scan.fare,
-                result.hourlyRate, result.kmRate
-              )
-              cont.resume(returning: line)
+          ScanProcessor.shared.process(image: image) { finalResult in
+            guard let result = finalResult else {
+              cont.resume(throwing: IntentError.noRideDetected)
+              return
             }
-          )
+            // 1. Démarre la Live Activity directement avec les valeurs finales.
+            LiveActivityManager.shared.start(
+              platform: result.scan.platform.rawValue,
+              fare: result.scan.fare,
+              hourlyRate: result.hourlyRate,
+              kmRate: result.kmRate,
+              distanceKm: result.totalDistanceKm,
+              durationMin: result.totalDurationMin,
+              verdictLevel: result.verdictLevel
+            )
+
+            // 2. Persiste pour que l'app principale picke le résultat.
+            self.saveResultForMainApp(result)
+
+            let line = String(
+              format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
+              result.scan.platform.rawValue, result.scan.fare,
+              result.hourlyRate, result.kmRate
+            )
+            cont.resume(returning: line)
+          }
         }
       }
       group.addTask {
@@ -113,7 +98,7 @@ struct AnalyzeRideIntent: AppIntent {
 
   private func saveResultForMainApp(_ result: ScanProcessor.FinalResult) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
-      ?? "group.com.strive.app"
+      ?? "group.com.striveapp.app"
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
 
     var body: [String: Any] = [
@@ -135,7 +120,7 @@ struct AnalyzeRideIntent: AppIntent {
       let center = CFNotificationCenterGetDarwinNotifyCenter()
       CFNotificationCenterPostNotification(
         center,
-        CFNotificationName("com.strive.app.scanResult" as CFString),
+        CFNotificationName("com.striveapp.app.scanResult" as CFString),
         nil, nil, true
       )
     }

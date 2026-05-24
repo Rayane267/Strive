@@ -37,6 +37,18 @@ import { registerPushToken, setupNotificationListeners } from '../services/notif
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 
+/**
+ * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
+ * Heuristique vitesse moyenne par tranche de distance — calibration FR/EU.
+ * À garder en sync avec FloatingBubbleService.kt::estimateDurationMin et
+ * ScanProcessor.swift::estimateDurationMin.
+ */
+function estimateDurationMin(distanceKm: number): number {
+  if (distanceKm < 5)  return Math.round(distanceKm / 25 * 60);  // urbain dense
+  if (distanceKm < 20) return Math.round(distanceKm / 45 * 60);  // mixte
+  return Math.round(distanceKm / 60 * 60);                       // péri-urbain / autoroute
+}
+
 const DashboardScreen = () => {
   const { t } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
@@ -51,7 +63,10 @@ const DashboardScreen = () => {
   const tier = getEffectivePlanTier(profile);
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
-  const remaining = getRemainingScans(tier, rides.length, extraCredits);
+  // Utiliser stats.scans (autoritatif depuis fetchData + incrément local au scan)
+  // plutôt que rides.length, qui décroît quand handleStatusUpdate filter une course
+  // 700 ms après decline/accept → faisait remonter artificiellement le quota.
+  const remaining = getRemainingScans(tier, stats.scans, extraCredits);
   const canScan = remaining === null || remaining > 0;
 
   const [isOnline, setIsOnline] = useState(false);
@@ -104,9 +119,29 @@ const DashboardScreen = () => {
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
   const lastScanTsRef = useRef(0);
+  // Ref pour canScan : évite la stale closure dans le listener onScanResult
+  // (le useEffect ne se re-attache pas à chaque render pour éviter les fuites).
+  const canScanRef = useRef(canScan);
+  useEffect(() => { canScanRef.current = canScan; }, [canScan]);
+
+  // Sync l'état quota au natif : la bulle Android / Share Extension iOS
+  // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
+  // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
+  useEffect(() => {
+    try { scannerService.setQuotaReached(!canScan); } catch {}
+  }, [canScan]);
+
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
       if (!user?.id) return;
+      // Quota atteint côté client → on ignore le scan natif sans tenter
+      // d'INSERT en DB (qui planterait avec daily_scan_quota_exceeded). Le
+      // paywall scanLimitCard est déjà affiché en bas du Dashboard.
+      if (!canScanRef.current) {
+        __DEV__ && console.warn('[Scanner] quota atteint — scan ignoré');
+        hapticError();
+        return;
+      }
       // Rate limit côté JS : ignore les events dupliqués <1s (défense en plus
       // du `scanInProgress` natif). Évite les double-inserts DB sur event RN
       // flaky.
@@ -160,7 +195,7 @@ const DashboardScreen = () => {
         && result.pickupDurationMin != null
         && result.pickupDistanceKm != null;
 
-      const courseDuration = result.durationMin ?? Math.round(result.distanceKm / 25 * 60);
+      const courseDuration = result.durationMin ?? estimateDurationMin(result.distanceKm);
       const totalDuration = includePickup
         ? (result.pickupDurationMin as number) + courseDuration
         : courseDuration;
@@ -285,6 +320,10 @@ const DashboardScreen = () => {
     }
   }, [isOnline, pulseAnim]);
 
+  // fetchData est déclaré plus bas (l.420). On passe par une ref pour éviter
+  // une dep cyclique sur useCallback + TDZ — handleStatusUpdate reste stable.
+  const fetchDataRef = useRef<() => void>(() => {});
+
   const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
     setRides(prev => prev.map(r => (r.id === id ? { ...r, status: newStatus } : r)));
@@ -294,9 +333,9 @@ const DashboardScreen = () => {
     try {
       await updateRideStatus(id, newStatus);
     } catch {
-      fetchData();
+      fetchDataRef.current();
     }
-  }, [fetchData]);
+  }, []);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
@@ -453,6 +492,9 @@ const DashboardScreen = () => {
     }
   }, [user?.id]);
 
+  // Sync la ref pour handleStatusUpdate.catch (déclaré avant fetchData).
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
+
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
@@ -546,9 +588,19 @@ const DashboardScreen = () => {
             <Text style={[styles.statValue, { color: colors.primary }]}>{stats.avgRate}€/h</Text>
             <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
           </View>
-          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.scans')}: ${stats.scans}`}>
+          <View
+            style={styles.statCard}
+            accessible
+            accessibilityLabel={
+              dailyScans !== null
+                ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
+                : `${t('dashboard.scans')}: ${stats.scans}`
+            }
+          >
             <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
-            <Text style={styles.statValue}>{stats.scans}</Text>
+            <Text style={styles.statValue}>
+              {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
+            </Text>
             <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
           </View>
         </View>
@@ -584,11 +636,22 @@ const DashboardScreen = () => {
             <Text style={styles.scanLimitText}>
               {t('dashboard.scanLimit.cardText', "Vous avez utilisé vos {{count}} scans d'aujourd'hui.", { count: dailyScans ?? 0 })}
             </Text>
-            <View style={styles.scanLimitActions}>
-              <TouchableOpacity style={styles.scanLimitBtnPrimary} onPress={() => navigation.navigate('SubscriptionScreen')}>
-                <Text style={styles.scanLimitBtnPrimaryText}>{t('dashboard.scanLimit.upgrade', 'Passer Plus')}</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Free → propose l'upgrade vers Plus.
+                Plus → pas de bouton (pas de tier supérieur dispo au launch,
+                       pas de boutique consumable non plus). Message "revenez
+                       demain" pour signaler que le quota se reset. */}
+            {tier === 'free' && (
+              <View style={styles.scanLimitActions}>
+                <TouchableOpacity style={styles.scanLimitBtnPrimary} onPress={() => navigation.navigate('SubscriptionScreen')}>
+                  <Text style={styles.scanLimitBtnPrimaryText}>{t('dashboard.scanLimit.upgrade', 'Passer Plus')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {tier === 'plus' && (
+              <Text style={styles.scanLimitText}>
+                {t('dashboard.scanLimit.comeBackTomorrow', 'Revenez demain pour scanner à nouveau.')}
+              </Text>
+            )}
           </View>
         )}
 
@@ -853,7 +916,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
-  statValue: { color: colors.textMain, fontSize: 26, fontWeight: '900' },
+  statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   statIcon: { position: 'absolute', top: 10, right: 10 },
 
 

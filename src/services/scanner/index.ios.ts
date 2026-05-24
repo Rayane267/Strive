@@ -108,6 +108,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setTomTomApiKey(key);
   },
 
+  setQuotaReached: (reached: boolean) => {
+    ScanBridge?.setQuotaReached(reached);
+  },
+
 checkPermissions: async () => {
     if (!ScanBridge) {
       return {

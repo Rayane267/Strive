@@ -50,6 +50,10 @@ class FloatingBubbleService : Service() {
         /** Seuils utilisateur pour le verdict natif (synchronisés depuis JS). */
         var minHourlyRate: Double = 25.0
         var minKmRate: Double = 1.2
+        /** Quota journalier dépassé (synchronisé depuis JS via setQuotaReached).
+         *  Si true, triggerScan affiche un état "limite atteinte" sans lancer
+         *  l'OCR ni TomTom → 0 coût Gemini/TomTom pour les users hors quota. */
+        var quotaReached: Boolean = false
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -184,6 +188,13 @@ class FloatingBubbleService : Service() {
 
     fun triggerScan() {
         if (scanInProgress) return
+        // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
+        // émis au JS, donc rien ne part en queue offline non plus.
+        if (quotaReached) {
+            showQuotaReachedState()
+            mainHandler.postDelayed({ showIdleState() }, 2500)
+            return
+        }
         scanInProgress = true
         showLoadingState()
 
@@ -223,9 +234,12 @@ class FloatingBubbleService : Service() {
                 if (result != null) {
                     val base64 = GeminiVisionService.encodeForBridge(fullBitmap)
                     fullBitmap.recycle()
-                    // Affichage OCR instantané pour feedback utilisateur.
-                    showResultState(result)
-                    // debugBlocks n'est transmis qu'en debug build (diagnostic fragmentation ML Kit)
+                    // NB : on N'AFFICHE PAS showResultState ici. La bulle reste
+                    // en showLoadingState jusqu'à ce que resolveTomTomAndEmit
+                    // ait soit (a) TomTom OK → valeurs vérifiées,
+                    //         (b) TomTom skip/KO → fallback OCR.
+                    // Évite le flash de valeurs OCR provisoires qui pouvaient
+                    // donner un verdict différent du verdict final.
                     val debug = if (BuildConfig.DEBUG) debugBlocks else null
                     resolveTomTomAndEmit(result, base64, debug)
                     scanInProgress = false
@@ -312,9 +326,10 @@ class FloatingBubbleService : Service() {
     }
 
 /**
-     * Enchaîne TomTom (natif) après OCR et met à jour la bulle + JS avec les
-     * valeurs finales. Fait tout côté natif pour rester réactif même quand JS
-     * est throttlé (app en background pendant le scan Uber/Bolt/Heetch).
+     * Enchaîne TomTom (natif) après OCR et affiche la bulle + émet au JS avec
+     * les valeurs finales (TomTom si OK, OCR sinon). La bulle reste en
+     * showLoadingState jusqu'ici → l'utilisateur ne voit jamais de valeurs
+     * provisoires qui pourraient changer après TomTom.
      */
     private fun resolveTomTomAndEmit(
         ocr: OcrParser.ScanResult,
@@ -329,57 +344,54 @@ class FloatingBubbleService : Service() {
             ?.trim() ?: ""
 
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
-            // Pas d'adresses ou pas de clé → émet direct les valeurs OCR.
+            // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
+            mainHandler.post { showResultState(ocr); applyVerdict(ocr) }
             ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks)
             return
         }
 
-        mainHandler.post { startDistancePulse() }
         TomTomService.calculateRoute(pickup, dest) { route ->
             val finalResult = if (route != null && route.distanceKm in 0.3..1000.0) {
-                
-                // 1. On vérifie si l'utilisateur veut inclure le trajet d'approche
-                val useApproach = includePickup
-                    && ocr.pickupDurationMin != null
-                    && ocr.pickupDistanceKm != null
-
-                // ✅ RÈGLE V2 : TomTom est le ROI. 
-                // Distance = Course TomTom + Approche OCR (si activée)
-                val totalDistance = if (useApproach)
-                    route.distanceKm + (ocr.pickupDistanceKm ?: 0.0)
-                else route.distanceKm
-
-                // Durée = Course TomTom + Approche OCR (si activée)
-                val totalDuration = if (useApproach)
-                    route.durationMin + (ocr.pickupDurationMin ?: 0)
-                else route.durationMin
-
-                // Recalcul de la vraie rentabilité
-                val hourlyRate = if (totalDuration > 0) ocr.fare / (totalDuration / 60.0) else 0.0
-                val kmRate = if (totalDistance > 0) ocr.fare / totalDistance else 0.0
-                val hrOk = hourlyRate >= minHourlyRate
-                val kmOk = kmRate >= minKmRate
-                val level = if (hrOk && kmOk) 2 else if (hrOk || kmOk) 1 else 0
-
-                mainHandler.post {
-                    stopDistancePulse()
-                    updateMetrics(hourlyRate, kmRate, totalDuration, totalDistance)
-                    updateVerdict(level)
-                }
-
-                // ScanResult mis à jour pour la base de données : on écrase avec les valeurs TomTom
+                // ✅ RÈGLE V2 : TomTom est le ROI. Distance = Course TomTom + Approche OCR.
                 ocr.copy(
                     distanceKm = route.distanceKm,
                     durationMin = route.durationMin,
                 )
             } else {
-                // 🚨 FALLBACK : TomTom a échoué (réseau, adresse introuvable). 
-                // On garde 100% des valeurs OCR de la plateforme !
-                mainHandler.post { stopDistancePulse() }
+                // 🚨 FALLBACK : TomTom a échoué (réseau, adresse introuvable).
+                // On garde 100% des valeurs OCR de la plateforme.
                 ocr
             }
+            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult) }
             ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks)
         }
+    }
+
+    /**
+     * Calcule et applique le verdict couleur (rouge/orange/vert) sur la bulle
+     * à partir d'un ScanResult final. Centralise le calcul utilisé par les
+     * branches "skip TomTom" et "TomTom OK/KO".
+     */
+    private fun applyVerdict(result: OcrParser.ScanResult) {
+        val useApproach = includePickup
+            && result.pickupDurationMin != null
+            && result.pickupDistanceKm != null
+
+        val courseDuration = result.durationMin?.toDouble() ?: estimateDurationMin(result.distanceKm)
+        val totalDuration = if (useApproach)
+            courseDuration + (result.pickupDurationMin?.toDouble() ?: 0.0)
+        else courseDuration
+
+        val totalDistance = if (useApproach)
+            result.distanceKm + (result.pickupDistanceKm ?: 0.0)
+        else result.distanceKm
+
+        val hourlyRate = if (totalDuration > 0) result.fare / (totalDuration / 60.0) else 0.0
+        val kmRate = if (totalDistance > 0) result.fare / totalDistance else 0.0
+        val hrOk = hourlyRate >= minHourlyRate
+        val kmOk = kmRate >= minKmRate
+        val level = if (hrOk && kmOk) 2 else if (hrOk || kmOk) 1 else 0
+        updateVerdict(level)
     }
 
     // ─── Verdict ─────────────────────────────────────────────────────────────────
@@ -452,6 +464,18 @@ class FloatingBubbleService : Service() {
     // ─── UI States ────────────────────────────────────────────────────────────────
 
     private fun dpToPx(dp: Int) = (dp * resources.displayMetrics.density).toInt()
+
+    /**
+     * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
+     * Heuristique vitesse moyenne par tranche de distance — calibration FR/EU
+     * basée sur les vitesses moyennes observées (urbain dense / mixte / autoroute).
+     * À garder en sync avec ScanProcessor.swift et DashboardScreen.tsx.
+     */
+    private fun estimateDurationMin(distanceKm: Double): Double = when {
+        distanceKm < 5.0  -> distanceKm / 25.0 * 60.0   // urbain dense
+        distanceKm < 20.0 -> distanceKm / 45.0 * 60.0   // mixte ville/péri
+        else              -> distanceKm / 60.0 * 60.0   // péri-urbain / autoroute
+    }
 
     private fun showIdleState() {
         clearTransientState()
@@ -532,7 +556,11 @@ class FloatingBubbleService : Service() {
             && result.pickupDurationMin != null
             && result.pickupDistanceKm != null
 
-        val courseDuration = result.durationMin?.toDouble() ?: (result.distanceKm / 25.0 * 60.0)
+        // Heuristique vitesse moyenne selon la distance — l'ancienne estimation
+        // unique à 25 km/h surestimait massivement les durées de courses
+        // péri-urbaines (24 km Chennevières→Paris : 25 km/h ≈ 59 min vs réalité
+        // ~38 min). Calibration prudente pour éviter de gonfler le €/h estimé.
+        val courseDuration = result.durationMin?.toDouble() ?: estimateDurationMin(result.distanceKm)
         val totalDuration = if (useApproach)
             courseDuration + (result.pickupDurationMin?.toDouble() ?: 0.0)
         else courseDuration
@@ -753,6 +781,38 @@ class FloatingBubbleService : Service() {
             override fun onTick(millisLeft: Long) {}
             override fun onFinish() { mainHandler.post { showIdleState() } }
         }.start()
+    }
+
+    private fun showQuotaReachedState() {
+        clearTransientState()
+        bubbleContainer.removeAllViews()
+
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(16), dpToPx(8))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#FF9800"))   // orange = limite atteinte
+                cornerRadius = dpToPx(999).toFloat()
+            }
+            elevation = dpToPx(8).toFloat()
+            isClickable = true
+            // Tap sur la pill → ouvre l'app (probablement écran abonnement)
+            setOnClickListener { openAppHistory() }
+        }
+        pill.addView(TextView(this).apply {
+            text = "🔒"; textSize = 14f
+            setPadding(0, 0, dpToPx(6), 0)
+        })
+        pill.addView(TextView(this).apply {
+            text = "Quota atteint"; textSize = 13f; setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+
+        bubbleContainer.addView(pill, FrameLayout.LayoutParams(
+            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT
+        ))
+        animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
     private fun showErrorState() {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from './SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +33,7 @@ export const PremiumBanner = React.memo(({ todayScanCount, onPressUpgrade }: Pre
       onPress={onPressUpgrade}
       style={styles.container}
     >
-      <LinearGradient
+      <SafeGradient
         colors={isExhausted ? ['#1A0A0A', '#2B1A1A', '#FF5252'] : ['#0A120E', '#1A2B23', '#10B981']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -62,7 +62,7 @@ export const PremiumBanner = React.memo(({ todayScanCount, onPressUpgrade }: Pre
         </View>
 
         <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />
-      </LinearGradient>
+      </SafeGradient>
     </TouchableOpacity>
   );
 });

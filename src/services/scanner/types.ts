@@ -69,6 +69,9 @@ export interface ScannerService {
   setThresholds(minHourlyRate: number, minKmRate: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   setTomTomApiKey(key: string): void;
+  /** Quota journalier atteint — la bulle / Share Extension affiche "Quota atteint"
+   *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. */
+  setQuotaReached(reached: boolean): void;
   /** Vérifie l'état complet des permissions */
   checkPermissions(): Promise<PermissionsStatus>;
   /** Ouvre les paramètres overlay */

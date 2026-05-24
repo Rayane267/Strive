@@ -6,7 +6,7 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from './SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +55,7 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
       <View style={[styles.rideCard, !isPending && { opacity: 0.5 }]}>
         <View style={styles.rideImageWrap}>
           <Image source={bgImage} style={styles.rideImage} resizeMode="cover" />
-          <LinearGradient colors={['transparent', colors.surface]} style={StyleSheet.absoluteFillObject} />
+          <SafeGradient colors={['transparent', colors.surface]} style={StyleSheet.absoluteFillObject} />
           <View style={styles.imageBadgesRow}>
             <View style={styles.platformPill}>
               <View style={[styles.platformDot, { backgroundColor: platformColor }]} />

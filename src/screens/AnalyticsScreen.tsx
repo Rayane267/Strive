@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
-import LinearGradient from 'react-native-linear-gradient';
+import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -302,23 +302,24 @@ const AnalyticsScreen = () => {
 
   const getMarkedDates = () => {
     const marks: any = {};
-    const primary = colors.primary;
-    const textOnPrimary = '#000000';
-    const mid = 'rgba(0,230,118,0.15)';
+    const edge = colors.primary;
+    const edgeText = '#06140C';
+    const mid = 'rgba(0,230,118,0.20)';
+    const midText = colors.textMain;
     if (selectionStep === 1 && tempStart) {
-      marks[tempStart] = { startingDay: true, endingDay: true, color: primary, textColor: textOnPrimary };
+      marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
     } else if (dateRange.start && dateRange.end) {
       const startStr = dateRange.start.toISOString().split('T')[0];
       const endStr = dateRange.end.toISOString().split('T')[0];
       if (startStr === endStr) {
-        marks[startStr] = { startingDay: true, endingDay: true, color: primary, textColor: textOnPrimary };
+        marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
       } else {
         let curr = new Date(startStr);
         while (curr <= new Date(endStr)) {
           const ds = curr.toISOString().split('T')[0];
-          if (ds === startStr)      marks[ds] = { startingDay: true, color: primary, textColor: textOnPrimary };
-          else if (ds === endStr)   marks[ds] = { endingDay: true,   color: primary, textColor: textOnPrimary };
-          else                      marks[ds] = { color: mid, textColor: colors.textMain };
+          if (ds === startStr)      marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
+          else if (ds === endStr)   marks[ds] = { endingDay: true,   color: edge, textColor: edgeText };
+          else                      marks[ds] = { color: mid, textColor: midText };
           curr.setDate(curr.getDate() + 1);
         }
       }
@@ -337,15 +338,15 @@ const AnalyticsScreen = () => {
     const d = new Date(date.getTime());
     return (
       <View style={styles.calHeaderRow}>
-        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.calArrow}>
-          <Feather name="chevron-left" size={22} color={colors.textMuted} />
+        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="chevron-left" size={18} color={colors.textMain} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.calMonthBtn} onPress={() => setShowMonthPicker(true)}>
+        <TouchableOpacity style={styles.calMonthBtn} onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}>
           <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
-          <Feather name="chevron-down" size={13} color={colors.textMuted} style={{ marginLeft: 4 }} />
+          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calArrow}>
-          <Feather name="chevron-right" size={22} color={colors.textMuted} />
+        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="chevron-right" size={18} color={colors.textMain} />
         </TouchableOpacity>
       </View>
     );
@@ -422,24 +423,12 @@ const AnalyticsScreen = () => {
               accessible
               accessibilityLabel={`${t('analytics.netProfit')}: €${stats.totalProfit.toFixed(2)}`}
             >
-              {Platform.OS === 'ios' ? (
-                <>
-                  <BlurView
-                    style={StyleSheet.absoluteFill}
-                    blurType="chromeMaterialDark"
-                    blurAmount={28}
-                    reducedTransparencyFallbackColor="#0F2D1F"
-                  />
-                  <View style={[StyleSheet.absoluteFill, styles.heroGlassTint]} />
-                </>
-              ) : (
-                <LinearGradient
-                  colors={['#0F2D1F', '#0A1A12']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              )}
+              <SafeGradient
+                colors={['#0F2D1F', '#0A150E']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
               {/* top shimmer */}
               <View style={styles.heroShimmer} />
 
@@ -478,7 +467,7 @@ const AnalyticsScreen = () => {
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (
-                  <LinearGradient
+                  <SafeGradient
                     colors={['#1A2A22', '#141E18']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -501,7 +490,7 @@ const AnalyticsScreen = () => {
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (
-                  <LinearGradient
+                  <SafeGradient
                     colors={['#1A2A22', '#141E18']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -642,12 +631,12 @@ const AnalyticsScreen = () => {
               {showMonthPicker ? (
                 <View>
                   <View style={styles.calHeaderRow}>
-                    <TouchableOpacity onPress={() => setPickerYear(y => y - 1)} style={styles.calArrow}>
-                      <Feather name="chevron-left" size={22} color={colors.textMain} />
+                    <TouchableOpacity onPress={() => setPickerYear(y => y - 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.yearNavText}>−</Text>
                     </TouchableOpacity>
                     <Text style={styles.calMonthText}>{pickerYear}</Text>
-                    <TouchableOpacity onPress={() => setPickerYear(y => y + 1)} style={styles.calArrow}>
-                      <Feather name="chevron-right" size={22} color={colors.textMain} />
+                    <TouchableOpacity onPress={() => setPickerYear(y => y + 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.yearNavText}>+</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.monthGrid}>
@@ -678,10 +667,12 @@ const AnalyticsScreen = () => {
                     </View>
                   ) : null}
                 <Calendar
+                  key={currentMonth}
                   current={currentMonth}
                   onMonthChange={(month: any) => setCurrentMonth(month.dateString)}
                   firstDay={1}
                   hideExtraDays
+                  hideArrows
                   renderHeader={renderCustomHeader}
                   onDayPress={handleDayPress}
                   markingType="period"
@@ -933,13 +924,31 @@ const styles = StyleSheet.create({
   },
   calHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 14,
+    paddingBottom: 10,
+    gap: 14,
   },
-  calArrow: { padding: 6 },
-  calMonthBtn: { flexDirection: 'row', alignItems: 'center' },
-  calMonthText: { color: colors.textMain, fontSize: 17, fontWeight: 'bold' },
+  calMonthBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderWidth: 1, borderColor: 'rgba(0,230,118,0.18)',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+  },
+  calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  yearNavBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  yearNavText: { color: colors.textMain, fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  calNavBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
 
   modalAlertRow: {
     flexDirection: 'row',
@@ -966,12 +975,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: colors.background,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  monthCellActive: { backgroundColor: colors.primary },
-  monthCellText: { color: colors.textMain, fontSize: 14, fontWeight: '600' },
-  monthCellTextActive: { color: '#000', fontWeight: 'bold' },
+  monthCellActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  monthCellText: { color: colors.textMain, fontSize: 13, fontWeight: '700' },
+  monthCellTextActive: { color: '#06140C', fontWeight: '900' },
 });
 
 export default AnalyticsScreen;

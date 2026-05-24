@@ -13,7 +13,6 @@ import TabNavigator from './TabNavigator';
 import AuthScreenRaw from '../screens/AuthScreen';
 import CarSettingsScreenRaw from '../screens/CarSettingsScreen';
 import AccountInfoScreenRaw from '../screens/AccountInfoScreen';
-import UpgradeScreenRaw from '../screens/UpgradeScreen';
 import PreferencesScreenRaw from '../screens/PreferencesScreen.tsx';
 import ProfileSetupScreenRaw from '../screens/ProfileSetupScreen.tsx';
 import SubscriptionScreenRaw from '../screens/SubscriptionScreen.tsx';
@@ -25,7 +24,6 @@ import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
 const AuthScreen = withErrorBoundary(AuthScreenRaw);
 const CarSettingsScreen = withErrorBoundary(CarSettingsScreenRaw);
 const AccountInfoScreen = withErrorBoundary(AccountInfoScreenRaw);
-const UpgradeScreen = withErrorBoundary(UpgradeScreenRaw);
 const PreferencesScreen = withErrorBoundary(PreferencesScreenRaw);
 const ProfileSetupScreen = withErrorBoundary(ProfileSetupScreenRaw);
 const SubscriptionScreen = withErrorBoundary(SubscriptionScreenRaw);
@@ -137,17 +135,11 @@ const RootNavigator = () => {
 
           {/* Modales */}
           <Stack.Screen
-            name="Upgrade"
-            component={UpgradeScreen}
-            options={{ presentation: 'modal', headerShown: false }}
-          />
-
-          <Stack.Screen
             name="SubscriptionScreen"
             component={SubscriptionScreen}
             options={{
               headerShown: false,
-              presentation: 'modal',
+              presentation: 'fullScreenModal',
               animation: 'slide_from_bottom',
             }}
           />

@@ -38,6 +38,6 @@
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>StriveAppGroupId</key>
-	<string>group.com.strive.app</string>
+	<string>group.com.striveapp.app</string>
 </dict>
 </plist>

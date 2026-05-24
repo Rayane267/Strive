@@ -29,12 +29,12 @@ final class ScanProcessor {
     let verdictLevel: Int
   }
 
-  /// Lance le pipeline complet sur l'image. Le callback `onProvisional` est
-  /// appelé dès que l'OCR a renvoyé un résultat (avant TomTom). Le callback
-  /// `onFinal` est appelé après TomTom (ou immédiatement si pas d'adresses).
+  /// Lance le pipeline complet sur l'image. Le callback `onFinal` n'est appelé
+  /// qu'UNE seule fois, avec le résultat final (TomTom OK, fallback OCR, ou nil
+  /// si OCR n'a rien trouvé). Le caller n'a pas à gérer d'état provisoire — la
+  /// bulle/Live Activity reste en loading jusqu'à cet appel.
   func process(
     image: UIImage,
-    onProvisional: @escaping (FinalResult) -> Void,
     onFinal: @escaping (FinalResult?) -> Void
   ) {
     runOcr(image: image) { [weak self] blocks, screenW, screenH in
@@ -48,33 +48,41 @@ final class ScanProcessor {
         onFinal(nil); return
       }
 
-      // 1. Calcul provisoire avec valeurs OCR (incl. pickup add-on si activé)
-      let provisional = self.computeFinal(scan: result)
-      onProvisional(provisional)
-
-      // 2. TomTom — uniquement si on a 2 adresses et la clé est configurée
+      // TomTom — uniquement si on a 2 adresses et la clé est configurée
       let pickup = result.pickupAddress?.replacingOccurrences(of: "\n", with: " ")
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let dest = result.destinationAddress?.replacingOccurrences(of: "\n", with: " ")
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
       if pickup.isEmpty || dest.isEmpty || !TomTomService.shared.isReady {
-        onFinal(provisional)
+        // Pas d'adresses ou pas de clé → final = valeurs OCR direct.
+        onFinal(self.computeFinal(scan: result))
         return
       }
 
       TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
         guard let route = route, route.distanceKm >= 0.3, route.distanceKm <= 1000 else {
           // Fallback OCR — exactement comme Android
-          onFinal(provisional)
+          onFinal(self.computeFinal(scan: result))
           return
         }
 
         // Override OCR distance/duration avec valeurs TomTom
         let updated = result.copy(distanceKm: route.distanceKm, durationMin: route.durationMin)
-        let final = self.computeFinal(scan: updated)
-        onFinal(final)
+        onFinal(self.computeFinal(scan: updated))
       }
+    }
+  }
+
+  /// Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
+  /// Heuristique vitesse moyenne par tranche de distance — calibration FR/EU.
+  /// À garder en sync avec `FloatingBubbleService.kt::estimateDurationMin`
+  /// et `DashboardScreen.tsx::estimateDurationMin`.
+  private static func estimateDurationMin(distanceKm: Double) -> Double {
+    switch distanceKm {
+    case ..<5:  return distanceKm / 25.0 * 60.0   // urbain dense
+    case ..<20: return distanceKm / 45.0 * 60.0   // mixte ville/péri
+    default:    return distanceKm / 60.0 * 60.0   // péri-urbain / autoroute
     }
   }
 
@@ -82,7 +90,7 @@ final class ScanProcessor {
 
   private func computeFinal(scan: ScanResultModel) -> FinalResult {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
-      ?? "group.com.strive.app"
+      ?? "group.com.striveapp.app"
     let prefs = UserDefaults(suiteName: appGroupId)
     let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25.0
     let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
@@ -92,9 +100,10 @@ final class ScanProcessor {
       && scan.pickupDurationMin != nil
       && scan.pickupDistanceKm != nil
 
-    // courseDuration : OCR ou estimé à partir de la distance (25 km/h moyenne ville)
+    // courseDuration : OCR ou estimé via heuristique vitesse selon distance
+    // (cf. estimateDurationMin — calibration FR/EU urbain/mixte/autoroute).
     let courseDuration = scan.durationMin.map { Double($0) }
-      ?? (scan.distanceKm / 25.0 * 60.0)
+      ?? Self.estimateDurationMin(distanceKm: scan.distanceKm)
 
     let totalDuration = useApproach
       ? courseDuration + Double(scan.pickupDurationMin ?? 0)

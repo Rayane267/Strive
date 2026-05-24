@@ -25,7 +25,7 @@ import './src/i18n';
 Sentry.init({
   dsn: SENTRY_DSN || '',
   enabled: !__DEV__ && !!SENTRY_DSN,
-  release: `com.strive.app@${appVersion}`,
+  release: `com.striveapp.app@${appVersion}`,
   tracesSampleRate: 0.2,
   enableAutoSessionTracking: true,
   attachStacktrace: true,

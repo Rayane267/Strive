@@ -68,7 +68,7 @@ Convention : noms **abstraits**, pas de prix dans le SKU. Cf. `subscription_prod
 ### a. Project settings
 - Crée un projet "Strive"
 - Apps :
-  - **iOS** : bundle id `com.strive.app` (ou ce que tu utilises) + clé API App Store Connect
+  - **iOS** : bundle id `com.striveapp.app` + clé API App Store Connect
   - **Android** : package name `com.strive.app` + service account JSON Google Play
 
 ### b. Products
