@@ -115,16 +115,24 @@ class ScanBridgeModule: RCTEventEmitter {
     // L'app principale au foreground a toujours le droit de démarrer — on
     // relance ici. Le manager kill l'activité précédente si elle existait,
     // pas de doublon possible.
+    //
+    // ⚠ Délai 600ms : `appDidBecomeActive` fire AVANT que iOS considère l'app
+    // pleinement "visible" pour ActivityKit, ce qui throw
+    // `ActivityAuthorizationError.visibility (Code 7)`. Laisser un cycle de
+    // runloop + un peu de marge évite cette race.
     if #available(iOS 16.2, *) {
-      LiveActivityManager.shared.start(
-        platform: (result["platform"] as? String) ?? "UNKNOWN",
-        fare: (result["fare"] as? NSNumber)?.doubleValue ?? 0,
-        hourlyRate: (result["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
-        kmRate: (result["kmRate"] as? NSNumber)?.doubleValue ?? 0,
-        distanceKm: (result["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
-        durationMin: (result["durationMin"] as? NSNumber)?.intValue ?? 0,
-        verdictLevel: (result["verdictLevel"] as? NSNumber)?.intValue ?? 0
-      )
+      let payload = result
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        LiveActivityManager.shared.start(
+          platform: (payload["platform"] as? String) ?? "UNKNOWN",
+          fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+          hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+          kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+          distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+          durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+        )
+      }
     }
 
     sendEvent(withName: "onScanResult", body: result)
