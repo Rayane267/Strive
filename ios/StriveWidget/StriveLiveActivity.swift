@@ -206,3 +206,95 @@ private func verdictIcon(_ level: Int) -> String {
   default: return "xmark"
   }
 }
+
+// MARK: - Previews (Xcode Canvas)
+
+@available(iOS 17.0, *)
+#Preview("Lock Screen — Vert (rentable)", as: .content, using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "UBER",
+    fare: 24.0,
+    hourlyRate: 37,
+    kmRate: 1.52,
+    distanceKm: 12.6,
+    durationMin: 29,
+    verdictLevel: 2
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Lock Screen — Orange (limite)", as: .content, using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "BOLT",
+    fare: 12.0,
+    hourlyRate: 22,
+    kmRate: 0.97,
+    distanceKm: 8.4,
+    durationMin: 17,
+    verdictLevel: 1
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Lock Screen — Rouge (refuse)", as: .content, using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "HEETCH",
+    fare: 6.5,
+    hourlyRate: 14,
+    kmRate: 0.42,
+    distanceKm: 15.2,
+    durationMin: 28,
+    verdictLevel: 0
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "UBER",
+    fare: 24.0,
+    hourlyRate: 37,
+    kmRate: 1.52,
+    distanceKm: 12.6,
+    durationMin: 29,
+    verdictLevel: 2
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "UBER",
+    fare: 24.0,
+    hourlyRate: 37,
+    kmRate: 1.52,
+    distanceKm: 12.6,
+    durationMin: 29,
+    verdictLevel: 2
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "UBER",
+    fare: 24.0,
+    hourlyRate: 37,
+    kmRate: 1.52,
+    distanceKm: 12.6,
+    durationMin: 29,
+    verdictLevel: 2
+  )
+}
