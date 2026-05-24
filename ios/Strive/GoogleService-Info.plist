@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>397785965149-7at5j010btil8a2vfbq6i3s7snu1ob15.apps.googleusercontent.com</string>
+	<string>397785965149-p4gpv48aobopd5gi8ohr1nkk1pnteake.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.397785965149-7at5j010btil8a2vfbq6i3s7snu1ob15</string>
+	<string>com.googleusercontent.apps.397785965149-p4gpv48aobopd5gi8ohr1nkk1pnteake</string>
 	<key>ANDROID_CLIENT_ID</key>
 	<string>397785965149-vv7lqfb9jgq0905penl6dj9mgf10tcf8.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.strive.app</string>
+	<string>com.striveapp.app</string>
 	<key>PROJECT_ID</key>
 	<string>strive-492222</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:397785965149:ios:e4883969b11dec2109a3b4</string>
+	<string>1:397785965149:ios:0f8e0e3ab118d08709a3b4</string>
 </dict>
 </plist>

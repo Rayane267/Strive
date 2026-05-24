@@ -42,9 +42,15 @@ local.properties
 .env.production.example
 .env.*.local
 
-# Firebase / Google services credentials (contiennent des clés API)
-ios/**/GoogleService-Info.plist
-android/app/google-services.json
+# Firebase / Google services credentials
+# Note : ces fichiers (GoogleService-Info.plist iOS et google-services.json Android)
+# sont conçus par Firebase pour être embarqués dans l'app et commités en git.
+# La sécurité Firebase repose sur API key restrictions + security rules, pas sur
+# le secret de la clé. Cf. https://firebase.google.com/docs/projects/api-keys
+# → DÉ-commenter les lignes ci-dessous SI tu veux vraiment les retirer du repo
+#   (auquel cas il faudra les injecter via EAS file secret + hook pre-install).
+# ios/**/GoogleService-Info.plist
+# android/app/google-services.json
 
 # node.js
 #
