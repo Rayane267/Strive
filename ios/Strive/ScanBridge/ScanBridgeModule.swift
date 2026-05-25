@@ -111,18 +111,11 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.removeObject(forKey: Self.scanTimestampKey)
 
     // Fallback Live Activity : la Share Extension peut échouer à démarrer
-    // l'activité sur iOS 17.0/17.1, ou être tuée par iOS avant Activity.request.
-    // L'app principale au foreground a toujours le droit de démarrer — on
-    // relance ici. Le manager kill l'activité précédente si elle existait,
-    // pas de doublon possible.
-    //
-    // ⚠ Délai 600ms : `appDidBecomeActive` fire AVANT que iOS considère l'app
-    // pleinement "visible" pour ActivityKit, ce qui throw
-    // `ActivityAuthorizationError.visibility (Code 7)`. Laisser un cycle de
-    // runloop + un peu de marge évite cette race.
+    // l'activité (pas de foreground visibility). Le manager retry avec backoff
+    // si l'erreur visibility persiste.
     if #available(iOS 16.2, *) {
       let payload = result
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
         LiveActivityManager.shared.start(
           platform: (payload["platform"] as? String) ?? "UNKNOWN",
           fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
