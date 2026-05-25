@@ -24,7 +24,7 @@ import appleAuth from '@invertase/react-native-apple-authentication';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
-import { enforceSignupQuota } from '../utils/deviceId';
+import { enforceSignupQuota, enforceOAuthSignupQuota, registerOAuthSignup } from '../utils/deviceId';
 import BrandLoader from '../components/BrandLoader';
 
 GoogleSignin.configure({
@@ -166,15 +166,26 @@ const AuthScreen = () => {
       );
       const idToken = userInfo.data?.idToken;
       if (idToken) {
-        const { error } = await supabase.auth.signInWithIdToken({
+        const { data, error } = await supabase.auth.signInWithIdToken({
           provider: 'google',
           token: idToken,
           ...(rawNonce ? { nonce: rawNonce } : {}),
         });
         if (error) throw error;
+        const isNewUser = data.user &&
+          (Date.now() - new Date(data.user.created_at).getTime()) < 60_000;
+        if (isNewUser) {
+          try {
+            await enforceOAuthSignupQuota();
+            await registerOAuthSignup();
+          } catch {
+            await supabase.auth.signOut();
+            throw new Error('device_signup_limit_reached');
+          }
+        }
       }
     } catch (error: any) {
-      showToast({ type: 'error', title: t('auth.errors.googleTitle'), message: error.message });
+      showToast({ type: 'error', title: t('auth.errors.googleTitle'), message: mapAuthError(error.message) });
     } finally {
       setLoading(false);
     }
@@ -192,20 +203,31 @@ const AuthScreen = () => {
       });
       const { identityToken, fullName } = appleAuthRequestResponse;
       if (identityToken) {
-        const { error } = await supabase.auth.signInWithIdToken({
+        const { data, error } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
           token: identityToken,
           nonce: rawNonce,
         });
         if (error) throw error;
-        const displayName = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(' ');
-        if (displayName) {
-          await supabase.auth.updateUser({ data: { full_name: displayName } });
+        const isNewUser = data.user &&
+          (Date.now() - new Date(data.user.created_at).getTime()) < 60_000;
+        if (isNewUser) {
+          try {
+            await enforceOAuthSignupQuota();
+            await registerOAuthSignup();
+          } catch {
+            await supabase.auth.signOut();
+            throw new Error('device_signup_limit_reached');
+          }
+          const displayName = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(' ');
+          if (displayName) {
+            await supabase.auth.updateUser({ data: { full_name: displayName } });
+          }
         }
       }
     } catch (error: any) {
       if (error?.code === appleAuth.Error.CANCELED) return;
-      showToast({ type: 'error', title: t('auth.errors.appleTitle'), message: error.message });
+      showToast({ type: 'error', title: t('auth.errors.appleTitle'), message: mapAuthError(error.message) });
     } finally {
       setLoading(false);
     }

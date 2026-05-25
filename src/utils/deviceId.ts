@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 
 const DEVICE_ID_KEY = '@strive_device_id';
+const OAUTH_SIGNUPS_KEY = '@strive_oauth_signups';
 
 function uuidV4(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -51,6 +52,34 @@ export async function getOrCreateDeviceId(): Promise<string> {
  *   - 'invalid_device_id'            : device_id < 16 chars
  *   - 'signup_quota_check_failed'    : RPC injoignable (réseau, Supabase down)
  */
+/**
+ * Quota OAuth (Apple / Google) : max 5 créations de compte par device par
+ * fenêtre rolling de 30 jours. Compteur local AsyncStorage — reset si
+ * l'app est désinstallée (acceptable, même limite que le device_id email).
+ *
+ * Appelée APRÈS `signInWithIdToken` uniquement si le user vient d'être
+ * créé (created_at < 60s). Les logins sur un compte existant ne sont
+ * jamais bloqués.
+ */
+export async function enforceOAuthSignupQuota(): Promise<void> {
+  const raw = await AsyncStorage.getItem(OAUTH_SIGNUPS_KEY);
+  const signups: number[] = raw ? JSON.parse(raw) : [];
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recent = signups.filter(ts => ts > thirtyDaysAgo);
+  if (recent.length >= 5) {
+    throw new Error('device_signup_limit_reached');
+  }
+}
+
+export async function registerOAuthSignup(): Promise<void> {
+  const raw = await AsyncStorage.getItem(OAUTH_SIGNUPS_KEY);
+  const signups: number[] = raw ? JSON.parse(raw) : [];
+  signups.push(Date.now());
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const cleaned = signups.filter(ts => ts > thirtyDaysAgo);
+  await AsyncStorage.setItem(OAUTH_SIGNUPS_KEY, JSON.stringify(cleaned));
+}
+
 export async function enforceSignupQuota(): Promise<void> {
   const deviceId = await getOrCreateDeviceId();
   const { error } = await supabase.rpc('check_and_register_device_signup', {
