@@ -183,16 +183,28 @@ const AuthScreen = () => {
   const handleAppleLogin = async () => {
     setLoading(true);
     try {
+      const rawNonce = generateSecureNonce();
+      const hashedNonce = sha256(rawNonce);
       const appleAuthRequestResponse = await appleAuth.performRequest({
         requestedOperation: appleAuth.Operation.LOGIN,
         requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
+        nonce: hashedNonce,
       });
-      const { identityToken } = appleAuthRequestResponse;
+      const { identityToken, fullName } = appleAuthRequestResponse;
       if (identityToken) {
-        const { error } = await supabase.auth.signInWithIdToken({ provider: 'apple', token: identityToken });
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'apple',
+          token: identityToken,
+          nonce: rawNonce,
+        });
         if (error) throw error;
+        const displayName = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(' ');
+        if (displayName) {
+          await supabase.auth.updateUser({ data: { full_name: displayName } });
+        }
       }
     } catch (error: any) {
+      if (error?.code === appleAuth.Error.CANCELED) return;
       showToast({ type: 'error', title: t('auth.errors.appleTitle'), message: error.message });
     } finally {
       setLoading(false);
