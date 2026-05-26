@@ -448,9 +448,9 @@
       "seeVerdict": "See verdict"
     },
     "iosInstall": {
-      "step1t": "Get Shortcut", "step1s": "Tap the button below",
-      "step2t": "Add Shortcut", "step2s": "Confirm in the Shortcuts app",
-      "step3t": "Come back here", "step3s": "Tap Continue",
+      "step1t": "Tap \"Get Shortcut\" below",
+      "step2t": "Tap \"Add Shortcut\" in the Shortcuts app",
+      "step3t": "Come back here and tap Continue",
       "cta": "Get Shortcut",
       "warning": "You need to install the shortcut first."
     },

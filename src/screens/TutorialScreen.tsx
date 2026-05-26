@@ -220,26 +220,24 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS 2 — Install Shortcut (title + subtitle steps) */}
+          {/* Slide iOS 2 — Install Shortcut (single-line steps like ref) */}
           {isIosInstall ? (
             <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
-              <View style={styles.triggerHeroCircle}>
-                <MaterialCommunityIcons name="lightning-bolt" size={32} color={item.color} />
-              </View>
-
-              <View style={styles.triggerStepsList}>
+              <View style={styles.installStepsCard}>
                 {[1, 2, 3].map(n => (
-                  <View key={n} style={styles.triggerStepRow}>
-                    <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                      <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>{n}</Text>
+                  <View key={n} style={styles.installStepRow}>
+                    <View style={[styles.installStepNum, { backgroundColor: item.color }]}>
+                      <Text style={styles.installStepNumTxt}>{n}</Text>
                     </View>
-                    <View style={styles.triggerStepTexts}>
-                      <Text style={styles.triggerStepTitle}>{t(`tutorial.iosInstall.step${n}t`)}</Text>
-                      <Text style={styles.triggerStepSub}>{t(`tutorial.iosInstall.step${n}s`)}</Text>
-                    </View>
+                    <Text style={styles.installStepTxt}>{t(`tutorial.iosInstall.step${n}t`)}</Text>
                   </View>
                 ))}
               </View>
+
+              <Text style={styles.installWarning}>
+                <MaterialCommunityIcons name="alert" size={13} color="#FFB300" />
+                {'  '}{t('tutorial.iosInstall.warning')}
+              </Text>
 
               <TouchableOpacity
                 style={[styles.iosBigCta, { backgroundColor: item.color }]}
@@ -393,29 +391,34 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Step Done — Quick Reference vertical with animations */}
+          {/* Step Done — Quick Reference horizontal (like Trip Identifier) */}
           {isDone ? (
             <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              <Text style={styles.doneSubtitle}>{t('tutorial.quickRef.subtitle', 'Référence rapide')}</Text>
-
-              {[
-                { icon: 'cellphone-screenshot', iconLib: 'mci', color: '#4FC3F7', label: t('tutorial.quickRef.screenshot'), num: '1' },
-                { icon: 'gesture-double-tap', iconLib: 'mci', color: colors.primary, label: t('tutorial.quickRef.doubleTap'), num: '2' },
-                { icon: 'check-circle', iconLib: 'feather', color: '#FF8A65', label: t('tutorial.quickRef.seeVerdict'), num: '3' },
-              ].map((step, si) => (
-                <View key={si} style={styles.quickRefStep}>
-                  <View style={[styles.quickRefNum, { backgroundColor: step.color + '18', borderColor: step.color + '40' }]}>
-                    <Text style={[styles.quickRefNumTxt, { color: step.color }]}>{step.num}</Text>
+              <View style={styles.qrCard}>
+                <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
+                <View style={styles.qrRow}>
+                  <View style={styles.qrItem}>
+                    <View style={[styles.qrIcon, { backgroundColor: '#4FC3F7' + '20' }]}>
+                      <MaterialCommunityIcons name="cellphone-screenshot" size={20} color="#4FC3F7" />
+                    </View>
+                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.screenshot')}</Text>
                   </View>
-                  <View style={[styles.quickRefStepIcon, { backgroundColor: step.color + '15' }]}>
-                    {step.iconLib === 'mci'
-                      ? <MaterialCommunityIcons name={step.icon as any} size={22} color={step.color} />
-                      : <Feather name={step.icon as any} size={22} color={step.color} />
-                    }
+                  <Text style={styles.qrArrow}>›</Text>
+                  <View style={styles.qrItem}>
+                    <View style={[styles.qrIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <MaterialCommunityIcons name="gesture-double-tap" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.doubleTap')}</Text>
                   </View>
-                  <Text style={styles.quickRefStepTxt}>{step.label}</Text>
+                  <Text style={styles.qrArrow}>›</Text>
+                  <View style={styles.qrItem}>
+                    <View style={[styles.qrIcon, { backgroundColor: '#FF8A65' + '20' }]}>
+                      <Feather name="zap" size={18} color="#FF8A65" />
+                    </View>
+                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.seeVerdict')}</Text>
+                  </View>
                 </View>
-              ))}
+              </View>
             </Animated.View>
           ) : null}
 
@@ -1238,43 +1241,89 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Quick Reference (done step) — vertical list
-  quickRefStep: {
+  // Install shortcut — single-line steps in a card
+  installStepsCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+    gap: 16,
+    marginBottom: 16,
+  },
+  installStepRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 10,
   },
-  quickRefNum: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
+  installStepNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickRefNumTxt: {
+  installStepNumTxt: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '800',
   },
-  quickRefStepIcon: {
+  installStepTxt: {
+    flex: 1,
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  installWarning: {
+    color: '#FFB300',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+
+  // Quick Reference — horizontal card (done step)
+  qrCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+    gap: 14,
+  },
+  qrCardTitle: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  qrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  qrItem: {
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  qrIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickRefStepTxt: {
-    flex: 1,
-    color: colors.textMain,
-    fontSize: 15,
+  qrLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
     fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  qrArrow: {
+    color: colors.textDimmed,
+    fontSize: 22,
+    fontWeight: '300',
+    marginBottom: 20,
   },
 
   footer: {

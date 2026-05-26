@@ -448,9 +448,9 @@
       "seeVerdict": "Voir le verdict"
     },
     "iosInstall": {
-      "step1t": "Obtenir le raccourci", "step1s": "Tapez le bouton ci-dessous",
-      "step2t": "Ajouter le raccourci", "step2s": "Confirmez dans l'app Raccourcis",
-      "step3t": "Revenir ici", "step3s": "Appuyez sur Continuer",
+      "step1t": "Tapez « Obtenir le raccourci » ci-dessous",
+      "step2t": "Tapez « Ajouter le raccourci » dans l'app Raccourcis",
+      "step3t": "Revenez ici et appuyez sur Continuer",
       "cta": "Obtenir le raccourci",
       "warning": "Vous devez d'abord installer le raccourci."
     },
