@@ -11,6 +11,7 @@ class ScanBridgeModule: RCTEventEmitter {
 
   private var isActive = false
   private var hasListeners = false
+  private var pendingLiveActivityPayload: [String: Any]?
 
   // MARK: - App Group (partage données avec Share Extension)
 
@@ -87,6 +88,24 @@ class ScanBridgeModule: RCTEventEmitter {
     if isActive {
       handleShareExtensionResult()
     }
+    // Démarre le Live Activity en attente quand l'app revient au foreground
+    if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
+      pendingLiveActivityPayload = nil
+      let existing = Activity<StriveActivityAttributes>.activities
+      if existing.isEmpty {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+          LiveActivityManager.shared.start(
+            platform: (payload["platform"] as? String) ?? "UNKNOWN",
+            fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+            hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+            kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+            distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+            durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+            verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+          )
+        }
+      }
+    }
   }
 
   // MARK: - Lecture résultat Share Extension
@@ -112,24 +131,41 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.removeObject(forKey: Self.scanResultKey)
     defaults.removeObject(forKey: Self.scanTimestampKey)
 
-    let laDebug = defaults.string(forKey: "liveActivityDebug") ?? "not-set"
-    let laDebugTs = defaults.double(forKey: "liveActivityDebugTs")
-    let laFromResult = (result["_liveActivityDebug"] as? String) ?? "not-in-result"
-    defaults.removeObject(forKey: "liveActivityDebug")
-    defaults.removeObject(forKey: "liveActivityDebugTs")
-
+    // Tente de démarrer le Live Activity depuis l'app principale si la
+    // Share Extension n'a pas réussi (pas d'activité en cours).
     if #available(iOS 16.2, *) {
-      let authEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
-      SentrySDK.capture(message: "LiveActivity debug from ShareExtension") { scope in
+      let existing = Activity<StriveActivityAttributes>.activities
+      let shareExtStatus = (result["_liveActivityDebug"] as? String) ?? "unknown"
+      NSLog("[Strive:Bridge] ShareExt LA status=%@, existing activities=%d, appState=%d",
+            shareExtStatus, existing.count, UIApplication.shared.applicationState.rawValue)
+
+      if existing.isEmpty {
+        let payload = result
+        let appState = UIApplication.shared.applicationState
+        if appState == .active {
+          LiveActivityManager.shared.start(
+            platform: (payload["platform"] as? String) ?? "UNKNOWN",
+            fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+            hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+            kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+            distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+            durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+            verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+          )
+        } else {
+          pendingLiveActivityPayload = payload
+        }
+      }
+
+      SentrySDK.capture(message: "LiveActivity debug") { scope in
         scope.setLevel(.info)
         scope.setTag(value: "live-activity", key: "feature")
-        scope.setTag(value: laFromResult, key: "share-ext-result")
+        scope.setTag(value: shareExtStatus, key: "share-ext-result")
         scope.setContext(value: [
-          "fromAppGroup": laDebug,
-          "fromResult": laFromResult,
-          "shareExtTimestamp": "\(laDebugTs)",
-          "mainAppAuthEnabled": "\(authEnabled)",
-          "iosVersion": UIDevice.current.systemVersion,
+          "shareExtStatus": shareExtStatus,
+          "existingActivities": "\(existing.count)",
+          "appState": "\(UIApplication.shared.applicationState.rawValue)",
+          "mainAppAuthEnabled": "\(ActivityAuthorizationInfo().areActivitiesEnabled)",
         ], key: "live-activity-debug")
       }
     }
