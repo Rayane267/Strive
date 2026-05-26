@@ -62,9 +62,9 @@ const PREVIEW_DATA = [
 ];
 
 const PRESETS = [
-  { key: 'casual', hourly: 30, km: 1.0 },
-  { key: 'standard', hourly: 40, km: 1.50 },
-  { key: 'premium', hourly: 50, km: 2.0 },
+  { key: 'casual', hourly: 20, km: 0.80 },
+  { key: 'standard', hourly: 30, km: 1.0 },
+  { key: 'premium', hourly: 40, km: 1.50 },
 ];
 
 const TutorialScreen = () => {
@@ -77,8 +77,8 @@ const TutorialScreen = () => {
   const [iosTrigger, setIosTrigger] = useState<IosTrigger>('assistive');
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
   const [previewIdx, setPreviewIdx] = useState(0);
-  const [minHourly, setMinHourly] = useState(40);
-  const [minKm, setMinKm] = useState(1.50);
+  const [minHourly, setMinHourly] = useState(30);
+  const [minKm, setMinKm] = useState(1.0);
   const [includePickup, setIncludePickup] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<string | null>('standard');
 
