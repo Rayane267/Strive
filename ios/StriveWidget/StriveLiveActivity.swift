@@ -12,44 +12,76 @@ struct StriveLiveActivity: Widget {
         .activitySystemActionForegroundColor(.white)
 
     } dynamicIsland: { context in
+      let isScanning = context.state.platform == "SCANNING"
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(context.state.platform.capitalized)
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundColor(.white.opacity(0.75))
-            HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
+          if isScanning {
+            HStack(spacing: 6) {
+              ProgressView()
+                .tint(.white)
+              Text("Analyse…")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.75))
+            }
+            .padding(.leading, 4)
+          } else {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+              Text(context.state.platform.capitalized)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.75))
+              HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
+            }
+            .padding(.leading, 4)
           }
-          .padding(.leading, 4)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          HStack(spacing: 8) {
-            FarePill(fare: context.state.fare, level: context.state.verdictLevel)
-            KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
+          if !isScanning {
+            HStack(spacing: 8) {
+              FarePill(fare: context.state.fare, level: context.state.verdictLevel)
+              KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
+            }
+            .padding(.trailing, 4)
           }
-          .padding(.trailing, 4)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          RouteRow(
-            distanceKm: context.state.distanceKm,
-            durationMin: context.state.durationMin,
-            level: context.state.verdictLevel
-          )
-          .padding(.horizontal, 4)
-          .padding(.top, 4)
+          if !isScanning {
+            RouteRow(
+              distanceKm: context.state.distanceKm,
+              durationMin: context.state.durationMin,
+              level: context.state.verdictLevel
+            )
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
+          }
         }
       } compactLeading: {
-        Image(systemName: "car.fill")
-          .foregroundColor(verdictColor(context.state.verdictLevel))
+        if isScanning {
+          ProgressView()
+            .tint(.white)
+        } else {
+          Image(systemName: "car.fill")
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+        }
       } compactTrailing: {
-        Text("€\(Int(context.state.hourlyRate))/h")
-          .font(.system(size: 14, weight: .bold))
-          .foregroundColor(verdictColor(context.state.verdictLevel))
+        if isScanning {
+          Text("…")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.white.opacity(0.6))
+        } else {
+          Text("€\(Int(context.state.hourlyRate))/h")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+        }
       } minimal: {
-        Image(systemName: verdictIcon(context.state.verdictLevel))
-          .foregroundColor(verdictColor(context.state.verdictLevel))
+        if isScanning {
+          ProgressView()
+            .tint(.white)
+        } else {
+          Image(systemName: verdictIcon(context.state.verdictLevel))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+        }
       }
-      .keylineTint(verdictColor(context.state.verdictLevel))
+      .keylineTint(isScanning ? .white : verdictColor(context.state.verdictLevel))
     }
   }
 }
@@ -61,26 +93,37 @@ private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
 
   var body: some View {
+    let isScanning = state.platform == "SCANNING"
     VStack(spacing: 12) {
-      HStack(alignment: .center, spacing: 10) {
-        Text(state.platform.capitalized)
-          .font(.system(size: 15, weight: .semibold))
-          .foregroundColor(.white.opacity(0.75))
+      if isScanning {
+        HStack(spacing: 8) {
+          ProgressView()
+            .tint(.white)
+          Text("Analyse en cours…")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white.opacity(0.75))
+        }
+      } else {
+        HStack(alignment: .center, spacing: 10) {
+          Text(state.platform.capitalized)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white.opacity(0.75))
 
-        HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
+          HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
 
-        Spacer(minLength: 6)
+          Spacer(minLength: 6)
 
-        FarePill(fare: state.fare, level: state.verdictLevel)
+          FarePill(fare: state.fare, level: state.verdictLevel)
 
-        KmRateText(value: state.kmRate, level: state.verdictLevel)
+          KmRateText(value: state.kmRate, level: state.verdictLevel)
+        }
+
+        RouteRow(
+          distanceKm: state.distanceKm,
+          durationMin: state.durationMin,
+          level: state.verdictLevel
+        )
       }
-
-      RouteRow(
-        distanceKm: state.distanceKm,
-        durationMin: state.durationMin,
-        level: state.verdictLevel
-      )
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 12)

@@ -110,24 +110,6 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.removeObject(forKey: Self.scanResultKey)
     defaults.removeObject(forKey: Self.scanTimestampKey)
 
-    // Fallback Live Activity : la Share Extension peut échouer à démarrer
-    // l'activité (pas de foreground visibility). Le manager retry avec backoff
-    // si l'erreur visibility persiste.
-    if #available(iOS 16.2, *) {
-      let payload = result
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-        LiveActivityManager.shared.start(
-          platform: (payload["platform"] as? String) ?? "UNKNOWN",
-          fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
-          hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
-          kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
-          distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
-          durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
-          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
-        )
-      }
-    }
-
     sendEvent(withName: "onScanResult", body: result)
   }
 

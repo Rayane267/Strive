@@ -381,23 +381,35 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
-    // L'UI reste en loading (spinner + "Analyse en cours…") jusqu'à ce que
-    // TomTom ait répondu — ou que le fallback OCR/Gemini ait été appliqué.
-    // Évite de flasher des valeurs provisoires qui changeraient juste après.
+    // Démarre la Live Activity IMMÉDIATEMENT pendant que l'extension est
+    // visible — Activity.request() exige la foreground visibility et on la
+    // perd dès que le callback async revient (extension en cours de dismiss).
+    // Les valeurs placeholder seront remplacées par update() après TomTom.
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.start(
+        platform: "SCANNING",
+        fare: 0,
+        hourlyRate: 0,
+        kmRate: 0,
+        distanceKm: 0,
+        durationMin: 0,
+        verdictLevel: 1
+      )
+    }
+
     ScanProcessor.shared.process(image: image) { [weak self] finalResult in
       DispatchQueue.main.async {
         guard let self = self else { return }
         guard let result = finalResult else {
-          // OCR a échoué ou pas de course détectée → fallback Gemini
           self.fallbackToGemini(image: image)
           return
         }
         self.showResult(from: result)
         self.saveSharedResult(result)
 
-        // Déclenche la Live Activity sur iOS 16.2+ avec les valeurs finales
+        // Met à jour la Live Activity avec les valeurs finales
         if #available(iOS 16.2, *) {
-          LiveActivityManager.shared.start(
+          LiveActivityManager.shared.update(
             platform: result.scan.platform.rawValue,
             fare: result.scan.fare,
             hourlyRate: result.hourlyRate,
