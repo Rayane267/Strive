@@ -13,7 +13,7 @@ struct StriveLiveActivity: Widget {
 
     } dynamicIsland: { context in
       let isScanning = context.state.platform == "SCANNING"
-      DynamicIsland {
+      return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           if isScanning {
             HStack(spacing: 6) {
