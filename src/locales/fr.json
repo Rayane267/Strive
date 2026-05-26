@@ -431,8 +431,11 @@
       "casual": "Débutant",
       "standard": "Standard",
       "premium": "Premium",
+      "presetHint": "Choisissez un preset ou personnalisez ci-dessous",
       "hourly": "Minimum €/h",
+      "hourlyHint": "Gains horaires nets. La plupart des chauffeurs visent 25-40€/h.",
       "kmRate": "Minimum €/km",
+      "kmRateHint": "Couvre l'essence + l'usure. Le barème fiscal est ~0.60€/km, la plupart visent 1-2€/km.",
       "includePickup": "Inclure le trajet d'approche"
     },
     "quickRef": {

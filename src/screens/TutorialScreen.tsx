@@ -62,9 +62,9 @@ const PREVIEW_DATA = [
 ];
 
 const PRESETS = [
-  { key: 'casual', hourly: 20, km: 1.0 },
-  { key: 'standard', hourly: 25, km: 1.25 },
-  { key: 'premium', hourly: 35, km: 1.50 },
+  { key: 'casual', hourly: 30, km: 1.0 },
+  { key: 'standard', hourly: 40, km: 1.50 },
+  { key: 'premium', hourly: 50, km: 2.0 },
 ];
 
 const TutorialScreen = () => {
@@ -77,8 +77,8 @@ const TutorialScreen = () => {
   const [iosTrigger, setIosTrigger] = useState<IosTrigger>('assistive');
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
   const [previewIdx, setPreviewIdx] = useState(0);
-  const [minHourly, setMinHourly] = useState(25);
-  const [minKm, setMinKm] = useState(1.25);
+  const [minHourly, setMinHourly] = useState(40);
+  const [minKm, setMinKm] = useState(1.50);
   const [includePickup, setIncludePickup] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<string | null>('standard');
 
@@ -339,6 +339,8 @@ const TutorialScreen = () => {
                 })}
               </View>
 
+              <Text style={styles.presetHint}>{t('tutorial.minimums.presetHint')}</Text>
+
               <View style={styles.sliderBlock}>
                 <View style={styles.sliderHeader}>
                   <Text style={styles.sliderLabel}>{t('tutorial.minimums.hourly')}</Text>
@@ -353,6 +355,7 @@ const TutorialScreen = () => {
                   maximumTrackTintColor="rgba(255,255,255,0.08)"
                   thumbTintColor={colors.primary}
                 />
+                <Text style={styles.sliderHint}>{t('tutorial.minimums.hourlyHint')}</Text>
               </View>
 
               <View style={styles.sliderBlock}>
@@ -369,6 +372,7 @@ const TutorialScreen = () => {
                   maximumTrackTintColor="rgba(255,255,255,0.08)"
                   thumbTintColor={colors.primary}
                 />
+                <Text style={styles.sliderHint}>{t('tutorial.minimums.kmRateHint')}</Text>
               </View>
 
               <View style={styles.pickupRow}>
@@ -1097,6 +1101,14 @@ const styles = StyleSheet.create({
   },
   presetSubActive: { color: colors.primary + 'AA' },
 
+  presetHint: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 18,
+    fontStyle: 'italic',
+  },
+
   // Sliders
   sliderBlock: {
     marginBottom: 14,
@@ -1119,6 +1131,12 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 36,
+  },
+  sliderHint: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: -2,
   },
 
   // Pickup toggle

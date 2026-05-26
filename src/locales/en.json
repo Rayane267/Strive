@@ -431,8 +431,11 @@
       "casual": "Casual",
       "standard": "Standard",
       "premium": "Premium",
+      "presetHint": "Tap a preset or customize below",
       "hourly": "Minimum €/hr",
+      "hourlyHint": "Net hourly earnings. Most drivers aim for €25-40/hr.",
       "kmRate": "Minimum €/km",
+      "kmRateHint": "Covers gas + wear. Tax rate is ~€0.60/km, most drivers aim for €1-2/km.",
       "includePickup": "Include pickup in calculations"
     },
     "quickRef": {
