@@ -220,27 +220,23 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS 2 — Install Shortcut */}
+          {/* Slide iOS 2 — Install Shortcut (title + subtitle steps) */}
           {isIosInstall ? (
             <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
-              <SafeGradient
-                colors={[item.color + '22', item.color + '06']}
-                style={styles.iosHeroCard}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View style={[styles.iosHeroIconWrap, { backgroundColor: item.color + '20', borderColor: item.color + '55' }]}>
-                  <MaterialCommunityIcons name="lightning-bolt" size={30} color={item.color} />
-                </View>
-              </SafeGradient>
+              <View style={styles.triggerHeroCircle}>
+                <MaterialCommunityIcons name="lightning-bolt" size={32} color={item.color} />
+              </View>
 
-              <View style={styles.iosStepsList}>
+              <View style={styles.triggerStepsList}>
                 {[1, 2, 3].map(n => (
-                  <View key={n} style={styles.iosStepRow}>
-                    <View style={[styles.iosStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                      <Text style={[styles.iosStepNumTxt, { color: item.color }]}>{n}</Text>
+                  <View key={n} style={styles.triggerStepRow}>
+                    <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
+                      <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>{n}</Text>
                     </View>
-                    <Text style={styles.iosStepTxt}>{t(`tutorial.iosInstall.step${n}`)}</Text>
+                    <View style={styles.triggerStepTexts}>
+                      <Text style={styles.triggerStepTitle}>{t(`tutorial.iosInstall.step${n}t`)}</Text>
+                      <Text style={styles.triggerStepSub}>{t(`tutorial.iosInstall.step${n}s`)}</Text>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -808,35 +804,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Steps list (install + trigger)
-  iosStepsList: {
-    gap: 14,
-    marginBottom: 18,
-  },
-  iosStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  iosStepNum: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iosStepNumTxt: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  iosStepTxt: {
-    flex: 1,
-    color: colors.textMain,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
+  // (old step styles removed — now using triggerStep* pattern)
 
   // ── Install hero card ──
   iosHeroCard: {
