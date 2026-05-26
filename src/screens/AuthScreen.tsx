@@ -190,11 +190,12 @@ const AuthScreen = () => {
               </TouchableOpacity>
             )}
 
-            {/* Facebook — iOS + Android */}
+            {/* Facebook — iOS + Android (à activer après config Facebook Developer)
             <TouchableOpacity style={styles.btnFacebook} onPress={handleFacebookLogin} activeOpacity={0.85}>
               <FontAwesome name="facebook" size={18} color="#fff" />
               <Text style={styles.btnFacebookText}>{t('auth.continueFacebook', 'Continuer avec Facebook')}</Text>
             </TouchableOpacity>
+            */}
           </>
         )}
 
