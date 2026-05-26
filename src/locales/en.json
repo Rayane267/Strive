@@ -457,29 +457,28 @@
     "step3": { "title": "Accept or decline instantly", "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline." },
     "step3_ios": { "title": "Choose your trigger", "desc": "How do you want to launch the shortcut from Uber / Bolt / Heetch?" },
     "iosTrigger": {
+      "recommended": "★ Recommended — Fastest option",
       "backTap": {
         "label": "Back Tap",
-        "desc": "Double or triple-tap the back of your iPhone. Invisible gesture, works through a thin case.",
-        "preview": "Tap the back",
-        "step1": "Open Settings → Accessibility → Touch",
-        "step2": "Tap \"Back Tap\" then \"Double Tap\"",
-        "step3": "Pick the Strive shortcut from the list"
+        "hero": "Tap the back",
+        "step1t": "Open Settings", "step1s": "Settings → Accessibility → Touch",
+        "step2t": "Back Tap", "step2s": "Tap \"Double Tap\"",
+        "step3t": "Pick shortcut", "step3s": "Select Strive from the list"
       },
       "assistive": {
-        "label": "AssistiveTouch",
-        "desc": "On-screen floating button, always visible. One tap to analyze.",
-        "preview": "Floating button",
-        "step1": "Open Settings → Accessibility → Touch",
-        "step2": "Enable AssistiveTouch (toggle at the top)",
-        "step3": "Custom Actions → Single Tap → pick the Strive shortcut"
+        "label": "Assistive",
+        "hero": "Floating button",
+        "step1t": "Open Settings", "step1s": "Settings → Accessibility → Touch",
+        "step2t": "Enable AssistiveTouch", "step2s": "Toggle at the top of the page",
+        "step3t": "Custom Actions", "step3s": "Single-Tap",
+        "step4t": "Add \"Strive\"", "step4s": "Select from Shortcuts list"
       },
       "homeScreen": {
         "label": "Home Screen",
-        "desc": "An icon on your Home Screen. Tap it to launch the analysis.",
-        "preview": "App icon",
-        "step1": "Open the Shortcuts app",
-        "step2": "Long-press your shortcut → Details",
-        "step3": "\"Add to Home Screen\""
+        "hero": "App icon",
+        "step1t": "Open Shortcuts", "step1s": "Apple's Shortcuts app",
+        "step2t": "Hold the shortcut", "step2s": "Long press → Details",
+        "step3t": "Add to Home Screen", "step3s": "\"Add to Home Screen\""
       },
       "cta": "Open Accessibility settings",
       "doneCta": "I've set it up"

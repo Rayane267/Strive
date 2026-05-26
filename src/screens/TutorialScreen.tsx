@@ -423,10 +423,9 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS 3 — Choose Trigger */}
+          {/* Slide iOS 3 — Choose Trigger (inspired by Trip Identifier) */}
           {isIosTrigger ? (
             <Animated.View style={[styles.iosTriggerBlock, { opacity }]}>
-              {/* iOS-style segmented control */}
               <View style={styles.iosSegmented}>
                 {(['backTap', 'assistive', 'homeScreen'] as IosTrigger[]).map(tr => {
                   const active = iosTrigger === tr;
@@ -445,41 +444,42 @@ const TutorialScreen = () => {
                 })}
               </View>
 
-              {/* Content container — hauteur fixe pour éviter les sauts */}
-              <View style={styles.iosTriggerContent}>
-                <View style={[styles.iosTriggerHero, { borderColor: item.color + '30' }]}>
-                  <SafeGradient
-                    colors={[item.color + '30', item.color + '0A']}
-                    style={styles.iosTriggerHeroIcon}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  >
-                    <MaterialCommunityIcons
-                      name={
-                        iosTrigger === 'backTap' ? 'gesture-double-tap' :
-                        iosTrigger === 'assistive' ? 'gesture-tap-hold' :
-                        'apps'
-                      }
-                      size={30}
-                      color={item.color}
-                    />
-                  </SafeGradient>
-                  <Text style={styles.iosTriggerHeroTxt} numberOfLines={2}>
-                    {t(`tutorial.iosTrigger.${iosTrigger}.desc`)}
-                  </Text>
-                </View>
+              {iosTrigger === 'assistive' && (
+                <Text style={styles.triggerRecommended}>{t('tutorial.iosTrigger.recommended')}</Text>
+              )}
 
-                <View style={styles.iosStepsList}>
-                  {[1, 2, 3].map(n => (
-                    <View key={n} style={styles.iosStepRow}>
-                      <View style={[styles.iosStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                        <Text style={[styles.iosStepNumTxt, { color: item.color }]}>{n}</Text>
+              <View style={styles.iosTriggerContent}>
+                <View style={styles.triggerHeroCircle}>
+                  <MaterialCommunityIcons
+                    name={
+                      iosTrigger === 'backTap' ? 'gesture-double-tap' :
+                      iosTrigger === 'assistive' ? 'gesture-tap-hold' :
+                      'apps'
+                    }
+                    size={32}
+                    color={item.color}
+                  />
+                </View>
+                <Text style={styles.triggerHeroLabel}>{t(`tutorial.iosTrigger.${iosTrigger}.hero`)}</Text>
+
+                <View style={styles.triggerStepsList}>
+                  {[1, 2, 3, 4].map(n => {
+                    const titleKey = `tutorial.iosTrigger.${iosTrigger}.step${n}t`;
+                    const subKey = `tutorial.iosTrigger.${iosTrigger}.step${n}s`;
+                    const title = t(titleKey, { defaultValue: '' });
+                    if (!title) return null;
+                    return (
+                      <View key={n} style={styles.triggerStepRow}>
+                        <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
+                          <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>{n}</Text>
+                        </View>
+                        <View style={styles.triggerStepTexts}>
+                          <Text style={styles.triggerStepTitle}>{title}</Text>
+                          <Text style={styles.triggerStepSub}>{t(subKey)}</Text>
+                        </View>
                       </View>
-                      <Text style={styles.iosStepTxt} numberOfLines={2}>
-                        {t(`tutorial.iosTrigger.${iosTrigger}.step${n}`)}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </View>
 
@@ -1173,9 +1173,71 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Trigger content — hauteur fixe
+  // Trigger content
   iosTriggerContent: {
-    minHeight: 220,
+    alignItems: 'center',
+    minHeight: 240,
+  },
+  triggerRecommended: {
+    color: '#FFB300',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 14,
+    letterSpacing: 0.3,
+  },
+  triggerHeroCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  triggerHeroLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 18,
+  },
+  triggerStepsList: {
+    width: '100%',
+    gap: 10,
+    marginBottom: 16,
+  },
+  triggerStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  triggerStepNum: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  triggerStepNumTxt: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  triggerStepTexts: {
+    flex: 1,
+    gap: 1,
+  },
+  triggerStepTitle: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  triggerStepSub: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    fontWeight: '500',
   },
 
   // Done step

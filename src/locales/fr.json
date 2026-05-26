@@ -457,29 +457,28 @@
     "step3": { "title": "Acceptez ou refusez en un instant", "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser." },
     "step3_ios": { "title": "Choisissez votre déclencheur", "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?" },
     "iosTrigger": {
+      "recommended": "★ Recommandé — Le plus rapide",
       "backTap": {
         "label": "Arrière",
-        "desc": "Double ou triple tap au dos de l'iPhone. Geste invisible, marche à travers une coque fine.",
-        "preview": "Touchez le dos de l'iPhone",
-        "step1": "Ouvrir Réglages → Accessibilité → Toucher",
-        "step2": "Tapez sur « Toucher l'arrière » puis « Toucher deux fois »",
-        "step3": "Choisissez le raccourci Strive dans la liste"
+        "hero": "Toucher l'arrière",
+        "step1t": "Ouvrir Réglages", "step1s": "Réglages → Accessibilité → Toucher",
+        "step2t": "Toucher l'arrière", "step2s": "Tapez « Toucher deux fois »",
+        "step3t": "Choisir le raccourci", "step3s": "Sélectionnez Strive dans la liste"
       },
       "assistive": {
         "label": "Assistive",
-        "desc": "Bouton flottant à l'écran, toujours visible. Un tap pour analyser.",
-        "preview": "Bouton flottant",
-        "step1": "Ouvrir Réglages → Accessibilité → Toucher",
-        "step2": "Activez AssistiveTouch (interrupteur en haut)",
-        "step3": "Actions personnalisées → Toucher unique → choisir le raccourci Strive"
+        "hero": "Bouton flottant",
+        "step1t": "Ouvrir Réglages", "step1s": "Réglages → Accessibilité → Toucher",
+        "step2t": "Activer AssistiveTouch", "step2s": "Interrupteur en haut de la page",
+        "step3t": "Actions personnalisées", "step3s": "Toucher unique",
+        "step4t": "Ajouter « Strive »", "step4s": "Sélectionnez dans la liste des raccourcis"
       },
       "homeScreen": {
         "label": "Accueil",
-        "desc": "Une icône sur votre écran d'accueil. Tapez-la pour lancer l'analyse.",
-        "preview": "Icône d'app",
-        "step1": "Ouvrez l'app Raccourcis",
-        "step2": "Touchez et maintenez votre raccourci → Détails",
-        "step3": "« Ajouter à l'écran d'accueil »"
+        "hero": "Icône d'app",
+        "step1t": "Ouvrir Raccourcis", "step1s": "L'app Raccourcis d'Apple",
+        "step2t": "Maintenir le raccourci", "step2s": "Appui long → Détails",
+        "step3t": "Ajouter à l'écran", "step3s": "« Ajouter à l'écran d'accueil »"
       },
       "cta": "Ouvrir les réglages d'Accessibilité",
       "doneCta": "C'est configuré"
