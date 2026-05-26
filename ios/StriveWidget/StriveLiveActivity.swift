@@ -16,31 +16,31 @@ struct StriveLiveActivity: Widget {
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           if isScanning {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
               ProgressView()
                 .tint(.white)
               Text("Analyse…")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white.opacity(0.75))
             }
-            .padding(.leading, 4)
+            .padding(.leading, 6)
           } else {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
               Text(context.state.platform.capitalized)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white.opacity(0.75))
               HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
             }
-            .padding(.leading, 4)
+            .padding(.leading, 6)
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
           if !isScanning {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
               KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
             }
-            .padding(.trailing, 4)
+            .padding(.trailing, 6)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
@@ -50,8 +50,9 @@ struct StriveLiveActivity: Widget {
               durationMin: context.state.durationMin,
               level: context.state.verdictLevel
             )
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
+            .padding(.horizontal, 6)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
           }
         }
       } compactLeading: {
@@ -125,8 +126,8 @@ private struct LockScreenView: View {
         )
       }
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 12)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
   }
 }
 
@@ -139,10 +140,10 @@ private struct HourlyRate: View {
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
       Text("€\(Int(value))")
-        .font(.system(size: 26, weight: .heavy))
+        .font(.system(size: 28, weight: .heavy))
         .foregroundColor(.white)
       Text("/h")
-        .font(.system(size: 13, weight: .semibold))
+        .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.white.opacity(0.55))
     }
   }
@@ -154,10 +155,10 @@ private struct FarePill: View {
   let level: Int
   var body: some View {
     Text(String(format: "€%.0f", fare))
-      .font(.system(size: 13, weight: .bold))
+      .font(.system(size: 14, weight: .bold))
       .foregroundColor(.white)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 4)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 5)
       .background(
         Capsule().fill(verdictColor(level).opacity(0.28))
       )
@@ -172,12 +173,12 @@ private struct KmRateText: View {
   let value: Double
   let level: Int
   var body: some View {
-    HStack(spacing: 3) {
+    HStack(spacing: 4) {
       Image(systemName: "arrow.up.right")
-        .font(.system(size: 11, weight: .heavy))
+        .font(.system(size: 12, weight: .heavy))
         .foregroundColor(verdictColor(level))
       Text(String(format: "€%.2f/km", value))
-        .font(.system(size: 13, weight: .semibold))
+        .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.white)
     }
   }
@@ -190,40 +191,40 @@ private struct RouteRow: View {
   let level: Int
 
   var body: some View {
-    HStack(alignment: .center, spacing: 10) {
+    HStack(alignment: .center, spacing: 12) {
       ZStack {
         Circle()
           .fill(verdictColor(level))
-          .frame(width: 26, height: 26)
+          .frame(width: 28, height: 28)
         Image(systemName: "car.fill")
-          .font(.system(size: 12, weight: .bold))
+          .font(.system(size: 13, weight: .bold))
           .foregroundColor(.black)
       }
 
       ZStack {
         Capsule()
           .fill(verdictColor(level).opacity(0.85))
-          .frame(height: 3)
+          .frame(height: 4)
         Circle()
           .fill(verdictColor(level))
-          .frame(width: 10, height: 10)
+          .frame(width: 11, height: 11)
       }
 
-      VStack(alignment: .trailing, spacing: 1) {
+      VStack(alignment: .trailing, spacing: 2) {
         Text("\(durationMin)min")
-          .font(.system(size: 14, weight: .bold))
+          .font(.system(size: 15, weight: .bold))
           .foregroundColor(.white)
         Text(String(format: "%.1fkm", distanceKm))
-          .font(.system(size: 11, weight: .semibold))
+          .font(.system(size: 12, weight: .semibold))
           .foregroundColor(.white.opacity(0.55))
       }
 
       ZStack {
         Circle()
           .fill(verdictColor(level))
-          .frame(width: 26, height: 26)
+          .frame(width: 28, height: 28)
         Image(systemName: verdictIcon(level))
-          .font(.system(size: 12, weight: .bold))
+          .font(.system(size: 13, weight: .bold))
           .foregroundColor(.black)
       }
     }
