@@ -13,7 +13,8 @@
     "start:prod": "ENVFILE=.env.production react-native start --reset-cache",
     "test": "jest",
     "postinstall": "patch-package",
-    "eas-build-pre-install": "node ./scripts/eas-build-pre-install.js"
+    "eas-build-pre-install": "node ./scripts/eas-build-pre-install.js",
+    "eas-build-post-install": "node ./scripts/eas-build-post-install.js"
   },
   "dependencies": {
     "@invertase/react-native-apple-authentication": "^2.5.1",
