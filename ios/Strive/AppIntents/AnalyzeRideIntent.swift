@@ -32,10 +32,14 @@ struct AnalyzeRideIntent: AppIntent {
       throw IntentError.invalidImage
     }
 
-    // Pipeline complet via ScanProcessor (OCR + parsing + TomTom). La Live
-    // Activity n'est démarrée qu'au callback final pour éviter de flasher des
-    // valeurs provisoires qui changeraient après TomTom. Wrappé dans un
-    // TaskGroup qui race contre un timeout global pour ne jamais hang le Shortcut.
+    // Start Live Activity immediately with placeholder (AppIntent may lose
+    // visibility once the async pipeline starts).
+    LiveActivityManager.shared.start(
+      platform: "SCANNING",
+      fare: 0, hourlyRate: 0, kmRate: 0,
+      distanceKm: 0, durationMin: 0, verdictLevel: 1
+    )
+
     let summary: String = try await withThrowingTaskGroup(of: String.self) { group in
       group.addTask {
         try await withCheckedThrowingContinuation { cont in
@@ -44,8 +48,7 @@ struct AnalyzeRideIntent: AppIntent {
               cont.resume(throwing: IntentError.noRideDetected)
               return
             }
-            // 1. Démarre la Live Activity directement avec les valeurs finales.
-            LiveActivityManager.shared.start(
+            LiveActivityManager.shared.update(
               platform: result.scan.platform.rawValue,
               fare: result.scan.fare,
               hourlyRate: result.hourlyRate,
@@ -55,7 +58,6 @@ struct AnalyzeRideIntent: AppIntent {
               verdictLevel: result.verdictLevel
             )
 
-            // 2. Persiste pour que l'app principale picke le résultat.
             self.saveResultForMainApp(result)
 
             let line = String(
