@@ -397,50 +397,29 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Step Done — Quick Reference with animated checkmark */}
+          {/* Step Done — Quick Reference vertical with animations */}
           {isDone ? (
             <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              <View style={styles.doneCheckWrap}>
-                <SafeGradient
-                  colors={[colors.primary + '30', colors.primary + '08']}
-                  style={styles.doneCheckOuter}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={styles.doneCheckInner}>
-                    <Feather name="check" size={36} color={colors.background} />
-                  </View>
-                </SafeGradient>
-              </View>
-
               <Text style={styles.doneSubtitle}>{t('tutorial.quickRef.subtitle', 'Référence rapide')}</Text>
 
-              <View style={styles.quickRefRow}>
-                <View style={styles.quickRefItem}>
-                  <View style={[styles.quickRefIcon, { backgroundColor: '#4FC3F7' + '20' }]}>
-                    <MaterialCommunityIcons name="cellphone-screenshot" size={22} color="#4FC3F7" />
+              {[
+                { icon: 'cellphone-screenshot', iconLib: 'mci', color: '#4FC3F7', label: t('tutorial.quickRef.screenshot'), num: '1' },
+                { icon: 'gesture-double-tap', iconLib: 'mci', color: colors.primary, label: t('tutorial.quickRef.doubleTap'), num: '2' },
+                { icon: 'check-circle', iconLib: 'feather', color: '#FF8A65', label: t('tutorial.quickRef.seeVerdict'), num: '3' },
+              ].map((step, si) => (
+                <View key={si} style={styles.quickRefStep}>
+                  <View style={[styles.quickRefNum, { backgroundColor: step.color + '18', borderColor: step.color + '40' }]}>
+                    <Text style={[styles.quickRefNumTxt, { color: step.color }]}>{step.num}</Text>
                   </View>
-                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.screenshot')}</Text>
-                </View>
-                <View style={styles.quickRefArrow}>
-                  <Feather name="arrow-right" size={14} color={colors.primary + '60'} />
-                </View>
-                <View style={styles.quickRefItem}>
-                  <View style={[styles.quickRefIcon, { backgroundColor: colors.primary + '20' }]}>
-                    <MaterialCommunityIcons name="gesture-double-tap" size={22} color={colors.primary} />
+                  <View style={[styles.quickRefStepIcon, { backgroundColor: step.color + '15' }]}>
+                    {step.iconLib === 'mci'
+                      ? <MaterialCommunityIcons name={step.icon as any} size={22} color={step.color} />
+                      : <Feather name={step.icon as any} size={22} color={step.color} />
+                    }
                   </View>
-                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.doubleTap')}</Text>
+                  <Text style={styles.quickRefStepTxt}>{step.label}</Text>
                 </View>
-                <View style={styles.quickRefArrow}>
-                  <Feather name="arrow-right" size={14} color={colors.primary + '60'} />
-                </View>
-                <View style={styles.quickRefItem}>
-                  <View style={[styles.quickRefIcon, { backgroundColor: '#FF8A65' + '20' }]}>
-                    <Feather name="check-circle" size={22} color="#FF8A65" />
-                  </View>
-                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.seeVerdict')}</Text>
-                </View>
-              </View>
+              ))}
             </Animated.View>
           ) : null}
 
@@ -1229,41 +1208,43 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Quick Reference (done step)
-  quickRefRow: {
+  // Quick Reference (done step) — vertical list
+  quickRefStep: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 18,
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.03)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 10,
   },
-  quickRefItem: {
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  quickRefArrow: {
-    width: 20,
-    alignItems: 'center',
-  },
-  quickRefIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+  quickRefNum: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickRefTxt: {
-    color: colors.textMuted,
-    fontSize: 10,
+  quickRefNumTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  quickRefStepIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickRefStepTxt: {
+    flex: 1,
+    color: colors.textMain,
+    fontSize: 15,
     fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 14,
   },
 
   footer: {

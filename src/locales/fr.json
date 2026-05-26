@@ -458,7 +458,7 @@
     "step3_ios": { "title": "Choisissez votre déclencheur", "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?" },
     "iosTrigger": {
       "backTap": {
-        "label": "Toucher l'arrière",
+        "label": "Arrière",
         "desc": "Double ou triple tap au dos de l'iPhone. Geste invisible, marche à travers une coque fine.",
         "preview": "Touchez le dos de l'iPhone",
         "step1": "Ouvrir Réglages → Accessibilité → Toucher",
@@ -466,7 +466,7 @@
         "step3": "Choisissez le raccourci Strive dans la liste"
       },
       "assistive": {
-        "label": "AssistiveTouch",
+        "label": "Assistive",
         "desc": "Bouton flottant à l'écran, toujours visible. Un tap pour analyser.",
         "preview": "Bouton flottant",
         "step1": "Ouvrir Réglages → Accessibilité → Toucher",
@@ -474,7 +474,7 @@
         "step3": "Actions personnalisées → Toucher unique → choisir le raccourci Strive"
       },
       "homeScreen": {
-        "label": "Écran d'accueil",
+        "label": "Accueil",
         "desc": "Une icône sur votre écran d'accueil. Tapez-la pour lancer l'analyse.",
         "preview": "Icône d'app",
         "step1": "Ouvrez l'app Raccourcis",
