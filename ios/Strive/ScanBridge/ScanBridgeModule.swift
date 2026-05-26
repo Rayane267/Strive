@@ -1,6 +1,8 @@
 import Foundation
 import UIKit
 import React
+import ActivityKit
+import Sentry
 
 /// Module natif React Native — pont entre JS et le scanner iOS.
 /// Équivalent de ScanBridgeModule.kt sur Android.
@@ -109,6 +111,28 @@ class ScanBridgeModule: RCTEventEmitter {
     // Nettoyer après lecture
     defaults.removeObject(forKey: Self.scanResultKey)
     defaults.removeObject(forKey: Self.scanTimestampKey)
+
+    // Lire le debug Live Activity écrit par la Share Extension et l'envoyer à Sentry
+    let laDebug = defaults.string(forKey: "liveActivityDebug") ?? "not-set"
+    let laDebugTs = defaults.double(forKey: "liveActivityDebugTs")
+    defaults.removeObject(forKey: "liveActivityDebug")
+    defaults.removeObject(forKey: "liveActivityDebugTs")
+    NSLog("[Strive:Bridge] ShareExt LiveActivity debug: %@ (ts=%.0f)", laDebug, laDebugTs)
+
+    if #available(iOS 16.2, *) {
+      let authEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
+      SentrySDK.capture(message: "LiveActivity debug from ShareExtension") { scope in
+        scope.setLevel(.info)
+        scope.setTag(value: "live-activity", key: "feature")
+        scope.setTag(value: laDebug, key: "share-ext-result")
+        scope.setContext(value: [
+          "shareExtResult": laDebug,
+          "shareExtTimestamp": "\(laDebugTs)",
+          "mainAppAuthEnabled": "\(authEnabled)",
+          "iosVersion": UIDevice.current.systemVersion,
+        ], key: "live-activity-debug")
+      }
+    }
 
     sendEvent(withName: "onScanResult", body: result)
   }
