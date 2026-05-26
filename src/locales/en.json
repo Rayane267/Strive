@@ -420,7 +420,25 @@
       "metricKmSub": "Rate per km driven",
       "metricTotal": "Total",
       "metricTotalSub": "Total trip earnings",
-      "customizeCta": "Customize my thresholds"
+      "customizeCta": "Customize my thresholds",
+      "good": "Good ride",
+      "average": "Average ride",
+      "bad": "Bad ride"
+    },
+    "minimums": {
+      "title": "Set Your Minimums",
+      "desc": "Rides below these rates will be marked SKIP.",
+      "casual": "Casual",
+      "standard": "Standard",
+      "premium": "Premium",
+      "hourly": "Minimum €/hr",
+      "kmRate": "Minimum €/km",
+      "includePickup": "Include pickup in calculations"
+    },
+    "quickRef": {
+      "screenshot": "Screenshot",
+      "doubleTap": "Double-tap back",
+      "seeVerdict": "See verdict"
     },
     "iosInstall": {
       "step1": "Tap \"Get Shortcut\" below",

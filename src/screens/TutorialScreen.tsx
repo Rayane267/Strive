@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   Animated,
   Platform,
   Linking,
+  Switch,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -36,12 +38,13 @@ type IosTrigger = 'backTap' | 'assistive' | 'homeScreen';
 // Android = 5 slides (Welcome + Setup + Accept/decline + Stats + Done)
 const STEPS = (Platform.OS === 'ios'
   ? [
-      { key: '1',       icon: 'steering',          color: colors.primary, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
-      { key: 'preview', icon: 'eye-outline',       color: '#A78BFA',      titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
-      { key: '2',       icon: 'download-circle',   color: '#4FC3F7',      titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
-      { key: '3',       icon: 'gesture-tap-button', color: colors.primary, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
-      { key: '4',       icon: 'chart-line',        color: '#FF8A65',      titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
-      { key: '5',       icon: 'rocket-launch',     color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
+      { key: '1',        icon: 'steering',           color: colors.primary, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
+      { key: 'preview',  icon: 'eye-outline',        color: '#A78BFA',      titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
+      { key: 'minimums', icon: 'tune-vertical',      color: '#FF8A65',      titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
+      { key: '2',        icon: 'download-circle',    color: '#4FC3F7',      titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
+      { key: '3',        icon: 'gesture-tap-button', color: colors.primary, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
+      { key: '4',        icon: 'chart-line',         color: '#FF8A65',      titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
+      { key: '5',        icon: 'rocket-launch',      color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
     ]
   : [
       { key: '1', icon: 'steering',       color: colors.primary, titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', tip: 'tutorial.tips.step1' },
@@ -52,6 +55,18 @@ const STEPS = (Platform.OS === 'ios'
     ]
 ) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
 
+const PREVIEW_DATA = [
+  { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, labelKey: 'tutorial.iosPreview.good' },
+  { hourly: 22, fare: 12, km: '1.10', duration: 35, distance: '10.9', color: '#FF9900', icon: 'alert-triangle' as const, labelKey: 'tutorial.iosPreview.average' },
+  { hourly: 15, fare: 8,  km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, labelKey: 'tutorial.iosPreview.bad' },
+];
+
+const PRESETS = [
+  { key: 'casual', hourly: 20, km: 1.0 },
+  { key: 'standard', hourly: 25, km: 1.25 },
+  { key: 'premium', hourly: 35, km: 1.50 },
+];
+
 const TutorialScreen = () => {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
@@ -61,6 +76,11 @@ const TutorialScreen = () => {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [iosTrigger, setIosTrigger] = useState<IosTrigger>('assistive');
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const [minHourly, setMinHourly] = useState(25);
+  const [minKm, setMinKm] = useState(1.25);
+  const [includePickup, setIncludePickup] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<string | null>('standard');
 
   const isLast = currentIndex === STEPS.length - 1;
 
@@ -141,7 +161,9 @@ const TutorialScreen = () => {
     const isIosPreview = Platform.OS === 'ios' && item.key === 'preview';
     const isIosInstall = Platform.OS === 'ios' && item.key === '2';
     const isIosTrigger = Platform.OS === 'ios' && item.key === '3';
-    const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger;
+    const isMinimums = item.key === 'minimums';
+    const isDone = item.key === '5';
+    const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger || isMinimums || isDone;
 
     return (
       <View style={styles.slide}>
@@ -238,65 +260,154 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS « See It In Action » — preview Dynamic Island */}
+          {/* Slide iOS « See It In Action » — 3 previews (vert/orange/rouge) */}
           {isIosPreview ? (
             <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              {/* Lock screen context : faux time + dynamic island */}
-              <View style={styles.iosLockFrame}>
-                <Text style={styles.iosLockTime}>9:41</Text>
-                {/* Mock 1:1 du SwiftUI StriveLiveActivity.LockScreenView */}
-                <View style={styles.dynamicIsland}>
-                  {/* Row 1 — Platform · €/h · spacer · Pill · KmRate */}
-                  <View style={styles.diRowTop}>
-                    <Text style={styles.diPlatform}>Uber</Text>
-                    <View style={styles.diHourly}>
-                      <Text style={styles.diHourlyValue}>€53</Text>
-                      <Text style={styles.diHourlyUnit}>/h</Text>
+              {PREVIEW_DATA.map((p, pi) => pi === previewIdx ? (
+                <View key={pi} style={styles.iosLockFrame}>
+                  <View style={styles.dynamicIsland}>
+                    <View style={styles.diRowTop}>
+                      <Text style={styles.diPlatform}>Uber</Text>
+                      <View style={styles.diHourly}>
+                        <Text style={styles.diHourlyValue}>€{p.hourly}</Text>
+                        <Text style={styles.diHourlyUnit}>/h</Text>
+                      </View>
+                      <View style={{ flex: 1 }} />
+                      <View style={[styles.diFarePill, { backgroundColor: p.color + '46', borderColor: p.color + 'D9' }]}>
+                        <Text style={styles.diFarePillTxt}>€{p.fare}</Text>
+                      </View>
+                      <View style={styles.diKmRate}>
+                        <Feather name="arrow-up-right" size={11} color={p.color} />
+                        <Text style={styles.diKmRateTxt}>€{p.km}/km</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }} />
-                    <View style={[styles.diFarePill, { backgroundColor: 'rgba(0,199,82,0.28)', borderColor: 'rgba(0,199,82,0.85)' }]}>
-                      <Text style={styles.diFarePillTxt}>€17</Text>
-                    </View>
-                    <View style={styles.diKmRate}>
-                      <Feather name="arrow-up-right" size={11} color="#00C752" />
-                      <Text style={styles.diKmRateTxt}>€3.15/km</Text>
-                    </View>
-                  </View>
-
-                  {/* Row 2 — RouteRow : car · line+dot · stats · check */}
-                  <View style={styles.diRouteRow}>
-                    <View style={[styles.diRouteCircle, { backgroundColor: '#00C752' }]}>
-                      <MaterialCommunityIcons name="car" size={12} color="#000" />
-                    </View>
-                    <View style={styles.diRouteLineWrap}>
-                      <View style={[styles.diRouteLine, { backgroundColor: 'rgba(0,199,82,0.85)' }]} />
-                      <View style={[styles.diRouteDot, { backgroundColor: '#00C752' }]} />
-                    </View>
-                    <View style={styles.diRouteStats}>
-                      <Text style={styles.diRouteDuration}>28min</Text>
-                      <Text style={styles.diRouteDistance}>5.4km</Text>
-                    </View>
-                    <View style={[styles.diRouteCircle, { backgroundColor: '#00C752' }]}>
-                      <Feather name="check" size={12} color="#000" />
+                    <View style={styles.diRouteRow}>
+                      <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
+                        <MaterialCommunityIcons name="car" size={12} color="#000" />
+                      </View>
+                      <View style={styles.diRouteLineWrap}>
+                        <View style={[styles.diRouteLine, { backgroundColor: p.color + 'D9' }]} />
+                        <View style={[styles.diRouteDot, { backgroundColor: p.color }]} />
+                      </View>
+                      <View style={styles.diRouteStats}>
+                        <Text style={styles.diRouteDuration}>{p.duration}min</Text>
+                        <Text style={styles.diRouteDistance}>{p.distance}km</Text>
+                      </View>
+                      <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
+                        <Feather name={p.icon} size={12} color="#000" />
+                      </View>
                     </View>
                   </View>
                 </View>
+              ) : null)}
+
+              <View style={styles.previewLabel}>
+                <View style={[styles.previewLabelDot, { backgroundColor: PREVIEW_DATA[previewIdx].color }]} />
+                <Text style={[styles.previewLabelTxt, { color: PREVIEW_DATA[previewIdx].color }]}>
+                  {t(PREVIEW_DATA[previewIdx].labelKey)}
+                </Text>
               </View>
 
-              <Text style={styles.iosPreviewHint}>
-                <Feather name="check-circle" size={11} color={colors.primary} />  {t('tutorial.iosPreview.verdictThreshold')}
-              </Text>
+              <View style={styles.previewDots}>
+                {PREVIEW_DATA.map((p, pi) => (
+                  <TouchableOpacity key={pi} onPress={() => { hapticLight(); setPreviewIdx(pi); }}>
+                    <View style={[styles.previewDot, pi === previewIdx && { backgroundColor: p.color, width: 24 }]} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+          ) : null}
 
-              <TouchableOpacity
-                style={[styles.iosSecondaryCta, { borderColor: item.color + '50' }]}
-                onPress={() => navigation.navigate('Preferences')}
-                activeOpacity={0.8}
-              >
-                <Feather name="sliders" size={14} color={item.color} />
-                <Text style={[styles.iosSecondaryTxt, { color: item.color }]}>
-                  {t('tutorial.iosPreview.customizeCta')}
-                </Text>
-              </TouchableOpacity>
+          {/* Slide Minimums — seuils €/h, €/km, pickup */}
+          {isMinimums ? (
+            <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
+              <View style={styles.presetRow}>
+                {PRESETS.map(p => {
+                  const active = selectedPreset === p.key;
+                  return (
+                    <TouchableOpacity
+                      key={p.key}
+                      style={[styles.presetCard, active && styles.presetCardActive]}
+                      onPress={() => { hapticLight(); setSelectedPreset(p.key); setMinHourly(p.hourly); setMinKm(p.km); }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.presetName, active && styles.presetNameActive]}>{t(`tutorial.minimums.${p.key}`)}</Text>
+                      <Text style={[styles.presetValue, active && styles.presetValueActive]}>€{p.hourly}/h</Text>
+                      <Text style={[styles.presetSub, active && styles.presetSubActive]}>€{p.km.toFixed(2)}/km</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.sliderBlock}>
+                <View style={styles.sliderHeader}>
+                  <Text style={styles.sliderLabel}>{t('tutorial.minimums.hourly')}</Text>
+                  <Text style={styles.sliderValue}>€{minHourly}/h</Text>
+                </View>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={10} maximumValue={80} step={1}
+                  value={minHourly}
+                  onValueChange={v => { setMinHourly(v); setSelectedPreset(null); }}
+                  minimumTrackTintColor={colors.primary}
+                  maximumTrackTintColor="rgba(255,255,255,0.08)"
+                  thumbTintColor={colors.primary}
+                />
+              </View>
+
+              <View style={styles.sliderBlock}>
+                <View style={styles.sliderHeader}>
+                  <Text style={styles.sliderLabel}>{t('tutorial.minimums.kmRate')}</Text>
+                  <Text style={styles.sliderValue}>€{minKm.toFixed(2)}/km</Text>
+                </View>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0.3} maximumValue={4} step={0.05}
+                  value={minKm}
+                  onValueChange={v => { setMinKm(v); setSelectedPreset(null); }}
+                  minimumTrackTintColor={colors.primary}
+                  maximumTrackTintColor="rgba(255,255,255,0.08)"
+                  thumbTintColor={colors.primary}
+                />
+              </View>
+
+              <View style={styles.pickupRow}>
+                <Text style={styles.pickupLabel}>{t('tutorial.minimums.includePickup')}</Text>
+                <Switch
+                  value={includePickup}
+                  onValueChange={setIncludePickup}
+                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: colors.primary + '60' }}
+                  thumbColor={includePickup ? colors.primary : '#ccc'}
+                />
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {/* Step Done — Quick Reference */}
+          {isDone ? (
+            <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
+              <View style={styles.quickRefRow}>
+                <View style={styles.quickRefItem}>
+                  <View style={[styles.quickRefIcon, { backgroundColor: '#4FC3F7' + '20' }]}>
+                    <MaterialCommunityIcons name="cellphone-screenshot" size={24} color="#4FC3F7" />
+                  </View>
+                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.screenshot')}</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                <View style={styles.quickRefItem}>
+                  <View style={[styles.quickRefIcon, { backgroundColor: colors.primary + '20' }]}>
+                    <MaterialCommunityIcons name="gesture-double-tap" size={24} color={colors.primary} />
+                  </View>
+                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.doubleTap')}</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                <View style={styles.quickRefItem}>
+                  <View style={[styles.quickRefIcon, { backgroundColor: '#FF8A65' + '20' }]}>
+                    <Feather name="check-circle" size={24} color="#FF8A65" />
+                  </View>
+                  <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.seeVerdict')}</Text>
+                </View>
+              </View>
             </Animated.View>
           ) : null}
 
@@ -912,6 +1023,148 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 17,
+  },
+
+  // Preview carousel dots + label
+  previewLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  previewLabelDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  previewLabelTxt: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  previewDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  previewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+
+  // Minimums presets
+  presetRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  presetCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    gap: 4,
+  },
+  presetCardActive: {
+    borderColor: colors.primary + '80',
+    backgroundColor: colors.primary + '0A',
+  },
+  presetName: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  presetNameActive: { color: colors.primary },
+  presetValue: {
+    color: colors.textMain,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  presetValueActive: { color: colors.primary },
+  presetSub: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  presetSubActive: { color: colors.primary + 'AA' },
+
+  // Sliders
+  sliderBlock: {
+    marginBottom: 14,
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  sliderLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sliderValue: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  slider: {
+    width: '100%',
+    height: 36,
+  },
+
+  // Pickup toggle
+  pickupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  pickupLabel: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Quick Reference (done step)
+  quickRefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  quickRefItem: {
+    alignItems: 'center',
+    gap: 8,
+    width: 80,
+  },
+  quickRefIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickRefTxt: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   footer: {

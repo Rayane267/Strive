@@ -420,7 +420,25 @@
       "metricKmSub": "Tarif par km parcouru",
       "metricTotal": "Total",
       "metricTotalSub": "Gains totaux de la course",
-      "customizeCta": "Personnaliser mes seuils"
+      "customizeCta": "Personnaliser mes seuils",
+      "good": "Bonne course",
+      "average": "Course moyenne",
+      "bad": "Mauvaise course"
+    },
+    "minimums": {
+      "title": "Configurez vos seuils",
+      "desc": "Les courses en dessous seront marquées à refuser.",
+      "casual": "Débutant",
+      "standard": "Standard",
+      "premium": "Premium",
+      "hourly": "Minimum €/h",
+      "kmRate": "Minimum €/km",
+      "includePickup": "Inclure le trajet d'approche"
+    },
+    "quickRef": {
+      "screenshot": "Capture d'écran",
+      "doubleTap": "Double-tap arrière",
+      "seeVerdict": "Voir le verdict"
     },
     "iosInstall": {
       "step1": "Tapez « Obtenir le raccourci » ci-dessous",
