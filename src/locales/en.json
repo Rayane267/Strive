@@ -421,9 +421,12 @@
       "metricTotal": "Total",
       "metricTotalSub": "Total trip earnings",
       "customizeCta": "Customize my thresholds",
-      "good": "Good ride",
-      "average": "Average ride",
-      "bad": "Bad ride"
+      "verdictTake": "TAKE",
+      "verdictMaybe": "MAYBE",
+      "verdictSkip": "SKIP",
+      "hintGood": "Both metrics exceed your minimums ✓",
+      "hintAverage": "Good $/mi but short trip — your call",
+      "hintBad": "$/hr too low, long distance — skip this one"
     },
     "minimums": {
       "title": "Set Your Minimums",

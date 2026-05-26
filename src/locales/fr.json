@@ -421,9 +421,12 @@
       "metricTotal": "Total",
       "metricTotalSub": "Gains totaux de la course",
       "customizeCta": "Personnaliser mes seuils",
-      "good": "Bonne course",
-      "average": "Course moyenne",
-      "bad": "Mauvaise course"
+      "verdictTake": "PRENDRE",
+      "verdictMaybe": "PEUT-ÊTRE",
+      "verdictSkip": "REFUSER",
+      "hintGood": "Les deux métriques dépassent vos seuils ✓",
+      "hintAverage": "Bon €/km mais course courte — à vous de décider",
+      "hintBad": "€/h trop bas, longue distance — à éviter"
     },
     "minimums": {
       "title": "Configurez vos seuils",

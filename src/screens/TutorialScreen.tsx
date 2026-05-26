@@ -56,9 +56,9 @@ const STEPS = (Platform.OS === 'ios'
 ) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
 
 const PREVIEW_DATA = [
-  { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, labelKey: 'tutorial.iosPreview.good' },
-  { hourly: 22, fare: 12, km: '1.10', duration: 35, distance: '10.9', color: '#FF9900', icon: 'alert-triangle' as const, labelKey: 'tutorial.iosPreview.average' },
-  { hourly: 15, fare: 8,  km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, labelKey: 'tutorial.iosPreview.bad' },
+  { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
+  { hourly: 38, fare: 7,  km: '3.50', duration: 9,  distance: '2.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
+  { hourly: 15, fare: 22, km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
 ];
 
 const PRESETS = [
@@ -260,61 +260,71 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS « See It In Action » — 3 previews (vert/orange/rouge) */}
+          {/* Slide iOS « See It In Action » — tap to cycle through 3 examples */}
           {isIosPreview ? (
             <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              {PREVIEW_DATA.map((p, pi) => pi === previewIdx ? (
-                <View key={pi} style={styles.iosLockFrame}>
-                  <View style={styles.dynamicIsland}>
-                    <View style={styles.diRowTop}>
-                      <Text style={styles.diPlatform}>Uber</Text>
-                      <View style={styles.diHourly}>
-                        <Text style={styles.diHourlyValue}>€{p.hourly}</Text>
-                        <Text style={styles.diHourlyUnit}>/h</Text>
+              {(() => {
+                const p = PREVIEW_DATA[previewIdx];
+                return (
+                  <>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => { hapticLight(); setPreviewIdx((previewIdx + 1) % PREVIEW_DATA.length); }}
+                    >
+                      <View style={styles.dynamicIsland}>
+                        <View style={styles.diRowTop}>
+                          <Text style={styles.diPlatform}>Uber</Text>
+                          <View style={styles.diHourly}>
+                            <Text style={styles.diHourlyValue}>€{p.hourly}</Text>
+                            <Text style={styles.diHourlyUnit}>/h</Text>
+                          </View>
+                          <View style={{ flex: 1 }} />
+                          <View style={[styles.diFarePill, { backgroundColor: p.color + '46', borderColor: p.color + 'D9' }]}>
+                            <Text style={styles.diFarePillTxt}>€{p.fare}</Text>
+                          </View>
+                          <View style={styles.diKmRate}>
+                            <Feather name="arrow-up-right" size={11} color={p.color} />
+                            <Text style={styles.diKmRateTxt}>€{p.km}/km</Text>
+                          </View>
+                        </View>
+                        <View style={styles.diRouteRow}>
+                          <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
+                            <MaterialCommunityIcons name="car" size={12} color="#000" />
+                          </View>
+                          <View style={styles.diRouteLineWrap}>
+                            <View style={[styles.diRouteLine, { backgroundColor: p.color + 'D9' }]} />
+                            <View style={[styles.diRouteDot, { backgroundColor: p.color }]} />
+                          </View>
+                          <View style={styles.diRouteStats}>
+                            <Text style={styles.diRouteDuration}>{p.duration}min</Text>
+                            <Text style={styles.diRouteDistance}>{p.distance}km</Text>
+                          </View>
+                          <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
+                            <Feather name={p.icon} size={12} color="#000" />
+                          </View>
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }} />
-                      <View style={[styles.diFarePill, { backgroundColor: p.color + '46', borderColor: p.color + 'D9' }]}>
-                        <Text style={styles.diFarePillTxt}>€{p.fare}</Text>
-                      </View>
-                      <View style={styles.diKmRate}>
-                        <Feather name="arrow-up-right" size={11} color={p.color} />
-                        <Text style={styles.diKmRateTxt}>€{p.km}/km</Text>
-                      </View>
-                    </View>
-                    <View style={styles.diRouteRow}>
-                      <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
-                        <MaterialCommunityIcons name="car" size={12} color="#000" />
-                      </View>
-                      <View style={styles.diRouteLineWrap}>
-                        <View style={[styles.diRouteLine, { backgroundColor: p.color + 'D9' }]} />
-                        <View style={[styles.diRouteDot, { backgroundColor: p.color }]} />
-                      </View>
-                      <View style={styles.diRouteStats}>
-                        <Text style={styles.diRouteDuration}>{p.duration}min</Text>
-                        <Text style={styles.diRouteDistance}>{p.distance}km</Text>
-                      </View>
-                      <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
-                        <Feather name={p.icon} size={12} color="#000" />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              ) : null)}
+                    </TouchableOpacity>
 
-              <View style={styles.previewLabel}>
-                <View style={[styles.previewLabelDot, { backgroundColor: PREVIEW_DATA[previewIdx].color }]} />
-                <Text style={[styles.previewLabelTxt, { color: PREVIEW_DATA[previewIdx].color }]}>
-                  {t(PREVIEW_DATA[previewIdx].labelKey)}
-                </Text>
-              </View>
+                    <View style={styles.previewVerdict}>
+                      <View style={[styles.previewVerdictDot, { backgroundColor: p.color }]} />
+                      <Text style={[styles.previewVerdictTxt, { color: p.color }]}>
+                        {t(p.verdictKey)}
+                      </Text>
+                    </View>
 
-              <View style={styles.previewDots}>
-                {PREVIEW_DATA.map((p, pi) => (
-                  <TouchableOpacity key={pi} onPress={() => { hapticLight(); setPreviewIdx(pi); }}>
-                    <View style={[styles.previewDot, pi === previewIdx && { backgroundColor: p.color, width: 24 }]} />
-                  </TouchableOpacity>
-                ))}
-              </View>
+                    <Text style={styles.previewHintTxt}>{t(p.hintKey)}</Text>
+
+                    <View style={styles.previewDots}>
+                      {PREVIEW_DATA.map((d, pi) => (
+                        <TouchableOpacity key={pi} onPress={() => { hapticLight(); setPreviewIdx(pi); }}>
+                          <View style={[styles.previewDot, pi === previewIdx && { backgroundColor: d.color, width: 24 }]} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                );
+              })()}
             </Animated.View>
           ) : null}
 
@@ -1049,23 +1059,31 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  // Preview carousel dots + label
-  previewLabel: {
+  // Preview verdict + hint
+  previewVerdict: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 14,
-    marginBottom: 10,
+    marginTop: 16,
+    marginBottom: 6,
   },
-  previewLabelDot: {
+  previewVerdictDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
-  previewLabelTxt: {
-    fontSize: 13,
-    fontWeight: '700',
+  previewVerdictTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  previewHintTxt: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 14,
+    lineHeight: 17,
   },
   previewDots: {
     flexDirection: 'row',
