@@ -381,7 +381,10 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
+    var liveActivityStatus = "skipped-ios-too-old"
     if #available(iOS 16.2, *) {
+      let authEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
+      NSLog("[Strive:ShareExt] areActivitiesEnabled=%d", authEnabled ? 1 : 0)
       let ok = LiveActivityManager.shared.start(
         platform: "SCANNING",
         fare: 0,
@@ -391,13 +394,13 @@ class ShareViewController: UIViewController {
         durationMin: 0,
         verdictLevel: 1
       )
-      NSLog("[Strive:ShareExt] LiveActivity start(SCANNING) → %@", ok ? "OK" : "FAILED")
-      if let defaults = UserDefaults(suiteName: Self.appGroupId) {
-        defaults.set(ok ? "started" : "failed", forKey: "liveActivityDebug")
-        defaults.set(Date().timeIntervalSince1970, forKey: "liveActivityDebugTs")
-      }
-    } else {
-      NSLog("[Strive:ShareExt] iOS < 16.2 — Live Activity not available")
+      liveActivityStatus = ok ? "started" : (authEnabled ? "failed-with-auth" : "failed-no-auth")
+      NSLog("[Strive:ShareExt] LiveActivity start → %@", liveActivityStatus)
+    }
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(liveActivityStatus, forKey: "liveActivityDebug")
+      defaults.set(Date().timeIntervalSince1970, forKey: "liveActivityDebugTs")
+      defaults.synchronize()
     }
 
     ScanProcessor.shared.process(image: image) { [weak self] finalResult in
@@ -482,6 +485,7 @@ class ShareViewController: UIViewController {
   /// Sauve le résultat pour que l'app principale puisse le picker au foreground.
   private func saveSharedResult(_ final: ScanProcessor.FinalResult) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    let laStatus = defaults.string(forKey: "liveActivityDebug") ?? "not-written"
     var body: [String: Any] = [
       "platform": final.scan.platform.rawValue,
       "fare": final.scan.fare,
@@ -490,6 +494,7 @@ class ShareViewController: UIViewController {
       "hourlyRate": final.hourlyRate,
       "kmRate": final.kmRate,
       "verdictLevel": final.verdictLevel,
+      "_liveActivityDebug": laStatus,
     ]
     if let pickup = final.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = final.scan.destinationAddress { body["destinationAddress"] = dest }

@@ -112,21 +112,21 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.removeObject(forKey: Self.scanResultKey)
     defaults.removeObject(forKey: Self.scanTimestampKey)
 
-    // Lire le debug Live Activity écrit par la Share Extension et l'envoyer à Sentry
     let laDebug = defaults.string(forKey: "liveActivityDebug") ?? "not-set"
     let laDebugTs = defaults.double(forKey: "liveActivityDebugTs")
+    let laFromResult = (result["_liveActivityDebug"] as? String) ?? "not-in-result"
     defaults.removeObject(forKey: "liveActivityDebug")
     defaults.removeObject(forKey: "liveActivityDebugTs")
-    NSLog("[Strive:Bridge] ShareExt LiveActivity debug: %@ (ts=%.0f)", laDebug, laDebugTs)
 
     if #available(iOS 16.2, *) {
       let authEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
       SentrySDK.capture(message: "LiveActivity debug from ShareExtension") { scope in
         scope.setLevel(.info)
         scope.setTag(value: "live-activity", key: "feature")
-        scope.setTag(value: laDebug, key: "share-ext-result")
+        scope.setTag(value: laFromResult, key: "share-ext-result")
         scope.setContext(value: [
-          "shareExtResult": laDebug,
+          "fromAppGroup": laDebug,
+          "fromResult": laFromResult,
           "shareExtTimestamp": "\(laDebugTs)",
           "mainAppAuthEnabled": "\(authEnabled)",
           "iosVersion": UIDevice.current.systemVersion,
