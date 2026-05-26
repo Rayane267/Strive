@@ -12,6 +12,7 @@
 		21AE19B012C3F8C5CB08A988 /* Pods_Strive.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09E3798515C9FE3B8FA01BD7 /* Pods_Strive.framework */; };
 		5F3B05ACB769F59111645C16 /* AnalyzeRideIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D4F42FECCD48841FFAF058 /* AnalyzeRideIntent.swift */; };
 		694825BB2FC33BF500CC8F7E /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 694825BA2FC33BF500CC8F7E /* WidgetKit.framework */; };
+		FF00010000000000000000A1 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF00010000000000000000A2 /* ActivityKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		694825BD2FC33BF500CC8F7E /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 694825BC2FC33BF500CC8F7E /* SwiftUI.framework */; };
 		694825CC2FC33BF700CC8F7E /* StriveWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 694825B92FC33BF500CC8F7E /* StriveWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		694825D82FC3445800CC8F7E /* StriveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00020000000000000000A1 /* StriveActivityAttributes.swift */; };
@@ -107,6 +108,7 @@
 		DD00050000000000000000A1 /* GeocodeCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodeCache.swift; sourceTree = "<group>"; };
 		EC13873C2A2BE5BFD4C09F8D /* Pods-StriveShareExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-StriveShareExtension.release.xcconfig"; path = "Target Support Files/Pods-StriveShareExtension/Pods-StriveShareExtension.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		FF00010000000000000000A2 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		EE00010000000000000000A1 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		EE00020000000000000000A1 /* StriveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StriveActivityAttributes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -147,6 +149,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FF00010000000000000000A1 /* ActivityKit.framework in Frameworks */,
 				FE89B5BD3B09A90CC7E2F5B4 /* Pods_StriveShareExtension.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
