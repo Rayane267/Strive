@@ -13,6 +13,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -524,18 +525,20 @@ const DashboardScreen = () => {
               <Text style={styles.appSubtitle}>{t('dashboard.subtitle')}</Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={[styles.settingsBtn, scannerActive && { backgroundColor: 'rgba(0,230,118,0.15)', borderColor: colors.primary }]}
-            onPress={handleToggleScanner}
-            accessibilityRole="button"
-            accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
-          >
-            <MaterialCommunityIcons
-              name="line-scan"
-              size={20}
-              color={scannerActive ? colors.primary : colors.textMuted}
-            />
-          </TouchableOpacity>
+          {Platform.OS === 'android' && (
+            <TouchableOpacity
+              style={[styles.settingsBtn, scannerActive && { backgroundColor: 'rgba(0,230,118,0.15)', borderColor: colors.primary }]}
+              onPress={handleToggleScanner}
+              accessibilityRole="button"
+              accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
+            >
+              <MaterialCommunityIcons
+                name="line-scan"
+                size={20}
+                color={scannerActive ? colors.primary : colors.textMuted}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── ONLINE TOGGLE ── */}
