@@ -439,6 +439,7 @@
       "includePickup": "Include pickup in calculations"
     },
     "quickRef": {
+      "subtitle": "Quick Reference",
       "screenshot": "Screenshot",
       "doubleTap": "Double-tap back",
       "seeVerdict": "See verdict"

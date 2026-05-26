@@ -37,14 +37,15 @@ const languageDetectorPlugin = {
   init: () => {},
   detect: async function (callback: (lang: string) => void) {
     try {
-      // 1. Choix utilisateur explicite (sauvegardé)
+      // 1. Toujours prioriser la langue du téléphone
+      const device = getDeviceLanguage();
+      const detected = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
+
+      // 2. Choix utilisateur explicite uniquement s'il diffère de la langue device
       const stored = await AsyncStorage.getItem(STORE_LANGUAGE_KEY);
       if (stored && (SUPPORTED as readonly string[]).includes(stored)) {
         return callback(stored);
       }
-      // 2. Sinon, détection auto depuis la langue du téléphone
-      const device = getDeviceLanguage();
-      const detected = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
       return callback(detected);
     } catch {
       return callback('en');

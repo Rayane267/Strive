@@ -387,27 +387,46 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Step Done — Quick Reference */}
+          {/* Step Done — Quick Reference with animated checkmark */}
           {isDone ? (
             <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
+              <View style={styles.doneCheckWrap}>
+                <SafeGradient
+                  colors={[colors.primary + '30', colors.primary + '08']}
+                  style={styles.doneCheckOuter}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.doneCheckInner}>
+                    <Feather name="check" size={36} color={colors.background} />
+                  </View>
+                </SafeGradient>
+              </View>
+
+              <Text style={styles.doneSubtitle}>{t('tutorial.quickRef.subtitle', 'Référence rapide')}</Text>
+
               <View style={styles.quickRefRow}>
                 <View style={styles.quickRefItem}>
                   <View style={[styles.quickRefIcon, { backgroundColor: '#4FC3F7' + '20' }]}>
-                    <MaterialCommunityIcons name="cellphone-screenshot" size={24} color="#4FC3F7" />
+                    <MaterialCommunityIcons name="cellphone-screenshot" size={22} color="#4FC3F7" />
                   </View>
                   <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.screenshot')}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                <View style={styles.quickRefArrow}>
+                  <Feather name="arrow-right" size={14} color={colors.primary + '60'} />
+                </View>
                 <View style={styles.quickRefItem}>
                   <View style={[styles.quickRefIcon, { backgroundColor: colors.primary + '20' }]}>
-                    <MaterialCommunityIcons name="gesture-double-tap" size={24} color={colors.primary} />
+                    <MaterialCommunityIcons name="gesture-double-tap" size={22} color={colors.primary} />
                   </View>
                   <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.doubleTap')}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                <View style={styles.quickRefArrow}>
+                  <Feather name="arrow-right" size={14} color={colors.primary + '60'} />
+                </View>
                 <View style={styles.quickRefItem}>
                   <View style={[styles.quickRefIcon, { backgroundColor: '#FF8A65' + '20' }]}>
-                    <Feather name="check-circle" size={24} color="#FF8A65" />
+                    <Feather name="check-circle" size={22} color="#FF8A65" />
                   </View>
                   <Text style={styles.quickRefTxt}>{t('tutorial.quickRef.seeVerdict')}</Text>
                 </View>
@@ -437,41 +456,42 @@ const TutorialScreen = () => {
                 })}
               </View>
 
-              {/* Hero illustrative card pour le trigger sélectionné */}
-              <View style={[styles.iosTriggerHero, { borderColor: item.color + '30' }]}>
-                <SafeGradient
-                  colors={[item.color + '30', item.color + '0A']}
-                  style={styles.iosTriggerHeroIcon}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <MaterialCommunityIcons
-                    name={
-                      iosTrigger === 'backTap' ? 'gesture-double-tap' :
-                      iosTrigger === 'assistive' ? 'gesture-tap-hold' :
-                      'apps'
-                    }
-                    size={30}
-                    color={item.color}
-                  />
-                </SafeGradient>
-                <Text style={styles.iosTriggerHeroTxt}>
-                  {t(`tutorial.iosTrigger.${iosTrigger}.preview`)}
-                </Text>
-              </View>
+              {/* Content container — hauteur fixe pour éviter les sauts */}
+              <View style={styles.iosTriggerContent}>
+                <View style={[styles.iosTriggerHero, { borderColor: item.color + '30' }]}>
+                  <SafeGradient
+                    colors={[item.color + '30', item.color + '0A']}
+                    style={styles.iosTriggerHeroIcon}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={
+                        iosTrigger === 'backTap' ? 'gesture-double-tap' :
+                        iosTrigger === 'assistive' ? 'gesture-tap-hold' :
+                        'apps'
+                      }
+                      size={30}
+                      color={item.color}
+                    />
+                  </SafeGradient>
+                  <Text style={styles.iosTriggerHeroTxt} numberOfLines={2}>
+                    {t(`tutorial.iosTrigger.${iosTrigger}.desc`)}
+                  </Text>
+                </View>
 
-              {/* Steps */}
-              <View style={styles.iosStepsList}>
-                {[1, 2, 3].map(n => (
-                  <View key={n} style={styles.iosStepRow}>
-                    <View style={[styles.iosStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                      <Text style={[styles.iosStepNumTxt, { color: item.color }]}>{n}</Text>
+                <View style={styles.iosStepsList}>
+                  {[1, 2, 3].map(n => (
+                    <View key={n} style={styles.iosStepRow}>
+                      <View style={[styles.iosStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
+                        <Text style={[styles.iosStepNumTxt, { color: item.color }]}>{n}</Text>
+                      </View>
+                      <Text style={styles.iosStepTxt} numberOfLines={2}>
+                        {t(`tutorial.iosTrigger.${iosTrigger}.step${n}`)}
+                      </Text>
                     </View>
-                    <Text style={styles.iosStepTxt}>
-                      {t(`tutorial.iosTrigger.${iosTrigger}.step${n}`)}
-                    </Text>
-                  </View>
-                ))}
+                  ))}
+                </View>
               </View>
 
               <TouchableOpacity
@@ -1158,31 +1178,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Trigger content — hauteur fixe
+  iosTriggerContent: {
+    minHeight: 220,
+  },
+
+  // Done step
+  doneCheckWrap: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  doneCheckOuter: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneCheckInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneSubtitle: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+
   // Quick Reference (done step)
   quickRefRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 6,
     paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   quickRefItem: {
     alignItems: 'center',
     gap: 8,
-    width: 80,
+    flex: 1,
+  },
+  quickRefArrow: {
+    width: 20,
+    alignItems: 'center',
   },
   quickRefIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickRefTxt: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 14,
   },
 
   footer: {

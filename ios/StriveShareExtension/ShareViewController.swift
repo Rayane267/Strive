@@ -381,12 +381,8 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
-    // Démarre la Live Activity IMMÉDIATEMENT pendant que l'extension est
-    // visible — Activity.request() exige la foreground visibility et on la
-    // perd dès que le callback async revient (extension en cours de dismiss).
-    // Les valeurs placeholder seront remplacées par update() après TomTom.
     if #available(iOS 16.2, *) {
-      LiveActivityManager.shared.start(
+      let ok = LiveActivityManager.shared.start(
         platform: "SCANNING",
         fare: 0,
         hourlyRate: 0,
@@ -395,6 +391,13 @@ class ShareViewController: UIViewController {
         durationMin: 0,
         verdictLevel: 1
       )
+      NSLog("[Strive:ShareExt] LiveActivity start(SCANNING) → %@", ok ? "OK" : "FAILED")
+      if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+        defaults.set(ok ? "started" : "failed", forKey: "liveActivityDebug")
+        defaults.set(Date().timeIntervalSince1970, forKey: "liveActivityDebugTs")
+      }
+    } else {
+      NSLog("[Strive:ShareExt] iOS < 16.2 — Live Activity not available")
     }
 
     ScanProcessor.shared.process(image: image) { [weak self] finalResult in

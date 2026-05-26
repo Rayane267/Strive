@@ -439,6 +439,7 @@
       "includePickup": "Inclure le trajet d'approche"
     },
     "quickRef": {
+      "subtitle": "Référence rapide",
       "screenshot": "Capture d'écran",
       "doubleTap": "Double-tap arrière",
       "seeVerdict": "Voir le verdict"

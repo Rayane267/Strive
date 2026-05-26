@@ -25,7 +25,9 @@ final class LiveActivityManager {
     durationMin: Int,
     verdictLevel: Int
   ) -> Bool {
-    guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+    let authInfo = ActivityAuthorizationInfo()
+    NSLog("[Strive] LiveActivity areActivitiesEnabled=%d, platform=%@", authInfo.areActivitiesEnabled ? 1 : 0, platform)
+    guard authInfo.areActivitiesEnabled else {
       NSLog("[Strive] LiveActivity disabled — Settings → Strive → Live Activities OFF")
       return false
     }
@@ -59,7 +61,10 @@ final class LiveActivityManager {
       NSLog("[Strive] LiveActivity started — platform=%@", platform)
       return true
     } catch {
-      NSLog("[Strive] LiveActivity start failed: %@", error.localizedDescription)
+      NSLog("[Strive] LiveActivity start FAILED: %@ (domain=%@, code=%d)",
+            error.localizedDescription,
+            (error as NSError).domain,
+            (error as NSError).code)
       return false
     }
   }
