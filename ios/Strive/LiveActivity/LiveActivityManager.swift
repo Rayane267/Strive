@@ -14,6 +14,7 @@ final class LiveActivityManager {
 
   private var current: Activity<StriveActivityAttributes>?
   private var pendingRetry: DispatchWorkItem?
+  private var autoDismiss: DispatchWorkItem?
 
   @discardableResult
   func start(
@@ -155,13 +156,20 @@ final class LiveActivityManager {
       durationMin: durationMin,
       verdictLevel: verdictLevel
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(45))
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))
     Task { await activity.update(content) }
+
+    autoDismiss?.cancel()
+    let work = DispatchWorkItem { [weak self] in self?.stop() }
+    autoDismiss = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
   }
 
   func stop() {
     pendingRetry?.cancel()
     pendingRetry = nil
+    autoDismiss?.cancel()
+    autoDismiss = nil
     guard let activity = current else { return }
     Task { await activity.end(nil, dismissalPolicy: .immediate) }
     current = nil
