@@ -383,8 +383,6 @@ class ShareViewController: UIViewController {
   private func analyzeImage(_ image: UIImage) {
     var liveActivityStatus = "skipped-ios-too-old"
     if #available(iOS 16.2, *) {
-      let authEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
-      NSLog("[Strive:ShareExt] areActivitiesEnabled=%d", authEnabled ? 1 : 0)
       let ok = LiveActivityManager.shared.start(
         platform: "SCANNING",
         fare: 0,
@@ -394,7 +392,7 @@ class ShareViewController: UIViewController {
         durationMin: 0,
         verdictLevel: 1
       )
-      liveActivityStatus = ok ? "started" : (authEnabled ? "failed-with-auth" : "failed-no-auth")
+      liveActivityStatus = ok ? "started" : "failed"
       NSLog("[Strive:ShareExt] LiveActivity start → %@", liveActivityStatus)
     }
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {

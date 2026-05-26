@@ -4,6 +4,7 @@ import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
 import FirebaseMessaging
+import ActivityKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -22,6 +23,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
     application.registerForRemoteNotifications()
     Messaging.messaging().delegate = self
+
+    // Log Live Activities status for debugging
+    if #available(iOS 16.2, *) {
+      let info = ActivityAuthorizationInfo()
+      NSLog("[Strive] Live Activities enabled: %d", info.areActivitiesEnabled ? 1 : 0)
+    }
 
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
