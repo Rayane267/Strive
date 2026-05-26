@@ -12,6 +12,7 @@ import {
   Switch,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -184,18 +185,24 @@ const TutorialScreen = () => {
             </SafeGradient>
           ) : (
             <>
-              {/* Icon container with layered rings */}
               <View style={styles.iconContainer}>
                 <View style={[styles.iconRingOuter, { borderColor: item.color + '12' }]} />
                 <View style={[styles.iconRingMiddle, { borderColor: item.color + '20' }]} />
-                <SafeGradient
-                  colors={[item.color + '25', item.color + '08']}
-                  style={styles.iconWrap}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <MaterialCommunityIcons name={item.icon as any} size={52} color={item.color} />
-                </SafeGradient>
+                {item.key === '1' ? (
+                  <Image
+                    source={require('../assets/strive-logo.png')}
+                    style={styles.iconLogoImg}
+                  />
+                ) : (
+                  <SafeGradient
+                    colors={[item.color + '25', item.color + '08']}
+                    style={styles.iconWrap}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <MaterialCommunityIcons name={item.icon as any} size={52} color={item.color} />
+                  </SafeGradient>
+                )}
               </View>
 
               {/* Step badge */}
@@ -676,6 +683,11 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconLogoImg: {
+    width: 100,
+    height: 100,
+    borderRadius: 24,
   },
 
   stepBadge: {

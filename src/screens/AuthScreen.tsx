@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Image } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
@@ -154,12 +155,10 @@ const AuthScreen = () => {
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       <View style={styles.hero}>
-        <SafeGradient
-          colors={['rgba(0,230,118,0.18)', 'rgba(0,230,118,0.04)']}
-          style={styles.logoWrap}
-        >
-          <MaterialCommunityIcons name="steering" size={40} color={colors.primary} />
-        </SafeGradient>
+        <Image
+          source={require('../assets/strive-logo.png')}
+          style={styles.logoImg}
+        />
 
         <Text style={styles.appName}>
           Str<Text style={styles.appNameGreen}>ive</Text>
@@ -222,14 +221,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 20,
   },
-  logoWrap: {
+  logoImg: {
     width: 80,
     height: 80,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.2)',
+    borderRadius: 20,
   },
   appName: {
     fontSize: 48,

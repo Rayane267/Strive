@@ -14,6 +14,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -517,9 +518,10 @@ const DashboardScreen = () => {
         {/* ── HEADER ── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.appIconWrap}>
-              <MaterialCommunityIcons name="steering" size={22} color={colors.primary} />
-            </View>
+            <Image
+              source={require('../assets/strive-logo.png')}
+              style={styles.appIconImg}
+            />
             <View>
               <Text style={styles.appTitle}>Strive</Text>
               <Text style={styles.appSubtitle}>{t('dashboard.subtitle')}</Text>
@@ -831,6 +833,9 @@ const styles = StyleSheet.create({
   // HEADER
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  appIconImg: {
+    width: 42, height: 42, borderRadius: 12,
+  },
   appIconWrap: {
     width: 46, height: 46, borderRadius: 13,
     backgroundColor: 'rgba(0,230,118,0.15)',
