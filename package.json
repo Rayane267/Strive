@@ -39,6 +39,7 @@
     "react-native-bootsplash": "7.2.0",
     "react-native-calendars": "^1.1314.0",
     "react-native-dotenv": "^3.4.11",
+    "react-native-fbsdk-next": "^13.4.3",
     "react-native-get-random-values": "^2.0.0",
     "react-native-keychain": "^10.0.0",
     "react-native-linear-gradient": "^2.8.3",
