@@ -307,6 +307,12 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  @objc func setSessionOnline(_ online: Bool) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(online, forKey: "sessionOnline")
+    }
+  }
+
   @objc func setUseLiveActivity(_ enabled: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(enabled, forKey: "useLiveActivity")

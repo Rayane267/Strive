@@ -187,6 +187,8 @@
     "decline": "Refuser",
     "accept": "Accepter",
     "online": "En ligne",
+    "sessionRequired": "Session requise",
+    "startSessionToScan": "Veuillez démarrer votre session pour commencer à scanner.",
     "estimated": "est.",
     "status": {
       "accepted": "COURSE ACCEPTÉE",

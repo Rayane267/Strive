@@ -29,6 +29,14 @@ struct AnalyzeRideIntent: AppIntent {
   private static let overallTimeoutNs: UInt64 = 15_000_000_000
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    guard isSessionOnline else {
+      sendLocalNotification(
+        title: "Session requise",
+        body: "Veuillez démarrer votre session dans Strive pour commencer à scanner."
+      )
+      return .result(value: "Session non démarrée")
+    }
+
     guard let image = UIImage(data: screenshot.data) else {
       throw IntentError.invalidImage
     }
@@ -103,6 +111,12 @@ struct AnalyzeRideIntent: AppIntent {
   }
 
   // MARK: - Preference
+
+  private var isSessionOnline: Bool {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: appGroupId)?.bool(forKey: "sessionOnline") ?? false
+  }
 
   private var useLiveActivity: Bool {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)

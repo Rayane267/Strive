@@ -189,6 +189,11 @@ const DashboardScreen = () => {
       // Quota atteint côté client → on ignore le scan natif sans tenter
       // d'INSERT en DB (qui planterait avec daily_scan_quota_exceeded). Le
       // paywall scanLimitCard est déjà affiché en bas du Dashboard.
+      if (!isOnline) {
+        hapticError();
+        showToast({ type: 'error', title: t('dashboard.sessionRequired', 'Session requise'), message: t('dashboard.startSessionToScan', 'Veuillez démarrer votre session pour commencer à scanner.') });
+        return;
+      }
       if (!canScanRef.current) {
         __DEV__ && console.warn('[Scanner] quota atteint — scan ignoré');
         hapticError();
@@ -523,6 +528,7 @@ const DashboardScreen = () => {
             onlineMinutes: Math.floor(sessionSeconds / 60),
           });
         }
+        if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
         scheduleInactivityReminder();
       } else {
         if (currentSessionId) {
@@ -536,6 +542,7 @@ const DashboardScreen = () => {
         cancelInactivityReminder();
         if (Platform.OS === 'ios' && ScanBridge) {
           ScanBridge.stopLiveActivity();
+          if (ScanBridge.setSessionOnline) ScanBridge.setSessionOnline(false);
         }
       }
       await supabase.from('profiles').update({ is_online: newStatus }).eq('id', user.id);
