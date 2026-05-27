@@ -309,8 +309,12 @@ object OcrParser {
 
         blocks.forEachIndexed { idx, block ->
             val normalizedText = normalizeOcrDigits(block.text)
-            // Exclus les boutons de suggestion de prix Heetch ("Proposer X €")
             if (Regex("""proposer""", RegexOption.IGNORE_CASE).containsMatchIn(normalizedText)) return@forEachIndexed
+            val blockLower = block.text.lowercase()
+            if (blockLower.contains("★") || blockLower.contains("⭐") || blockLower.contains("star")
+                || blockLower.contains("étoile") || blockLower.contains("etoile")
+                || blockLower.contains("rating") || blockLower.contains("note")) return@forEachIndexed
+
             val match = PRICE_REGEX.find(normalizedText) ?: return@forEachIndexed
             val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
             val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
@@ -322,27 +326,22 @@ object OcrParser {
             val box = block.boundingBox
 
             if (box != null) {
-                // Plus le texte est grand, plus il est important visuellement
                 score += box.height().toFloat() * 1.5f
-
-                // Zone haute de l'écran = le prix de la course est toujours au-dessus du fold
                 val centerY = (box.top + box.bottom) / 2f
                 if (centerY < screenHeight * 0.55f) score += 30f
             }
 
-            // Bloc lui-même contient un mot-ancre ("Total", "Gain", etc.)
-            val blockLower = block.text.lowercase()
             if (anchors.any { blockLower.contains(it) }) score += 25f
 
-            // Bloc précédent contient un mot-ancre
             if (idx > 0 && anchors.any { blocks[idx - 1].text.lowercase().contains(it) }) {
                 score += 35f
             }
 
-            // Bloc suivant contient un mot-ancre (cas Uber où le label est sous le montant)
             if (idx < blocks.size - 1 && anchors.any { blocks[idx + 1].text.lowercase().contains(it) }) {
                 score += 20f
             }
+
+            if (value in 1.0..5.0) score -= 40f
 
             candidates.add(Candidate(value, score))
         }

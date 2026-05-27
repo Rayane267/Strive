@@ -249,8 +249,11 @@ final class OcrParser {
 
     for (idx, block) in blocks.enumerated() {
       let normalized = normalizeOcrDigits(block.text)
-      // Exclus boutons "Proposer X €" Heetch
       if matches(normalized, pattern: "proposer", caseInsensitive: true) { continue }
+      let blockLower = block.text.lowercased()
+      if blockLower.contains("★") || blockLower.contains("⭐") || blockLower.contains("star")
+        || blockLower.contains("étoile") || blockLower.contains("etoile")
+        || blockLower.contains("rating") || blockLower.contains("note") { continue }
 
       guard let m = Self.priceRegex.firstMatch(
         in: normalized, range: NSRange(normalized.startIndex..., in: normalized)
@@ -266,7 +269,6 @@ final class OcrParser {
       let centerY = Float((block.box.top + block.box.bottom) / 2)
       if centerY < Float(screenHeight) * 0.55 { score += 30 }
 
-      let blockLower = block.text.lowercased()
       if anchors.contains(where: { blockLower.contains($0) }) { score += 25 }
       if idx > 0, anchors.contains(where: { blocks[idx - 1].text.lowercased().contains($0) }) {
         score += 35
@@ -275,6 +277,7 @@ final class OcrParser {
          anchors.contains(where: { blocks[idx + 1].text.lowercased().contains($0) }) {
         score += 20
       }
+      if value >= 1.0 && value <= 5.0 { score -= 40 }
       candidates.append(Candidate(value: value, score: score))
     }
 
