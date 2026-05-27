@@ -244,6 +244,8 @@
   "analytics": {
     "title": "Mes Statistiques",
     "netProfit": "Profit Net",
+    "grossProfit": "Profit brut",
+    "netAfterFuel": "Net après carburant",
     "vsAvg": "vs Moy.",
     "beforeTax": "Avant impôts",
     "distance": "Distance",

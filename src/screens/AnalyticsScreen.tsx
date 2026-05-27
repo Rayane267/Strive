@@ -12,6 +12,7 @@ import {
   Pressable,
   RefreshControl,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
@@ -106,6 +107,17 @@ const AnalyticsScreen = () => {
     appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 },
   });
 
+  const [showNet, setShowNet] = useState(false);
+  const flipAnim = useRef(new Animated.Value(0)).current;
+  const hasFuelData = stats.fuelCost > 0;
+
+  const toggleProfitView = () => {
+    if (!hasFuelData) return;
+    const toNet = !showNet;
+    setShowNet(toNet);
+    Animated.spring(flipAnim, { toValue: toNet ? 1 : 0, useNativeDriver: true, tension: 80, friction: 10 }).start();
+  };
+
   const [dailyEarnings, setDailyEarnings] = useState<{ label: string; earnings: number; isToday?: boolean }[]>([]);
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
@@ -121,7 +133,7 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, fuel_price')
         .eq('id', user.id)
         .single();
 
@@ -237,10 +249,8 @@ const AnalyticsScreen = () => {
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
       const avgCons = profileData?.avg_cons ?? 0;
-      const fuelType = profileData?.fuel_type ?? 'essence';
-      const FUEL_PRICE: Record<string, number> = { essence: 1.75, diesel: 1.65, electric: 0.25 };
-      const pricePerUnit = FUEL_PRICE[fuelType] ?? 1.75;
-      const fuelCost = avgCons > 0 ? (totalDistance / 100) * avgCons * pricePerUnit : 0;
+      const fuelPrice = profileData?.fuel_price ?? 0;
+      const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
       const newStats = {
         totalProfit,
@@ -445,15 +455,30 @@ const AnalyticsScreen = () => {
                 <Text style={styles.heroLabel}>{t('analytics.netProfit').toUpperCase()}</Text>
                 <Text style={styles.heroBefore}>{t('analytics.beforeTax')}</Text>
               </View>
-              <Text style={styles.heroAmount}>€{stats.totalProfit.toFixed(2)}</Text>
-              {stats.fuelCost > 0 && (
-                <View style={styles.fuelRow}>
-                  <MaterialCommunityIcons name="gas-station" size={13} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.fuelText}>
-                    -{stats.fuelCost.toFixed(2)}€ carburant · Net réel : {(stats.totalProfit - stats.fuelCost).toFixed(2)}€
+              <TouchableOpacity onPress={toggleProfitView} activeOpacity={hasFuelData ? 0.7 : 1}>
+                <Animated.View style={{ transform: [{ scale: flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.92, 1] }) }] }}>
+                  <Text style={styles.heroAmount}>
+                    €{showNet ? (stats.totalProfit - stats.fuelCost).toFixed(2) : stats.totalProfit.toFixed(2)}
                   </Text>
-                </View>
-              )}
+                </Animated.View>
+                {hasFuelData && (
+                  <View style={styles.profitToggleRow}>
+                    <View style={[styles.profitBadge, showNet && styles.profitBadgeActive]}>
+                      <MaterialCommunityIcons
+                        name={showNet ? 'gas-station' : 'cash-multiple'}
+                        size={12}
+                        color={showNet ? colors.primary : 'rgba(255,255,255,0.5)'}
+                      />
+                      <Text style={[styles.profitBadgeText, showNet && styles.profitBadgeTextActive]}>
+                        {showNet ? t('analytics.netAfterFuel', 'Net après carburant') : t('analytics.grossProfit', 'Profit brut')}
+                      </Text>
+                    </View>
+                    {showNet && (
+                      <Text style={styles.fuelDetail}>-{stats.fuelCost.toFixed(2)}€ ⛽</Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
               <View style={styles.heroSep} />
               <View style={styles.heroStatsRow}>
                 <View style={styles.heroStat}>
@@ -801,20 +826,41 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -2,
     marginBottom: 6,
+    textAlign: 'center',
   },
-  fuelRow: {
+  profitToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  profitBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  fuelText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
+  profitBadgeActive: {
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderColor: 'rgba(0,230,118,0.2)',
+  },
+  profitBadgeText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  profitBadgeTextActive: {
+    color: colors.primary,
+  },
+  fuelDetail: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 11,
     fontWeight: '600',
   },
   heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 18 },

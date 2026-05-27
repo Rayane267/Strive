@@ -104,6 +104,7 @@ const CarSettingsScreen = () => {
   const [regNum, setRegNum] = useState('');
   const [fuelType, setFuelType] = useState<FuelKey>('essence');
   const [avgCons, setAvgCons] = useState('');
+  const [fuelPrice, setFuelPrice] = useState('');
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
   const [isSaving, setIsSaving] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'make' | 'model' | 'year' | 'fuel' | null>(null);
@@ -122,6 +123,7 @@ const CarSettingsScreen = () => {
         setFuelType(profile.fuel_type as FuelKey);
       }
       if (profile.avg_cons) setAvgCons(profile.avg_cons.toString());
+      if (profile.fuel_price) setFuelPrice(profile.fuel_price.toString());
     }
   }, [profile]);
 
@@ -181,6 +183,7 @@ const CarSettingsScreen = () => {
         car_reg: regNum || null,
         fuel_type: fuelType || null,
         avg_cons: consToSave,
+        fuel_price: fuelPrice.trim() ? parseFloat(fuelPrice.replace(',', '.')) || null : null,
       }).eq('id', user.id);
       if (error) throw error;
       hapticSuccess();
@@ -347,6 +350,37 @@ const CarSettingsScreen = () => {
                   placeholder="0.0"
                   placeholderTextColor={colors.textDimmed}
                   maxLength={4}
+                  onFocus={() => setOpenDropdown(null)}
+                />
+              </View>
+            </View>
+
+            {/* Prix au litre */}
+            <View style={styles.consCard}>
+              <View style={styles.consRow}>
+                <View style={styles.consLabelWrap}>
+                  <View style={[styles.consIconWrap, { backgroundColor: 'rgba(255,183,77,0.1)' }]}>
+                    <MaterialCommunityIcons name="currency-eur" size={14} color="#FFB74D" />
+                  </View>
+                  <View>
+                    <Text style={styles.consTitle}>{t('settings.fuelPrice', 'Prix au litre/kWh')}</Text>
+                    <Text style={styles.consUnit}>€</Text>
+                  </View>
+                </View>
+                <TextInput
+                  style={styles.smallInput}
+                  value={fuelPrice}
+                  onChangeText={text => {
+                    let cleaned = text.replace(',', '.').replace(/[^0-9.]/g, '');
+                    const parts = cleaned.split('.');
+                    if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                    if (parts[1] !== undefined && parts[1].length > 2) cleaned = parts[0] + '.' + parts[1].slice(0, 2);
+                    setFuelPrice(cleaned);
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="1.75"
+                  placeholderTextColor={colors.textDimmed}
+                  maxLength={5}
                   onFocus={() => setOpenDropdown(null)}
                 />
               </View>

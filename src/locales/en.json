@@ -244,6 +244,8 @@
   "analytics": {
     "title": "My Analytics",
     "netProfit": "Net Profit",
+    "grossProfit": "Gross profit",
+    "netAfterFuel": "Net after fuel",
     "vsAvg": "vs Avg",
     "beforeTax": "Before tax",
     "distance": "Distance",
