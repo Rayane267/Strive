@@ -22,7 +22,7 @@ final class OcrParser {
 
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
-  private var fareMin: Double = 3.0
+  private var fareMin: Double = 8.0
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
   private var distMax: Double = 1000.0

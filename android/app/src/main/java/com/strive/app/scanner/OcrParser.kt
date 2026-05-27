@@ -31,7 +31,7 @@ object OcrParser {
 
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
-    private var fareMin = 3.0
+    private var fareMin = 8.0
     private var fareMax = 200.0
     private var distMin = 0.3
     private var distMax = 1000.0
