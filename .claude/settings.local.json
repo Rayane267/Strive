@@ -111,7 +111,11 @@
       "PowerShell(New-Item *)",
       "PowerShell(Copy-Item *)",
       "Bash(Select-Object -First 50)",
-      "WebFetch(domain:strive-pf.sentry.io)"
+      "WebFetch(domain:strive-pf.sentry.io)",
+      "Bash(bundle update *)",
+      "Bash(gem list *)",
+      "Bash(bundle install *)",
+      "Bash(brew install *)"
     ]
   },
   "enableAllProjectMcpServers": true,

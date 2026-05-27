@@ -11,7 +11,21 @@ PODS:
     - PromisesObjC (~> 2.4)
   - BVLinearGradient (2.8.3):
     - React-Core
+  - FBAEMKit (18.0.3):
+    - FBSDKCoreKit_Basics (= 18.0.3)
   - FBLazyVector (0.84.0)
+  - FBSDKCoreKit (18.0.3):
+    - FBAEMKit (= 18.0.3)
+    - FBSDKCoreKit_Basics (= 18.0.3)
+  - FBSDKCoreKit_Basics (18.0.3)
+  - FBSDKGamingServicesKit (18.0.3):
+    - FBSDKCoreKit (= 18.0.3)
+    - FBSDKCoreKit_Basics (= 18.0.3)
+    - FBSDKShareKit (= 18.0.3)
+  - FBSDKLoginKit (18.0.3):
+    - FBSDKCoreKit (= 18.0.3)
+  - FBSDKShareKit (18.0.3):
+    - FBSDKCoreKit (= 18.0.3)
   - Firebase/CoreOnly (12.10.0):
     - FirebaseCore (~> 12.10.0)
   - Firebase/Messaging (12.10.0):
@@ -1505,6 +1519,21 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-fbsdk-next (13.4.3):
+    - React-Core
+    - react-native-fbsdk-next/Core (= 13.4.3)
+    - react-native-fbsdk-next/Login (= 13.4.3)
+    - react-native-fbsdk-next/Share (= 13.4.3)
+  - react-native-fbsdk-next/Core (13.4.3):
+    - FBSDKCoreKit (~> 18.0)
+    - React-Core
+  - react-native-fbsdk-next/Login (13.4.3):
+    - FBSDKLoginKit (~> 18.0)
+    - React-Core
+  - react-native-fbsdk-next/Share (13.4.3):
+    - FBSDKGamingServicesKit (~> 18.0)
+    - FBSDKShareKit (~> 18.0)
+    - React-Core
   - react-native-get-random-values (2.0.0):
     - hermes-engine
     - RCTRequired
@@ -2166,6 +2195,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNKeychain (10.0.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNPurchases (9.15.2):
     - PurchasesHybridCommon (= 17.55.1)
     - React-Core
@@ -2309,6 +2360,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
+  - react-native-fbsdk-next (from `../node_modules/react-native-fbsdk-next`)
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
@@ -2353,6 +2405,7 @@ DEPENDENCIES:
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
   - "RNFBMessaging (from `../node_modules/@react-native-firebase/messaging`)"
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
+  - RNKeychain (from `../node_modules/react-native-keychain`)
   - RNPurchases (from `../node_modules/react-native-purchases`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - "RNSentry (from `../node_modules/@sentry/react-native`)"
@@ -2363,6 +2416,12 @@ SPEC REPOS:
   trunk:
     - AppAuth
     - AppCheckCore
+    - FBAEMKit
+    - FBSDKCoreKit
+    - FBSDKCoreKit_Basics
+    - FBSDKGamingServicesKit
+    - FBSDKLoginKit
+    - FBSDKShareKit
     - Firebase
     - FirebaseCore
     - FirebaseCoreExtension
@@ -2462,6 +2521,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-blur:
     :path: "../node_modules/@react-native-community/blur"
+  react-native-fbsdk-next:
+    :path: "../node_modules/react-native-fbsdk-next"
   react-native-get-random-values:
     :path: "../node_modules/react-native-get-random-values"
   react-native-netinfo:
@@ -2550,6 +2611,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/messaging"
   RNGoogleSignin:
     :path: "../node_modules/@react-native-google-signin/google-signin"
+  RNKeychain:
+    :path: "../node_modules/react-native-keychain"
   RNPurchases:
     :path: "../node_modules/react-native-purchases"
   RNScreens:
@@ -2565,7 +2628,13 @@ SPEC CHECKSUMS:
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   BVLinearGradient: cb006ba232a1f3e4f341bb62c42d1098c284da70
+  FBAEMKit: 2a6b529993713c185b02bc36f8c91129bf78dfb0
   FBLazyVector: c12d2108050e27952983d565a232f6f7b1ad5e69
+  FBSDKCoreKit: 65d7f7a7d6fcc3aa6eb6e093ec737a4184fc6049
+  FBSDKCoreKit_Basics: 7bc9d8fde8f70985fba2ed7c1d07e319f969a991
+  FBSDKGamingServicesKit: fbf065fa50428f30d05417009d6c7ef76352110a
+  FBSDKLoginKit: 66d20fcb7afcafc0c420477662f96845cd1a5179
+  FBSDKShareKit: 837e908192dd6dc8f34aea673e62bb9570f75a99
   Firebase: 99f203d3a114c6ba591f3b32263a9626e450af65
   FirebaseCore: f4428e22415ea3b3eca652c2098413dabf2a23a9
   FirebaseCoreExtension: 3473a6ec16a91aee29fb75994a86c0220d2cddf3
@@ -2618,6 +2687,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 93685af84d050c469eb129b1e99cb44489eb1b77
   React-microtasksnativemodule: 3f3ac4c11be64f61e9b0e66f36a4827c1202d2dd
   react-native-blur: 89dfefbd5f99e8dabbae0272137e7dd7c7d8a742
+  react-native-fbsdk-next: 325e4973a478f098bb9406fb2a13fa2e1f5dffeb
   react-native-get-random-values: b5c58b0394402d412415337011bb227495a66380
   react-native-netinfo: f6ef8e2319c27b4f48599b85fc827f64b69c5c6d
   react-native-safe-area-context: 5fa8e2c34247c529f6591b888075f8f26d30eaf0
@@ -2663,6 +2733,7 @@ SPEC CHECKSUMS:
   RNFBApp: a600bd13799bb4d8268a1d9b37b032e6e3a3f2e2
   RNFBMessaging: d44795f92d33cc74a2f7f6458b56a5e0f96b7cf2
   RNGoogleSignin: 4590097b5c265e55e01bf2e824e0f5f5f66d2dfd
+  RNKeychain: ce2cee63eab83888c3da68684da50b9c83c33461
   RNPurchases: 4f6b0209e2fb4152bda0d0276a2a46d2b3416752
   RNScreens: d3b8e93072b0d3d790c7185a0f0d344870784d1c
   RNSentry: 09150fb6cebb71b6fac48c0f58088fa9946b33ab

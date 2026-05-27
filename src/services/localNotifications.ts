@@ -6,10 +6,9 @@ const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
 
 let PushNotification: any = null;
 try {
-  // Android only — uses react-native-push-notification if available
-  if (Platform.OS === 'android') {
-    PushNotification = require('react-native-push-notification');
-  }
+  PushNotification = Platform.OS === 'android'
+    ? require('react-native-push-notification')
+    : null;
 } catch {}
 
 function scheduleNative(id: string, title: string, body: string, delayMs: number) {

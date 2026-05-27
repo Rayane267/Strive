@@ -17,6 +17,7 @@ import {
   Image,
   RefreshControl,
   NativeModules,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -83,6 +84,7 @@ const DashboardScreen = () => {
   const canScan = remaining === null || remaining > 0;
 
   const [isOnline, setIsOnline] = useState(profile?.is_online ?? false);
+  const [sessionStartTs, setSessionStartTs] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -413,12 +415,15 @@ const DashboardScreen = () => {
 
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isOnline) {
-      interval = setInterval(() => setSessionSeconds(prev => prev + 1), 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isOnline]);
+    if (!isOnline || !sessionStartTs) return;
+    const tick = () => setSessionSeconds(Math.floor((Date.now() - sessionStartTs) / 1000));
+    tick();
+    const interval = setInterval(tick, 1000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tick();
+    });
+    return () => { clearInterval(interval); sub.remove(); };
+  }, [isOnline, sessionStartTs]);
 
   // Auto-close session after 1h without scan
   useEffect(() => {
@@ -450,6 +455,7 @@ const DashboardScreen = () => {
           .single();
         if (error) throw error;
         setCurrentSessionId(data.id);
+        setSessionStartTs(Date.now());
         setSessionSeconds(0);
         if (Platform.OS === 'ios' && ScanBridge) {
           ScanBridge.startLiveActivity({
@@ -467,6 +473,7 @@ const DashboardScreen = () => {
             .eq('id', currentSessionId);
         }
         setCurrentSessionId(null);
+        setSessionStartTs(null);
         cancelInactivityReminder();
         if (Platform.OS === 'ios' && ScanBridge) {
           ScanBridge.stopLiveActivity();
