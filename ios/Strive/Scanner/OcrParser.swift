@@ -1,5 +1,5 @@
 import Foundation
-
+import UIKit
 /// Port iOS du `OcrParser.kt` Android. La logique d'analyse doit rester
 /// strictement identique entre les deux plateformes pour garantir la même
 /// rentabilité affichée — toute modif ici DOIT être répercutée Android (et vice
@@ -22,7 +22,7 @@ final class OcrParser {
 
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
-  private var fareMin: Double = 5.0
+  private var fareMin: Double = 5.10
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
   private var distMax: Double = 120.0

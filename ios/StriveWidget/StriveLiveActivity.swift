@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 import ActivityKit
-
+			
 @available(iOS 16.2, *)
 struct StriveLiveActivity: Widget {
 

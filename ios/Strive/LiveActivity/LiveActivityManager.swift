@@ -139,7 +139,11 @@ final class LiveActivityManager {
         let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
         let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
         let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
-        let alert = AlertConfiguration(title: alertTitle, body: alertBody, sound: .default)
+        let alert = AlertConfiguration(
+            title: LocalizedStringResource(stringLiteral: alertTitle),
+            body: LocalizedStringResource(stringLiteral: alertBody),
+            sound: .default
+        )
         let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(10))
         Task { await newActivity.update(content, alertConfiguration: alert) }
         autoDismiss?.cancel()
@@ -167,7 +171,11 @@ final class LiveActivityManager {
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
-    let alert = AlertConfiguration(title: alertTitle, body: alertBody, sound: .default)
+    let alert = AlertConfiguration(
+        title: LocalizedStringResource(stringLiteral: alertTitle),
+        body: LocalizedStringResource(stringLiteral: alertBody),
+        sound: .default
+    )
     Task { await activity.update(content, alertConfiguration: alert) }
     log("updated \(activity.id), dismiss in 10s")
 
