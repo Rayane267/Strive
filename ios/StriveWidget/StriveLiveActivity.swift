@@ -8,8 +8,8 @@ struct StriveLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: StriveActivityAttributes.self) { context in
       LockScreenView(state: context.state)
-        .activityBackgroundTint(.clear)
-        .activitySystemActionForegroundColor(.clear)
+        .activityBackgroundTint(Color.black.opacity(0.92))
+        .activitySystemActionForegroundColor(.white)
 
     } dynamicIsland: { context in
       let isScanning = context.state.platform == "SCANNING"
@@ -19,49 +19,41 @@ struct StriveLiveActivity: Widget {
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           if isError {
-            HStack(spacing: 8) {
-              Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(errorRed)
-              Text("Échec")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white.opacity(0.75))
-            }
-            .padding(.leading, 6)
+            Image(systemName: "xmark.circle.fill")
+              .font(.system(size: 18, weight: .bold))
+              .foregroundColor(errorRed)
+              .padding(.leading, 6)
           } else if isScanning {
-            HStack(spacing: 8) {
-              ProgressView()
-                .tint(.white)
-              Text("Analyse…")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white.opacity(0.75))
-            }
-            .padding(.leading, 6)
-          } else if isIdle {
-            EmptyView()
-          } else {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-              Text(context.state.platform.capitalized)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white.opacity(0.75))
-              HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
-            }
-            .padding(.leading, 6)
+            ProgressView()
+              .tint(.white)
+              .padding(.leading, 6)
+          } else if !isIdle {
+            Text(context.state.platform.capitalized)
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundColor(.white.opacity(0.75))
+              .padding(.leading, 6)
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
+          if !isScanning && !isIdle && !isError {
+            KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
+              .padding(.trailing, 6)
+          }
+        }
+        DynamicIslandExpandedRegion(.center) {
           if isError {
             Text("Analyse impossible")
-              .font(.system(size: 13, weight: .medium))
-              .foregroundColor(.white.opacity(0.55))
-              .padding(.trailing, 6)
-          } else if !isScanning && !isIdle {
-            // trailing: result data
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundColor(.white.opacity(0.75))
+          } else if isScanning {
+            Text("Analyse…")
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundColor(.white.opacity(0.75))
+          } else if !isIdle {
             HStack(spacing: 10) {
+              HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
-              KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
             }
-            .padding(.trailing, 6)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
@@ -69,18 +61,15 @@ struct StriveLiveActivity: Widget {
             Text("Réessayez avec une autre capture")
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
-              .padding(.top, 4)
-              .padding(.bottom, 4)
-          } else if isIdle {
-            EmptyView()
-          } else if !isScanning {
+              .padding(.vertical, 4)
+          } else if !isScanning && !isIdle {
             RouteRow(
               distanceKm: context.state.distanceKm,
               durationMin: context.state.durationMin,
               level: context.state.verdictLevel
             )
             .padding(.horizontal, 6)
-            .padding(.top, 8)
+            .padding(.top, 6)
             .padding(.bottom, 4)
           }
         }
@@ -138,7 +127,45 @@ struct StriveLiveActivity: Widget {
 private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
   var body: some View {
-    EmptyView().frame(height: 0)
+    let isScanning = state.platform == "SCANNING"
+    let isIdle = state.platform == "IDLE"
+    let isError = state.platform == "ERROR"
+    VStack(spacing: 10) {
+      if isError {
+        HStack(spacing: 8) {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 18, weight: .bold))
+            .foregroundColor(Color(red: 0.94, green: 0.27, blue: 0.27))
+          Text("Analyse impossible")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white.opacity(0.75))
+        }
+      } else if isScanning {
+        HStack(spacing: 8) {
+          ProgressView().tint(.white)
+          Text("Analyse en cours…")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white.opacity(0.75))
+        }
+      } else if !isIdle {
+        HStack(spacing: 10) {
+          Text(state.platform.capitalized)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white.opacity(0.75))
+          HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
+          Spacer(minLength: 4)
+          FarePill(fare: state.fare, level: state.verdictLevel)
+          KmRateText(value: state.kmRate, level: state.verdictLevel)
+        }
+        RouteRow(
+          distanceKm: state.distanceKm,
+          durationMin: state.durationMin,
+          level: state.verdictLevel
+        )
+      }
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
   }
 }
 
@@ -216,9 +243,14 @@ private struct RouteRow: View {
         Capsule()
           .fill(verdictColor(level).opacity(0.85))
           .frame(height: 4)
-        Circle()
-          .fill(verdictColor(level))
-          .frame(width: 11, height: 11)
+        ZStack {
+          Circle()
+            .fill(verdictColor(level))
+            .frame(width: 24, height: 24)
+          Image(systemName: "figure.wave")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(.black)
+        }
       }
 
       VStack(alignment: .trailing, spacing: 2) {
