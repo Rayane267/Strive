@@ -124,6 +124,16 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(new Date(data.start_at).getTime());
         setIsOnline(true);
+        if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
+        if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
+          ScanBridge.startLiveActivity({
+            platform: 'IDLE',
+            fare: 0, hourlyRate: 0, kmRate: 0,
+            distanceKm: 0, durationMin: 0, verdictLevel: 1,
+            todayEarnings: 0, todayHourlyRate: 0, todayKm: 0,
+            onlineMinutes: Math.floor((Date.now() - new Date(data.start_at).getTime()) / 60000),
+          });
+        }
       }
     })();
   }, [user?.id]);
@@ -172,8 +182,10 @@ const DashboardScreen = () => {
   const lastScanTsRef = useRef(0);
   const canScanRef = useRef(canScan);
   const scanCountRef = useRef(stats.scans);
+  const isOnlineRef = useRef(isOnline);
   useEffect(() => { canScanRef.current = canScan; }, [canScan]);
   useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
+  useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -189,9 +201,8 @@ const DashboardScreen = () => {
       // Quota atteint côté client → on ignore le scan natif sans tenter
       // d'INSERT en DB (qui planterait avec daily_scan_quota_exceeded). Le
       // paywall scanLimitCard est déjà affiché en bas du Dashboard.
-      if (!isOnline) {
+      if (!isOnlineRef.current) {
         hapticError();
-        showToast({ type: 'error', title: t('dashboard.sessionRequired', 'Session requise'), message: t('dashboard.startSessionToScan', 'Veuillez démarrer votre session pour commencer à scanner.') });
         return;
       }
       if (!canScanRef.current) {

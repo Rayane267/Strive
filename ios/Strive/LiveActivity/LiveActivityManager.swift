@@ -121,6 +121,7 @@ final class LiveActivityManager {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
     if current == nil {
       current = Activity<StriveActivityAttributes>.activities.first
+      if current != nil { observeState() }
       log("recovered existing activity: \(current?.id ?? "none")")
     }
     guard let activity = current else {
@@ -243,8 +244,21 @@ final class LiveActivityManager {
     log("stop() current=\(current == nil ? "nil" : current!.id)")
     autoDismiss?.cancel()
     autoDismiss = nil
-    guard let activity = current else { return }
+    stateObserverTask?.cancel()
+    stateObserverTask = nil
+    if current == nil {
+      current = Activity<StriveActivityAttributes>.activities.first
+    }
+    guard let activity = current else {
+      for orphan in Activity<StriveActivityAttributes>.activities {
+        Task { await orphan.end(nil, dismissalPolicy: .immediate) }
+      }
+      return
+    }
     Task { await activity.end(nil, dismissalPolicy: .immediate) }
     current = nil
+    for orphan in Activity<StriveActivityAttributes>.activities {
+      Task { await orphan.end(nil, dismissalPolicy: .immediate) }
+    }
   }
 }

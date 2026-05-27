@@ -37,6 +37,14 @@ struct AnalyzeRideIntent: AppIntent {
       return .result(value: "session_off")
     }
 
+    guard !isQuotaReached else {
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.quota", fr: "Quota journalier atteint — revenez demain ou achetez des crédits.", en: "Daily quota reached — come back tomorrow or buy credits.")
+      )
+      return .result(value: "quota_reached")
+    }
+
     guard let image = UIImage(data: screenshot.data) else {
       sendLocalNotification(
         title: "Strive",
@@ -123,6 +131,12 @@ struct AnalyzeRideIntent: AppIntent {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     return UserDefaults(suiteName: appGroupId)?.bool(forKey: "useLiveActivity") ?? true
+  }
+
+  private var isQuotaReached: Bool {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: appGroupId)?.bool(forKey: "scanQuotaReached") ?? false
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {

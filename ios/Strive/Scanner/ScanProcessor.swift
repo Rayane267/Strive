@@ -18,8 +18,8 @@ final class ScanProcessor {
   static let shared = ScanProcessor()
   private init() {}
 
-  /// Résultat final remonté au caller (AppIntent / ShareExtension) après
-  /// tout le pipeline. Utilisé pour persistance App Group + retour Shortcut.
+  private var scanInProgress = false
+
   struct FinalResult {
     let scan: ScanResultModel
     let hourlyRate: Double
@@ -37,9 +37,15 @@ final class ScanProcessor {
     image: UIImage,
     onFinal: @escaping (FinalResult?) -> Void
   ) {
+    guard !scanInProgress else {
+      NSLog("[Strive:Scan] scan already in progress — skipped")
+      onFinal(nil)
+      return
+    }
+    scanInProgress = true
     runOcr(image: image) { [weak self] blocks, screenW, screenH in
       guard let self = self else { onFinal(nil); return }
-      guard let blocks = blocks else { onFinal(nil); return }
+      guard let blocks = blocks else { self.scanInProgress = false; onFinal(nil); return }
 
       // Parsing identique à Android
       guard let result = OcrParser.shared.parse(
@@ -55,19 +61,18 @@ final class ScanProcessor {
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
       if pickup.isEmpty || dest.isEmpty || !TomTomService.shared.isReady {
-        // Pas d'adresses ou pas de clé → final = valeurs OCR direct.
+        self.scanInProgress = false
         onFinal(self.computeFinal(scan: result))
         return
       }
 
       TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
+        self.scanInProgress = false
         guard let route = route, route.distanceKm >= 0.3, route.distanceKm <= 1000 else {
-          // Fallback OCR — exactement comme Android
           onFinal(self.computeFinal(scan: result))
           return
         }
 
-        // Override OCR distance/duration avec valeurs TomTom
         let updated = result.copy(distanceKm: route.distanceKm, durationMin: route.durationMin)
         onFinal(self.computeFinal(scan: updated))
       }
