@@ -133,7 +133,7 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, fuel_price')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type')
         .eq('id', user.id)
         .single();
 
@@ -249,7 +249,16 @@ const AnalyticsScreen = () => {
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
       const avgCons = profileData?.avg_cons ?? 0;
-      const fuelPrice = profileData?.fuel_price ?? 0;
+      const fuelType = profileData?.fuel_type ?? 'essence';
+      let fuelPrice = 0;
+      if (avgCons > 0) {
+        const { data: fp } = await supabase
+          .from('fuel_prices')
+          .select(fuelType === 'diesel' ? 'diesel' : fuelType === 'e85' ? 'e85' : 'essence')
+          .eq('id', 'paris')
+          .single();
+        if (fp) fuelPrice = Object.values(fp)[0] as number ?? 0;
+      }
       const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
       const newStats = {
