@@ -31,27 +31,34 @@ struct AnalyzeRideIntent: AppIntent {
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     guard isSessionOnline else {
       sendLocalNotification(
-        title: "Session requise",
-        body: "Veuillez démarrer votre session dans Strive pour commencer à scanner."
+        title: localizedString("notif.session.title", fr: "Session requise", en: "Session required"),
+        body: localizedString("notif.session.body", fr: "Veuillez démarrer votre session dans Strive pour commencer à scanner.", en: "Please start your session in Strive to begin scanning.")
       )
-      return .result(value: "Session non démarrée")
+      return .result(value: "session_off")
     }
 
     guard let image = UIImage(data: screenshot.data) else {
-      throw IntentError.invalidImage
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.invalidImage", fr: "Image invalide — réessayez avec une capture d'écran.", en: "Invalid image — try again with a screenshot.")
+      )
+      return .result(value: "invalid_image")
     }
 
-    let summary: String = try await withThrowingTaskGroup(of: String.self) { group in
+    let summary: String = await withTaskGroup(of: String?.self) { group in
       group.addTask {
-        try await withCheckedThrowingContinuation { cont in
+        await withCheckedContinuation { cont in
           ScanProcessor.shared.process(image: image) { finalResult in
             guard let result = finalResult else {
               if self.useLiveActivity {
                 LiveActivityManager.shared.showError()
               } else {
-                self.sendLocalNotification(title: "Strive", body: "Analyse impossible — réessayez avec une autre capture.")
+                self.sendLocalNotification(
+                  title: "Strive",
+                  body: self.localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot.")
+                )
               }
-              cont.resume(throwing: IntentError.noRideDetected)
+              cont.resume(returning: nil)
               return
             }
             if self.useLiveActivity {
@@ -65,7 +72,7 @@ struct AnalyzeRideIntent: AppIntent {
                 verdictLevel: result.verdictLevel
               )
             } else {
-              let verdict = result.verdictLevel == 2 ? "✅ Rentable" : result.verdictLevel == 1 ? "⚠️ Limite" : "❌ Refuser"
+              let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
               self.sendLocalNotification(
                 title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.scan.fare)) · \(verdict)",
                 body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
@@ -84,30 +91,24 @@ struct AnalyzeRideIntent: AppIntent {
         }
       }
       group.addTask {
-        try await Task.sleep(nanoseconds: Self.overallTimeoutNs)
-        throw IntentError.timeout
+        try? await Task.sleep(nanoseconds: Self.overallTimeoutNs)
+        return nil
       }
-      defer { group.cancelAll() }
-      guard let first = try await group.next() else {
-        throw IntentError.noRideDetected
+      var result: String? = nil
+      for await value in group {
+        if let v = value { result = v; group.cancelAll(); break }
       }
-      return first
+      if result == nil {
+        group.cancelAll()
+        self.sendLocalNotification(
+          title: "Strive",
+          body: self.localizedString("notif.timeout", fr: "Analyse trop longue — réessayez.", en: "Analysis took too long — try again.")
+        )
+      }
+      return result ?? "no_result"
     }
 
     return .result(value: summary)
-  }
-
-  // MARK: - Errors
-
-  enum IntentError: Error, LocalizedError {
-    case invalidImage, noRideDetected, timeout
-    var errorDescription: String? {
-      switch self {
-      case .invalidImage: return "Image invalide"
-      case .noRideDetected: return "Aucune offre de course détectée"
-      case .timeout: return "Analyse trop longue, réessayez"
-      }
-    }
   }
 
   // MARK: - Preference
@@ -122,6 +123,11 @@ struct AnalyzeRideIntent: AppIntent {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     return UserDefaults(suiteName: appGroupId)?.bool(forKey: "useLiveActivity") ?? true
+  }
+
+  private func localizedString(_ key: String, fr: String, en: String) -> String {
+    let lang = Locale.current.language.languageCode?.identifier ?? "en"
+    return lang == "fr" ? fr : en
   }
 
   private func sendLocalNotification(title: String, body: String) {

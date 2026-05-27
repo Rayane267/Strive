@@ -229,7 +229,7 @@ class FloatingBubbleService : Service() {
         recognizer.process(InputImage.fromBitmap(bitmapForOcr, 0))
             .addOnSuccessListener { visionText ->
                 ocrBitmap?.recycle()
-                val result = OcrParser.parse(visionText, w, h)
+                val result = OcrParser.parse(visionText, w, h, fullBitmap)
                 val debugBlocks = OcrParser.dumpBlocks(visionText)
                 if (result != null) {
                     val base64 = GeminiVisionService.encodeForBridge(fullBitmap)

@@ -46,7 +46,7 @@ const STEPS = (Platform.OS === 'ios'
       { key: 'minimums', icon: 'tune-vertical',      color: '#FF8A65',      titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
       { key: '2',        icon: 'download-circle',    color: '#4FC3F7',      titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
       { key: '3',        icon: 'gesture-tap-button', color: colors.primary, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
-      { key: 'la_tip',   icon: 'island-variant',     color: '#F44336',      titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
+      { key: 'la_tip',   icon: 'cellphone-nfc',       color: '#F44336',      titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
       { key: '4',        icon: 'chart-line',         color: '#FF8A65',      titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
       { key: '5',        icon: 'rocket-launch',      color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
     ]
@@ -428,24 +428,26 @@ const TutorialScreen = () => {
                 <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
                 <View style={styles.qrRow}>
                   {(Platform.OS === 'android' ? [
-                    { icon: 'line-scan', color: '#4FC3F7', label: 'Scanner', sub: 'Activez le scanner' },
-                    { icon: 'gesture-tap', color: colors.primary, label: 'Tap', sub: 'Tapez sur la bulle' },
-                    { icon: 'check-decagram', color: '#FF8A65', label: 'Verdict', sub: 'Résultat instantané' },
+                    { icon: 'line-scan', color: '#4FC3F7', labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
+                    { icon: 'gesture-tap', color: colors.primary, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
+                    { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
                   ] : [
-                    { icon: 'cellphone-screenshot', color: '#4FC3F7', label: 'Screenshot', sub: "Capturez l'offre" },
-                    { icon: 'gesture-double-tap', color: colors.primary, label: 'Double-tap', sub: 'Tapez 2x au dos' },
-                    { icon: 'check-decagram', color: '#FF8A65', label: 'Verdict', sub: 'Résultat instantané' },
+                    { icon: 'cellphone-screenshot', color: '#4FC3F7', labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
+                    { icon: 'gesture-tap-hold', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
+                    { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
                   ]).map((step, i) => (
                     <React.Fragment key={i}>
                       {i > 0 && (
-                        <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                        <View style={styles.qrArrow}>
+                          <Feather name="chevron-right" size={14} color={colors.textDimmed} />
+                        </View>
                       )}
                       <View style={styles.qrItem}>
-                        <View style={[styles.qrIcon, { backgroundColor: step.color + '18' }]}>
-                          <MaterialCommunityIcons name={step.icon as any} size={24} color={step.color} />
+                        <View style={[styles.qrIcon, { backgroundColor: step.color + '15', borderWidth: 1, borderColor: step.color + '25' }]}>
+                          <MaterialCommunityIcons name={step.icon as any} size={26} color={step.color} />
                         </View>
-                        <Text style={styles.qrLabel}>{step.label}</Text>
-                        <Text style={styles.qrSub}>{step.sub}</Text>
+                        <Text style={styles.qrLabel}>{t(step.labelKey)}</Text>
+                        <Text style={styles.qrSub}>{t(step.subKey)}</Text>
                       </View>
                     </React.Fragment>
                   ))}
@@ -668,63 +670,70 @@ const styles = StyleSheet.create({
 
   glowCircle: {
     position: 'absolute',
-    width: width * 0.85,
-    height: width * 0.85,
-    borderRadius: width * 0.425,
-    top: height * 0.08,
+    width: width * 0.9,
+    height: width * 0.9,
+    borderRadius: width * 0.45,
+    top: height * 0.06,
   },
   glowCircleInner: {
     position: 'absolute',
-    width: width * 0.55,
-    height: width * 0.55,
-    borderRadius: width * 0.275,
-    top: height * 0.08 + width * 0.15,
+    width: width * 0.5,
+    height: width * 0.5,
+    borderRadius: width * 0.25,
+    top: height * 0.06 + width * 0.2,
   },
 
   iconContainer: {
-    width: 140,
-    height: 140,
+    width: 160,
+    height: 160,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 36,
   },
   iconRingOuter: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 1,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 1.5,
   },
   iconRingMiddle: {
     position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 132,
+    height: 132,
+    borderRadius: 66,
     borderWidth: 1,
   },
   iconWrap: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 108,
+    height: 108,
+    borderRadius: 54,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   iconLogoImg: {
-    width: 100,
-    height: 100,
-    borderRadius: 24,
+    width: 108,
+    height: 108,
+    borderRadius: 28,
   },
 
   stepBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    marginBottom: 20,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   stepBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.5,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
 
   stepTitle: {
@@ -755,12 +764,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   iconCompact: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
 
   tipCard: {
@@ -1195,15 +1211,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   triggerHeroCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   triggerHeroLabel: {
     color: colors.textMuted,
@@ -1222,10 +1243,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   triggerStepNum: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1259,28 +1280,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   doneCheckOuter: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,230,118,0.2)',
-    marginBottom: 28,
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    borderWidth: 2,
+    borderColor: 'rgba(0,230,118,0.15)',
+    marginBottom: 32,
   },
   doneCheckInner: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0.6,
+    shadowRadius: 28,
+    elevation: 12,
   },
   doneSubtitle: {
     color: colors.textDimmed,
@@ -1308,11 +1329,16 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   installStepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   installStepNumTxt: {
     color: '#fff',
@@ -1363,9 +1389,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   qrIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  qrArrow: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },

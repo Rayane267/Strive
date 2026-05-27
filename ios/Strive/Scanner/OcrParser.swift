@@ -155,11 +155,14 @@ final class OcrParser {
 
   // MARK: - Entry point
 
-  func parse(blocks: [OcrTextBlock], screenWidth: Int, screenHeight: Int) -> ScanResultModel? {
+  func parse(blocks: [OcrTextBlock], screenWidth: Int, screenHeight: Int, image: UIImage? = nil) -> ScanResultModel? {
     if blocks.isEmpty { return nil }
 
     let fullText = blocks.map { $0.text }.joined(separator: " ").lowercased()
-    let platform = detectPlatform(fullText)
+    var platform = detectPlatform(fullText)
+    if platform == .UNKNOWN, let img = image {
+      platform = detectPlatformByColor(image: img)
+    }
 
     guard let fare = extractFare(blocks: blocks, platform: platform, screenHeight: screenHeight)
     else { return nil }
@@ -195,6 +198,45 @@ final class OcrParser {
     for (platform, keywords) in platformKeywords {
       if keywords.contains(where: { fullText.contains($0) }) { return platform }
     }
+    return .UNKNOWN
+  }
+
+  /// Fallback : détecte la plateforme à partir des couleurs dominantes du screenshot.
+  /// Bolt = vert (#34BB78), Heetch = rose/violet (#FF3B80), Uber = fond clair gris/blanc.
+  func detectPlatformByColor(image: UIImage) -> ScanPlatform {
+    guard let cgImage = image.cgImage else { return .UNKNOWN }
+    let w = min(cgImage.width, 120)
+    let h = min(cgImage.height, 200)
+    guard let context = CGContext(
+      data: nil, width: w, height: h,
+      bitsPerComponent: 8, bytesPerRow: w * 4,
+      space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else { return .UNKNOWN }
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+    guard let data = context.data else { return .UNKNOWN }
+    let ptr = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+
+    var greenCount = 0
+    var pinkCount = 0
+    var lightCount = 0
+    let total = w * h
+
+    for i in 0..<total {
+      let off = i * 4
+      let r = Int(ptr[off]), g = Int(ptr[off+1]), b = Int(ptr[off+2])
+      // Bolt green: high green, low red, moderate blue
+      if g > 140 && g > r + 30 && g > b + 20 && r < 120 { greenCount += 1 }
+      // Heetch pink/magenta: high red, low green, moderate-high blue
+      if r > 180 && g < 100 && b > 80 { pinkCount += 1 }
+      // Uber light: all channels > 200 (white/light gray)
+      if r > 200 && g > 200 && b > 200 { lightCount += 1 }
+    }
+
+    let threshold = Double(total) * 0.08
+    if Double(greenCount) > threshold { return .BOLT }
+    if Double(pinkCount) > threshold { return .HEETCH }
+    if Double(lightCount) > Double(total) * 0.35 { return .UBER }
     return .UNKNOWN
   }
 

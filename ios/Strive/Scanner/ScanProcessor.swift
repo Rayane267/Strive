@@ -43,7 +43,7 @@ final class ScanProcessor {
 
       // Parsing identique à Android
       guard let result = OcrParser.shared.parse(
-        blocks: blocks, screenWidth: screenW, screenHeight: screenH
+        blocks: blocks, screenWidth: screenW, screenHeight: screenH, image: image
       ) else {
         onFinal(nil); return
       }

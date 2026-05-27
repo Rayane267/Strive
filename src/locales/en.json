@@ -455,10 +455,23 @@
       "includePickup": "Include pickup in calculations"
     },
     "quickRef": {
-      "subtitle": "Quick Reference",
-      "screenshot": "Screenshot",
-      "doubleTap": "Double-tap back",
-      "seeVerdict": "See verdict"
+      "subtitle": "HOW IT WORKS",
+      "ios": {
+        "step1": "Screenshot",
+        "step1Sub": "Capture the offer",
+        "step2": "AssistiveTouch",
+        "step2Sub": "Tap the button",
+        "step3": "Verdict",
+        "step3Sub": "Instant result"
+      },
+      "android": {
+        "step1": "Scanner",
+        "step1Sub": "Enable the scanner",
+        "step2": "Tap",
+        "step2Sub": "Tap the bubble",
+        "step3": "Verdict",
+        "step3Sub": "Instant result"
+      }
     },
     "iosInstall": {
       "step1t": "Tap \"Get Shortcut\" below",

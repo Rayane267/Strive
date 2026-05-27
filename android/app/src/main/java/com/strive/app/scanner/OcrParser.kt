@@ -1,5 +1,6 @@
 package com.strive.scanner
 
+import android.graphics.Bitmap
 import com.google.mlkit.vision.text.Text
 import org.json.JSONArray
 import org.json.JSONObject
@@ -161,12 +162,15 @@ object OcrParser {
 
     // ─── Entry point ─────────────────────────────────────────────────────────────
 
-    fun parse(visionText: Text, screenWidth: Int, screenHeight: Int): ScanResult? {
+    fun parse(visionText: Text, screenWidth: Int, screenHeight: Int, bitmap: Bitmap? = null): ScanResult? {
         val blocks = visionText.textBlocks
         if (blocks.isEmpty()) return null
 
         val fullText = blocks.joinToString(" ") { it.text }.lowercase()
-        val platform = detectPlatform(fullText)
+        var platform = detectPlatform(fullText)
+        if (platform == Platform.UNKNOWN && bitmap != null) {
+            platform = detectPlatformByColor(bitmap)
+        }
 
         val fare = extractFare(blocks, platform, screenHeight) ?: return null
         val fareBlockY = locateFareBlockY(blocks, fare)
@@ -260,6 +264,34 @@ object OcrParser {
         for ((platform, keywords) in platformKeywords) {
             if (keywords.any { fullText.contains(it) }) return platform
         }
+        return Platform.UNKNOWN
+    }
+
+    fun detectPlatformByColor(bitmap: Bitmap): Platform {
+        val w = minOf(bitmap.width, 120)
+        val h = minOf(bitmap.height, 200)
+        val scaled = Bitmap.createScaledBitmap(bitmap, w, h, true)
+        val pixels = IntArray(w * h)
+        scaled.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        var greenCount = 0
+        var pinkCount = 0
+        var lightCount = 0
+
+        for (px in pixels) {
+            val r = (px shr 16) and 0xFF
+            val g = (px shr 8) and 0xFF
+            val b = px and 0xFF
+            if (g > 140 && g > r + 30 && g > b + 20 && r < 120) greenCount++
+            if (r > 180 && g < 100 && b > 80) pinkCount++
+            if (r > 200 && g > 200 && b > 200) lightCount++
+        }
+
+        val total = pixels.size
+        val threshold = total * 0.08
+        if (greenCount > threshold) return Platform.BOLT
+        if (pinkCount > threshold) return Platform.HEETCH
+        if (lightCount > total * 0.35) return Platform.UBER
         return Platform.UNKNOWN
     }
 

@@ -455,10 +455,23 @@
       "includePickup": "Inclure le trajet d'approche"
     },
     "quickRef": {
-      "subtitle": "Référence rapide",
-      "screenshot": "Capture d'écran",
-      "doubleTap": "Double-tap arrière",
-      "seeVerdict": "Voir le verdict"
+      "subtitle": "COMMENT ÇA MARCHE",
+      "ios": {
+        "step1": "Capture",
+        "step1Sub": "Capturez l'offre",
+        "step2": "AssistiveTouch",
+        "step2Sub": "Appuyez sur le bouton",
+        "step3": "Verdict",
+        "step3Sub": "Résultat instantané"
+      },
+      "android": {
+        "step1": "Scanner",
+        "step1Sub": "Activez le scanner",
+        "step2": "Tap",
+        "step2Sub": "Tapez sur la bulle",
+        "step3": "Verdict",
+        "step3Sub": "Résultat instantané"
+      }
     },
     "iosInstall": {
       "step1t": "Tapez « Obtenir le raccourci » ci-dessous",
