@@ -115,7 +115,9 @@ const PreferencesScreen = () => {
 
       hapticSuccess();
       setStatusMessage({ text: t('preferences.saveSuccess', 'Préférences enregistrées avec succès.'), type: 'success' });
-      setTimeout(() => navigation.goBack(), 1500);
+      setTimeout(() => {
+        if (navigation.canGoBack()) navigation.goBack();
+      }, 1500);
 
     } catch (error: any) {
       hapticError();

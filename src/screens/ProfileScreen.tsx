@@ -10,6 +10,7 @@ import {
   TextInput,
   Linking,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -48,6 +49,10 @@ const ProfileScreen = () => {
 
   const changeLanguage = (lang: string) => {
     i18n.changeLanguage(lang);
+    if (Platform.OS === 'ios') {
+      const { NativeModules } = require('react-native');
+      NativeModules.ScanBridge?.setAppLanguage(lang);
+    }
   };
 
   const confirmLogout = async () => {
@@ -110,6 +115,13 @@ const ProfileScreen = () => {
       sub: t('preferences.subtitle'),
       onPress: () => navigation.navigate('Preferences'),
     },
+    ...(isPlus ? [{
+      icon: 'crown-outline',
+      iconLib: 'mc' as const,
+      title: t('subscription.manage', 'Gérer mon abonnement'),
+      sub: t('profile.subscriptionSubActive', 'Annuler, changer de formule...'),
+      onPress: () => navigation.navigate('SubscriptionScreen'),
+    }] : []),
   ];
 
   const resourceItems: MenuItem[] = [
@@ -221,12 +233,19 @@ const ProfileScreen = () => {
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.upgradeBtn}
+                style={styles.upgradeBtnWrap}
                 onPress={() => navigation.navigate('SubscriptionScreen')}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="crown-outline" size={14} color={colors.primary} />
-                <Text style={styles.upgradeBtnText}>{t('profile.upgradeLink')}</Text>
+                <SafeGradient
+                  colors={['#A4FF6B', '#00FF8C', colors.primary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.upgradeBtn}
+                >
+                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
+                  <Text style={styles.upgradeBtnText}>{t('profile.upgradeLink')}</Text>
+                </SafeGradient>
               </TouchableOpacity>
             )}
           </View>
@@ -236,8 +255,38 @@ const ProfileScreen = () => {
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
         {renderMenuGroup(accountItems)}
 
+        {/* ── UPGRADE CTA (free only) ── */}
+        {!isPlus && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('SubscriptionScreen')}
+            style={styles.profileUpgradeCard}
+          >
+            <SafeGradient
+              colors={['#0A2418', '#0E3020', '#122E1E']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.profileUpgradeGradient}
+            >
+              <View style={styles.profileUpgradeGlow} />
+              <View style={styles.profileUpgradeRow}>
+                <SafeGradient
+                  colors={['#A4FF6B', '#00FF8C', colors.primary]}
+                  style={styles.profileUpgradeIconWrap}
+                >
+                  <MaterialCommunityIcons name="crown" size={18} color="#062318" />
+                </SafeGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.profileUpgradeTitle}>{t('profile.upgradeCardTitle')}</Text>
+                  <Text style={styles.profileUpgradeSub}>{t('profile.upgradeCardSub')}</Text>
+                </View>
+                <Feather name="arrow-right" size={18} color={colors.primary} />
+              </View>
+            </SafeGradient>
+          </TouchableOpacity>
+        )}
+
         {/* ── RESOURCES SECTION ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.resources')}</Text>
+        <Text style={[styles.sectionTitle, !isPlus ? {} : { marginTop: 22 }]}>{t('profile.resources')}</Text>
         {renderMenuGroup(resourceItems)}
 
         {/* ── LANGUAGE SECTION ── */}
@@ -469,19 +518,54 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
+  upgradeBtnWrap: {
+    marginTop: 8,
+    borderRadius: 22, overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 },
+      android: { elevation: 8 },
+    }),
+  },
   upgradeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,230,118,0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.3)',
-    marginTop: 4,
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 22,
   },
-  upgradeBtnText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
+  upgradeBtnText: { color: '#062318', fontSize: 13, fontWeight: '900', letterSpacing: 0.3 },
+
+  // Upgrade CTA card
+  profileUpgradeCard: {
+    marginTop: 18, marginBottom: 18, borderRadius: 18, overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
+      android: { elevation: 8 },
+    }),
+  },
+  profileUpgradeGradient: {
+    borderRadius: 18, padding: 18,
+    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    overflow: 'hidden',
+  },
+  profileUpgradeGlow: {
+    position: 'absolute', top: -20, right: -20,
+    width: 90, height: 90, borderRadius: 45,
+    backgroundColor: 'rgba(0,230,118,0.08)',
+  },
+  profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  profileUpgradeIconWrap: {
+    width: 42, height: 42, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
+      android: { elevation: 6 },
+    }),
+  },
+  profileUpgradeTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
+  profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
 
   // Section title
   sectionTitle: {

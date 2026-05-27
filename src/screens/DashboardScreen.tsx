@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
-import { PremiumBanner } from '../components/PremiumBanner';
+
 import { getEffectivePlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
@@ -42,6 +42,7 @@ import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
+import SafeGradient from '../components/SafeGradient';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 import {
@@ -52,6 +53,7 @@ import {
   notifyQuotaReached,
   notifySessionClosed,
 } from '../services/localNotifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { ScanBridge } = NativeModules;
 
@@ -68,7 +70,7 @@ function estimateDurationMin(distanceKm: number): number {
 }
 
 const DashboardScreen = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
@@ -99,6 +101,7 @@ const DashboardScreen = () => {
   const [ratingModal, setRatingModal] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [dayResetHour, setDayResetHour] = useState(0);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -163,6 +166,14 @@ const DashboardScreen = () => {
     fetchParserConfig().then(config => {
       if (config) scannerService.setParserConfig(config);
     });
+    // Sync live-activity pref to native (defaults to true on fresh install)
+    if (Platform.OS === 'ios') {
+      AsyncStorage.getItem('@strive_use_live_activity').then(v => {
+        const enabled = v !== '0';
+        NativeModules.ScanBridge?.setUseLiveActivity(enabled);
+      });
+      NativeModules.ScanBridge?.setAppLanguage(i18n.language);
+    }
 // Sync timezone du téléphone vers profile (reset quota au midnight local)
     if (user?.id) {
       try {
@@ -289,9 +300,8 @@ const DashboardScreen = () => {
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
         try { scannerService.setQuotaReached(true); } catch {}
-        const resetHour = preferences.day_reset_hour ?? 0;
-        notifyQuotaReached(resetHour);
-        scheduleQuotaResetNotification(resetHour);
+        notifyQuotaReached(dayResetHour);
+        scheduleQuotaResetNotification(dayResetHour);
       }
 
       __DEV__ && console.info('[Scanner:Final] valeurs DB :', {
@@ -508,6 +518,65 @@ const DashboardScreen = () => {
     return () => clearInterval(check);
   }, [isOnline]);
 
+  // Split session that already spans a past reset boundary (app restored / came back from background)
+  useEffect(() => {
+    if (!isOnline || !user?.id || !currentSessionId || !sessionStartTs) return;
+    const resetBoundary = getDayStart(dayResetHour);
+    if (sessionStartTs >= resetBoundary.getTime()) return; // session is within current day
+    (async () => {
+      const boundary = resetBoundary.toISOString();
+      const elapsed = Math.floor((resetBoundary.getTime() - sessionStartTs) / 1000);
+      await supabase
+        .from('online_sessions')
+        .update({ end_at: boundary, duration_seconds: Math.max(elapsed, 0) })
+        .eq('id', currentSessionId);
+      const { data } = await supabase
+        .from('online_sessions')
+        .insert([{ user_id: user.id, start_at: boundary }])
+        .select()
+        .single();
+      if (data) {
+        setCurrentSessionId(data.id);
+        setSessionStartTs(resetBoundary.getTime());
+        setSessionSeconds(Math.floor((Date.now() - resetBoundary.getTime()) / 1000));
+      }
+      fetchDataRef.current?.();
+    })();
+  }, [isOnline, dayResetHour, user?.id, currentSessionId, sessionStartTs]);
+
+  // Schedule session split at next reset boundary (user stays online past midnight/4h)
+  useEffect(() => {
+    if (!isOnline || !user?.id) return;
+    const now = new Date();
+    const nextReset = new Date(now);
+    nextReset.setHours(dayResetHour, 0, 0, 0);
+    if (nextReset.getTime() <= now.getTime()) {
+      nextReset.setDate(nextReset.getDate() + 1);
+    }
+    const msUntilReset = nextReset.getTime() - now.getTime();
+    const timer = setTimeout(async () => {
+      if (!isOnlineRef.current || !currentSessionId) return;
+      const boundary = nextReset.toISOString();
+      const elapsed = Math.floor((nextReset.getTime() - (sessionStartTs ?? Date.now())) / 1000);
+      await supabase
+        .from('online_sessions')
+        .update({ end_at: boundary, duration_seconds: Math.max(elapsed, 0) })
+        .eq('id', currentSessionId);
+      const { data } = await supabase
+        .from('online_sessions')
+        .insert([{ user_id: user.id, start_at: boundary }])
+        .select()
+        .single();
+      if (data) {
+        setCurrentSessionId(data.id);
+        setSessionStartTs(nextReset.getTime());
+        setSessionSeconds(0);
+      }
+      fetchDataRef.current?.();
+    }, msUntilReset);
+    return () => clearTimeout(timer);
+  }, [isOnline, dayResetHour, user?.id, currentSessionId, sessionStartTs]);
+
   const handleToggleOnlineRef = useRef<(() => void) | null>(null);
 
   const handleToggleOnline = async () => {
@@ -597,7 +666,9 @@ const DashboardScreen = () => {
         .maybeSingle();
 
       const resetHour = prefsData?.day_reset_hour === 4 ? 4 : 0;
+      setDayResetHour(resetHour);
       const resetTime = getDayStart(resetHour);
+
 
       if (prefsData) {
         const minHourly = Number(String(prefsData.min_hourly_rate ?? '25').replace(',', '.'));
@@ -618,6 +689,7 @@ const DashboardScreen = () => {
         .lt('created_at', resetTime.toISOString());
 
       const ridesData = await fetchRides(user.id, resetTime);
+
 
       const { data: sessionsData } = await supabase
         .from('online_sessions')
@@ -662,6 +734,14 @@ const DashboardScreen = () => {
   }, [fetchData]);
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+
+  // Re-fetch stats on every foreground resume (fetchData computes the correct day boundary)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') fetchDataRef.current?.();
+    });
+    return () => sub.remove();
+  }, []);
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
 
@@ -807,42 +887,59 @@ const DashboardScreen = () => {
           </View>
         )}
 
-        {/* ── PREMIUM BANNER ── */}
-        <PremiumBanner
-          todayScanCount={rides.length}
-          onPressUpgrade={() => navigation.navigate('SubscriptionScreen')}
-        />
-
         {/* ── PENDING SCANS HEADER ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('dashboard.pending')}</Text>
         </View>
 
-        {/* ── SCAN LIMIT PAYWALL ── */}
-        {!canScan && (
+        {/* ── SCAN LIMIT ── */}
+        {!canScan && tier === 'plus' && (
           <View style={styles.scanLimitCard}>
-            <MaterialCommunityIcons name="shield-lock-outline" size={28} color={colors.danger} style={{ marginBottom: 10 }} />
-            <Text style={styles.scanLimitTitle}>{t('dashboard.scanLimit.cardTitle', 'Quota journalier atteint')}</Text>
-            <Text style={styles.scanLimitText}>
-              {t('dashboard.scanLimit.cardText', "Vous avez utilisé vos {{count}} scans d'aujourd'hui.", { count: dailyScans ?? 0 })}
-            </Text>
-            {/* Free → propose l'upgrade vers Plus.
-                Plus → pas de bouton (pas de tier supérieur dispo au launch,
-                       pas de boutique consumable non plus). Message "revenez
-                       demain" pour signaler que le quota se reset. */}
-            {tier === 'free' && (
-              <View style={styles.scanLimitActions}>
-                <TouchableOpacity style={styles.scanLimitBtnPrimary} onPress={() => navigation.navigate('SubscriptionScreen')}>
-                  <Text style={styles.scanLimitBtnPrimaryText}>{t('dashboard.scanLimit.upgrade', 'Passer Plus')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {tier === 'plus' && (
-              <Text style={styles.scanLimitText}>
-                {t('dashboard.scanLimit.comeBackTomorrow', 'Revenez demain pour scanner à nouveau.')}
-              </Text>
-            )}
+            <Text style={styles.scanLimitTitle}>{t('dashboard.scanLimit.cardTitle')}</Text>
+            <Text style={styles.scanLimitText}>{t('dashboard.scanLimit.comeBackTomorrow')}</Text>
           </View>
+        )}
+        {!canScan && tier === 'free' && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('SubscriptionScreen')}
+            style={styles.upgradeCard}
+          >
+            <SafeGradient
+              colors={['#0A2418', '#0E3020', '#122E1E']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.upgradeCardGradient}
+            >
+              <View style={styles.upgradeCardGlow} />
+              <View style={styles.upgradeCardTop}>
+                <View style={styles.upgradeCardBadge}>
+                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Passe à Strive Plus')}</Text>
+                  <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', '15 scans/jour · €/h en direct · Historique complet')}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.upgradeCardDivider} />
+              <View style={styles.upgradeCardBottom}>
+                <View style={styles.upgradeCardPerk}>
+                  <Feather name="zap" size={12} color={colors.primary} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '15 scans/jour')}</Text>
+                </View>
+                <View style={styles.upgradeCardPerkDot} />
+                <View style={styles.upgradeCardPerk}>
+                  <Feather name="trending-up" size={12} color={colors.primary} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', '€/h en direct')}</Text>
+                </View>
+                <View style={styles.upgradeCardPerkDot} />
+                <View style={styles.upgradeCardPerk}>
+                  <Feather name="clock" size={12} color={colors.primary} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk3', 'Historique')}</Text>
+                </View>
+              </View>
+            </SafeGradient>
+          </TouchableOpacity>
         )}
 
         {/* ── RIDES ── */}
@@ -1123,27 +1220,58 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   sectionTitle: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
 
-  // SCAN LIMIT
+  // SCAN LIMIT (Plus tier — simple message)
   scanLimitCard: {
     backgroundColor: colors.surface, borderRadius: 16, padding: 20,
     alignItems: 'center', marginBottom: 18,
-    borderWidth: 1, borderColor: 'rgba(255,90,90,0.2)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  scanLimitTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
-  scanLimitText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  scanLimitActions: { flexDirection: 'row', gap: 10, width: '100%' },
-  scanLimitBtnSecondary: {
-    flex: 1, paddingVertical: 12, borderRadius: 12,
-    borderWidth: 1, borderColor: colors.primary, alignItems: 'center',
+  scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
+  scanLimitText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20 },
+
+  // UPGRADE CARD (Free tier — premium upsell)
+  upgradeCard: {
+    marginBottom: 18, borderRadius: 18, overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
+      android: { elevation: 8 },
+    }),
   },
-  scanLimitBtnSecondaryText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
-  scanLimitBtnPrimary: {
-    flex: 1, paddingVertical: 12, borderRadius: 12,
-    backgroundColor: colors.primary, alignItems: 'center',
+  upgradeCardGradient: {
+    borderRadius: 18, padding: 18,
+    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    overflow: 'hidden',
   },
-  scanLimitBtnPrimaryText: { color: colors.background, fontSize: 13, fontWeight: '700' },
+  upgradeCardGlow: {
+    position: 'absolute', top: -30, right: -30,
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: 'rgba(0,230,118,0.08)',
+  },
+  upgradeCardTop: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  upgradeCardBadge: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
+      android: { elevation: 6 },
+    }),
+  },
+  upgradeCardTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
+  upgradeCardSub: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  upgradeCardDivider: {
+    height: 1, backgroundColor: 'rgba(0,230,118,0.12)',
+    marginVertical: 14,
+  },
+  upgradeCardBottom: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6,
+  },
+  upgradeCardPerk: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  upgradeCardPerkText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
+  upgradeCardPerkDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
 
   // WAITING
   waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 10 },

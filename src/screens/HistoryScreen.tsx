@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Modal,
   Pressable,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -151,8 +152,8 @@ const HistoryScreen = () => {
     LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
   }, [i18n.language]);
 
-  // Fetch day_reset_hour preference
-  useEffect(() => {
+  // Re-read day_reset_hour on focus so a change in Preferences is picked up
+  useFocusEffect(useCallback(() => {
     if (!user) return;
     supabase
       .from('preferences')
@@ -164,7 +165,7 @@ const HistoryScreen = () => {
         setResetHour(h);
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
-  }, [user]);
+  }, [user]));
 
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,6 +237,16 @@ const HistoryScreen = () => {
   }, [fetchHistory]);
 
   useFocusEffect(useCallback(() => { fetchHistory(); }, [fetchHistory]));
+
+  // Re-fetch on foreground resume (picks up new day boundary automatically)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setDateRange({ start: getDayStart(resetHour), end: getDayStart(resetHour) });
+      }
+    });
+    return () => sub.remove();
+  }, [resetHour]);
 
   // ── Calendar helpers ─────────────────────────────────────────────────────────
 

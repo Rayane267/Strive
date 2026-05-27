@@ -66,6 +66,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
+    "subscriptionSub": "15 scans/day, live €/h...",
+    "subscriptionSubActive": "Cancel, change plan...",
+    "upgradeCardTitle": "Upgrade to Strive Plus",
+    "upgradeCardSub": "15 scans/day · Live €/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -222,9 +226,16 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "buyCredits": "Buy scan credits",
+      "cardTextFree": "Go Plus for 15 scans/day instead of {{count}}.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
+    },
+    "upgradeCard": {
+      "title": "Upgrade to Strive Plus",
+      "sub": "15 scans/day · Live €/h · Full history",
+      "perk1": "15 scans/day",
+      "perk2": "Live €/h",
+      "perk3": "History"
     }
   },
   "shop": {
@@ -584,9 +595,35 @@
         "sub": "Set your min €/h, Strive filters the rest."
       }
     },
+    "feat": {
+      "scan": "Instant scan",
+      "scanText": "analysis per ride in 2 seconds",
+      "hourly": "Hourly rate €/h",
+      "hourlyText": "live on every offer",
+      "filter": "Smart filter",
+      "filterText": "spots unprofitable rides",
+      "threshold": "Custom thresholds",
+      "thresholdText": "your min €/h, Strive does the sorting"
+    },
+    "yearlyAccess": "YEARLY ACCESS",
+    "monthlyAccess": "MONTHLY ACCESS",
+    "heroTitleActive": "Strive Plus active",
+    "heroSubActive": "You're enjoying all the benefits. Manage your subscription below.",
+    "activeTitle": "Active subscription",
+    "activeSub": "You have 15 scans/day, live hourly rate and all Plus features.",
+    "manage": "Manage my subscription",
+    "manageVia": "Manage via {{store}}",
+    "cancelHint": "To cancel, go to your {{store}} settings.",
+    "popular": "POPULAR",
+    "trialRibbon": "3 DAYS FREE",
+    "trialFreeLabel": "€0.00 for 3 days",
+    "trialThenPrice": "then {{price}}/mo",
+    "trialHint": "Cancel anytime during the trial",
+    "monthlyHint": "No commitment, cancel in 1 tap",
     "trust": {
       "cancel": "1-tap cancel",
       "secure": "Apple payment",
+      "secureAndroid": "Google Play",
       "commitment": "No commitment"
     },
     "faq": {

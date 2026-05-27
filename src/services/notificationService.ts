@@ -44,11 +44,18 @@ export async function registerPushToken(userId: string): Promise<void> {
     const cached = await AsyncStorage.getItem(FCM_TOKEN_KEY);
     if (cached === token) return;
 
+    let appLang = 'fr';
+    try {
+      const i18n = require('../i18n').default;
+      appLang = i18n.language ?? 'fr';
+    } catch {}
+
     await supabase
       .from('profiles')
       .update({
         fcm_token: token,
         device_platform: Platform.OS,
+        preferred_lang: appLang,
       })
       .eq('id', userId);
 

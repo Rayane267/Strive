@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -34,11 +35,26 @@ const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
 
 const Stack = createNativeStackNavigator();
 
+const TUTORIAL_SEEN_KEY = '@strive_has_seen_tutorial';
+
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
   const { t } = useTranslation();
+  const [tutorialChecked, setTutorialChecked] = useState(false);
+  const [showTutorialFirst, setShowTutorialFirst] = useState(false);
 
-  if (loading || (user && profile === null && !profileError)) {
+  useEffect(() => {
+    if (!user || !profile?.first_name) {
+      setTutorialChecked(true);
+      return;
+    }
+    AsyncStorage.getItem(TUTORIAL_SEEN_KEY).then(v => {
+      if (v !== '1') setShowTutorialFirst(true);
+      setTutorialChecked(true);
+    });
+  }, [user, profile?.first_name]);
+
+  if (loading || (user && profile === null && !profileError) || (user && profile?.first_name && !tutorialChecked)) {
     return <SplashScreen />;
   }
 
@@ -96,6 +112,22 @@ const RootNavigator = () => {
         />
       ) : (
         <>
+          {showTutorialFirst && (
+            <Stack.Screen
+              name="TutorialOnboarding"
+              options={{ headerShown: false, animation: 'fade' }}
+            >
+              {(props: any) => (
+                <TutorialScreenRaw
+                  {...props}
+                  onFinish={() => {
+                    AsyncStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+                    setShowTutorialFirst(false);
+                  }}
+                />
+              )}
+            </Stack.Screen>
+          )}
           <Stack.Screen
             name="MainTabs"
             component={TabNavigator}

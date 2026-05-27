@@ -319,6 +319,12 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  @objc func setAppLanguage(_ lang: String) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(lang, forKey: "appLanguage")
+    }
+  }
+
   /// Préférences utilisateur pour le verdict natif (seuils + include pickup).
   /// Lus par AnalyzeRideIntent au moment du calcul de rentabilité.
   @objc func setScannerPreferences(_ minHourlyRate: NSNumber,

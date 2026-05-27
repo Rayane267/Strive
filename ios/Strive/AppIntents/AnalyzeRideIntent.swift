@@ -130,7 +130,8 @@ struct AnalyzeRideIntent: AppIntent {
   private var useLiveActivity: Bool {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
-    return UserDefaults(suiteName: appGroupId)?.bool(forKey: "useLiveActivity") ?? true
+    let defaults = UserDefaults(suiteName: appGroupId)
+    return defaults?.object(forKey: "useLiveActivity") == nil ? true : defaults!.bool(forKey: "useLiveActivity")
   }
 
   private var isQuotaReached: Bool {
@@ -140,8 +141,11 @@ struct AnalyzeRideIntent: AppIntent {
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {
-    let lang = Locale.current.language.languageCode?.identifier ?? "en"
-    return lang == "fr" ? fr : en
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    let appLang = UserDefaults(suiteName: appGroupId)?.string(forKey: "appLanguage")
+    let lang = appLang ?? Locale.current.language.languageCode?.identifier ?? "en"
+    return lang.hasPrefix("fr") ? fr : en
   }
 
   private func sendLocalNotification(title: String, body: String) {

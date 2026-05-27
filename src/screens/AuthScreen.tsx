@@ -160,9 +160,10 @@ const AuthScreen = () => {
           style={styles.logoImg}
         />
 
-        <Text style={styles.appName}>
-          Str<Text style={styles.appNameGreen}>ive</Text>
-        </Text>
+        <View style={styles.appNameWrap}>
+          <Text style={styles.appName}>Strive</Text>
+          <View style={styles.appNameLine} />
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -226,14 +227,21 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 20,
   },
+  appNameWrap: {
+    alignItems: 'center',
+  },
   appName: {
     fontSize: 48,
     fontWeight: '900',
     color: colors.textMain,
     letterSpacing: -1.5,
   },
-  appNameGreen: {
-    color: colors.primary,
+  appNameLine: {
+    width: 60,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    marginTop: 6,
   },
   actions: {
     paddingBottom: 32,

@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Platform,
   Animated,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
@@ -67,8 +68,8 @@ const AnalyticsScreen = () => {
     LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
   }, [i18n.language]);
 
-  // Fetch day_reset_hour preference
-  useEffect(() => {
+  // Re-read day_reset_hour on focus so a change in Preferences is picked up
+  useFocusEffect(useCallback(() => {
     if (!user) return;
     supabase
       .from('preferences')
@@ -80,7 +81,7 @@ const AnalyticsScreen = () => {
         setResetHour(h);
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
-  }, [user]);
+  }, [user]));
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -301,6 +302,16 @@ const AnalyticsScreen = () => {
   }, [fetchAnalytics]);
 
   useFocusEffect(useCallback(() => { fetchAnalytics(); }, [fetchAnalytics]));
+
+  // Re-fetch on foreground resume (picks up new day boundary automatically)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setDateRange({ start: getDayStart(resetHour), end: getDayStart(resetHour) });
+      }
+    });
+    return () => sub.remove();
+  }, [resetHour]);
 
   const handleDayPress = (day: any) => {
     const todayString = new Date().toISOString().split('T')[0];

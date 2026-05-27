@@ -66,6 +66,10 @@
     "plus": "Membre Plus",
     "free": "Membre Gratuit",
     "upgradeLink": "Passer Plus →",
+    "subscriptionSub": "15 scans/jour, €/h en direct...",
+    "subscriptionSubActive": "Annuler, changer de formule...",
+    "upgradeCardTitle": "Passe à Strive Plus",
+    "upgradeCardSub": "15 scans/jour · €/h en direct · Sans engagement",
     "verified": "PARTENAIRE VÉRIFIÉ",
     "emailLabel": "EMAIL",
     "phoneLabel": "TÉLÉPHONE",
@@ -222,9 +226,16 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "buyCredits": "Acheter des crédits",
+      "cardTextFree": "Passez Plus pour obtenir 15 scans/jour au lieu de {{count}}.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
+    },
+    "upgradeCard": {
+      "title": "Passe à Strive Plus",
+      "sub": "15 scans/jour · €/h en direct · Historique complet",
+      "perk1": "15 scans/jour",
+      "perk2": "€/h en direct",
+      "perk3": "Historique"
     }
   },
   "shop": {
@@ -584,9 +595,35 @@
         "sub": "Définis ton €/h minimum, Strive fait le tri."
       }
     },
+    "feat": {
+      "scan": "Scan instantané",
+      "scanText": "d'analyse par course en 2 secondes",
+      "hourly": "Taux horaire €/h",
+      "hourlyText": "en direct sur chaque offre",
+      "filter": "Filtre intelligent",
+      "filterText": "repère les courses non rentables",
+      "threshold": "Seuils personnalisés",
+      "thresholdText": "ton €/h minimum, Strive fait le tri"
+    },
+    "yearlyAccess": "ABONNEMENT ANNUEL",
+    "monthlyAccess": "ABONNEMENT MENSUEL",
+    "heroTitleActive": "Strive Plus actif",
+    "heroSubActive": "Tu profites de tous les avantages. Gère ton abonnement ci-dessous.",
+    "activeTitle": "Abonnement actif",
+    "activeSub": "Tu profites de 15 scans/jour, du taux horaire en direct et de toutes les fonctionnalités Plus.",
+    "manage": "Gérer mon abonnement",
+    "manageVia": "Gérer via {{store}}",
+    "cancelHint": "Pour annuler, rendez-vous dans les réglages {{store}}.",
+    "popular": "POPULAIRE",
+    "trialRibbon": "3 JOURS GRATUITS",
+    "trialFreeLabel": "0,00 € pendant 3 jours",
+    "trialThenPrice": "puis {{price}}/mois",
+    "trialHint": "Annulable à tout moment pendant l'essai",
+    "monthlyHint": "Sans engagement, annulable en 1 clic",
     "trust": {
       "cancel": "Annulation 1-clic",
       "secure": "Paiement Apple",
+      "secureAndroid": "Google Play",
       "commitment": "Sans engagement"
     },
     "faq": {

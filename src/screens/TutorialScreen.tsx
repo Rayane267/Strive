@@ -72,10 +72,14 @@ const PRESETS = [
   { key: 'premium', hourly: 40, km: 1.50 },
 ];
 
-const TutorialScreen = () => {
+const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
+  const closeTutorial = () => {
+    if (onFinish) onFinish();
+    else if (navigation.canGoBack()) navigation.goBack();
+  };
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -120,7 +124,7 @@ const TutorialScreen = () => {
     } else {
       hapticSuccess();
       savePreferences();
-      navigation.goBack();
+      closeTutorial();
     }
   };
 
@@ -546,7 +550,7 @@ const TutorialScreen = () => {
         <View style={styles.progressBarTrack}>
           <Animated.View style={[styles.progressBarFill, { width: progressWidth as any }]} />
         </View>
-        <TouchableOpacity onPress={() => { savePreferences(); navigation.goBack(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel={t('tutorial.skip')}>
+        <TouchableOpacity onPress={() => { savePreferences(); closeTutorial(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel={t('tutorial.skip')}>
           <Text style={styles.skipText}>{t('tutorial.skip')}</Text>
         </TouchableOpacity>
       </View>
