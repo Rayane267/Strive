@@ -6,7 +6,7 @@ const TRIGGER_COUNT = 5; // show after 5 accepted rides
 
 const STORE_URL = Platform.select({
   android: 'market://details?id=com.strive',
-  ios: 'itms-apps://itunes.apple.com/app/id0000000000', // replace with real App Store ID
+  ios: 'itms-apps://itunes.apple.com/app/id6772641578',
 }) ?? '';
 
 export async function maybePromptRating(acceptedCount: number): Promise<boolean> {

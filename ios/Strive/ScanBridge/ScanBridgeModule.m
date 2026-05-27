@@ -30,6 +30,8 @@ RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
 
 RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached)
 
+RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
+
 RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 
 RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate

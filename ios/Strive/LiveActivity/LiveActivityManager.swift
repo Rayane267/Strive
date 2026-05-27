@@ -177,6 +177,25 @@ final class LiveActivityManager {
     DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
   }
 
+  func updateSessionKPI(
+    todayEarnings: Double,
+    todayHourlyRate: Double,
+    todayKm: Double,
+    onlineMinutes: Int
+  ) {
+    guard let activity = current else { return }
+    log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate)")
+    let state = StriveActivityAttributes.State(
+      platform: "IDLE",
+      todayEarnings: todayEarnings,
+      todayHourlyRate: todayHourlyRate,
+      todayKm: todayKm,
+      onlineMinutes: onlineMinutes
+    )
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(3600 * 8))
+    Task { await activity.update(content) }
+  }
+
   func stop() {
     log("stop() current=\(current == nil ? "nil" : current!.id)")
     autoDismiss?.cancel()

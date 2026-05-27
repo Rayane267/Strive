@@ -131,42 +131,101 @@ private struct LockScreenView: View {
     let isIdle = state.platform == "IDLE"
     let isError = state.platform == "ERROR"
     let hasResult = !isScanning && !isIdle && !isError
+    let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
 
-    VStack(spacing: 12) {
-      // KPI row
-      HStack(spacing: 0) {
-        KpiItem(value: String(format: "%.0f€", state.todayEarnings), label: "Gains")
-        KpiDivider()
-        KpiItem(value: String(format: "%.0f€/h", state.todayHourlyRate), label: "Taux horaire")
-        KpiDivider()
-        KpiItem(value: String(format: "%.1f km", state.todayKm), label: "Distance")
-        KpiDivider()
-        KpiItem(value: "\(state.onlineMinutes)min", label: "En ligne")
+    VStack(spacing: 0) {
+      // Header : logo + marque
+      HStack(spacing: 8) {
+        Image(systemName: "car.fill")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundColor(.black)
+          .padding(6)
+          .background(Circle().fill(accent))
+        Text("STRIVE")
+          .font(.system(size: 13, weight: .heavy, design: .rounded))
+          .tracking(2)
+          .foregroundColor(accent)
+        Spacer()
+        if isScanning {
+          HStack(spacing: 5) {
+            ProgressView().tint(.white)
+            Text("Analyse…")
+              .font(.system(size: 12, weight: .medium))
+              .foregroundColor(.white.opacity(0.6))
+          }
+        } else {
+          Text(formatOnlineTime(state.onlineMinutes))
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.5))
+        }
+      }
+      .padding(.bottom, 12)
+
+      // KPI cards
+      HStack(spacing: 8) {
+        KpiCard(value: String(format: "%.0f€", state.todayEarnings), label: "Gains", accent: accent)
+        KpiCard(value: String(format: "%.0f€/h", state.todayHourlyRate), label: "Taux", accent: accent)
+        KpiCard(value: String(format: "%.1fkm", state.todayKm), label: "Distance", accent: accent)
       }
 
+      // Dernière course (si résultat dispo)
       if hasResult {
-        Rectangle()
-          .fill(.white.opacity(0.12))
-          .frame(height: 1)
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
           Text(state.platform.capitalized)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundColor(.white.opacity(0.7))
+          Spacer()
           Text(String(format: "€%.0f", state.fare))
-            .font(.system(size: 15, weight: .heavy))
+            .font(.system(size: 14, weight: .heavy))
             .foregroundColor(.white)
-          Text(String(format: "€%.0f/h", state.hourlyRate))
+          Text("·")
+            .foregroundColor(.white.opacity(0.3))
+          Text(String(format: "%.0f€/h", state.hourlyRate))
             .font(.system(size: 13, weight: .bold))
             .foregroundColor(verdictColor(state.verdictLevel))
-          Spacer()
           Image(systemName: verdictIcon(state.verdictLevel))
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundColor(verdictColor(state.verdictLevel))
         }
+        .padding(.top, 10)
       }
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
+  }
+}
+
+@available(iOS 16.2, *)
+private func formatOnlineTime(_ minutes: Int) -> String {
+  let h = minutes / 60
+  let m = minutes % 60
+  return h > 0 ? String(format: "%dh%02d", h, m) : "\(m)min"
+}
+
+@available(iOS 16.2, *)
+private struct KpiCard: View {
+  let value: String
+  let label: String
+  let accent: Color
+  var body: some View {
+    VStack(spacing: 4) {
+      Text(value)
+        .font(.system(size: 16, weight: .heavy))
+        .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+      Text(label.uppercased())
+        .font(.system(size: 9, weight: .bold))
+        .tracking(0.5)
+        .foregroundColor(accent.opacity(0.7))
+        .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 8)
+    .background(
+      RoundedRectangle(cornerRadius: 10)
+        .fill(.white.opacity(0.06))
+    )
   }
 }
 

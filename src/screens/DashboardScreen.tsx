@@ -391,16 +391,37 @@ const DashboardScreen = () => {
 
   const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
-    setRides(prev => prev.map(r => (r.id === id ? { ...r, status: newStatus } : r)));
+    setRides(prev => {
+      const updated = prev.map(r => (r.id === id ? { ...r, status: newStatus } : r));
+      if (newStatus === 'ACCEPTED') {
+        const accepted = updated.filter(r => r.status === 'ACCEPTED');
+        const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
+        const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
+        const onlineH = sessionSeconds / 3600 || 1/3600;
+        const avgRate = totalEarnings / onlineH;
+        setStats(s => ({
+          ...s,
+          earnings: totalEarnings.toFixed(0),
+          avgRate: avgRate.toFixed(0),
+        }));
+        if (Platform.OS === 'ios' && ScanBridge?.updateSessionKPI) {
+          ScanBridge.updateSessionKPI({
+            todayEarnings: totalEarnings,
+            todayHourlyRate: avgRate,
+            todayKm: totalKm,
+            onlineMinutes: Math.floor(sessionSeconds / 60),
+          });
+        }
+      }
+      return updated;
+    });
     setTimeout(() => {
       setRides(prev => prev.filter(r => r.id !== id));
-    }, 700);
+    }, 500);
     try {
       await updateRideStatus(id, newStatus);
-    } catch {
-      fetchDataRef.current();
-    }
-  }, []);
+    } catch {}
+  }, [sessionSeconds]);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
@@ -920,34 +941,34 @@ const DashboardScreen = () => {
         onRequestClose={() => setRatingModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconWrap}>
-              <MaterialCommunityIcons name="star-outline" size={32} color="#FFD700" />
-            </View>
-            <Text style={styles.modalTitle}>
+          <View style={styles.ratingCard}>
+            <Text style={styles.ratingEmoji}>🚀</Text>
+            <Text style={styles.ratingStars}>⭐⭐⭐⭐⭐</Text>
+            <Text style={styles.ratingTitle}>
               {t('rating.title')}
             </Text>
-            <Text style={styles.modalSubtitle}>
+            <Text style={styles.ratingMessage}>
               {t('rating.message')}
             </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalBtnCancel}
-                onPress={() => setRatingModal(false)}
-              >
-                <Text style={styles.modalBtnCancelText}>
-                  {t('rating.notNow')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalBtnConfirm}
-                onPress={() => { setRatingModal(false); openStoreForRating(); }}
-              >
-                <Text style={styles.modalBtnConfirmText}>
-                  {t('rating.rate')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.ratingBtnPrimary}
+              onPress={() => { setRatingModal(false); openStoreForRating(); }}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="star" size={18} color="#000" />
+              <Text style={styles.ratingBtnPrimaryText}>
+                {t('rating.rate')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.ratingBtnSkip}
+              onPress={() => setRatingModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.ratingBtnSkipText}>
+                {t('rating.notNow')}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1300,6 +1321,68 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontWeight: '800',
     fontSize: 15,
+  },
+  ratingCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: 28,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.15)',
+  },
+  ratingEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  ratingStars: {
+    fontSize: 28,
+    letterSpacing: 4,
+    marginBottom: 16,
+  },
+  ratingTitle: {
+    color: colors.textMain,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  ratingMessage: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 24,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  ratingBtnPrimary: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  ratingBtnPrimaryText: {
+    color: '#000',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  ratingBtnSkip: {
+    marginTop: 14,
+    paddingVertical: 10,
+  },
+  ratingBtnSkipText: {
+    color: colors.textDimmed,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 

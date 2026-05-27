@@ -296,6 +296,17 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  @objc func updateSessionKPI(_ payload: NSDictionary) {
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.updateSessionKPI(
+        todayEarnings: (payload["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
+        todayHourlyRate: (payload["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+        todayKm: (payload["todayKm"] as? NSNumber)?.doubleValue ?? 0,
+        onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0
+      )
+    }
+  }
+
   @objc func setUseLiveActivity(_ enabled: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(enabled, forKey: "useLiveActivity")

@@ -44,22 +44,14 @@ export const formatTimeAgo = (dateString: string, t: any): string => {
  * Convertit des secondes en format lisible (ex: 1h 25m 04s)
  */
 export const formatDuration = (totalSeconds: number): string => {
-  if (totalSeconds <= 0) return '0s';
+  if (totalSeconds < 60) return '0min';
 
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
 
-  // Format avec Heures (ex: 1h 05m 10s)
   if (hours > 0) {
-    return `${hours}h ${minutes}m ${seconds}s`;
+    return `${hours}h${minutes > 0 ? ` ${String(minutes).padStart(2, '0')}min` : ''}`;
   }
 
-  // Format avec Minutes (ex: 2m 45s)
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-
-  // Format Secondes uniquement (ex: 30s)
-  return `${seconds}s`;
+  return `${minutes}min`;
 };

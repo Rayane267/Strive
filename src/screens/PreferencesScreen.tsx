@@ -252,72 +252,62 @@ const PreferencesScreen = () => {
           </View>
         </View>
 
-        {/* ── OPTIONS ── */}
+        {/* ── OPTIONS TRAJET ── */}
         <View style={styles.sectionLabel}>
           <View style={styles.sectionAccent} />
           <Text style={styles.sectionLabelText}>{t('preferences.options')}</Text>
         </View>
 
-        <View style={styles.card}>
-          {/* Day reset at 4 AM toggle */}
-          <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(0,230,118,0.12)' }]}>
-              <Feather name="sunrise" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.toggleTextBlock}>
-              <Text style={styles.toggleTitle}>{t('preferences.dayReset4am', 'Reset à 4h du matin')}</Text>
-              <Text style={styles.toggleSub}>{t('preferences.dayReset4amSub', 'Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit')}</Text>
-            </View>
-            <Switch
-              value={dayResetHour === 4}
-              onValueChange={(v) => setDayResetHour(v ? 4 : 0)}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={dayResetHour === 4 ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
-            />
+        <View style={styles.optionCard}>
+          <View style={[styles.optionIconCircle, { backgroundColor: 'rgba(255,183,77,0.12)' }]}>
+            <MaterialCommunityIcons name="weather-sunset-up" size={22} color="#FFB74D" />
           </View>
-
-          <View style={styles.cardDivider} />
-
-          {/* Include pickup */}
-          <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(79,195,247,0.1)' }]}>
-              <Feather name="map-pin" size={18} color="#4FC3F7" />
-            </View>
-            <View style={styles.toggleTextBlock}>
-              <Text style={styles.toggleTitle}>{t('preferences.includePickup', 'Inclure la prise en charge')}</Text>
-              <Text style={styles.toggleSub}>{t('preferences.includePickupSub', 'Comptabiliser le trajet jusqu\'au client')}</Text>
-            </View>
-            <Switch
-              value={includePickup}
-              onValueChange={setIncludePickup}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={includePickup ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
-            />
+          <View style={styles.optionContent}>
+            <Text style={styles.optionTitle}>{t('preferences.dayReset4am', 'Reset à 4h du matin')}</Text>
+            <Text style={styles.optionSub}>{t('preferences.dayReset4amSub', 'Pour les chauffeurs de nuit')}</Text>
           </View>
-
+          <Switch
+            value={dayResetHour === 4}
+            onValueChange={(v) => setDayResetHour(v ? 4 : 0)}
+            trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(255,183,77,0.4)' }}
+            thumbColor={dayResetHour === 4 ? '#FFB74D' : colors.textDimmed}
+            ios_backgroundColor="rgba(255,255,255,0.08)"
+          />
         </View>
 
-        {/* ── RESULT DISPLAY MODE ── */}
+        <View style={styles.optionCard}>
+          <View style={[styles.optionIconCircle, { backgroundColor: 'rgba(79,195,247,0.12)' }]}>
+            <MaterialCommunityIcons name="map-marker-radius" size={22} color="#4FC3F7" />
+          </View>
+          <View style={styles.optionContent}>
+            <Text style={styles.optionTitle}>{t('preferences.includePickup', 'Inclure la prise en charge')}</Text>
+            <Text style={styles.optionSub}>{t('preferences.includePickupSub', 'Comptabiliser le trajet jusqu\'au client')}</Text>
+          </View>
+          <Switch
+            value={includePickup}
+            onValueChange={setIncludePickup}
+            trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(79,195,247,0.4)' }}
+            thumbColor={includePickup ? '#4FC3F7' : colors.textDimmed}
+            ios_backgroundColor="rgba(255,255,255,0.08)"
+          />
+        </View>
+
         {Platform.OS === 'ios' && (
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(244,67,54,0.1)' }]}>
-                <Feather name="smartphone" size={18} color="#F44336" />
-              </View>
-              <View style={styles.toggleTextBlock}>
-                <Text style={styles.toggleTitle}>{t('preferences.resultMode', 'Dynamic Island')}</Text>
-                <Text style={styles.toggleSub}>{t('preferences.resultModeSub', 'Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.')}</Text>
-              </View>
-              <Switch
-                value={useLiveActivity}
-                onValueChange={setUseLiveActivity}
-                trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(244,67,54,0.35)' }}
-                thumbColor={useLiveActivity ? '#F44336' : colors.textDimmed}
-                ios_backgroundColor="rgba(255,255,255,0.08)"
-              />
+          <View style={styles.optionCard}>
+            <View style={[styles.optionIconCircle, { backgroundColor: 'rgba(171,71,188,0.12)' }]}>
+              <MaterialCommunityIcons name="island" size={22} color="#AB47BC" />
             </View>
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>{t('preferences.resultMode', 'Dynamic Island')}</Text>
+              <Text style={styles.optionSub}>{t('preferences.resultModeSub', 'Désactivé = notification classique')}</Text>
+            </View>
+            <Switch
+              value={useLiveActivity}
+              onValueChange={setUseLiveActivity}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(171,71,188,0.4)' }}
+              thumbColor={useLiveActivity ? '#AB47BC' : colors.textDimmed}
+              ios_backgroundColor="rgba(255,255,255,0.08)"
+            />
           </View>
         )}
 
@@ -565,6 +555,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  optionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  optionContent: {
+    flex: 1,
+    marginRight: 10,
+  },
+  optionTitle: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  optionSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });
 
