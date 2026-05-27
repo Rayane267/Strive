@@ -68,7 +68,16 @@ final class ScanProcessor {
 
       TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
         self.scanInProgress = false
-        guard let route = route, route.distanceKm >= 0.3, route.distanceKm <= 1000 else {
+        guard let route = route,
+              route.distanceKm >= 0.3,
+              route.distanceKm <= 120,
+              route.durationMin <= 180 else {
+          onFinal(self.computeFinal(scan: result))
+          return
+        }
+
+        let ratio = result.fare / route.distanceKm
+        guard ratio >= 0.2 && ratio <= 12.0 else {
           onFinal(self.computeFinal(scan: result))
           return
         }

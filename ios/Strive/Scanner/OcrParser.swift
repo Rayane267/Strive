@@ -25,7 +25,7 @@ final class OcrParser {
   private var fareMin: Double = 8.0
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
-  private var distMax: Double = 1000.0
+  private var distMax: Double = 120.0
   private var rateMin: Double = 0.4
   private var rateMax: Double = 12.0
 

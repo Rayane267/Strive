@@ -351,15 +351,16 @@ class FloatingBubbleService : Service() {
         }
 
         TomTomService.calculateRoute(pickup, dest) { route ->
-            val finalResult = if (route != null && route.distanceKm in 0.3..1000.0) {
-                // ✅ RÈGLE V2 : TomTom est le ROI. Distance = Course TomTom + Approche OCR.
+            val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
+            val finalResult = if (route != null
+                && route.distanceKm in 0.3..120.0
+                && route.durationMin != null && route.durationMin <= 180
+                && ratio in 0.2..12.0) {
                 ocr.copy(
                     distanceKm = route.distanceKm,
                     durationMin = route.durationMin,
                 )
             } else {
-                // 🚨 FALLBACK : TomTom a échoué (réseau, adresse introuvable).
-                // On garde 100% des valeurs OCR de la plateforme.
                 ocr
             }
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult) }

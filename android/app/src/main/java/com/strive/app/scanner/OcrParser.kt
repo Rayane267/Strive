@@ -34,7 +34,7 @@ object OcrParser {
     private var fareMin = 8.0
     private var fareMax = 200.0
     private var distMin = 0.3
-    private var distMax = 1000.0
+    private var distMax = 120.0
     private var rateMin = 0.4
     private var rateMax = 12.0
 
