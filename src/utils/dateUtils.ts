@@ -44,14 +44,13 @@ export const formatTimeAgo = (dateString: string, t: any): string => {
  * Convertit des secondes en format lisible (ex: 1h 25m 04s)
  */
 export const formatDuration = (totalSeconds: number): string => {
-  if (totalSeconds < 60) return '0min';
-
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
   if (hours > 0) {
     return `${hours}h${minutes > 0 ? ` ${String(minutes).padStart(2, '0')}min` : ''}`;
   }
 
-  return `${minutes}min`;
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 };

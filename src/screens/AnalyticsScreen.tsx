@@ -101,6 +101,7 @@ const AnalyticsScreen = () => {
     hourlyRate: 0,
     pricePerKm: 0,
     acceptedCount: 0,
+    fuelCost: 0,
     appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 },
     appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 },
   });
@@ -120,7 +121,7 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type')
         .eq('id', user.id)
         .single();
 
@@ -234,6 +235,13 @@ const AnalyticsScreen = () => {
       setKmTrend(kmTrendData);
 
       const totalOnlineHours = totalOnlineSeconds / 3600;
+
+      const avgCons = profileData?.avg_cons ?? 0;
+      const fuelType = profileData?.fuel_type ?? 'essence';
+      const FUEL_PRICE: Record<string, number> = { essence: 1.75, diesel: 1.65, electric: 0.25 };
+      const pricePerUnit = FUEL_PRICE[fuelType] ?? 1.75;
+      const fuelCost = avgCons > 0 ? (totalDistance / 100) * avgCons * pricePerUnit : 0;
+
       const newStats = {
         totalProfit,
         totalDistance,
@@ -241,6 +249,7 @@ const AnalyticsScreen = () => {
         hourlyRate: totalOnlineHours > 0 ? totalProfit / totalOnlineHours : 0,
         pricePerKm: totalDistance > 0 ? totalProfit / totalDistance : 0,
         acceptedCount: acceptedRides.length,
+        fuelCost,
         appDistribution: {
           UBER:   totalProfit > 0 ? Math.round((distribution.UBER   / totalProfit) * 100) : 0,
           BOLT:   totalProfit > 0 ? Math.round((distribution.BOLT   / totalProfit) * 100) : 0,
@@ -437,6 +446,14 @@ const AnalyticsScreen = () => {
                 <Text style={styles.heroBefore}>{t('analytics.beforeTax')}</Text>
               </View>
               <Text style={styles.heroAmount}>€{stats.totalProfit.toFixed(2)}</Text>
+              {stats.fuelCost > 0 && (
+                <View style={styles.fuelRow}>
+                  <MaterialCommunityIcons name="gas-station" size={13} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.fuelText}>
+                    -{stats.fuelCost.toFixed(2)}€ carburant · Net réel : {(stats.totalProfit - stats.fuelCost).toFixed(2)}€
+                  </Text>
+                </View>
+              )}
               <View style={styles.heroSep} />
               <View style={styles.heroStatsRow}>
                 <View style={styles.heroStat}>
@@ -783,7 +800,22 @@ const styles = StyleSheet.create({
     fontSize: 52,
     fontWeight: '900',
     letterSpacing: -2,
-    marginBottom: 20,
+    marginBottom: 6,
+  },
+  fuelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+  },
+  fuelText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '600',
   },
   heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 18 },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center' },
