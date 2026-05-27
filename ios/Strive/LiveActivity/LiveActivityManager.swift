@@ -127,6 +127,7 @@ final class LiveActivityManager {
       log("SKIP update — no activity running")
       return
     }
+    let prev = activity.content.state
     let state = StriveActivityAttributes.State(
       platform: platform,
       fare: fare,
@@ -134,10 +135,17 @@ final class LiveActivityManager {
       kmRate: kmRate,
       distanceKm: distanceKm,
       durationMin: durationMin,
-      verdictLevel: verdictLevel
+      verdictLevel: verdictLevel,
+      todayEarnings: prev.todayEarnings,
+      todayHourlyRate: prev.todayHourlyRate,
+      todayKm: prev.todayKm,
+      onlineMinutes: prev.onlineMinutes
     )
     let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))
-    let alert = AlertConfiguration(title: "", body: "", sound: .default)
+    let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
+    let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
+    let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
+    let alert = AlertConfiguration(title: alertTitle, body: alertBody, sound: .default)
     Task { await activity.update(content, alertConfiguration: alert) }
     log("updated \(activity.id), dismiss in 10s")
 
@@ -171,13 +179,19 @@ final class LiveActivityManager {
       return
     }
     log("showError() on \(activity.id)")
+    let prev = activity.content.state
     let errorState = StriveActivityAttributes.State(
       platform: "ERROR",
       fare: 0, hourlyRate: 0, kmRate: 0,
-      distanceKm: 0, durationMin: 0, verdictLevel: 0
+      distanceKm: 0, durationMin: 0, verdictLevel: 0,
+      todayEarnings: prev.todayEarnings,
+      todayHourlyRate: prev.todayHourlyRate,
+      todayKm: prev.todayKm,
+      onlineMinutes: prev.onlineMinutes
     )
     let content = ActivityContent(state: errorState, staleDate: Date().addingTimeInterval(7))
-    Task { await activity.update(content) }
+    let alert = AlertConfiguration(title: "Strive", body: "Analyse impossible — réessayez.", sound: .default)
+    Task { await activity.update(content, alertConfiguration: alert) }
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
