@@ -352,7 +352,11 @@ class ScanBridgeModule: RCTEventEmitter {
         kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
         distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
         durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
-        verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+        verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
+        todayEarnings: (payload["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
+        todayHourlyRate: (payload["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+        todayKm: (payload["todayKm"] as? NSNumber)?.doubleValue ?? 0,
+        onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0
       )
       resolve(started)
     } else {

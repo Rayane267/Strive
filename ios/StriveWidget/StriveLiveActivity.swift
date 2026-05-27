@@ -133,65 +133,81 @@ private struct LockScreenView: View {
     let hasResult = !isScanning && !isIdle && !isError
     let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
 
-    VStack(spacing: 0) {
-      // Header : logo + marque
-      HStack(spacing: 8) {
-        Image(systemName: "car.fill")
-          .font(.system(size: 14, weight: .bold))
-          .foregroundColor(.black)
-          .padding(6)
-          .background(Circle().fill(accent))
-        Text("STRIVE")
-          .font(.system(size: 13, weight: .heavy, design: .rounded))
-          .tracking(2)
-          .foregroundColor(accent)
-        Spacer()
+    HStack(spacing: 14) {
+      // Logo Strive
+      Image("StriveLogo")
+        .resizable()
+        .aspectRatio(contentMode: .fill)
+        .frame(width: 42, height: 42)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+          RoundedRectangle(cornerRadius: 12)
+            .stroke(accent.opacity(0.4), lineWidth: 1)
+        )
+
+      // KPIs
+      VStack(alignment: .leading, spacing: 6) {
         if isScanning {
-          HStack(spacing: 5) {
-            ProgressView().tint(.white)
-            Text("Analyse…")
-              .font(.system(size: 12, weight: .medium))
-              .foregroundColor(.white.opacity(0.6))
+          HStack(spacing: 6) {
+            ProgressView().tint(accent)
+            Text("Analyse en cours…")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundColor(.white.opacity(0.7))
+          }
+        } else if isError {
+          HStack(spacing: 6) {
+            Image(systemName: "xmark.circle.fill")
+              .foregroundColor(.red)
+            Text("Échec de l'analyse")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundColor(.white.opacity(0.7))
           }
         } else {
-          Text(formatOnlineTime(state.onlineMinutes))
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white.opacity(0.5))
+          // Ligne 1 : Gains + Taux horaire
+          HStack(spacing: 0) {
+            Text(String(format: "%.0f€", state.todayEarnings))
+              .font(.system(size: 22, weight: .heavy))
+              .foregroundColor(.white)
+            Text(" · ")
+              .font(.system(size: 14))
+              .foregroundColor(.white.opacity(0.25))
+            Text(String(format: "%.0f€/h", state.todayHourlyRate))
+              .font(.system(size: 16, weight: .bold))
+              .foregroundColor(accent)
+          }
+
+          // Ligne 2 : Distance + Temps
+          HStack(spacing: 12) {
+            HStack(spacing: 4) {
+              Image(systemName: "road.lanes")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.35))
+              Text(String(format: "%.1f km", state.todayKm))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.55))
+            }
+            HStack(spacing: 4) {
+              Image(systemName: "clock")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.35))
+              Text(formatOnlineTime(state.onlineMinutes))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.55))
+            }
+            if hasResult {
+              Spacer()
+              Image(systemName: verdictIcon(state.verdictLevel))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(verdictColor(state.verdictLevel))
+            }
+          }
         }
       }
-      .padding(.bottom, 12)
 
-      // KPI cards
-      HStack(spacing: 8) {
-        KpiCard(value: String(format: "%.0f€", state.todayEarnings), label: "Gains", accent: accent)
-        KpiCard(value: String(format: "%.0f€/h", state.todayHourlyRate), label: "Taux", accent: accent)
-        KpiCard(value: String(format: "%.1fkm", state.todayKm), label: "Distance", accent: accent)
-      }
-
-      // Dernière course (si résultat dispo)
-      if hasResult {
-        HStack(spacing: 8) {
-          Text(state.platform.capitalized)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(.white.opacity(0.7))
-          Spacer()
-          Text(String(format: "€%.0f", state.fare))
-            .font(.system(size: 14, weight: .heavy))
-            .foregroundColor(.white)
-          Text("·")
-            .foregroundColor(.white.opacity(0.3))
-          Text(String(format: "%.0f€/h", state.hourlyRate))
-            .font(.system(size: 13, weight: .bold))
-            .foregroundColor(verdictColor(state.verdictLevel))
-          Image(systemName: verdictIcon(state.verdictLevel))
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(verdictColor(state.verdictLevel))
-        }
-        .padding(.top, 10)
-      }
+      Spacer(minLength: 0)
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 14)
+    .padding(.horizontal, 14)
+    .padding(.vertical, 12)
   }
 }
 
@@ -200,33 +216,6 @@ private func formatOnlineTime(_ minutes: Int) -> String {
   let h = minutes / 60
   let m = minutes % 60
   return h > 0 ? String(format: "%dh%02d", h, m) : "\(m)min"
-}
-
-@available(iOS 16.2, *)
-private struct KpiCard: View {
-  let value: String
-  let label: String
-  let accent: Color
-  var body: some View {
-    VStack(spacing: 4) {
-      Text(value)
-        .font(.system(size: 16, weight: .heavy))
-        .foregroundColor(.white)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-      Text(label.uppercased())
-        .font(.system(size: 9, weight: .bold))
-        .tracking(0.5)
-        .foregroundColor(accent.opacity(0.7))
-        .lineLimit(1)
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 8)
-    .background(
-      RoundedRectangle(cornerRadius: 10)
-        .fill(.white.opacity(0.06))
-    )
-  }
 }
 
 // MARK: - KPI Composants

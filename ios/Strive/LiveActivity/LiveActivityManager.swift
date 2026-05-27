@@ -35,12 +35,16 @@ final class LiveActivityManager {
   @discardableResult
   func start(
     platform: String,
-    fare: Double,
-    hourlyRate: Double,
-    kmRate: Double,
-    distanceKm: Double,
-    durationMin: Int,
-    verdictLevel: Int
+    fare: Double = 0,
+    hourlyRate: Double = 0,
+    kmRate: Double = 0,
+    distanceKm: Double = 0,
+    durationMin: Int = 0,
+    verdictLevel: Int = 1,
+    todayEarnings: Double = 0,
+    todayHourlyRate: Double = 0,
+    todayKm: Double = 0,
+    onlineMinutes: Int = 0
   ) -> Bool {
     log("start(\(platform)) fare=\(fare) hr=\(hourlyRate) km=\(kmRate)")
 
@@ -61,7 +65,11 @@ final class LiveActivityManager {
       kmRate: kmRate,
       distanceKm: distanceKm,
       durationMin: durationMin,
-      verdictLevel: verdictLevel
+      verdictLevel: verdictLevel,
+      todayEarnings: todayEarnings,
+      todayHourlyRate: todayHourlyRate,
+      todayKm: todayKm,
+      onlineMinutes: onlineMinutes
     )
 
     do {

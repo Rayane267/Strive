@@ -510,10 +510,17 @@ const DashboardScreen = () => {
         setSessionStartTs(Date.now());
         setSessionSeconds(0);
         if (Platform.OS === 'ios' && ScanBridge) {
+          const accepted = rides.filter(r => r.status === 'ACCEPTED');
+          const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
+          const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
             fare: 0, hourlyRate: 0, kmRate: 0,
             distanceKm: 0, durationMin: 0, verdictLevel: 1,
+            todayEarnings: totalE,
+            todayHourlyRate: parseFloat(stats.avgRate) || 0,
+            todayKm: totalKm,
+            onlineMinutes: Math.floor(sessionSeconds / 60),
           });
         }
         scheduleInactivityReminder();
