@@ -32,19 +32,12 @@ struct AnalyzeRideIntent: AppIntent {
       throw IntentError.invalidImage
     }
 
-    // Start Live Activity immediately with placeholder (AppIntent may lose
-    // visibility once the async pipeline starts).
-    LiveActivityManager.shared.start(
-      platform: "SCANNING",
-      fare: 0, hourlyRate: 0, kmRate: 0,
-      distanceKm: 0, durationMin: 0, verdictLevel: 1
-    )
-
     let summary: String = try await withThrowingTaskGroup(of: String.self) { group in
       group.addTask {
         try await withCheckedThrowingContinuation { cont in
           ScanProcessor.shared.process(image: image) { finalResult in
             guard let result = finalResult else {
+              LiveActivityManager.shared.showError()
               cont.resume(throwing: IntentError.noRideDetected)
               return
             }

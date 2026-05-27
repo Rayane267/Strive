@@ -56,4 +56,11 @@ RCT_EXTERN_METHOD(updateLiveActivity:(NSDictionary *)payload
 RCT_EXTERN_METHOD(stopLiveActivity:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(scheduleLocalNotification:(NSString *)identifier
+                  title:(NSString *)title
+                  body:(NSString *)body
+                  delaySeconds:(double)delaySeconds)
+
+RCT_EXTERN_METHOD(cancelLocalNotification:(NSString *)identifier)
+
 @end

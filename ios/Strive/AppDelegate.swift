@@ -24,10 +24,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     application.registerForRemoteNotifications()
     Messaging.messaging().delegate = self
 
-    // Log Live Activities status for debugging
     if #available(iOS 16.2, *) {
       let info = ActivityAuthorizationInfo()
-      NSLog("[Strive] Live Activities enabled: %d", info.areActivitiesEnabled ? 1 : 0)
+      NSLog("[Strive] Live Activities enabled: %d, active: %d",
+            info.areActivitiesEnabled ? 1 : 0,
+            Activity<StriveActivityAttributes>.activities.count)
     }
 
     let delegate = ReactNativeDelegate()
@@ -56,8 +57,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
     if url.scheme == "strive" {
-      // La Share Extension a ouvert l'app — le ScanBridgeModule
-      // va automatiquement lire le résultat depuis App Group
       NotificationCenter.default.post(
         name: UIApplication.didBecomeActiveNotification,
         object: nil

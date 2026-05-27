@@ -381,26 +381,6 @@ class ShareViewController: UIViewController {
   }
 
   private func analyzeImage(_ image: UIImage) {
-    var liveActivityStatus = "skipped-ios-too-old"
-    if #available(iOS 16.2, *) {
-      let ok = LiveActivityManager.shared.start(
-        platform: "SCANNING",
-        fare: 0,
-        hourlyRate: 0,
-        kmRate: 0,
-        distanceKm: 0,
-        durationMin: 0,
-        verdictLevel: 1
-      )
-      liveActivityStatus = ok ? "started" : "failed"
-      NSLog("[Strive:ShareExt] LiveActivity start → %@", liveActivityStatus)
-    }
-    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
-      defaults.set(liveActivityStatus, forKey: "liveActivityDebug")
-      defaults.set(Date().timeIntervalSince1970, forKey: "liveActivityDebugTs")
-      defaults.synchronize()
-    }
-
     ScanProcessor.shared.process(image: image) { [weak self] finalResult in
       DispatchQueue.main.async {
         guard let self = self else { return }
@@ -410,19 +390,6 @@ class ShareViewController: UIViewController {
         }
         self.showResult(from: result)
         self.saveSharedResult(result)
-
-        // Met à jour la Live Activity avec les valeurs finales
-        if #available(iOS 16.2, *) {
-          LiveActivityManager.shared.update(
-            platform: result.scan.platform.rawValue,
-            fare: result.scan.fare,
-            hourlyRate: result.hourlyRate,
-            kmRate: result.kmRate,
-            distanceKm: result.totalDistanceKm,
-            durationMin: result.totalDurationMin,
-            verdictLevel: result.verdictLevel
-          )
-        }
       }
     }
   }
@@ -445,6 +412,12 @@ class ShareViewController: UIViewController {
         if let result = result {
           self.showResult(result)
           self.saveResultForMainApp(result)
+          let dur = result.durationMin ?? Int(result.distanceKm / 25 * 60)
+          let hr = dur > 0 ? result.fare / (Double(dur) / 60.0) : 0
+          let km = result.distanceKm > 0 ? result.fare / result.distanceKm : 0
+          let prefs = UserDefaults(suiteName: Self.appGroupId)
+          let minH = prefs?.double(forKey: "minHourlyRate") ?? 25.0
+          let minK = prefs?.double(forKey: "minKmRate") ?? 1.2
         } else {
           self.showError("Impossible d'analyser cette image")
         }
@@ -591,12 +564,28 @@ class ShareViewController: UIViewController {
   private func saveResultForMainApp(_ result: ParsedResult) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
 
+    let durationMin = result.durationMin ?? Int(result.distanceKm / 25 * 60)
+    let hourlyRate = durationMin > 0 ? result.fare / (Double(durationMin) / 60.0) : 0
+    let kmRate = result.distanceKm > 0 ? result.fare / result.distanceKm : 0
+
+    let minH = defaults.double(forKey: "minHourlyRate")
+    let minK = defaults.double(forKey: "minKmRate")
+    let hrOk = hourlyRate >= (minH > 0 ? minH : 25.0)
+    let kmOk = kmRate >= (minK > 0 ? minK : 1.2)
+    let verdictLevel = (hrOk && kmOk) ? 2 : (hrOk || kmOk) ? 1 : 0
+
+    let laStatus = defaults.string(forKey: "liveActivityDebug") ?? "not-written"
+
     var body: [String: Any] = [
       "platform": result.platform,
       "fare": result.fare,
       "distanceKm": result.distanceKm,
+      "durationMin": durationMin,
+      "hourlyRate": hourlyRate,
+      "kmRate": kmRate,
+      "verdictLevel": verdictLevel,
+      "_liveActivityDebug": laStatus,
     ]
-    if let dur = result.durationMin { body["durationMin"] = dur }
     if let pickup = result.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = result.destinationAddress { body["destinationAddress"] = dest }
 
@@ -604,7 +593,6 @@ class ShareViewController: UIViewController {
       defaults.set(data, forKey: Self.scanResultKey)
       defaults.set(Date().timeIntervalSince1970, forKey: Self.scanTimestampKey)
 
-      // Notifier l'app principale via Darwin notification
       let center = CFNotificationCenterGetDarwinNotifyCenter()
       CFNotificationCenterPostNotification(center, CFNotificationName("com.striveapp.app.scanResult" as CFString), nil, nil, true)
     }

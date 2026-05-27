@@ -88,22 +88,19 @@ class ScanBridgeModule: RCTEventEmitter {
     if isActive {
       handleShareExtensionResult()
     }
-    // Démarre le Live Activity en attente quand l'app revient au foreground
+    // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
-      let existing = Activity<StriveActivityAttributes>.activities
-      if existing.isEmpty {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-          LiveActivityManager.shared.start(
-            platform: (payload["platform"] as? String) ?? "UNKNOWN",
-            fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
-            hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
-            kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
-            distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
-            durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
-            verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
-          )
-        }
+      if !Activity<StriveActivityAttributes>.activities.isEmpty {
+        LiveActivityManager.shared.update(
+          platform: (payload["platform"] as? String) ?? "UNKNOWN",
+          fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
+          hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+          kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+          distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
+          durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
+          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+        )
       }
     }
   }
@@ -140,34 +137,59 @@ class ScanBridgeModule: RCTEventEmitter {
             shareExtStatus, existing.count, UIApplication.shared.applicationState.rawValue)
 
       if existing.isEmpty {
-        let payload = result
-        let appState = UIApplication.shared.applicationState
-        if appState == .active {
-          LiveActivityManager.shared.start(
-            platform: (payload["platform"] as? String) ?? "UNKNOWN",
-            fare: (payload["fare"] as? NSNumber)?.doubleValue ?? 0,
-            hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
-            kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
-            distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
-            durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
-            verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
-          )
-        } else {
-          pendingLiveActivityPayload = payload
+        var payload = result
+        let fare = (payload["fare"] as? NSNumber)?.doubleValue ?? 0
+        let distKm = (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0
+        let durMin = (payload["durationMin"] as? NSNumber)?.intValue ?? 0
+
+        if (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0 == 0, fare > 0, durMin > 0 {
+          payload["hourlyRate"] = fare / (Double(durMin) / 60.0)
         }
+        if (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0 == 0, fare > 0, distKm > 0 {
+          payload["kmRate"] = fare / distKm
+        }
+        if payload["verdictLevel"] == nil {
+          let prefs = UserDefaults(suiteName: Self.appGroupId)
+          let minH = prefs?.double(forKey: "minHourlyRate") ?? 25.0
+          let minK = prefs?.double(forKey: "minKmRate") ?? 1.2
+          let hr = (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0
+          let km = (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0
+          payload["verdictLevel"] = (hr >= minH && km >= minK) ? 2 : (hr >= minH || km >= minK) ? 1 : 0
+        }
+
+        LiveActivityManager.shared.update(
+          platform: (payload["platform"] as? String) ?? "UNKNOWN",
+          fare: fare,
+          hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+          kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
+          distanceKm: distKm,
+          durationMin: durMin,
+          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+        )
       }
+
+      let defaults = UserDefaults(suiteName: Self.appGroupId)
+      let laResult = defaults?.string(forKey: "laLastStep") ?? "none"
+      let existingAfter = Activity<StriveActivityAttributes>.activities.count
 
       SentrySDK.capture(message: "LiveActivity debug") { scope in
         scope.setLevel(.info)
         scope.setTag(value: "live-activity", key: "feature")
         scope.setTag(value: shareExtStatus, key: "share-ext-result")
+        scope.setTag(value: String(laResult.prefix(200)), key: "la-result")
+        scope.setTag(value: "\(existing.count)>\(existingAfter)", key: "la-count")
+        scope.setTag(value: "\(UIApplication.shared.applicationState.rawValue)", key: "la-appstate")
         scope.setContext(value: [
           "shareExtStatus": shareExtStatus,
-          "existingActivities": "\(existing.count)",
+          "existingBefore": "\(existing.count)",
+          "existingAfter": "\(existingAfter)",
           "appState": "\(UIApplication.shared.applicationState.rawValue)",
           "mainAppAuthEnabled": "\(ActivityAuthorizationInfo().areActivitiesEnabled)",
+          "laResult": laResult,
         ], key: "live-activity-debug")
       }
+      defaults?.removeObject(forKey: "laSteps")
+      defaults?.removeObject(forKey: "laLastStep")
     }
 
     sendEvent(withName: "onScanResult", body: result)
@@ -370,5 +392,28 @@ class ScanBridgeModule: RCTEventEmitter {
         "screenHeight": ocrResult.screenHeight,
       ])
     }
+  }
+
+  // MARK: - Local Notifications
+
+  @objc func scheduleLocalNotification(_ identifier: String,
+                                       title: String,
+                                       body: String,
+                                       delaySeconds: Double) {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+
+    let trigger = delaySeconds > 0
+      ? UNTimeIntervalNotificationTrigger(timeInterval: max(delaySeconds, 1), repeats: false)
+      : nil
+
+    let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+    UNUserNotificationCenter.current().add(request)
+  }
+
+  @objc func cancelLocalNotification(_ identifier: String) {
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
   }
 }

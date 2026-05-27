@@ -8,14 +8,27 @@ struct StriveLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: StriveActivityAttributes.self) { context in
       LockScreenView(state: context.state)
-        .activityBackgroundTint(Color.black.opacity(0.92))
-        .activitySystemActionForegroundColor(.white)
+        .activityBackgroundTint(.clear)
+        .activitySystemActionForegroundColor(.clear)
 
     } dynamicIsland: { context in
       let isScanning = context.state.platform == "SCANNING"
+      let isIdle = context.state.platform == "IDLE"
+      let isError = context.state.platform == "ERROR"
+      let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          if isScanning {
+          if isError {
+            HStack(spacing: 8) {
+              Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(errorRed)
+              Text("Échec")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.75))
+            }
+            .padding(.leading, 6)
+          } else if isScanning {
             HStack(spacing: 8) {
               ProgressView()
                 .tint(.white)
@@ -24,6 +37,8 @@ struct StriveLiveActivity: Widget {
                 .foregroundColor(.white.opacity(0.75))
             }
             .padding(.leading, 6)
+          } else if isIdle {
+            EmptyView()
           } else {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
               Text(context.state.platform.capitalized)
@@ -35,7 +50,13 @@ struct StriveLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          if !isScanning {
+          if isError {
+            Text("Analyse impossible")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundColor(.white.opacity(0.55))
+              .padding(.trailing, 6)
+          } else if !isScanning && !isIdle {
+            // trailing: result data
             HStack(spacing: 10) {
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
               KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
@@ -44,7 +65,15 @@ struct StriveLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
-          if !isScanning {
+          if isError {
+            Text("Réessayez avec une autre capture")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundColor(.white.opacity(0.45))
+              .padding(.top, 4)
+              .padding(.bottom, 4)
+          } else if isIdle {
+            EmptyView()
+          } else if !isScanning {
             RouteRow(
               distanceKm: context.state.distanceKm,
               durationMin: context.state.durationMin,
@@ -56,25 +85,41 @@ struct StriveLiveActivity: Widget {
           }
         }
       } compactLeading: {
-        if isScanning {
+        if isError {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundColor(errorRed)
+        } else if isScanning {
           ProgressView()
             .tint(.white)
+        } else if isIdle {
+          EmptyView()
         } else {
           Image(systemName: "car.fill")
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       } compactTrailing: {
-        if isScanning {
+        if isError {
+          Text("Erreur")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(errorRed)
+        } else if isScanning {
           Text("…")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white.opacity(0.6))
+        } else if isIdle {
+          EmptyView()
         } else {
           Text("€\(Int(context.state.hourlyRate))/h")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       } minimal: {
-        if isScanning {
+        if isError {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundColor(errorRed)
+        } else if isIdle {
+          EmptyView()
+        } else if isScanning {
           ProgressView()
             .tint(.white)
         } else {
@@ -82,7 +127,7 @@ struct StriveLiveActivity: Widget {
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       }
-      .keylineTint(isScanning ? .white : verdictColor(context.state.verdictLevel))
+      .keylineTint(isError ? errorRed : (isIdle || isScanning) ? .white : verdictColor(context.state.verdictLevel))
     }
   }
 }
@@ -92,42 +137,8 @@ struct StriveLiveActivity: Widget {
 @available(iOS 16.2, *)
 private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
-
   var body: some View {
-    let isScanning = state.platform == "SCANNING"
-    VStack(spacing: 12) {
-      if isScanning {
-        HStack(spacing: 8) {
-          ProgressView()
-            .tint(.white)
-          Text("Analyse en cours…")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white.opacity(0.75))
-        }
-      } else {
-        HStack(alignment: .center, spacing: 10) {
-          Text(state.platform.capitalized)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white.opacity(0.75))
-
-          HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
-
-          Spacer(minLength: 6)
-
-          FarePill(fare: state.fare, level: state.verdictLevel)
-
-          KmRateText(value: state.kmRate, level: state.verdictLevel)
-        }
-
-        RouteRow(
-          distanceKm: state.distanceKm,
-          durationMin: state.durationMin,
-          level: state.verdictLevel
-        )
-      }
-    }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 14)
+    EmptyView().frame(height: 0)
   }
 }
 
@@ -273,7 +284,7 @@ private func verdictIcon(_ level: Int) -> String {
   StriveLiveActivity()
 } contentStates: {
   StriveActivityAttributes.ContentState(
-    platform: "BOLT",
+    platform: "UBER",
     fare: 12.0,
     hourlyRate: 22,
     kmRate: 0.97,
@@ -288,7 +299,7 @@ private func verdictIcon(_ level: Int) -> String {
   StriveLiveActivity()
 } contentStates: {
   StriveActivityAttributes.ContentState(
-    platform: "HEETCH",
+    platform: "UBER",
     fare: 6.5,
     hourlyRate: 14,
     kmRate: 0.42,

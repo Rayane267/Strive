@@ -106,7 +106,12 @@
       "Bash(where ruby *)",
       "Bash(where bundle *)",
       "Bash(bundle --version)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(npx eas *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Copy-Item *)",
+      "Bash(Select-Object -First 50)",
+      "WebFetch(domain:strive-pf.sentry.io)"
     ]
   },
   "enableAllProjectMcpServers": true,

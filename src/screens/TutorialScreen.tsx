@@ -21,6 +21,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,11 +50,12 @@ const STEPS = (Platform.OS === 'ios'
       { key: '5',        icon: 'rocket-launch',      color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
     ]
   : [
-      { key: '1', icon: 'steering',       color: colors.primary, titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', tip: 'tutorial.tips.step1' },
-      { key: '2', icon: 'line-scan',      color: '#4FC3F7',      titleKey: 'tutorial.step2.title', descKey: 'tutorial.step2.desc', tip: 'tutorial.tips.step2' },
-      { key: '3', icon: 'check-decagram', color: colors.primary, titleKey: 'tutorial.step3.title', descKey: 'tutorial.step3.desc', tip: 'tutorial.tips.step3' },
-      { key: '4', icon: 'chart-line',     color: '#FF8A65',      titleKey: 'tutorial.step4.title', descKey: 'tutorial.step4.desc', tip: 'tutorial.tips.step4' },
-      { key: '5', icon: 'rocket-launch',  color: colors.primary, titleKey: 'tutorial.step5.title', descKey: 'tutorial.step5.desc', tip: 'tutorial.tips.step5' },
+      { key: '1',        icon: 'steering',       color: colors.primary, titleKey: 'tutorial.step1.title',      descKey: 'tutorial.step1.desc',      tip: 'tutorial.tips.step1' },
+      { key: 'preview',  icon: 'eye-outline',    color: '#A78BFA',      titleKey: 'tutorial.iosPreview.title', descKey: 'tutorial.iosPreview.subtitle', tip: '' },
+      { key: 'minimums', icon: 'tune-vertical',  color: '#FF8A65',      titleKey: 'tutorial.minimums.title',   descKey: 'tutorial.minimums.desc',   tip: '' },
+      { key: '2',        icon: 'line-scan',      color: '#4FC3F7',      titleKey: 'tutorial.step2.title',      descKey: 'tutorial.step2.desc',      tip: 'tutorial.tips.step2' },
+      { key: '4',        icon: 'chart-line',     color: '#FF8A65',      titleKey: 'tutorial.step4.title',      descKey: 'tutorial.step4.desc',      tip: 'tutorial.tips.step4' },
+      { key: '5',        icon: 'rocket-launch',  color: colors.primary, titleKey: 'tutorial.step5.title',      descKey: 'tutorial.step5.desc',      tip: 'tutorial.tips.step5' },
     ]
 ) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
 
@@ -70,6 +73,7 @@ const PRESETS = [
 
 const TutorialScreen = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const navigation = useNavigation<any>();
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -97,11 +101,24 @@ const TutorialScreen = () => {
     }).start();
   };
 
+  const savePreferences = async () => {
+    if (!user?.id) return;
+    try {
+      await supabase.from('preferences').upsert({
+        id: user.id,
+        min_hourly_rate: minHourly,
+        min_km_rate: minKm,
+        include_pickup: includePickup,
+      });
+    } catch {}
+  };
+
   const handleNext = () => {
     if (!isLast) {
       goToIndex(currentIndex + 1);
     } else {
       hapticSuccess();
+      savePreferences();
       navigation.goBack();
     }
   };
@@ -165,6 +182,7 @@ const TutorialScreen = () => {
     const isMinimums = item.key === 'minimums';
     const isDone = item.key === '5';
     const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger || isMinimums || isDone;
+    const showCompactIcon = hasCustomBlock && !isDone;
 
     return (
       <View style={styles.slide}>
@@ -173,8 +191,7 @@ const TutorialScreen = () => {
         <View style={[styles.glowCircleInner, { backgroundColor: item.color + '05' }]} />
 
         <Animated.View style={{ alignItems: 'center', opacity, transform: [{ scale }, { translateY }] }}>
-          {hasCustomBlock ? (
-            // Compact header pour slides iOS custom — gros icône + ring trop volumineux
+          {showCompactIcon ? (
             <SafeGradient
               colors={[item.color + '25', item.color + '08']}
               style={styles.iconCompact}
@@ -183,7 +200,7 @@ const TutorialScreen = () => {
             >
               <MaterialCommunityIcons name={item.icon as any} size={26} color={item.color} />
             </SafeGradient>
-          ) : (
+          ) : isDone ? null : (
             <>
               <View style={styles.iconContainer}>
                 <View style={[styles.iconRingOuter, { borderColor: item.color + '12' }]} />
@@ -398,32 +415,39 @@ const TutorialScreen = () => {
             </Animated.View>
           ) : null}
 
-          {/* Step Done — Quick Reference horizontal (like Trip Identifier) */}
           {isDone ? (
-            <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
+            <Animated.View style={[styles.doneBlock, { opacity }]}>
+              <View style={styles.doneCheckOuter}>
+                <View style={styles.doneCheckInner}>
+                  <Feather name="check" size={40} color={colors.background} />
+                </View>
+              </View>
+
               <View style={styles.qrCard}>
                 <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
                 <View style={styles.qrRow}>
-                  <View style={styles.qrItem}>
-                    <View style={[styles.qrIcon, { backgroundColor: '#4FC3F7' + '20' }]}>
-                      <MaterialCommunityIcons name="cellphone-screenshot" size={20} color="#4FC3F7" />
-                    </View>
-                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.screenshot')}</Text>
-                  </View>
-                  <Text style={styles.qrArrow}>›</Text>
-                  <View style={styles.qrItem}>
-                    <View style={[styles.qrIcon, { backgroundColor: colors.primary + '20' }]}>
-                      <MaterialCommunityIcons name="gesture-double-tap" size={20} color={colors.primary} />
-                    </View>
-                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.doubleTap')}</Text>
-                  </View>
-                  <Text style={styles.qrArrow}>›</Text>
-                  <View style={styles.qrItem}>
-                    <View style={[styles.qrIcon, { backgroundColor: '#FF8A65' + '20' }]}>
-                      <Feather name="zap" size={18} color="#FF8A65" />
-                    </View>
-                    <Text style={styles.qrLabel}>{t('tutorial.quickRef.seeVerdict')}</Text>
-                  </View>
+                  {(Platform.OS === 'android' ? [
+                    { icon: 'line-scan', color: '#4FC3F7', label: 'Scanner', sub: 'Activez le scanner' },
+                    { icon: 'gesture-tap', color: colors.primary, label: 'Tap', sub: 'Tapez sur la bulle' },
+                    { icon: 'check-decagram', color: '#FF8A65', label: 'Verdict', sub: 'Résultat instantané' },
+                  ] : [
+                    { icon: 'cellphone-screenshot', color: '#4FC3F7', label: 'Screenshot', sub: "Capturez l'offre" },
+                    { icon: 'gesture-double-tap', color: colors.primary, label: 'Double-tap', sub: 'Tapez 2x au dos' },
+                    { icon: 'check-decagram', color: '#FF8A65', label: 'Verdict', sub: 'Résultat instantané' },
+                  ]).map((step, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && (
+                        <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+                      )}
+                      <View style={styles.qrItem}>
+                        <View style={[styles.qrIcon, { backgroundColor: step.color + '18' }]}>
+                          <MaterialCommunityIcons name={step.icon as any} size={24} color={step.color} />
+                        </View>
+                        <Text style={styles.qrLabel}>{step.label}</Text>
+                        <Text style={styles.qrSub}>{step.sub}</Text>
+                      </View>
+                    </React.Fragment>
+                  ))}
                 </View>
               </View>
             </Animated.View>
@@ -519,7 +543,7 @@ const TutorialScreen = () => {
         <View style={styles.progressBarTrack}>
           <Animated.View style={[styles.progressBarFill, { width: progressWidth as any }]} />
         </View>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel={t('tutorial.skip')}>
+        <TouchableOpacity onPress={() => { savePreferences(); navigation.goBack(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel={t('tutorial.skip')}>
           <Text style={styles.skipText}>{t('tutorial.skip')}</Text>
         </TouchableOpacity>
       </View>
@@ -863,8 +887,8 @@ const styles = StyleSheet.create({
   },
   iosSegmentTxt: {
     color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
   },
   iosSegmentTxtActive: {
     color: colors.textMain,
@@ -1228,20 +1252,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  doneBlock: {
+    width: width - 48,
+    alignItems: 'center',
+    marginTop: 8,
+  },
   doneCheckOuter: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,230,118,0.2)',
+    marginBottom: 28,
   },
   doneCheckInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
   },
   doneSubtitle: {
     color: colors.textDimmed,
@@ -1295,22 +1333,28 @@ const styles = StyleSheet.create({
 
   // Quick Reference — horizontal card (done step)
   qrCard: {
+    width: '100%',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    padding: 16,
-    gap: 14,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    gap: 20,
   },
   qrCardTitle: {
-    color: colors.textMain,
-    fontSize: 14,
+    color: colors.textDimmed,
+    fontSize: 12,
     fontWeight: '800',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
   qrRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 12,
   },
   qrItem: {
     alignItems: 'center',
@@ -1318,24 +1362,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   qrIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qrLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
+    color: colors.textMain,
+    fontSize: 13,
+    fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 15,
   },
-  qrArrow: {
+  qrSub: {
     color: colors.textDimmed,
-    fontSize: 22,
-    fontWeight: '300',
-    marginBottom: 20,
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 13,
   },
 
   footer: {

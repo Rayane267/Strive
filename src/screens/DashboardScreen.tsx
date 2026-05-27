@@ -15,6 +15,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  RefreshControl,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -38,6 +40,15 @@ import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offl
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
+import {
+  scheduleInactivityReminder,
+  cancelInactivityReminder,
+  resetInactivityReminder,
+  scheduleQuotaResetNotification,
+  notifySessionClosed,
+} from '../services/localNotifications';
+
+const { ScanBridge } = NativeModules;
 
 /**
  * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
@@ -71,15 +82,17 @@ const DashboardScreen = () => {
   const remaining = getRemainingScans(tier, stats.scans, extraCredits);
   const canScan = remaining === null || remaining > 0;
 
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(profile?.is_online ?? false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
+  const lastScanTimeRef = useRef<number>(Date.now());
   const [priceModal, setPriceModal] = useState<{ rideId: string; input: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<string | null>(null); // rideId awaiting price confirmation
   const [ratingModal, setRatingModal] = useState(false);
   const [fetchError, setFetchError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -90,6 +103,20 @@ const DashboardScreen = () => {
     const cleanup = setupNotificationListeners();
     return cleanup;
   }, [user?.id]);
+
+  // ── Restore online state + LA on app open ──
+  useEffect(() => {
+    if (profile?.is_online) {
+      setIsOnline(true);
+      if (Platform.OS === 'ios' && ScanBridge) {
+        ScanBridge.startLiveActivity({
+          platform: 'IDLE',
+          fare: 0, hourlyRate: 0, kmRate: 0,
+          distanceKm: 0, durationMin: 0, verdictLevel: 1,
+        });
+      }
+    }
+  }, [profile?.is_online]);
 
   // ── Config scanner (edge function Gemini + remote config OCR + TomTom) ──
   useEffect(() => {
@@ -131,6 +158,7 @@ const DashboardScreen = () => {
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
   useEffect(() => {
     try { scannerService.setQuotaReached(!canScan); } catch {}
+    if (!canScan) scheduleQuotaResetNotification(0);
   }, [canScan]);
 
   useEffect(() => {
@@ -212,6 +240,8 @@ const DashboardScreen = () => {
       const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
 
       hapticHeavy();
+      lastScanTimeRef.current = Date.now();
+      resetInactivityReminder();
 
       __DEV__ && console.info('[Scanner:Final] valeurs DB :', {
         platform: result.platform,
@@ -390,6 +420,21 @@ const DashboardScreen = () => {
     return () => clearInterval(interval);
   }, [isOnline]);
 
+  // Auto-close session after 1h without scan
+  useEffect(() => {
+    if (!isOnline) return;
+    lastScanTimeRef.current = Date.now();
+    const check = setInterval(() => {
+      if (Date.now() - lastScanTimeRef.current > 3600_000) {
+        notifySessionClosed();
+        handleToggleOnlineRef.current?.();
+      }
+    }, 5 * 60_000);
+    return () => clearInterval(check);
+  }, [isOnline]);
+
+  const handleToggleOnlineRef = useRef<(() => void) | null>(null);
+
   const handleToggleOnline = async () => {
     if (!user || isSyncing) return;
     hapticMedium();
@@ -406,6 +451,14 @@ const DashboardScreen = () => {
         if (error) throw error;
         setCurrentSessionId(data.id);
         setSessionSeconds(0);
+        if (Platform.OS === 'ios' && ScanBridge) {
+          ScanBridge.startLiveActivity({
+            platform: 'IDLE',
+            fare: 0, hourlyRate: 0, kmRate: 0,
+            distanceKm: 0, durationMin: 0, verdictLevel: 1,
+          });
+        }
+        scheduleInactivityReminder();
       } else {
         if (currentSessionId) {
           await supabase
@@ -414,6 +467,10 @@ const DashboardScreen = () => {
             .eq('id', currentSessionId);
         }
         setCurrentSessionId(null);
+        cancelInactivityReminder();
+        if (Platform.OS === 'ios' && ScanBridge) {
+          ScanBridge.stopLiveActivity();
+        }
       }
       await supabase.from('profiles').update({ is_online: newStatus }).eq('id', user.id);
       setIsOnline(newStatus);
@@ -424,6 +481,8 @@ const DashboardScreen = () => {
       setIsSyncing(false);
     }
   };
+
+  handleToggleOnlineRef.current = handleToggleOnline;
 
   const fetchingRef = useRef(false);
   const fetchData = useCallback(async () => {
@@ -497,6 +556,12 @@ const DashboardScreen = () => {
   // Sync la ref pour handleStatusUpdate.catch (déclaré avant fetchData).
   useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
@@ -513,7 +578,18 @@ const DashboardScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
 
         {/* ── HEADER ── */}
         <View style={styles.header}>
@@ -611,6 +687,16 @@ const DashboardScreen = () => {
         </View>
 
 
+        {/* ── OFFLINE HINT ── */}
+        {!isOnline && (
+          <View style={styles.offlineHint}>
+            <Feather name="wifi-off" size={16} color="#FFB300" />
+            <Text style={styles.offlineHintText}>
+              {t('dashboard.offlineBanner', 'Passez en ligne pour activer le scanner')}
+            </Text>
+          </View>
+        )}
+
         {/* ── ERROR STATE ── */}
         {fetchError && (
           <View style={styles.errorCard}>
@@ -674,6 +760,12 @@ const DashboardScreen = () => {
               onDecline={handleDeclinePress}
             />
           ))
+        ) : !isOnline ? (
+          <View style={styles.waitingContainer}>
+            <MaterialCommunityIcons name="power-standby" size={36} color="rgba(255,255,255,0.15)" />
+            <Text style={styles.waitingTitle}>{t('dashboard.offlineHint', 'Passez en ligne pour scanner')}</Text>
+            <Text style={styles.waitingSubtitle}>{t('dashboard.offlineHintSub', 'Le scanner fonctionne uniquement quand vous êtes en ligne.')}</Text>
+          </View>
         ) : (
           <View style={styles.waitingContainer}>
             <MaterialCommunityIcons name="radar" size={32} color="rgba(0,230,118,0.3)" />
@@ -955,9 +1047,30 @@ const styles = StyleSheet.create({
   scanLimitBtnPrimaryText: { color: colors.background, fontSize: 13, fontWeight: '700' },
 
   // WAITING
-  waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 14 },
+  waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 10 },
   waitingTitle: { color: colors.textDimmed, fontSize: 14 },
+  waitingSubtitle: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', maxWidth: 260, lineHeight: 18, opacity: 0.7 },
 
+
+
+  // OFFLINE HINT
+  offlineHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,179,0,0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,179,0,0.2)',
+    padding: 14,
+    marginBottom: 12,
+  },
+  offlineHintText: {
+    flex: 1,
+    color: '#FFB300',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
   // ERROR STATE
   errorCard: {

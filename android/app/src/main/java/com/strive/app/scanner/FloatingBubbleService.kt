@@ -484,22 +484,28 @@ class FloatingBubbleService : Service() {
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(14), dpToPx(8), dpToPx(16), dpToPx(8))
+            setPadding(dpToPx(6), dpToPx(6), dpToPx(14), dpToPx(6))
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#E8000000"))
                 cornerRadius = dpToPx(999).toFloat()
+                setStroke(dpToPx(1), Color.parseColor("#3300E676"))
             }
-            elevation = dpToPx(8).toFloat()
+            elevation = dpToPx(10).toFloat()
         }
 
-        pill.addView(TextView(this).apply {
-            text = "📷"; textSize = 14f; gravity = Gravity.CENTER
-            setPadding(0, 0, dpToPx(6), 0)
+        val logoSize = dpToPx(30)
+        pill.addView(ImageView(this).apply {
+            setImageResource(com.strive.R.mipmap.ic_launcher_round)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }, LinearLayout.LayoutParams(logoSize, logoSize).apply {
+            marginEnd = dpToPx(8)
         })
+
         pill.addView(TextView(this).apply {
-            text = "Strive"; textSize = 13f
+            text = "Strive"; textSize = 14f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
         })
 
         bubbleContainer.addView(pill, FrameLayout.LayoutParams(
