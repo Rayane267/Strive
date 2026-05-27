@@ -19,6 +19,8 @@ import {
   NativeModules,
   NativeEventEmitter,
   AppState,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -526,6 +528,19 @@ const DashboardScreen = () => {
         setSessionStartTs(Date.now());
         setSessionSeconds(0);
         if (Platform.OS === 'ios' && ScanBridge) {
+          if (ScanBridge.checkLiveActivityPermission) {
+            const enabled = await ScanBridge.checkLiveActivityPermission();
+            if (!enabled) {
+              Alert.alert(
+                t('dashboard.liveActivityPermission.title', 'Activités en direct'),
+                t('dashboard.liveActivityPermission.message', 'Pour afficher le résultat des scans en temps réel, activez les Activités en direct dans Réglages → Strive.'),
+                [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('common.open'), onPress: () => Linking.openSettings() },
+                ],
+              );
+            }
+          }
           const accepted = rides.filter(r => r.status === 'ACCEPTED');
           const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
           const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);

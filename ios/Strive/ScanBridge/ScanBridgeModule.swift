@@ -347,6 +347,16 @@ class ScanBridgeModule: RCTEventEmitter {
 
   // MARK: - Live Activity (Dynamic Island)
 
+  @objc func checkLiveActivityPermission(_ resolve: @escaping RCTPromiseResolveBlock,
+                                        rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 16.2, *) {
+      let info = ActivityAuthorizationInfo()
+      resolve(info.areActivitiesEnabled)
+    } else {
+      resolve(false)
+    }
+  }
+
   @objc func startLiveActivity(_ payload: NSDictionary,
                                resolve: @escaping RCTPromiseResolveBlock,
                                rejecter reject: @escaping RCTPromiseRejectBlock) {
