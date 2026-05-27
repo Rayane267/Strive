@@ -115,7 +115,15 @@
       "Bash(bundle update *)",
       "Bash(gem list *)",
       "Bash(bundle install *)",
-      "Bash(brew install *)"
+      "Bash(brew install *)",
+      "Bash(Select-Object -First 5)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:blog.y9i.cc)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Select-Object -First 40)",
+      "PowerShell(npx tsc --noEmit --pretty 2>&1 | Select-Object -First 40)",
+      "PowerShell(git *)"
     ]
   },
   "enableAllProjectMcpServers": true,

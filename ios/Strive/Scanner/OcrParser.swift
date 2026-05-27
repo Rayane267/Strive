@@ -22,7 +22,7 @@ final class OcrParser {
 
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
-  private var fareMin: Double = 8.0
+  private var fareMin: Double = 5.0
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
   private var distMax: Double = 120.0
@@ -93,11 +93,15 @@ final class OcrParser {
   // MARK: - Regex (mêmes patterns que Android)
 
   private static let priceRegex = try! NSRegularExpression(
-    pattern: #"(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)"#)
+    pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
+  private static let priceWholeRegex = try! NSRegularExpression(
+    pattern: #"(\d{1,3})\s*€"#)
   private static let distanceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#, options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
+  private static let durationHourRegex = try! NSRegularExpression(
+    pattern: #"(\d{1,2})\s*h\s*(\d{1,2})?\s*(?:min)?"#, options: .caseInsensitive)
   private static let pickupComboMinFirst = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#,
     options: .caseInsensitive)
@@ -127,6 +131,9 @@ final class OcrParser {
       (#"(?<![a-zA-Zà-ü])[oO]+(?=\d[.,]\d)"#, { String(repeating: "0", count: $0.count) }),
       (#"(?<=\d[.,])[oO]+(?![a-zA-Zà-ü])"#, { String(repeating: "0", count: $0.count) }),
       (#"(?<=\d)[oO](?=\d)"#, { _ in "0" }),
+      // S→5, B→8 entre chiffres
+      (#"(?<=\d)[sS](?=\d)"#, { _ in "5" }),
+      (#"(?<=\d)[bB](?=\d)"#, { _ in "8" }),
     ]
     for (pattern, replacer) in rules {
       out = replaceAll(out, pattern: pattern, options: [], replacer: replacer)
@@ -255,19 +262,29 @@ final class OcrParser {
         || blockLower.contains("étoile") || blockLower.contains("etoile")
         || blockLower.contains("rating") || blockLower.contains("note") { continue }
 
-      guard let m = Self.priceRegex.firstMatch(
-        in: normalized, range: NSRange(normalized.startIndex..., in: normalized)
-      ) else { continue }
       let nsNorm = normalized as NSString
-      let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
-      let decPart = nsNorm.substring(with: m.range(at: 2)).replacingOccurrences(of: " ", with: "")
-      guard let value = Double("\(intPart).\(decPart)") else { continue }
-      if value < fareMin || value > fareMax { continue }
+      var value: Double?
+      var isWhole = false
+
+      if let m = Self.priceRegex.firstMatch(in: normalized, range: NSRange(location: 0, length: nsNorm.length)) {
+        let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
+        let decPart = nsNorm.substring(with: m.range(at: 2)).replacingOccurrences(of: " ", with: "")
+        value = Double("\(intPart).\(decPart)")
+      } else if let m = Self.priceWholeRegex.firstMatch(in: normalized, range: NSRange(location: 0, length: nsNorm.length)) {
+        let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
+        value = Double(intPart)
+        isWhole = true
+      }
+
+      guard let v = value, v >= fareMin, v <= fareMax else { continue }
 
       var score: Float = 0
       score += Float(block.box.height) * 1.5
       let centerY = Float((block.box.top + block.box.bottom) / 2)
       if centerY < Float(screenHeight) * 0.55 { score += 30 }
+      if blockLower.contains("€") || blockLower.contains("eur") { score += 20 }
+      if isWhole { score -= 10 }
+      if matches(blockLower, pattern: #"course\s+de"#) { score -= 30 }
 
       if anchors.contains(where: { blockLower.contains($0) }) { score += 25 }
       if idx > 0, anchors.contains(where: { blocks[idx - 1].text.lowercased().contains($0) }) {
@@ -277,8 +294,8 @@ final class OcrParser {
          anchors.contains(where: { blocks[idx + 1].text.lowercased().contains($0) }) {
         score += 20
       }
-      if value >= 1.0 && value <= 5.0 { score -= 40 }
-      candidates.append(Candidate(value: value, score: score))
+      if v >= 1.0 && v <= 5.0 { score -= 40 }
+      candidates.append(Candidate(value: v, score: score))
     }
 
     return candidates.max(by: { $0.score < $1.score })?.value
@@ -420,9 +437,20 @@ final class OcrParser {
       let hasMin = matches(lower, pattern: "min", caseInsensitive: false)
       let isPickupCombo = hasKm && hasMin
 
-      if hasKm && !hasMin { continue }
+      if hasKm && !hasMin && !matches(lower, pattern: "h", caseInsensitive: false) { continue }
       let normalized = normalizeOcrDigits(block.text)
       let nsNorm = normalized as NSString
+
+      if let mH = Self.durationHourRegex.firstMatch(in: normalized, range: NSRange(location: 0, length: nsNorm.length)) {
+        let hours = Int(nsNorm.substring(with: mH.range(at: 1))) ?? 0
+        let mins = mH.range(at: 2).location != NSNotFound ? (Int(nsNorm.substring(with: mH.range(at: 2))) ?? 0) : 0
+        let total = hours * 60 + mins
+        if total >= 1 && total <= 300 {
+          candidates.append(Cand(value: total, y: block.box.centerY, isPickupCombo: isPickupCombo))
+          continue
+        }
+      }
+
       guard let m = Self.durationRegex.firstMatch(
         in: normalized, range: NSRange(location: 0, length: nsNorm.length)
       ) else { continue }
