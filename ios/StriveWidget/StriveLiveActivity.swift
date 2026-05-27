@@ -133,81 +133,127 @@ private struct LockScreenView: View {
     let hasResult = !isScanning && !isIdle && !isError
     let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
 
-    HStack(spacing: 14) {
-      // Logo Strive
-      Image("StriveLogo")
-        .resizable()
-        .aspectRatio(contentMode: .fill)
-        .frame(width: 42, height: 42)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-          RoundedRectangle(cornerRadius: 12)
-            .stroke(accent.opacity(0.4), lineWidth: 1)
-        )
+    VStack(spacing: 0) {
+      // ── Header ──
+      HStack(spacing: 10) {
+        Image("StriveLogo")
+          .resizable()
+          .aspectRatio(contentMode: .fill)
+          .frame(width: 32, height: 32)
+          .clipShape(RoundedRectangle(cornerRadius: 9))
 
-      // KPIs
-      VStack(alignment: .leading, spacing: 6) {
+        Text("STRIVE")
+          .font(.system(size: 12, weight: .black, design: .rounded))
+          .tracking(2.5)
+          .foregroundColor(.white.opacity(0.45))
+
+        Spacer()
+
         if isScanning {
-          HStack(spacing: 6) {
-            ProgressView().tint(accent)
-            Text("Analyse en cours…")
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundColor(.white.opacity(0.7))
+          HStack(spacing: 5) {
+            ProgressView().tint(accent).scaleEffect(0.7)
+            Text("Analyse…")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundColor(.white.opacity(0.5))
           }
         } else if isError {
-          HStack(spacing: 6) {
-            Image(systemName: "xmark.circle.fill")
-              .foregroundColor(.red)
-            Text("Échec de l'analyse")
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundColor(.white.opacity(0.7))
-          }
+          Text("Erreur")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(Color(red: 0.94, green: 0.27, blue: 0.27))
         } else {
-          // Ligne 1 : Gains + Taux horaire
-          HStack(spacing: 0) {
-            Text(String(format: "%.0f€", state.todayEarnings))
-              .font(.system(size: 22, weight: .heavy))
-              .foregroundColor(.white)
-            Text(" · ")
-              .font(.system(size: 14))
-              .foregroundColor(.white.opacity(0.25))
-            Text(String(format: "%.0f€/h", state.todayHourlyRate))
-              .font(.system(size: 16, weight: .bold))
-              .foregroundColor(accent)
-          }
-
-          // Ligne 2 : Distance + Temps
-          HStack(spacing: 12) {
-            HStack(spacing: 4) {
-              Image(systemName: "road.lanes")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-              Text(String(format: "%.1f km", state.todayKm))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.55))
-            }
-            HStack(spacing: 4) {
-              Image(systemName: "clock")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-              Text(formatOnlineTime(state.onlineMinutes))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.55))
-            }
-            if hasResult {
-              Spacer()
-              Image(systemName: verdictIcon(state.verdictLevel))
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(verdictColor(state.verdictLevel))
-            }
-          }
+          Text(formatOnlineTime(state.onlineMinutes))
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.4))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(.white.opacity(0.07)))
         }
       }
+      .padding(.bottom, 14)
 
-      Spacer(minLength: 0)
+      // ── KPI Row ──
+      if !isScanning && !isError {
+        HStack(spacing: 0) {
+          // Gains
+          VStack(spacing: 2) {
+            Text(String(format: "%.0f€", state.todayEarnings))
+              .font(.system(size: 24, weight: .heavy))
+              .foregroundColor(.white)
+            Text("GAINS")
+              .font(.system(size: 8, weight: .heavy))
+              .tracking(1)
+              .foregroundColor(.white.opacity(0.3))
+          }
+          .frame(maxWidth: .infinity)
+
+          Rectangle()
+            .fill(accent.opacity(0.2))
+            .frame(width: 1, height: 32)
+
+          // Taux horaire
+          VStack(spacing: 2) {
+            Text(String(format: "%.0f€", state.todayHourlyRate))
+              .font(.system(size: 24, weight: .heavy))
+              .foregroundColor(accent)
+            Text("/HEURE")
+              .font(.system(size: 8, weight: .heavy))
+              .tracking(1)
+              .foregroundColor(accent.opacity(0.5))
+          }
+          .frame(maxWidth: .infinity)
+
+          Rectangle()
+            .fill(accent.opacity(0.2))
+            .frame(width: 1, height: 32)
+
+          // Distance
+          VStack(spacing: 2) {
+            Text(String(format: "%.1f", state.todayKm))
+              .font(.system(size: 24, weight: .heavy))
+              .foregroundColor(.white)
+            Text("KM")
+              .font(.system(size: 8, weight: .heavy))
+              .tracking(1)
+              .foregroundColor(.white.opacity(0.3))
+          }
+          .frame(maxWidth: .infinity)
+        }
+
+        // ── Last ride pill ──
+        if hasResult {
+          HStack(spacing: 8) {
+            Circle()
+              .fill(verdictColor(state.verdictLevel))
+              .frame(width: 6, height: 6)
+            Text(state.platform.uppercased())
+              .font(.system(size: 10, weight: .bold))
+              .tracking(0.5)
+              .foregroundColor(.white.opacity(0.5))
+            Spacer()
+            Text(String(format: "%.0f€", state.fare))
+              .font(.system(size: 12, weight: .heavy))
+              .foregroundColor(.white)
+            Text("·")
+              .foregroundColor(.white.opacity(0.2))
+            Text(String(format: "%.0f€/h", state.hourlyRate))
+              .font(.system(size: 12, weight: .bold))
+              .foregroundColor(verdictColor(state.verdictLevel))
+            Image(systemName: verdictIcon(state.verdictLevel))
+              .font(.system(size: 10, weight: .bold))
+              .foregroundColor(verdictColor(state.verdictLevel))
+          }
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .background(
+            RoundedRectangle(cornerRadius: 10)
+              .fill(.white.opacity(0.05))
+          )
+          .padding(.top, 12)
+        }
+      }
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 12)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
   }
 }
 
