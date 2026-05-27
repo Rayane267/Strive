@@ -124,7 +124,16 @@ final class LiveActivityManager {
       log("recovered existing activity: \(current?.id ?? "none")")
     }
     guard let activity = current else {
-      log("SKIP update — no activity running")
+      log("no activity — auto-starting a new one")
+      start(
+        platform: platform,
+        fare: fare,
+        hourlyRate: hourlyRate,
+        kmRate: kmRate,
+        distanceKm: distanceKm,
+        durationMin: durationMin,
+        verdictLevel: verdictLevel
+      )
       return
     }
     let prev = activity.content.state
