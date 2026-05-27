@@ -524,16 +524,21 @@ object OcrParser {
         pickupAddr: Text.TextBlock?,
         destAddr: Text.TextBlock?,
     ): Int? {
-        data class Cand(val value: Int, val y: Int)
+        data class Cand(val value: Int, val y: Int, val isPickupCombo: Boolean)
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
-            if (Regex("""km""", RegexOption.IGNORE_CASE).containsMatchIn(block.text)) continue
+            val lower = block.text.lowercase()
+            val hasKm = lower.contains("km")
+            val hasMin = lower.contains("min")
+            val isPickupCombo = hasKm && hasMin
+
+            if (hasKm && !hasMin) continue
             val normalizedText = normalizeOcrDigits(block.text)
             val match = DURATION_REGEX.find(normalizedText) ?: continue
             val value = match.groupValues[1].toIntOrNull() ?: continue
             if (value !in 1..180) continue
-            candidates.add(Cand(value, block.boundingBox?.centerY() ?: 0))
+            candidates.add(Cand(value, block.boundingBox?.centerY() ?: 0, isPickupCombo))
         }
 
         if (candidates.isEmpty()) return null
@@ -541,10 +546,12 @@ object OcrParser {
         if (pickupAddr != null && destAddr != null) {
             val yMin = (pickupAddr.boundingBox?.top ?: 0) - 10
             val yMax = (destAddr.boundingBox?.bottom ?: Int.MAX_VALUE) + 10
-            val inCourseZone = candidates.filter { it.y in yMin..yMax }
+            val inCourseZone = candidates.filter { !it.isPickupCombo && it.y in yMin..yMax }
             if (inCourseZone.isNotEmpty()) return inCourseZone.first().value
         }
-        return candidates.first().value
+        val nonPickup = candidates.filter { !it.isPickupCombo }
+        val pool = if (nonPickup.isNotEmpty()) nonPickup else candidates
+        return pool.first().value
     }
 
     // ─── Pickup combo extraction ("X min • X,X km") ───────────────────────────────

@@ -408,11 +408,16 @@ final class OcrParser {
   // MARK: - Duration extraction
 
   private func extractDuration(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?) -> Int? {
-    struct Cand { let value: Int; let y: Int }
+    struct Cand { let value: Int; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
     for block in blocks {
-      if matches(block.text, pattern: "km", caseInsensitive: true) { continue }
+      let lower = block.text.lowercased()
+      let hasKm = matches(lower, pattern: "km", caseInsensitive: false)
+      let hasMin = matches(lower, pattern: "min", caseInsensitive: false)
+      let isPickupCombo = hasKm && hasMin
+
+      if hasKm && !hasMin { continue }
       let normalized = normalizeOcrDigits(block.text)
       let nsNorm = normalized as NSString
       guard let m = Self.durationRegex.firstMatch(
@@ -420,17 +425,19 @@ final class OcrParser {
       ) else { continue }
       let raw = nsNorm.substring(with: m.range(at: 1))
       guard let value = Int(raw), value >= 1, value <= 180 else { continue }
-      candidates.append(Cand(value: value, y: block.box.centerY))
+      candidates.append(Cand(value: value, y: block.box.centerY, isPickupCombo: isPickupCombo))
     }
 
     if candidates.isEmpty { return nil }
     if let pickup = pickupAddr, let dest = destAddr {
       let yMin = pickup.box.top - 10
       let yMax = dest.box.bottom + 10
-      let inCourse = candidates.filter { $0.y >= yMin && $0.y <= yMax }
+      let inCourse = candidates.filter { !$0.isPickupCombo && $0.y >= yMin && $0.y <= yMax }
       if !inCourse.isEmpty { return inCourse.first?.value }
     }
-    return candidates.first?.value
+    let nonPickup = candidates.filter { !$0.isPickupCombo }
+    let pool = nonPickup.isEmpty ? candidates : nonPickup
+    return pool.first?.value
   }
 
   // MARK: - Pickup combo extraction
