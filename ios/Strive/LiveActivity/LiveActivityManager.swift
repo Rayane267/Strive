@@ -14,6 +14,9 @@ final class LiveActivityManager {
 
   private var current: Activity<StriveActivityAttributes>?
   private var autoDismiss: DispatchWorkItem?
+  private var stateObserverTask: Task<Void, Never>?
+
+  static let dismissedNotification = Notification.Name("StriveLiveActivityDismissed")
 
   private static let appGroupId = "group.com.striveapp.app"
 
@@ -73,10 +76,28 @@ final class LiveActivityManager {
         pushType: nil
       )
       log("OK id=\(current?.id ?? "nil")")
+      observeState()
       return true
     } catch {
       log("FAILED: \(error.localizedDescription) domain=\((error as NSError).domain) code=\((error as NSError).code)")
       return false
+    }
+  }
+
+  private func observeState() {
+    stateObserverTask?.cancel()
+    guard let activity = current else { return }
+    stateObserverTask = Task {
+      for await state in activity.activityStateUpdates {
+        if state == .dismissed || state == .ended {
+          log("LA dismissed/ended by user")
+          await MainActor.run {
+            NotificationCenter.default.post(name: Self.dismissedNotification, object: nil)
+          }
+          current = nil
+          break
+        }
+      }
     }
   }
 
@@ -107,7 +128,7 @@ final class LiveActivityManager {
       durationMin: durationMin,
       verdictLevel: verdictLevel
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(12))
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))
     let alert = AlertConfiguration(title: "", body: "", sound: .default)
     Task { await activity.update(content, alertConfiguration: alert) }
     log("updated \(activity.id), dismiss in 10s")

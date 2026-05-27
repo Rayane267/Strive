@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -34,6 +36,15 @@ const PreferencesScreen = () => {
   const [minHr, setMinHr] = useState(25);
   const [minKm, setMinKm] = useState(1.25);
   const [includePickup, setIncludePickup] = useState(false);
+  const [useLiveActivity, setUseLiveActivityRaw] = useState(true);
+  const setUseLiveActivity = (v: boolean) => {
+    setUseLiveActivityRaw(v);
+    AsyncStorage.setItem('@strive_use_live_activity', v ? '1' : '0');
+    if (Platform.OS === 'ios') {
+      const { NativeModules } = require('react-native');
+      NativeModules.ScanBridge?.setUseLiveActivity(v);
+    }
+  };
   const [isActive, setIsActive] = useState(true);
   const [dayResetHour, setDayResetHour] = useState<0 | 4>(0);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
@@ -41,6 +52,9 @@ const PreferencesScreen = () => {
   // --- CHARGEMENT DES DONNÉES ---
   useEffect(() => {
     fetchPreferences();
+    AsyncStorage.getItem('@strive_use_live_activity').then(v => {
+      if (v !== null) setUseLiveActivityRaw(v === '1');
+    });
   }, []);
 
   const fetchPreferences = async () => {
@@ -284,6 +298,28 @@ const PreferencesScreen = () => {
           </View>
 
         </View>
+
+        {/* ── RESULT DISPLAY MODE ── */}
+        {Platform.OS === 'ios' && (
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(244,67,54,0.1)' }]}>
+                <Feather name="smartphone" size={18} color="#F44336" />
+              </View>
+              <View style={styles.toggleTextBlock}>
+                <Text style={styles.toggleTitle}>{t('preferences.resultMode', 'Dynamic Island')}</Text>
+                <Text style={styles.toggleSub}>{t('preferences.resultModeSub', 'Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.')}</Text>
+              </View>
+              <Switch
+                value={useLiveActivity}
+                onValueChange={setUseLiveActivity}
+                trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(244,67,54,0.35)' }}
+                thumbColor={useLiveActivity ? '#F44336' : colors.textDimmed}
+                ios_backgroundColor="rgba(255,255,255,0.08)"
+              />
+            </View>
+          </View>
+        )}
 
         {/* ── STATUS MESSAGE ── */}
         {statusMessage.text !== '' && (

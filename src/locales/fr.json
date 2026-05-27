@@ -334,6 +334,8 @@
     "dayReset4amSub": "Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit",
     "includePickup": "Inclure l'approche aux calculs",
     "includePickupSub": "Prend en compte le temps et la distance d'approche pour une estimation plus réaliste.",
+    "resultMode": "Dynamic Island",
+    "resultModeSub": "Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.",
     "advanced": "Paramètres Avancés",
     "setup": "Relancer la configuration",
     "identification": "IDENTIFICATION",
@@ -483,6 +485,7 @@
       "cta": "Ouvrir les réglages d'Accessibilité",
       "doneCta": "C'est configuré"
     },
+    "laTip": { "title": "Ne supprimez pas la notification", "desc": "Le résultat de l'analyse s'affiche dans la Dynamic Island en haut de l'écran. Si vous supprimez la notification sur l'écran verrouillé, le résultat disparaît aussi." },
     "step4": { "title": "Suivez vos performances", "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables." },
     "step5": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences, puis démarrez le scanner depuis l'Accueil. Bonne route !" },
     "step5_ios": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences. Plus besoin de démarrer quoi que ce soit — votre raccourci est prêt. Bonne route !" },
@@ -492,6 +495,7 @@
       "step2_ios": "Vous pouvez aussi assigner le raccourci au bouton Action (iPhone 15 Pro+) ou à AssistiveTouch.",
       "step3": "Astuce : tapez la bulle quand l'offre apparaît sur votre écran VTC. Pas besoin de changer d'app.",
       "step3_ios": "Astuce : le double-tap au dos fonctionne même avec une coque (fine). Pas besoin de changer d'app.",
+      "laTip": "Le résultat reste affiché 10 secondes puis disparaît automatiquement.",
       "step4": "L'onglet Stats montre vos gains par jour, par plateforme et votre taux horaire en temps réel.",
       "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
       "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."

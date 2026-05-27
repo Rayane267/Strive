@@ -1,5 +1,6 @@
 import AppIntents
 import UIKit
+import UserNotifications
 
 /// App Intent exposé à l'app Shortcuts — flow identique à Android :
 ///   1. OCR (Vision)
@@ -37,19 +38,31 @@ struct AnalyzeRideIntent: AppIntent {
         try await withCheckedThrowingContinuation { cont in
           ScanProcessor.shared.process(image: image) { finalResult in
             guard let result = finalResult else {
-              LiveActivityManager.shared.showError()
+              if self.useLiveActivity {
+                LiveActivityManager.shared.showError()
+              } else {
+                self.sendLocalNotification(title: "Strive", body: "Analyse impossible — réessayez avec une autre capture.")
+              }
               cont.resume(throwing: IntentError.noRideDetected)
               return
             }
-            LiveActivityManager.shared.update(
-              platform: result.scan.platform.rawValue,
-              fare: result.scan.fare,
-              hourlyRate: result.hourlyRate,
-              kmRate: result.kmRate,
-              distanceKm: result.totalDistanceKm,
-              durationMin: result.totalDurationMin,
-              verdictLevel: result.verdictLevel
-            )
+            if self.useLiveActivity {
+              LiveActivityManager.shared.update(
+                platform: result.scan.platform.rawValue,
+                fare: result.scan.fare,
+                hourlyRate: result.hourlyRate,
+                kmRate: result.kmRate,
+                distanceKm: result.totalDistanceKm,
+                durationMin: result.totalDurationMin,
+                verdictLevel: result.verdictLevel
+              )
+            } else {
+              let verdict = result.verdictLevel == 2 ? "✅ Rentable" : result.verdictLevel == 1 ? "⚠️ Limite" : "❌ Refuser"
+              self.sendLocalNotification(
+                title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.scan.fare)) · \(verdict)",
+                body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
+              )
+            }
 
             self.saveResultForMainApp(result)
 
@@ -87,6 +100,23 @@ struct AnalyzeRideIntent: AppIntent {
       case .timeout: return "Analyse trop longue, réessayez"
       }
     }
+  }
+
+  // MARK: - Preference
+
+  private var useLiveActivity: Bool {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: appGroupId)?.bool(forKey: "useLiveActivity") ?? true
+  }
+
+  private func sendLocalNotification(title: String, body: String) {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+    let request = UNNotificationRequest(identifier: "strive-scan-\(UUID().uuidString)", content: content, trigger: nil)
+    UNUserNotificationCenter.current().add(request)
   }
 
   // MARK: - App Group

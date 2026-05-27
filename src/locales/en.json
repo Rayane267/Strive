@@ -334,6 +334,8 @@
     "dayReset4amSub": "For night drivers: your day starts at 4 AM local instead of midnight",
     "includePickup": "Include pickup in calculations",
     "includePickupSub": "Counts pickup time & distance in rates for a more accurate real earnings estimate.",
+    "resultMode": "Dynamic Island",
+    "resultModeSub": "Show scan result in the Dynamic Island. Off = classic notification.",
     "advanced": "Advanced Settings",
     "setup": "Run Setup Again",
     "identification": "IDENTIFICATION",
@@ -483,6 +485,7 @@
       "cta": "Open Accessibility settings",
       "doneCta": "I've set it up"
     },
+    "laTip": { "title": "Don't dismiss the notification", "desc": "The scan result appears in the Dynamic Island at the top of your screen. If you dismiss the notification on the Lock Screen, the result disappears too." },
     "step4": { "title": "Track your performance", "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms." },
     "step5": { "title": "You're all set!", "desc": "Configure your minimum rates in Preferences, then start the scanner from the Dashboard. Happy driving!" },
     "step5_ios": { "title": "You're all set!", "desc": "Configure your minimum rates in Preferences. Nothing to start manually — your shortcut is ready. Happy driving!" },
@@ -492,6 +495,7 @@
       "step2_ios": "You can also assign the shortcut to the Action Button (iPhone 15 Pro+) or to AssistiveTouch.",
       "step3": "Pro tip: tap the bubble when an offer appears on your VTC app. No need to switch apps.",
       "step3_ios": "Pro tip: Back Tap works through a thin case. No need to switch apps.",
+      "laTip": "The result stays visible for 10 seconds then disappears automatically.",
       "step4": "The Analytics tab shows daily earnings, platform breakdown and your real-time hourly rate.",
       "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
       "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."

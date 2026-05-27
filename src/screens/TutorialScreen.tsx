@@ -46,6 +46,7 @@ const STEPS = (Platform.OS === 'ios'
       { key: 'minimums', icon: 'tune-vertical',      color: '#FF8A65',      titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
       { key: '2',        icon: 'download-circle',    color: '#4FC3F7',      titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
       { key: '3',        icon: 'gesture-tap-button', color: colors.primary, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
+      { key: 'la_tip',   icon: 'island-variant',     color: '#F44336',      titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
       { key: '4',        icon: 'chart-line',         color: '#FF8A65',      titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
       { key: '5',        icon: 'rocket-launch',      color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
     ]

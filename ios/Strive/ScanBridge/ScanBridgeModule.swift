@@ -36,15 +36,29 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed"]
   }
+
+  private var laDismissObserver: Any?
 
   override func startObserving() {
     hasListeners = true
+    if #available(iOS 16.2, *) {
+      laDismissObserver = NotificationCenter.default.addObserver(
+        forName: LiveActivityManager.dismissedNotification,
+        object: nil, queue: .main
+      ) { [weak self] _ in
+        self?.sendEvent(withName: "onLiveActivityDismissed", body: nil)
+      }
+    }
   }
 
   override func stopObserving() {
     hasListeners = false
+    if let obs = laDismissObserver {
+      NotificationCenter.default.removeObserver(obs)
+      laDismissObserver = nil
+    }
   }
 
   // MARK: - Lifecycle
@@ -279,6 +293,12 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func setQuotaReached(_ reached: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
+    }
+  }
+
+  @objc func setUseLiveActivity(_ enabled: Bool) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(enabled, forKey: "useLiveActivity")
     }
   }
 

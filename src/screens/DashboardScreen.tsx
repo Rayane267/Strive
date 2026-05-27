@@ -17,6 +17,7 @@ import {
   Image,
   RefreshControl,
   NativeModules,
+  NativeEventEmitter,
   AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +47,7 @@ import {
   cancelInactivityReminder,
   resetInactivityReminder,
   scheduleQuotaResetNotification,
+  notifyQuotaReached,
   notifySessionClosed,
 } from '../services/localNotifications';
 
@@ -83,7 +85,7 @@ const DashboardScreen = () => {
   const remaining = getRemainingScans(tier, stats.scans, extraCredits);
   const canScan = remaining === null || remaining > 0;
 
-  const [isOnline, setIsOnline] = useState(profile?.is_online ?? false);
+  const [isOnline, setIsOnline] = useState(false);
   const [sessionStartTs, setSessionStartTs] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -106,19 +108,37 @@ const DashboardScreen = () => {
     return cleanup;
   }, [user?.id]);
 
-  // ── Restore online state + LA on app open ──
+  // Restaure une session existante depuis la BDD (jamais de nouvelle session auto)
   useEffect(() => {
-    if (profile?.is_online) {
-      setIsOnline(true);
-      if (Platform.OS === 'ios' && ScanBridge) {
-        ScanBridge.startLiveActivity({
-          platform: 'IDLE',
-          fare: 0, hourlyRate: 0, kmRate: 0,
-          distanceKm: 0, durationMin: 0, verdictLevel: 1,
-        });
+    if (!user?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('online_sessions')
+        .select('id, start_at')
+        .eq('user_id', user.id)
+        .is('end_at', null)
+        .order('start_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.start_at) {
+        setCurrentSessionId(data.id);
+        setSessionStartTs(new Date(data.start_at).getTime());
+        setIsOnline(true);
       }
-    }
-  }, [profile?.is_online]);
+    })();
+  }, [user?.id]);
+
+  // ── Live Activity dismissed → stop session ──
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const emitter = new NativeEventEmitter(ScanBridge);
+    const sub = emitter.addListener('onLiveActivityDismissed', () => {
+      if (isOnline && handleToggleOnlineRef.current) {
+        handleToggleOnlineRef.current();
+      }
+    });
+    return () => sub.remove();
+  }, [isOnline]);
 
   // ── Config scanner (edge function Gemini + remote config OCR + TomTom) ──
   useEffect(() => {
@@ -150,10 +170,10 @@ const DashboardScreen = () => {
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
   const lastScanTsRef = useRef(0);
-  // Ref pour canScan : évite la stale closure dans le listener onScanResult
-  // (le useEffect ne se re-attache pas à chaque render pour éviter les fuites).
   const canScanRef = useRef(canScan);
+  const scanCountRef = useRef(stats.scans);
   useEffect(() => { canScanRef.current = canScan; }, [canScan]);
+  useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -244,6 +264,17 @@ const DashboardScreen = () => {
       hapticHeavy();
       lastScanTimeRef.current = Date.now();
       resetInactivityReminder();
+
+      // Incrémente immédiatement (pas d'attente re-render React)
+      scanCountRef.current++;
+      const newRemaining = getRemainingScans(tier, scanCountRef.current, extraCredits);
+      if (newRemaining !== null && newRemaining <= 0) {
+        canScanRef.current = false;
+        try { scannerService.setQuotaReached(true); } catch {}
+        const resetHour = preferences.day_reset_hour ?? 0;
+        notifyQuotaReached(resetHour);
+        scheduleQuotaResetNotification(resetHour);
+      }
 
       __DEV__ && console.info('[Scanner:Final] valeurs DB :', {
         platform: result.platform,

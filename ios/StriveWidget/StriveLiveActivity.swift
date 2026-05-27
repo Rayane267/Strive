@@ -130,42 +130,74 @@ private struct LockScreenView: View {
     let isScanning = state.platform == "SCANNING"
     let isIdle = state.platform == "IDLE"
     let isError = state.platform == "ERROR"
-    VStack(spacing: 10) {
-      if isError {
-        HStack(spacing: 8) {
-          Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 18, weight: .bold))
-            .foregroundColor(Color(red: 0.94, green: 0.27, blue: 0.27))
-          Text("Analyse impossible")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white.opacity(0.75))
-        }
-      } else if isScanning {
-        HStack(spacing: 8) {
-          ProgressView().tint(.white)
-          Text("Analyse en cours…")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white.opacity(0.75))
-        }
-      } else if !isIdle {
+    let hasResult = !isScanning && !isIdle && !isError
+
+    VStack(spacing: 12) {
+      // KPI row
+      HStack(spacing: 0) {
+        KpiItem(value: String(format: "%.0f€", state.todayEarnings), label: "Gains")
+        KpiDivider()
+        KpiItem(value: String(format: "%.0f€/h", state.todayHourlyRate), label: "Taux horaire")
+        KpiDivider()
+        KpiItem(value: String(format: "%.1f km", state.todayKm), label: "Distance")
+        KpiDivider()
+        KpiItem(value: "\(state.onlineMinutes)min", label: "En ligne")
+      }
+
+      if hasResult {
+        Rectangle()
+          .fill(.white.opacity(0.12))
+          .frame(height: 1)
         HStack(spacing: 10) {
           Text(state.platform.capitalized)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white.opacity(0.75))
-          HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
-          Spacer(minLength: 4)
-          FarePill(fare: state.fare, level: state.verdictLevel)
-          KmRateText(value: state.kmRate, level: state.verdictLevel)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.white.opacity(0.7))
+          Text(String(format: "€%.0f", state.fare))
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundColor(.white)
+          Text(String(format: "€%.0f/h", state.hourlyRate))
+            .font(.system(size: 13, weight: .bold))
+            .foregroundColor(verdictColor(state.verdictLevel))
+          Spacer()
+          Image(systemName: verdictIcon(state.verdictLevel))
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(state.verdictLevel))
         }
-        RouteRow(
-          distanceKm: state.distanceKm,
-          durationMin: state.durationMin,
-          level: state.verdictLevel
-        )
       }
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
+  }
+}
+
+// MARK: - KPI Composants
+
+@available(iOS 16.2, *)
+private struct KpiItem: View {
+  let value: String
+  let label: String
+  var body: some View {
+    VStack(spacing: 3) {
+      Text(value)
+        .font(.system(size: 14, weight: .heavy))
+        .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+      Text(label)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundColor(.white.opacity(0.5))
+        .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity)
+  }
+}
+
+@available(iOS 16.2, *)
+private struct KpiDivider: View {
+  var body: some View {
+    Rectangle()
+      .fill(.white.opacity(0.15))
+      .frame(width: 1, height: 28)
   }
 }
 

@@ -117,6 +117,25 @@ export async function scheduleQuotaResetNotification(resetHour: number) {
   } catch {}
 }
 
+export function notifyQuotaReached(resetHour: number) {
+  const now = new Date();
+  const reset = new Date();
+  reset.setHours(resetHour, 0, 0, 0);
+  if (reset <= now) reset.setDate(reset.getDate() + 1);
+
+  const diffMs = reset.getTime() - now.getTime();
+  const hours = Math.floor(diffMs / 3600_000);
+  const mins = Math.floor((diffMs % 3600_000) / 60_000);
+  const timeStr = hours > 0 ? `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}` : `${mins}min`;
+
+  scheduleNative(
+    'quota-reached',
+    'Quota atteint',
+    `Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans ${timeStr}.`,
+    0,
+  );
+}
+
 /**
  * Programme une notification "Session fermee automatiquement"
  * quand l'auto-close se declenche.

@@ -15,7 +15,7 @@ public struct StriveActivityAttributes: ActivityAttributes {
   /// Données mutables affichées dans la Dynamic Island / Lock Screen.
   /// Mise à jour via `Activity.update(...)` quand TomTom répond après l'OCR.
   public struct State: Codable, Hashable {
-    public let platform: String     // UBER, BOLT, HEETCH, UNKNOWN
+    public let platform: String     // UBER, BOLT, HEETCH, SCANNING, IDLE, ERROR
     public let fare: Double         // €
     public let hourlyRate: Double   // €/h
     public let kmRate: Double       // €/km
@@ -24,14 +24,24 @@ public struct StriveActivityAttributes: ActivityAttributes {
     /// 0 = rouge (refuse), 1 = orange (limite), 2 = vert (accepte)
     public let verdictLevel: Int
 
+    // KPI session (Lock Screen)
+    public let todayEarnings: Double
+    public let todayHourlyRate: Double
+    public let todayKm: Double
+    public let onlineMinutes: Int
+
     public init(
       platform: String,
-      fare: Double,
-      hourlyRate: Double,
-      kmRate: Double,
-      distanceKm: Double,
-      durationMin: Int,
-      verdictLevel: Int
+      fare: Double = 0,
+      hourlyRate: Double = 0,
+      kmRate: Double = 0,
+      distanceKm: Double = 0,
+      durationMin: Int = 0,
+      verdictLevel: Int = 1,
+      todayEarnings: Double = 0,
+      todayHourlyRate: Double = 0,
+      todayKm: Double = 0,
+      onlineMinutes: Int = 0
     ) {
       self.platform = platform
       self.fare = fare
@@ -40,6 +50,10 @@ public struct StriveActivityAttributes: ActivityAttributes {
       self.distanceKm = distanceKm
       self.durationMin = durationMin
       self.verdictLevel = verdictLevel
+      self.todayEarnings = todayEarnings
+      self.todayHourlyRate = todayHourlyRate
+      self.todayKm = todayKm
+      self.onlineMinutes = onlineMinutes
     }
   }
 
