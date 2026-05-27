@@ -109,7 +109,8 @@
         "firstNameRequired": "Le prénom est requis",
         "lastNameRequired": "Le nom est requis",
         "phoneRequired": "Le numéro de téléphone est requis",
-        "phoneInvalid": "Numéro invalide (6 à 14 chiffres)",
+        "phoneInvalid": "Le numéro ne doit contenir que des chiffres",
+        "phoneLength": "Nombre de chiffres incorrect pour cet indicatif",
         "dobRequired": "La date de naissance est requise",
         "dobInvalid": "Date invalide",
         "dobMonthInvalid": "Mois invalide (01–12)",
@@ -208,9 +209,13 @@
     "priceModal": {
       "title": "Prix réel de la course",
       "subtitle": "Entrez le montant final affiché sur l'application VTC",
+      "placeholder": "Ex : 14,50",
       "skip": "Passer",
       "confirm": "Confirmer"
     },
+    "offlineBanner": "Passez en ligne pour activer le scanner",
+    "offlineHint": "Passez en ligne pour scanner",
+    "offlineHintSub": "Le scanner fonctionne uniquement quand vous êtes en ligne.",
     "scanLimit": {
       "reached": "Limite atteinte",
       "remaining": "{{count}} scan(s) restant(s)",
@@ -225,6 +230,8 @@
   "shop": {
     "title": "Boutique",
     "creditsBalance": "Crédits disponibles",
+    "extraBalance": "{{count}} scan",
+    "extraBalance_plural": "{{count}} scans",
     "packsTitle": "PACKS DE SCANS",
     "packsSubtitle": "Utilisables en plus de votre quota journalier, sans expiration.",
     "bestValue": "MEILLEUR PRIX",
@@ -620,5 +627,52 @@
     "minutes": "il y a {{count}} min",
     "hours": "il y a {{count}} h",
     "days": "il y a {{count}} j"
+  },
+  "notifications": {
+    "inactivity": {
+      "title": "Session inactive",
+      "body": "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session."
+    },
+    "quotaReset": {
+      "title": "Quota rechargé !",
+      "body": "Vos scans journaliers sont de nouveau disponibles. Bonne route !"
+    },
+    "quotaReached": {
+      "title": "Quota atteint",
+      "body": "Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans {{time}}."
+    },
+    "sessionClosed": {
+      "title": "Session fermée",
+      "body": "Votre session a été fermée après 1h d'inactivité."
+    }
+  },
+  "tier": {
+    "free": "Free",
+    "freeBadge": "GRATUIT",
+    "plus": "★ Plus",
+    "plusBadge": "PLUS",
+    "premiumBadge": "PREMIUM"
+  },
+  "countries": {
+    "fr": "France",
+    "be": "Belgique",
+    "ch": "Suisse",
+    "lu": "Luxembourg",
+    "dz": "Algérie",
+    "ma": "Maroc",
+    "tn": "Tunisie",
+    "sn": "Sénégal",
+    "ci": "Côte d'Ivoire",
+    "cm": "Cameroun",
+    "ml": "Mali",
+    "gn": "Guinée",
+    "pt": "Portugal",
+    "es": "Espagne",
+    "it": "Italie",
+    "gb": "Royaume-Uni",
+    "de": "Allemagne",
+    "ro": "Roumanie",
+    "pl": "Pologne",
+    "us": "États-Unis / Canada"
   }
 }

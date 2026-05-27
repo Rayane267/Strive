@@ -25,34 +25,35 @@ import { useAuth } from '../context/AuthContext';
 // ─── Indicatifs pays ──────────────────────────────────────────────────────────
 
 const DIAL_CODES = [
-  { code: '+33',  flag: '🇫🇷', name: 'France' },
-  { code: '+32',  flag: '🇧🇪', name: 'Belgique' },
-  { code: '+41',  flag: '🇨🇭', name: 'Suisse' },
-  { code: '+352', flag: '🇱🇺', name: 'Luxembourg' },
-  { code: '+213', flag: '🇩🇿', name: 'Algérie' },
-  { code: '+212', flag: '🇲🇦', name: 'Maroc' },
-  { code: '+216', flag: '🇹🇳', name: 'Tunisie' },
-  { code: '+221', flag: '🇸🇳', name: 'Sénégal' },
-  { code: '+225', flag: '🇨🇮', name: "Côte d'Ivoire" },
-  { code: '+237', flag: '🇨🇲', name: 'Cameroun' },
-  { code: '+223', flag: '🇲🇱', name: 'Mali' },
-  { code: '+224', flag: '🇬🇳', name: 'Guinée' },
-  { code: '+351', flag: '🇵🇹', name: 'Portugal' },
-  { code: '+34',  flag: '🇪🇸', name: 'Espagne' },
-  { code: '+39',  flag: '🇮🇹', name: 'Italie' },
-  { code: '+44',  flag: '🇬🇧', name: 'Royaume-Uni' },
-  { code: '+49',  flag: '🇩🇪', name: 'Allemagne' },
-  { code: '+40',  flag: '🇷🇴', name: 'Roumanie' },
-  { code: '+48',  flag: '🇵🇱', name: 'Pologne' },
-  { code: '+1',   flag: '🇺🇸', name: 'États-Unis / Canada' },
+  { code: '+33',  flag: '🇫🇷', nameKey: 'countries.fr',  digits: [9] },
+  { code: '+32',  flag: '🇧🇪', nameKey: 'countries.be',  digits: [8, 9] },
+  { code: '+41',  flag: '🇨🇭', nameKey: 'countries.ch',  digits: [9] },
+  { code: '+352', flag: '🇱🇺', nameKey: 'countries.lu',  digits: [6, 7, 8, 9] },
+  { code: '+213', flag: '🇩🇿', nameKey: 'countries.dz',  digits: [9] },
+  { code: '+212', flag: '🇲🇦', nameKey: 'countries.ma',  digits: [9] },
+  { code: '+216', flag: '🇹🇳', nameKey: 'countries.tn',  digits: [8] },
+  { code: '+221', flag: '🇸🇳', nameKey: 'countries.sn',  digits: [9] },
+  { code: '+225', flag: '🇨🇮', nameKey: 'countries.ci',  digits: [10] },
+  { code: '+237', flag: '🇨🇲', nameKey: 'countries.cm',  digits: [9] },
+  { code: '+223', flag: '🇲🇱', nameKey: 'countries.ml',  digits: [8] },
+  { code: '+224', flag: '🇬🇳', nameKey: 'countries.gn',  digits: [9] },
+  { code: '+351', flag: '🇵🇹', nameKey: 'countries.pt',  digits: [9] },
+  { code: '+34',  flag: '🇪🇸', nameKey: 'countries.es',  digits: [9] },
+  { code: '+39',  flag: '🇮🇹', nameKey: 'countries.it',  digits: [9, 10] },
+  { code: '+44',  flag: '🇬🇧', nameKey: 'countries.gb',  digits: [10] },
+  { code: '+49',  flag: '🇩🇪', nameKey: 'countries.de',  digits: [10, 11] },
+  { code: '+40',  flag: '🇷🇴', nameKey: 'countries.ro',  digits: [9] },
+  { code: '+48',  flag: '🇵🇱', nameKey: 'countries.pl',  digits: [9] },
+  { code: '+1',   flag: '🇺🇸', nameKey: 'countries.us',  digits: [10] },
 ];
 
 // ─── Validation — retourne des clés i18n ─────────────────────────────────────
 
-function validatePhoneKey(number: string): string | null {
-  const cleaned = number.replace(/[\s\-\.\(\)]/g, '');
+function validatePhoneKey(number: string, dial: typeof DIAL_CODES[number]): string | null {
+  const cleaned = number.replace(/[\s\-\.\(\)]/g, '').replace(/^0+/, '');
   if (!cleaned) return 'profile.setup.errors.phoneRequired';
-  if (!/^\d{6,14}$/.test(cleaned)) return 'profile.setup.errors.phoneInvalid';
+  if (!/^\d+$/.test(cleaned)) return 'profile.setup.errors.phoneInvalid';
+  if (!dial.digits.includes(cleaned.length)) return 'profile.setup.errors.phoneLength';
   return null;
 }
 
@@ -120,7 +121,7 @@ export default function ProfileSetupScreen() {
     setErrors(prev => ({ ...prev, [field]: '' }));
 
   const validate = (): boolean => {
-    const phoneKey = validatePhoneKey(phoneNumber);
+    const phoneKey = validatePhoneKey(phoneNumber, dialCode);
     const dobKey   = validateDobKey(dobDay, dobMonth, dobYear);
     const next = {
       firstName: firstName.trim() ? '' : t('profile.setup.errors.firstNameRequired'),
@@ -337,7 +338,7 @@ export default function ProfileSetupScreen() {
             </View>
             <FlatList
               data={DIAL_CODES}
-              keyExtractor={item => item.code + item.name}
+              keyExtractor={item => item.code + item.nameKey}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -346,7 +347,7 @@ export default function ProfileSetupScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.dialItemFlag}>{item.flag}</Text>
-                  <Text style={styles.dialItemName}>{item.name}</Text>
+                  <Text style={styles.dialItemName}>{t(item.nameKey)}</Text>
                   <Text style={styles.dialItemCode}>{item.code}</Text>
                   {item.code === dialCode.code && (
                     <Feather name="check" size={16} color={colors.primary} />

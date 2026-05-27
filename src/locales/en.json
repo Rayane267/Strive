@@ -109,7 +109,8 @@
         "firstNameRequired": "First name is required",
         "lastNameRequired": "Last name is required",
         "phoneRequired": "Phone number is required",
-        "phoneInvalid": "Invalid number (6 to 14 digits)",
+        "phoneInvalid": "Phone number must contain only digits",
+        "phoneLength": "Wrong number of digits for this country code",
         "dobRequired": "Date of birth is required",
         "dobInvalid": "Invalid date",
         "dobMonthInvalid": "Invalid month (01–12)",
@@ -208,9 +209,13 @@
     "priceModal": {
       "title": "Actual ride price",
       "subtitle": "Enter the final amount shown on the VTC app",
+      "placeholder": "e.g. 14.50",
       "skip": "Skip",
       "confirm": "Confirm"
     },
+    "offlineBanner": "Go online to enable the scanner",
+    "offlineHint": "Go online to scan",
+    "offlineHintSub": "The scanner only works when you are online.",
     "scanLimit": {
       "reached": "Limit reached",
       "remaining": "{{count}} scan(s) remaining",
@@ -225,6 +230,8 @@
   "shop": {
     "title": "Shop",
     "creditsBalance": "Available credits",
+    "extraBalance": "{{count}} scan",
+    "extraBalance_plural": "{{count}} scans",
     "packsTitle": "SCAN PACKS",
     "packsSubtitle": "Use on top of your daily quota, never expire.",
     "bestValue": "BEST VALUE",
@@ -620,5 +627,52 @@
     "minutes": "{{count}} min ago",
     "hours": "{{count}} hr ago",
     "days": "{{count}} d ago"
+  },
+  "notifications": {
+    "inactivity": {
+      "title": "Inactive session",
+      "body": "You haven't scanned in 1 hour. Consider ending your session."
+    },
+    "quotaReset": {
+      "title": "Quota recharged!",
+      "body": "Your daily scans are available again. Happy driving!"
+    },
+    "quotaReached": {
+      "title": "Quota reached",
+      "body": "You've used all your scans today. Resets in {{time}}."
+    },
+    "sessionClosed": {
+      "title": "Session closed",
+      "body": "Your session was closed after 1 hour of inactivity."
+    }
+  },
+  "tier": {
+    "free": "Free",
+    "freeBadge": "FREE",
+    "plus": "★ Plus",
+    "plusBadge": "PLUS",
+    "premiumBadge": "PREMIUM"
+  },
+  "countries": {
+    "fr": "France",
+    "be": "Belgium",
+    "ch": "Switzerland",
+    "lu": "Luxembourg",
+    "dz": "Algeria",
+    "ma": "Morocco",
+    "tn": "Tunisia",
+    "sn": "Senegal",
+    "ci": "Ivory Coast",
+    "cm": "Cameroon",
+    "ml": "Mali",
+    "gn": "Guinea",
+    "pt": "Portugal",
+    "es": "Spain",
+    "it": "Italy",
+    "gb": "United Kingdom",
+    "de": "Germany",
+    "ro": "Romania",
+    "pl": "Poland",
+    "us": "United States / Canada"
   }
 }

@@ -8,14 +8,15 @@ import fr from './locales/fr.json';
 
 const STORE_LANGUAGE_KEY = 'user_language';
 
-/**
- * Récupère la langue du système (sans dépendance externe).
- * - iOS : NativeModules.SettingsManager.settings.AppleLocale ou AppleLanguages[0]
- * - Android : NativeModules.I18nManager.localeIdentifier
- * Renvoie un code ISO 2 lettres ('fr', 'en', etc.) ou 'en' par défaut.
- */
 function getDeviceLanguage(): string {
   try {
+    // Hermes V1 (RN 0.84+) : Intl est le moyen le plus fiable (New Arch compatible)
+    const intlLocale = Intl.DateTimeFormat().resolvedOptions().locale;
+    if (intlLocale) {
+      const lang = intlLocale.toLowerCase().split(/[-_]/)[0];
+      if (lang) return lang;
+    }
+    // Fallback legacy NativeModules
     const raw =
       Platform.OS === 'ios'
         ? NativeModules.SettingsManager?.settings?.AppleLocale ||

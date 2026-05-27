@@ -127,11 +127,11 @@ const ShopScreen = () => {
             <MaterialCommunityIcons name="ticket-percent-outline" size={32} color={colors.primary} />
             <View style={styles.balanceTextWrap}>
               <Text style={styles.balanceLabel}>{t('shop.creditsBalance')}</Text>
-              <Text style={styles.balanceValue}>{extraCredits} scan{extraCredits !== 1 ? 's' : ''}</Text>
+              <Text style={styles.balanceValue}>{t('shop.extraBalance', { count: extraCredits })}</Text>
             </View>
           </View>
           <View style={[styles.tierBadge, tier === 'premium' && styles.tierBadgePremium, tier === 'plus' && styles.tierBadgePlus]}>
-            <Text style={styles.tierBadgeText}>{(tier ?? 'free').toUpperCase()}</Text>
+            <Text style={styles.tierBadgeText}>{t(`tier.${tier ?? 'free'}Badge`)}</Text>
           </View>
         </View>
 

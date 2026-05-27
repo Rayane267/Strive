@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from '../i18n';
 
 const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
@@ -62,28 +63,22 @@ export function scheduleInactivityReminder() {
   cancelNative('inactivity');
   scheduleNative(
     'inactivity',
-    'Session inactive',
-    "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session.",
+    i18n.t('notifications.inactivity.title'),
+    i18n.t('notifications.inactivity.body'),
     3600_000,
   );
 }
 
-/**
- * Annule le rappel d'inactivite (quand un scan arrive ou quand on passe hors ligne).
- */
 export function cancelInactivityReminder() {
   cancelNative('inactivity');
 }
 
-/**
- * Reprogramme le rappel d'inactivite (apres chaque scan).
- */
 export function resetInactivityReminder() {
   cancelNative('inactivity');
   scheduleNative(
     'inactivity',
-    'Session inactive',
-    "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session.",
+    i18n.t('notifications.inactivity.title'),
+    i18n.t('notifications.inactivity.body'),
     3600_000,
   );
 }
@@ -108,8 +103,8 @@ export async function scheduleQuotaResetNotification(resetHour: number) {
     if (delayMs > 0 && delayMs < 24 * 3600_000) {
       scheduleNative(
         'quota-reset',
-        'Quota rechargé !',
-        'Vos scans journaliers sont de nouveau disponibles. Bonne route !',
+        i18n.t('notifications.quotaReset.title'),
+        i18n.t('notifications.quotaReset.body'),
         delayMs,
       );
       await AsyncStorage.setItem(key, 'true');
@@ -130,8 +125,8 @@ export function notifyQuotaReached(resetHour: number) {
 
   scheduleNative(
     'quota-reached',
-    'Quota atteint',
-    `Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans ${timeStr}.`,
+    i18n.t('notifications.quotaReached.title'),
+    i18n.t('notifications.quotaReached.body', { time: timeStr }),
     0,
   );
 }
@@ -143,8 +138,8 @@ export function notifyQuotaReached(resetHour: number) {
 export function notifySessionClosed() {
   scheduleNative(
     'session-closed',
-    'Session fermée',
-    "Votre session a été fermée après 1h d'inactivité.",
+    i18n.t('notifications.sessionClosed.title'),
+    i18n.t('notifications.sessionClosed.body'),
     0,
   );
 }

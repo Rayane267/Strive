@@ -217,7 +217,7 @@ const ProfileScreen = () => {
             {isPlus ? (
               <View style={styles.tierBadgePlus}>
                 <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
-                <Text style={styles.tierBadgePlusText}>PLUS</Text>
+                <Text style={styles.tierBadgePlusText}>{t('tier.plusBadge')}</Text>
               </View>
             ) : (
               <TouchableOpacity

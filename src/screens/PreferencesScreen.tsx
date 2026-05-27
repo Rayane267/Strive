@@ -149,7 +149,7 @@ const PreferencesScreen = () => {
         <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
           {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
           <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
-            {isPremium ? 'PLUS' : 'FREE'}
+            {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
           </Text>
         </View>
       </View>

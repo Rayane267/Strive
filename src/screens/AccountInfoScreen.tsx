@@ -208,7 +208,7 @@ const AccountInfoScreen = () => {
         <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
         <View style={[styles.planBadge, !isPremium && styles.planBadgeFree]}>
           <Text style={[styles.planBadgeText, !isPremium && styles.planBadgeTextFree]}>
-            {isPremium ? '★ Plus' : 'Free'}
+            {isPremium ? t('tier.plus') : t('tier.free')}
           </Text>
         </View>
       </View>

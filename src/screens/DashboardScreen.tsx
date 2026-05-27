@@ -920,7 +920,7 @@ const DashboardScreen = () => {
                 setPriceModal(prev => prev ? { ...prev, input: cleaned } : null);
               }}
               keyboardType="decimal-pad"
-              placeholder="Ex: 14.50"
+              placeholder={t('dashboard.priceModal.placeholder', 'Ex: 14.50')}
               placeholderTextColor={colors.textMuted}
               maxLength={7}
               autoFocus
