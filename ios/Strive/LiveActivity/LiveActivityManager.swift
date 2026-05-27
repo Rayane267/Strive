@@ -124,8 +124,8 @@ final class LiveActivityManager {
       log("recovered existing activity: \(current?.id ?? "none")")
     }
     guard let activity = current else {
-      log("no activity — auto-starting a new one")
-      start(
+      log("no activity — auto-starting then updating for banner")
+      let started = start(
         platform: platform,
         fare: fare,
         hourlyRate: hourlyRate,
@@ -134,6 +134,18 @@ final class LiveActivityManager {
         durationMin: durationMin,
         verdictLevel: verdictLevel
       )
+      if started, let newActivity = current {
+        let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
+        let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
+        let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
+        let alert = AlertConfiguration(title: alertTitle, body: alertBody, sound: .default)
+        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(10))
+        Task { await newActivity.update(content, alertConfiguration: alert) }
+        autoDismiss?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
+        autoDismiss = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+      }
       return
     }
     let prev = activity.content.state
