@@ -70,6 +70,13 @@ function estimateDurationMin(distanceKm: number): number {
   return Math.round(distanceKm / 60 * 60);                       // péri-urbain / autoroute
 }
 
+// Sécurité « session oubliée » (cf. effet de restauration) : bornes appliquées
+// quand une session ouverte est retrouvée à l'ouverture de l'app (les timers JS
+// ne tournent pas app fermée). Sans activité depuis ce délai → abandonnée ;
+// au-delà de la durée max → plafonnée. Le temps mort n'est jamais compté.
+const SESSION_INACTIVITY_MS = 2 * 3600_000; // 2h sans course scannée
+const SESSION_MAX_MS = 14 * 3600_000;       // durée max d'une session
+
 const DashboardScreen = () => {
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
@@ -127,8 +134,47 @@ const DashboardScreen = () => {
         .limit(1)
         .single();
       if (data?.start_at) {
+        // ── Sécurité session oubliée (app tuée / laissée en ligne) ──
+        // Les timers d'auto-close ne tournent pas app fermée → une session peut
+        // rester ouverte des heures/jours et fausser le €/h. À la restauration on
+        // borne la session : (1) si aucune activité (dernière course scannée)
+        // depuis SESSION_INACTIVITY_MS, ou (2) si elle dépasse SESSION_MAX_MS, on
+        // la clôture à la dernière activité réelle (ou au plafond) au lieu de la
+        // rouvrir. Le temps mort n'est jamais compté.
+        const startTs = new Date(data.start_at).getTime();
+        const { data: lastRide } = await supabase
+          .from('rides')
+          .select('created_at')
+          .eq('user_id', user.id)
+          .gte('created_at', data.start_at)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const lastActivityTs = Math.max(
+          startTs,
+          lastRide?.created_at ? new Date(lastRide.created_at).getTime() : startTs,
+        );
+        const now = Date.now();
+        const abandoned =
+          now - lastActivityTs > SESSION_INACTIVITY_MS ||
+          now - startTs > SESSION_MAX_MS;
+        if (abandoned) {
+          const endTs = Math.min(lastActivityTs, startTs + SESSION_MAX_MS);
+          await supabase
+            .from('online_sessions')
+            .update({
+              end_at: new Date(endTs).toISOString(),
+              duration_seconds: Math.max(0, Math.floor((endTs - startTs) / 1000)),
+            })
+            .eq('id', data.id);
+          await supabase.from('profiles').update({ is_online: false }).eq('id', user.id);
+          if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(false);
+          if (Platform.OS === 'ios' && ScanBridge?.stopLiveActivity) ScanBridge.stopLiveActivity();
+          notifySessionClosed();
+          return;
+        }
         setCurrentSessionId(data.id);
-        setSessionStartTs(new Date(data.start_at).getTime());
+        setSessionStartTs(startTs);
         setIsOnline(true);
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
