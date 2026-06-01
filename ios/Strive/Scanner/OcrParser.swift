@@ -574,17 +574,7 @@ final class OcrParser {
     "course", "courses", "trajet", "trajets", "prise", "destination",
     "arrivée", "arrivee", "départ", "depart", "note", "notes", "étoiles", "etoiles",
   ]
-  private let connectorWords: Set<String> = [
-    "de", "du", "des", "la", "le", "les", "sur", "au", "aux",
-    "von", "der", "del", "della", "di",
-  ]
-
   private func hasActionWord(_ text: String) -> Bool { actionWords.contains { containsWord(text, $0) } }
-  private func hasConnector(_ text: String) -> Bool { connectorWords.contains { containsWord(text, $0) } }
-  private func titleCaseWordCount(_ original: String) -> Int {
-    guard let regex = try? NSRegularExpression(pattern: #"(?<![\p{L}])[A-ZÀ-Ü][\p{L}'’.\-]+"#) else { return 0 }
-    return regex.numberOfMatches(in: original, range: NSRange(original.startIndex..., in: original))
-  }
 
   /// Retire les lignes de stats ("49 min", "24.3 km") qu'OCR colle parfois à
   /// l'adresse dans un même bloc → ne garde que l'adresse. Mirror Android.
@@ -640,8 +630,6 @@ final class OcrParser {
     if matches(text, pattern: #"\b\d{4,5}\b"#) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
     // 6. Segment avec virgule + ≥6 lettres : "Châtelet, Paris".
     if text.contains(","), text.filter({ $0.isLetter }).count >= 6 { return true }
-    // 7. Toponyme Title Case (≥2 mots capitalisés) AVEC connecteur : "Gare du Nord".
-    if original.count >= 10, titleCaseWordCount(original) >= 2, hasConnector(text) { return true }
     return false
   }
 

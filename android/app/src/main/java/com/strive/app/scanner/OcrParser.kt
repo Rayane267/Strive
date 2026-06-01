@@ -717,17 +717,7 @@ object OcrParser {
         "course", "courses", "trajet", "trajets", "prise", "destination",
         "arrivée", "arrivee", "départ", "depart", "note", "notes", "étoiles", "etoiles",
     )
-    // Connecteurs FR/DE/ES/IT — confirment un toponyme ("Gare du Nord").
-    private val connectorWords = setOf(
-        "de", "du", "des", "la", "le", "les", "sur", "au", "aux",
-        "von", "der", "del", "della", "di",
-    )
-
     private fun hasActionWord(text: String): Boolean = actionWords.any { containsWord(text, it) }
-    private fun hasConnector(text: String): Boolean = connectorWords.any { containsWord(text, it) }
-    /** Nb de mots commençant par une majuscule (Title Case) — sur le texte ORIGINAL. */
-    private fun titleCaseWordCount(original: String): Int =
-        Regex("""(?<![\p{L}])[A-ZÀ-Ü][\p{L}'’.\-]+""").findAll(original).count()
 
     private val STAT_LINE = Regex("""^\s*(?:à\s*)?\d+[\d.,\s]*\s*(?:km|min)\b.*$""", RegexOption.IGNORE_CASE)
 
@@ -784,10 +774,6 @@ object OcrParser {
         if (Regex("""\b\d{4,5}\b""").containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
         // 6. Segment avec virgule + assez de lettres : "Châtelet, Paris".
         if (text.contains(",") && Regex("""[a-zà-üß]""").findAll(text).count() >= 6) return true
-        // 7. Toponyme Title Case (≥2 mots capitalisés) AVEC connecteur : "Gare du
-        //    Nord", "Place de la République". Le connecteur évite les libellés type
-        //    "Voir Détails" (déjà filtrés) et réduit les faux positifs.
-        if (original.length >= 10 && titleCaseWordCount(original) >= 2 && hasConnector(text)) return true
         return false
     }
 
