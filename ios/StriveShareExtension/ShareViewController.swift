@@ -25,7 +25,7 @@ class ShareViewController: UIViewController {
   /// App Group (`appLanguage`), sinon locale système. Même logique que AnalyzeRideIntent.
   private func localizedString(fr: String, en: String) -> String {
     let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-    let lang = appLang ?? Locale.current.language.languageCode?.identifier ?? "en"
+    let lang = appLang ?? Locale.current.languageCode ?? "en"
     return lang.hasPrefix("fr") ? fr : en
   }
 
