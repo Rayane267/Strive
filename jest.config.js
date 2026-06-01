@@ -7,4 +7,9 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@react-navigation|@sentry|@react-native-firebase|@react-native-google-signin|@invertase|react-native-.*)/)',
   ],
+  // Le plugin react-native-dotenv est désactivé en test (babel.config.js) ;
+  // on résout `@env` vers un mock déterministe.
+  moduleNameMapper: {
+    '^@env$': '<rootDir>/__mocks__/env.js',
+  },
 };

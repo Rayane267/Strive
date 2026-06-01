@@ -30,22 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # react-native-dotenv inline les valeurs `@env` au transform Babel. Les
-      # tests unitaires n'appellent aucun service réseau réel (fetch est mocké),
-      # mais certains modules gardent une early-return si les clés sont absentes.
-      # On fournit donc des valeurs factices NON vides — aucune n'est un secret.
-      - name: Write test .env
-        run: |
-          cat > .env <<'EOF'
-          PUBLIC_SUPABASE_URL=https://test.supabase.co
-          PUBLIC_SUPABASE_KEY=test-anon-key
-          TOMTOM_API_KEY=test-tomtom-key
-          REVENUECAT_API_KEY_ANDROID=test-rc-android
-          REVENUECAT_API_KEY_IOS=test-rc-ios
-          SENTRY_DSN=
-          GOOGLE_WEB_CLIENT_ID=test-google-web
-          GOOGLE_IOS_CLIENT_ID=test-google-ios
-          EOF
+      # Pas de `.env` à écrire : en env `test`, react-native-dotenv est désactivé
+      # (babel.config.js) et `@env` est résolu vers __mocks__/env.js. Les tests
+      # sont donc hermétiques.
 
       # Non-bloquant pour l'instant : ~17 erreurs lint préexistantes dans le code
       # applicatif (imports inutilisés, deps de hooks). Les tests restent la
