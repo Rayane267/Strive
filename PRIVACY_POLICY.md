@@ -1,6 +1,8 @@
 # Politique de confidentialité — Strive
 
-**Dernière mise à jour : 25 avril 2026**
+🇫🇷 Français · [🇬🇧 English](./PRIVACY_POLICY.en.md)
+
+**Dernière mise à jour : 29 mai 2026**
 
 Strive (« l'Application ») est une application mobile destinée aux chauffeurs VTC qui scanne les offres de course affichées dans les applications Uber, Bolt et Heetch afin de calculer la rentabilité des courses en temps réel. La présente politique décrit comment nous traitons vos données.
 
@@ -29,6 +31,8 @@ Lorsque vous créez un compte, nous collectons :
 - **Horodatage**
 
 Ces données sont utilisées pour afficher votre historique et calculer vos statistiques. Elles ne sont jamais revendues ni partagées avec des tiers commerciaux.
+
+Les **adresses de prise en charge et de destination** constituent votre carnet de bord professionnel (suivi de votre activité de chauffeur). Par souci de minimisation, ces adresses sont **automatiquement effacées au bout de 12 mois** ; le reste de la course (tarif, distance, durée, statut) est conservé pour vos statistiques. Vous pouvez également supprimer l'intégralité de votre historique à tout moment (voir §5).
 
 ### 1.3 Données techniques
 - **Identifiant appareil** (pour les notifications push via Firebase)
@@ -74,7 +78,7 @@ Les transferts hors UE sont encadrés par les clauses contractuelles types de la
 ## 4. Durée de conservation
 
 - **Données de compte** : tant que le compte est actif, puis 30 jours après suppression
-- **Historique des courses** : conservation indéfinie tant que le compte est actif (vous pouvez supprimer chaque course individuellement depuis l'onglet Historique)
+- **Historique des courses** : conservé tant que le compte est actif. Les **adresses de départ/destination sont automatiquement effacées après 12 mois** ; les autres données de course (tarif, distance, durée, statut) restent disponibles pour vos statistiques. Vous pouvez supprimer tout votre historique à tout moment depuis l'application (voir §5)
 - **Journaux d'erreurs Sentry** : 90 jours maximum
 - **Données de facturation RevenueCat** : durée légale (10 ans)
 
@@ -93,6 +97,9 @@ Pour exercer ces droits, contactez-nous à **[ton-email@domaine.com]**. Vous pou
 
 ### Suppression du compte
 Vous pouvez supprimer votre compte directement depuis l'application : **Profil → Paramètres → Supprimer le compte**. La suppression est définitive et irréversible après un délai de grâce de 7 jours.
+
+### Suppression de l'historique de courses
+Vous pouvez effacer l'intégralité de votre historique de courses (adresses incluses) sans supprimer votre compte : **Profil → Informations du compte → Supprimer mon historique**. Cette suppression est définitive et immédiate.
 
 ---
 

@@ -1,5 +1,7 @@
 # Conditions Générales d'Utilisation — Strive
 
+🇫🇷 Français · [🇬🇧 English](./TERMS_OF_SERVICE.en.md)
+
 **Dernière mise à jour : 25 avril 2026**
 
 Les présentes Conditions Générales d'Utilisation (« CGU ») régissent l'accès et l'utilisation de l'application mobile **Strive** (« l'Application »). En installant ou utilisant l'Application, vous acceptez ces CGU.

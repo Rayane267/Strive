@@ -568,6 +568,16 @@
     "informations": "INFORMATION",
     "driverDefault": "Driver",
     "errorSave": "Unable to save changes.",
+    "privacy": "DATA & PRIVACY",
+    "deleteHistory": {
+      "title": "Delete my history",
+      "message": "All your saved rides (addresses, fares, statistics) will be permanently deleted. This action cannot be undone.",
+      "confirm": "Delete",
+      "button": "Delete my history",
+      "note": "Your rides (including addresses) are kept for 12 months, then addresses are automatically erased.",
+      "success": "History deleted.",
+      "error": "Deletion failed. Please try again."
+    },
     "errors": {
       "emailInvalid": "Invalid email",
       "phoneInvalid": "Invalid phone number"

@@ -568,6 +568,16 @@
     "informations": "INFORMATIONS",
     "driverDefault": "Chauffeur",
     "errorSave": "Impossible d'enregistrer les modifications.",
+    "privacy": "DONNÉES & CONFIDENTIALITÉ",
+    "deleteHistory": {
+      "title": "Supprimer mon historique",
+      "message": "Toutes vos courses enregistrées (adresses, tarifs, statistiques) seront définitivement supprimées. Cette action est irréversible.",
+      "confirm": "Supprimer",
+      "button": "Supprimer mon historique",
+      "note": "Vos courses (adresses incluses) sont conservées 12 mois, puis les adresses sont automatiquement effacées.",
+      "success": "Historique supprimé.",
+      "error": "Échec de la suppression. Réessayez."
+    },
     "errors": {
       "emailInvalid": "Email invalide",
       "phoneInvalid": "Numéro de téléphone invalide"

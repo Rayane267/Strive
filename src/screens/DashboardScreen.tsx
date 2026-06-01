@@ -25,6 +25,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
 import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
@@ -196,9 +197,17 @@ const DashboardScreen = () => {
   const canScanRef = useRef(canScan);
   const scanCountRef = useRef(stats.scans);
   const isOnlineRef = useRef(isOnline);
+  // Refs pour les valeurs lues dans le listener de scan (deps non listées sinon
+  // → valeurs obsolètes au moment du scan après changement de tier/crédits/reset).
+  const tierRef = useRef(tier);
+  const extraCreditsRef = useRef(extraCredits);
+  const dayResetHourRef = useRef(dayResetHour);
   useEffect(() => { canScanRef.current = canScan; }, [canScan]);
   useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
+  useEffect(() => { tierRef.current = tier; }, [tier]);
+  useEffect(() => { extraCreditsRef.current = extraCredits; }, [extraCredits]);
+  useEffect(() => { dayResetHourRef.current = dayResetHour; }, [dayResetHour]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -276,16 +285,33 @@ const DashboardScreen = () => {
         && result.pickupDurationMin != null
         && result.pickupDistanceKm != null;
 
-      const courseDuration = result.durationMin ?? estimateDurationMin(result.distanceKm);
-      const totalDuration = includePickup
+      // Durée course : on n'utilise l'OCR que si > 0 — un `0` lu par erreur ferait
+      // diviser par zéro (€/h = Infinity). Sinon estimation heuristique.
+      const courseDuration = (result.durationMin && result.durationMin > 0)
+        ? result.durationMin
+        : estimateDurationMin(result.distanceKm);
+      const totalDuration = Math.max(1, includePickup
         ? (result.pickupDurationMin as number) + courseDuration
-        : courseDuration;
+        : courseDuration);
       const totalDistance = includePickup
         ? (result.pickupDistanceKm as number) + result.distanceKm
         : result.distanceKm;
 
       const hourlyRate = result.fare / (totalDuration / 60);
-      const kmRate = result.fare / totalDistance;
+      const kmRate = totalDistance > 0 ? result.fare / totalDistance : 0;
+
+      // Filet final anti-valeurs aberrantes (ex: "8 930 934 €/km" remonté en test).
+      // Le natif filtre déjà via isSane, mais le fallback Gemini / certains chemins
+      // ne re-valident pas le ratio → on bloque ici tout ce qui est non fini ou
+      // physiquement impossible AVANT d'écrire la course en DB.
+      if (!Number.isFinite(hourlyRate) || !Number.isFinite(kmRate)
+        || kmRate <= 0 || kmRate > 50
+        || hourlyRate <= 0 || hourlyRate > 1000) {
+        __DEV__ && console.warn('[Scanner] valeurs aberrantes rejetées', { hourlyRate, kmRate, totalDistance, totalDuration });
+        hapticError();
+        return;
+      }
+
       const hrOk = hourlyRate >= preferences.min_hourly_rate;
       const kmOk = kmRate >= preferences.min_km_rate;
       const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
@@ -296,12 +322,12 @@ const DashboardScreen = () => {
 
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
-      const newRemaining = getRemainingScans(tier, scanCountRef.current, extraCredits);
+      const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
         try { scannerService.setQuotaReached(true); } catch {}
-        notifyQuotaReached(dayResetHour);
-        scheduleQuotaResetNotification(dayResetHour);
+        notifyQuotaReached(dayResetHourRef.current);
+        scheduleQuotaResetNotification(dayResetHourRef.current);
       }
 
       __DEV__ && console.info('[Scanner:Final] valeurs DB :', {
@@ -326,6 +352,8 @@ const DashboardScreen = () => {
           durationMin: totalDuration,
           hourlyRate,
           kmRate,
+          pickupAddress: result.pickupAddress,
+          destinationAddress: result.destinationAddress,
         });
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
@@ -340,6 +368,8 @@ const DashboardScreen = () => {
             durationMin: queuedRide.duration_min,
             hourlyRate: queuedRide.hourly_rate,
             kmRate: queuedRide.km_rate,
+            pickupAddress: queuedRide.pickup_address,
+            destinationAddress: queuedRide.destination_address,
           });
         }).catch(() => {});
       } catch (e) {
@@ -354,6 +384,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          pickup_address: result.pickupAddress ?? null,
+          destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),
         });
         // Affiche localement pour retour utilisateur (ID temporaire)
@@ -368,6 +400,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          pickup_address: result.pickupAddress ?? null,
+          destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),
         }, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
@@ -448,7 +482,14 @@ const DashboardScreen = () => {
     }, 500);
     try {
       await updateRideStatus(id, newStatus);
-    } catch {}
+    } catch (e) {
+      // Le serveur n'a pas pris l'update → l'UI a déjà retiré la course (optimiste).
+      // On signale l'échec (haptique) et on resync depuis la DB (source de vérité)
+      // pour ne pas laisser la course disparue alors qu'elle est toujours PENDING.
+      Sentry.captureException(e, { tags: { flow: 'ride_status_update' } });
+      hapticError();
+      fetchDataRef.current?.();
+    }
   }, [sessionSeconds]);
 
   const handleAcceptPress = useCallback((id: string) => {

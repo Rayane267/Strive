@@ -34,6 +34,7 @@ class FloatingBubbleService : Service() {
     private var routeLine: View? = null
     private var routeCenterDot: View? = null
     private var routeGpsCircle: View? = null
+    private var routeGpsGlyphView: TextView? = null
     private var durationView: TextView? = null
     private var distanceView: TextView? = null
     private var hourlyRateView: TextView? = null
@@ -110,6 +111,7 @@ class FloatingBubbleService : Service() {
         routeLine = null
         routeCenterDot = null
         routeGpsCircle = null
+        routeGpsGlyphView = null
         durationView = null
         distanceView = null
         hourlyRateView = null
@@ -243,8 +245,16 @@ class FloatingBubbleService : Service() {
                     val debug = if (BuildConfig.DEBUG) debugBlocks else null
                     resolveTomTomAndEmit(result, base64, debug)
                     scanInProgress = false
-                } else {
+                } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
                     fallbackGemini(fullBitmap)
+                } else {
+                    // Pré-filtre anti-pub : du texte a été lu mais aucun signal VTC
+                    // (prix €, km/min, plateforme) → inutile de payer un appel Gemini.
+                    // Mirror iOS (ScanProcessor.lastScanMayBeRide).
+                    fullBitmap.recycle()
+                    onNotARide()
+                    ScanBridgeModule.emitScanFailed()
+                    scanInProgress = false
                 }
             }
             .addOnFailureListener {
@@ -282,6 +292,12 @@ class FloatingBubbleService : Service() {
 
     private fun onScanError() {
         mainHandler.post { showErrorState() }
+        mainHandler.postDelayed({ showIdleState() }, 2500)
+    }
+
+    /** Écran scanné sans signal d'offre VTC (pub, etc.) — pas d'appel Gemini. */
+    private fun onNotARide() {
+        mainHandler.post { showNotARideState() }
         mainHandler.postDelayed({ showIdleState() }, 2500)
     }
 
@@ -343,14 +359,18 @@ class FloatingBubbleService : Service() {
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
 
+        if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom? pickup='$pickup' dest='$dest' ready=${TomTomService.isReady}")
+
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
+            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
             mainHandler.post { showResultState(ocr); applyVerdict(ocr) }
             ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks)
             return
         }
 
         TomTomService.calculateRoute(pickup, dest) { route ->
+            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom route=$route (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
             val finalResult = if (route != null
                 && route.distanceKm in 0.3..120.0
@@ -417,6 +437,8 @@ class FloatingBubbleService : Service() {
             routeLine?.setBackgroundColor(color)
             routeCenterDot?.background = GradientDrawable().apply { setColor(color); cornerRadius = dpToPx(5).toFloat() }
             routeGpsCircle?.background = GradientDrawable().apply { setColor(color); cornerRadius = rc }
+            // Verdict au bout de la ligne — comme la Live Activity iOS (✓ / ! / ✕).
+            routeGpsGlyphView?.text = when (level) { 2 -> "✓"; 1 -> "!"; else -> "✕" }
             // Countdown bar
             verdictBarView?.background = GradientDrawable().apply {
                 setColor(color); cornerRadius = dpToPx(2).toFloat()
@@ -496,8 +518,8 @@ class FloatingBubbleService : Service() {
 
         val logoSize = dpToPx(30)
         pill.addView(ImageView(this).apply {
-            setImageResource(com.strive.R.mipmap.ic_launcher_round)
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(com.strive.R.drawable.strive_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }, LinearLayout.LayoutParams(logoSize, logoSize).apply {
             marginEnd = dpToPx(8)
         })
@@ -579,14 +601,6 @@ class FloatingBubbleService : Service() {
         val hourlyRate = if (totalDuration > 0) result.fare / (totalDuration / 60.0) else 0.0
         val kmRate = if (totalDistance > 0) result.fare / totalDistance else 0.0
 
-        val pColor = when (result.platform) {
-            OcrParser.Platform.UBER   -> "#FFFFFF"
-            OcrParser.Platform.BOLT   -> "#34D47A"
-            OcrParser.Platform.HEETCH -> "#FF3B80"
-            else                      -> "#AAAAAA"
-        }
-        val pColorInt = Color.parseColor(pColor)
-
         // ── Card ──
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -616,7 +630,7 @@ class FloatingBubbleService : Service() {
         }
         leftZone.addView(TextView(this).apply {
             text = result.platform.name.let { it[0] + it.substring(1).lowercase() }
-            textSize = 15f; setTextColor(pColorInt)
+            textSize = 15f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
         }, LinearLayout.LayoutParams(
@@ -758,11 +772,13 @@ class FloatingBubbleService : Service() {
         val warnView = FrameLayout(this).apply {
             background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = circleSize / 2f }
         }
-        warnView.addView(TextView(this).apply {
+        val warnGlyph = TextView(this).apply {
             text = "!"; textSize = 12f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
             includeFontPadding = false
-        }, FrameLayout.LayoutParams(
+        }
+        routeGpsGlyphView = warnGlyph
+        warnView.addView(warnGlyph, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ).apply { gravity = Gravity.CENTER })
         routeGpsCircle = warnView
@@ -842,6 +858,37 @@ class FloatingBubbleService : Service() {
         })
         pill.addView(TextView(this).apply {
             text = "Échec"; textSize = 13f; setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+
+        bubbleContainer.addView(pill, FrameLayout.LayoutParams(
+            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT
+        ))
+        animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    private fun showNotARideState() {
+        clearTransientState()
+        bubbleContainer.removeAllViews()
+
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(16), dpToPx(8))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#555555"))
+                cornerRadius = dpToPx(999).toFloat()
+            }
+            elevation = dpToPx(8).toFloat()
+        }
+        pill.addView(TextView(this).apply {
+            text = "🔍"; textSize = 14f
+            setPadding(0, 0, dpToPx(6), 0)
+        })
+        pill.addView(TextView(this).apply {
+            // Localisé via strings.xml (fr) / values-en (en) — suit la locale appareil.
+            text = getString(com.strive.R.string.scanner_not_a_ride)
+            textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
 

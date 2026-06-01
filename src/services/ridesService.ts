@@ -21,6 +21,8 @@ export async function createRide(params: {
   durationMin: number;
   hourlyRate: number;
   kmRate: number;
+  pickupAddress?: string | null;
+  destinationAddress?: string | null;
 }): Promise<Ride> {
   const { data, error } = await supabase
     .from('rides')
@@ -33,6 +35,8 @@ export async function createRide(params: {
       duration_min: params.durationMin,
       hourly_rate: params.hourlyRate,
       km_rate: params.kmRate,
+      pickup_address: params.pickupAddress ?? null,
+      destination_address: params.destinationAddress ?? null,
     })
     .select()
     .single();

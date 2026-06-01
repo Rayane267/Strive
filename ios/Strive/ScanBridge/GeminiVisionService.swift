@@ -69,9 +69,16 @@ final class GeminiVisionService {
       }
       req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
       req.setValue(anonKey, forHTTPHeaderField: "apikey")
+      // L'edge function durcie n'accepte QUE le format natif Gemini
+      // (`contents[].parts[]`) — cf. isValidGeminiPayload dans gemini-proxy.
+      // Doit rester aligné avec geminiFallback.ts et le ShareExtension.
       req.httpBody = try? JSONSerialization.data(withJSONObject: [
-        "imageBase64": base64,
-        "prompt": Self.prompt,
+        "contents": [[
+          "parts": [
+            ["inline_data": ["mime_type": "image/jpeg", "data": base64]],
+            ["text": Self.prompt],
+          ]
+        ]]
       ])
       request = req
     } else if let key = apiKey,
@@ -168,9 +175,12 @@ final class GeminiVisionService {
 
     let durationMin = (parsed["duration_min"] as? NSNumber)?.intValue
 
-    // Sanity bounds (mêmes que Android)
+    // Sanity bounds (mêmes que Android) + ratio plausible : rejette une distance
+    // hallucinée minuscule → €/km démentiel. Mirror JS / Android.
+    let ratio = distanceKm > 0 ? fare / distanceKm : .infinity
     guard fare >= 3, fare <= 200,
-          distanceKm >= 0.3, distanceKm <= 1000
+          distanceKm >= 0.3, distanceKm <= 1000,
+          ratio >= 0.2, ratio <= 15
     else { return nil }
 
     return GeminiResult(

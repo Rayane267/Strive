@@ -43,6 +43,10 @@ class ScanBridgeModule: RCTEventEmitter {
 
   override func startObserving() {
     hasListeners = true
+    // Cold start : un résultat écrit par la Share Extension pendant que l'app
+    // était tuée a pu rater la notification Darwin. Dès que le JS s'abonne, on
+    // flush ce qui est en attente dans l'App Group (garde timestamp anti-doublon).
+    handleShareExtensionResult()
     if #available(iOS 16.2, *) {
       laDismissObserver = NotificationCenter.default.addObserver(
         forName: LiveActivityManager.dismissedNotification,
@@ -99,9 +103,10 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   @objc private func appDidBecomeActive() {
-    if isActive {
-      handleShareExtensionResult()
-    }
+    // Sur iOS le scan passe toujours par la Share Extension → on traite les
+    // résultats en attente à chaque retour au premier plan, que startScanner()
+    // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
+    handleShareExtensionResult()
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -182,28 +187,9 @@ class ScanBridgeModule: RCTEventEmitter {
         )
       }
 
-      let defaults = UserDefaults(suiteName: Self.appGroupId)
-      let laResult = defaults?.string(forKey: "laLastStep") ?? "none"
-      let existingAfter = Activity<StriveActivityAttributes>.activities.count
-
-      SentrySDK.capture(message: "LiveActivity debug") { scope in
-        scope.setLevel(.info)
-        scope.setTag(value: "live-activity", key: "feature")
-        scope.setTag(value: shareExtStatus, key: "share-ext-result")
-        scope.setTag(value: String(laResult.prefix(200)), key: "la-result")
-        scope.setTag(value: "\(existing.count)>\(existingAfter)", key: "la-count")
-        scope.setTag(value: "\(UIApplication.shared.applicationState.rawValue)", key: "la-appstate")
-        scope.setContext(value: [
-          "shareExtStatus": shareExtStatus,
-          "existingBefore": "\(existing.count)",
-          "existingAfter": "\(existingAfter)",
-          "appState": "\(UIApplication.shared.applicationState.rawValue)",
-          "mainAppAuthEnabled": "\(ActivityAuthorizationInfo().areActivitiesEnabled)",
-          "laResult": laResult,
-        ], key: "live-activity-debug")
-      }
-      defaults?.removeObject(forKey: "laSteps")
-      defaults?.removeObject(forKey: "laLastStep")
+      // Nettoyage de la trace debug Live Activity (écrite par LiveActivityManager).
+      defaults.removeObject(forKey: "laSteps")
+      defaults.removeObject(forKey: "laLastStep")
     }
 
     sendEvent(withName: "onScanResult", body: result)
@@ -293,6 +279,14 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func setQuotaReached(_ reached: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
+    }
+  }
+
+  /// Active/désactive le scanner (toggle "Trip ID actif", iOS). Lu par la Share
+  /// Extension et l'AppIntent → un scan déclenché alors que désactivé est refusé.
+  @objc func setScannerEnabled(_ enabled: Bool) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(enabled, forKey: "scannerEnabled")
     }
   }
 

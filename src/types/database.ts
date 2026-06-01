@@ -43,5 +43,7 @@ export interface Ride {
   duration_min: number;
   hourly_rate: number;
   km_rate: number;
+  pickup_address?: string | null;
+  destination_address?: string | null;
   created_at: string;
 }

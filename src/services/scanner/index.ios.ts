@@ -112,6 +112,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setQuotaReached(reached);
   },
 
+  setScannerEnabled: (enabled: boolean) => {
+    ScanBridge?.setScannerEnabled(enabled);
+  },
+
 checkPermissions: async () => {
     if (!ScanBridge) {
       return {

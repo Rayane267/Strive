@@ -82,6 +82,10 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
     const distanceKm = Number(data.distanceKm);
     if (!Number.isFinite(fare) || fare < FARE_MIN || fare > FARE_MAX) return null;
     if (!Number.isFinite(distanceKm) || distanceKm < DIST_MIN || distanceKm > DIST_MAX) return null;
+    // Ratio plausible : Gemini hallucine parfois une distance minuscule → €/km
+    // démentiel. On rejette avant de remonter la course au Dashboard.
+    const ratio = fare / distanceKm;
+    if (ratio < 0.2 || ratio > 15) return null;
 
     const platform: ScanPlatform =
       (['UBER', 'BOLT', 'HEETCH'].includes(data.platform) ? data.platform : 'UNKNOWN');

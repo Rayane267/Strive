@@ -27,7 +27,7 @@ describe('getPlanLimits', () => {
 
   it('returns correct limits for plus tier', () => {
     const limits = getPlanLimits('plus');
-    expect(limits.dailyScans).toBe(50);
+    expect(limits.dailyScans).toBe(15);
     expect(limits.analyticsRangeDays).toBe(7);
   });
 
@@ -55,9 +55,15 @@ describe('getRemainingScans', () => {
   });
 
   it('returns remaining for plus tier', () => {
-    expect(getRemainingScans('plus', 10, 0)).toBe(40);
-    expect(getRemainingScans('plus', 50, 0)).toBe(0);
-    expect(getRemainingScans('plus', 50, 5)).toBe(5);
+    expect(getRemainingScans('plus', 10, 0)).toBe(5); // 15 daily - 10 used
+    expect(getRemainingScans('plus', 15, 0)).toBe(0);
+    expect(getRemainingScans('plus', 15, 5)).toBe(5); // quota exhausted + 5 extra
+  });
+
+  it('clamps negative or NaN counters to zero', () => {
+    expect(getRemainingScans('free', -5, 0)).toBe(3);
+    expect(getRemainingScans('free', NaN, NaN)).toBe(3);
+    expect(getRemainingScans('free', 0, -10)).toBe(3);
   });
 
   it('never returns negative from plan', () => {

@@ -47,7 +47,11 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
   const kmRate = Number(ride.km_rate || 0);
   const platformColor = PLATFORM_COLORS[rawPlatform] ?? '#FFFFFF';
   const bgImage = platformBackgrounds[rawPlatform] ?? platformBackgrounds.UBER;
-  const rateOk = hourlyRate >= preferences.min_hourly_rate;
+  // Verdict combiné (identique bulle / Dynamic Island / Share Extension) :
+  // 2 = vert (les deux seuils OK), 1 = orange (un seul OK), 0 = sous les seuils.
+  const hrOk = hourlyRate >= preferences.min_hourly_rate;
+  const kmOk = kmRate >= preferences.min_km_rate;
+  const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
   const platformLabel = rawPlatform.charAt(0) + rawPlatform.slice(1).toLowerCase();
 
   return (
@@ -61,9 +65,9 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
               <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
               <Text style={styles.platformPillText}>{platformLabel}</Text>
             </View>
-            <View style={[styles.ratePill, rateOk && styles.ratePillGood]}>
-              <Feather name="trending-up" size={12} color={rateOk ? colors.background : colors.textMuted} />
-              <Text style={[styles.ratePillText, rateOk && styles.ratePillTextGood]}>
+            <View style={[styles.ratePill, level === 2 && styles.ratePillGood, level === 1 && styles.ratePillMid]}>
+              <Feather name="trending-up" size={12} color={level === 2 ? colors.background : level === 1 ? '#3A2A00' : colors.textMuted} />
+              <Text style={[styles.ratePillText, level === 2 && styles.ratePillTextGood, level === 1 && styles.ratePillTextMid]}>
                 {hourlyRate.toFixed(0)}€/h
               </Text>
             </View>
@@ -189,8 +193,14 @@ const styles = StyleSheet.create({
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.6, shadowRadius: 8, elevation: 6,
   },
+  ratePillMid: {
+    backgroundColor: '#FF9800', borderColor: '#FF9800',
+    shadowColor: '#FF9800', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 6,
+  },
   ratePillText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   ratePillTextGood: { color: colors.background },
+  ratePillTextMid: { color: '#3A2A00' },
   timeAgoPill: {
     marginLeft: 'auto',
     backgroundColor: 'rgba(0,0,0,0.45)',

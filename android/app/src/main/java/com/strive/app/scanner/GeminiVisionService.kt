@@ -199,6 +199,10 @@ object GeminiVisionService {
 
             if (fare < 3 || fare > 200) return null
             if (distanceKm < 0.3 || distanceKm > 1000) return null
+            // Ratio plausible : rejette les combinaisons aberrantes (distance
+            // hallucinée minuscule → €/km démentiel). Mirror JS / iOS.
+            val ratio = fare / distanceKm
+            if (ratio < 0.2 || ratio > 15.0) return null
 
             OcrParser.ScanResult(
                 platform = platform,

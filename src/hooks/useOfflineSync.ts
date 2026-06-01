@@ -33,6 +33,8 @@ export function useOfflineSync() {
           durationMin: ride.duration_min,
           hourlyRate: ride.hourly_rate,
           kmRate: ride.km_rate,
+          pickupAddress: ride.pickup_address,
+          destinationAddress: ride.destination_address,
         });
       });
       if (count > 0) __DEV__ && console.log(`[SYNC] ${count} ride(s) synced from offline queue`);

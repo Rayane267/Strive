@@ -34,7 +34,7 @@ const PreferencesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [minHr, setMinHr] = useState(25);
-  const [minKm, setMinKm] = useState(1.25);
+  const [minKm, setMinKm] = useState(1.2);
   const [includePickup, setIncludePickup] = useState(false);
   const [useLiveActivity, setUseLiveActivityRaw] = useState(true);
   const setUseLiveActivity = (v: boolean) => {
@@ -45,7 +45,17 @@ const PreferencesScreen = () => {
       NativeModules.ScanBridge?.setUseLiveActivity(v);
     }
   };
-  const [isActive, setIsActive] = useState(true);
+  const [isActive, setIsActiveRaw] = useState(true);
+  // « Trip ID actif » : interrupteur du scanner sur iOS. Écrit un flag lu par la
+  // Share Extension + le raccourci AssistiveTouch (refus de scan si OFF).
+  // Sur Android le toggle n'est pas affiché (la bulle se pilote via son bouton).
+  const setIsActive = (v: boolean) => {
+    setIsActiveRaw(v);
+    if (Platform.OS === 'ios') {
+      const { NativeModules } = require('react-native');
+      NativeModules.ScanBridge?.setScannerEnabled?.(v);
+    }
+  };
   const [dayResetHour, setDayResetHour] = useState<0 | 4>(0);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
 
@@ -75,7 +85,7 @@ const PreferencesScreen = () => {
         setMinHr(Number(data.min_hourly_rate));
         setMinKm(Number(data.min_km_rate));
         setIncludePickup(data.include_pickup);
-        setIsActive(data.is_active);
+        setIsActive(data.is_active !== false); // null/undefined → activé par défaut
         if (data.day_reset_hour === 4) setDayResetHour(4);
         else setDayResetHour(0);
       }
@@ -158,30 +168,34 @@ const PreferencesScreen = () => {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* ── ACTIVATION ── */}
-        <View style={styles.sectionLabel}>
-          <View style={styles.sectionAccent} />
-          <Text style={styles.sectionLabelText}>{t('preferences.identification')}</Text>
-        </View>
+        {/* ── ACTIVATION (iOS uniquement — interrupteur du scanner) ── */}
+        {Platform.OS === 'ios' && (
+          <>
+            <View style={styles.sectionLabel}>
+              <View style={styles.sectionAccent} />
+              <Text style={styles.sectionLabelText}>{t('preferences.identification')}</Text>
+            </View>
 
-        <View style={styles.card}>
-          <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: isActive ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
-              <Feather name="zap" size={18} color={isActive ? colors.primary : colors.textDimmed} />
+            <View style={styles.card}>
+              <View style={styles.toggleRow}>
+                <View style={[styles.toggleIconWrap, { backgroundColor: isActive ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
+                  <Feather name="zap" size={18} color={isActive ? colors.primary : colors.textDimmed} />
+                </View>
+                <View style={styles.toggleTextBlock}>
+                  <Text style={styles.toggleTitle}>{t('preferences.active', 'Trip ID actif')}</Text>
+                  <Text style={styles.toggleSub}>{t('preferences.enableTripIdSub', 'Identification automatique des trajets scannés')}</Text>
+                </View>
+                <Switch
+                  value={isActive}
+                  onValueChange={setIsActive}
+                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+                  thumbColor={isActive ? colors.primary : colors.textDimmed}
+                  ios_backgroundColor="rgba(255,255,255,0.08)"
+                />
+              </View>
             </View>
-            <View style={styles.toggleTextBlock}>
-              <Text style={styles.toggleTitle}>{t('preferences.active', 'Trip ID actif')}</Text>
-              <Text style={styles.toggleSub}>{t('preferences.enableTripIdSub', 'Identification automatique des trajets scannés')}</Text>
-            </View>
-            <Switch
-              value={isActive}
-              onValueChange={setIsActive}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={isActive ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
-            />
-          </View>
-        </View>
+          </>
+        )}
 
 
         {/* ── MINIMUMS ── */}

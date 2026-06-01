@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   KeyboardTypeOptions,
+  Alert,
 } from 'react-native';
 import { Toast, useToast } from '../components/Toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,7 +47,39 @@ const AccountInfoScreen = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingHistory, setDeletingHistory] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
+
+  const handleDeleteHistory = () => {
+    if (!user?.id) return;
+    Alert.alert(
+      t('accountInfo.deleteHistory.title', 'Supprimer mon historique'),
+      t('accountInfo.deleteHistory.message', 'Toutes vos courses enregistrées (adresses, tarifs, statistiques) seront définitivement supprimées. Cette action est irréversible.'),
+      [
+        { text: t('common.cancel', 'Annuler'), style: 'cancel' },
+        {
+          text: t('accountInfo.deleteHistory.confirm', 'Supprimer'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!user?.id) return;
+            setDeletingHistory(true);
+            try {
+              const { error } = await supabase.from('rides').delete().eq('user_id', user.id);
+              if (error) throw error;
+              hapticSuccess();
+              showToast({ type: 'success', title: t('common.success'), message: t('accountInfo.deleteHistory.success', 'Historique supprimé.') });
+            } catch (e) {
+              hapticError();
+              showToast({ type: 'error', title: t('common.error'), message: t('accountInfo.deleteHistory.error', 'Échec de la suppression. Réessayez.') });
+              __DEV__ && console.error(e);
+            } finally {
+              setDeletingHistory(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const formatPhoneNumber = (text: string) => {
     const cleaned = text.replace(/\s+/g, '');
@@ -269,6 +302,32 @@ const AccountInfoScreen = () => {
             />
           </View>
 
+          {/* ── DONNÉES & CONFIDENTIALITÉ ── */}
+          <View style={[styles.formCard, { marginTop: 18 }]}>
+            <View style={styles.formHeader}>
+              <Feather name="shield" size={15} color={colors.primary} />
+              <Text style={styles.formHeaderText}>{t('accountInfo.privacy', 'DONNÉES & CONFIDENTIALITÉ')}</Text>
+            </View>
+            <Text style={styles.privacyNote}>
+              {t('accountInfo.deleteHistory.note', 'Vos courses (adresses incluses) sont conservées 12 mois, puis les adresses sont automatiquement effacées.')}
+            </Text>
+            <TouchableOpacity
+              style={styles.deleteHistoryBtn}
+              onPress={handleDeleteHistory}
+              disabled={deletingHistory}
+              activeOpacity={0.85}
+            >
+              {deletingHistory ? (
+                <ActivityIndicator color={colors.danger} />
+              ) : (
+                <>
+                  <Feather name="trash-2" size={16} color={colors.danger} />
+                  <Text style={styles.deleteHistoryText}>{t('accountInfo.deleteHistory.button', 'Supprimer mon historique')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
         </ScrollView>
 
         {/* ── SAVE BUTTON ── */}
@@ -379,6 +438,16 @@ const styles = StyleSheet.create({
   fieldError: { color: colors.danger, fontSize: 11, fontWeight: '600', marginTop: 4 },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: colors.textMain, fontSize: 15, height: '100%' },
+
+  // Données & confidentialité
+  privacyNote: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginBottom: 14 },
+  deleteHistoryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 48, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(255,77,77,0.4)',
+    backgroundColor: 'rgba(255,77,77,0.08)',
+  },
+  deleteHistoryText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
 
   // Footer
   footer: {

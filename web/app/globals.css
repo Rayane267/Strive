@@ -1,0 +1,229 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Night-shift instrument palette */
+  --color-canvas: #080a09;
+  --color-ink: #0f1311;
+  --color-ink-2: #161c18;
+  --color-line: rgba(233, 245, 238, 0.08);
+  --color-signal: #00e676;
+  --color-signal-deep: #00b85f;
+  --color-amber: #ffc24b;
+  --color-danger: #ff5a4d;
+  --color-fg: #eef3ef;
+  --color-muted: #8b958e;
+  --color-faint: #5b655e;
+
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--color-signal);
+  color: #05140c;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+.font-serif {
+  font-family: var(--font-serif);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Hero full-bleed warm glow */
+.hero-bg {
+  background:
+    radial-gradient(60% 55% at 50% 38%, rgba(0, 230, 118, 0.3), transparent 62%),
+    radial-gradient(38% 34% at 50% 36%, rgba(0, 230, 118, 0.22), transparent 68%),
+    radial-gradient(48% 24% at 50% 4%, rgba(0, 230, 118, 0.16), transparent 70%),
+    radial-gradient(80% 46% at 50% 116%, rgba(255, 168, 64, 0.16), transparent 66%),
+    var(--color-canvas);
+}
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 70%, var(--color-canvas) 100%);
+}
+
+/* Showcase stage for the instrument cluster */
+.showcase-stage {
+  background:
+    radial-gradient(54% 60% at 50% 35%, rgba(0, 230, 118, 0.16), transparent 70%),
+    radial-gradient(40% 40% at 70% 80%, rgba(255, 168, 64, 0.08), transparent 70%);
+}
+.stage-floor {
+  position: absolute;
+  left: 50%;
+  bottom: -2rem;
+  width: 36rem;
+  max-width: 90%;
+  height: 22rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 230, 118, 0.28), transparent 70%);
+  filter: blur(8px);
+}
+
+/* ---- Atmosphere ---- */
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.grid-lines {
+  background-image:
+    linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
+}
+
+.aurora {
+  background:
+    radial-gradient(48rem 30rem at 78% -8%, rgba(0, 230, 118, 0.16), transparent 60%),
+    radial-gradient(36rem 24rem at 8% 12%, rgba(255, 194, 75, 0.07), transparent 65%);
+}
+
+.text-signal-glow {
+  text-shadow: 0 0 36px rgba(0, 230, 118, 0.45);
+}
+
+.hairline {
+  border-top: 1px solid var(--color-line);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.2s ease;
+}
+.btn-signal {
+  background: var(--color-signal);
+  color: #05140c;
+  box-shadow: 0 10px 36px -8px rgba(0, 230, 118, 0.6);
+}
+.btn-signal:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 50px -10px rgba(0, 230, 118, 0.75);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--color-fg);
+  border: 1px solid var(--color-line);
+}
+.btn-ghost:hover {
+  border-color: rgba(233, 245, 238, 0.25);
+  background: rgba(233, 245, 238, 0.04);
+}
+
+/* ---- Eyebrow / mono label ---- */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-signal);
+}
+
+/* ---- Page-load entrance (above the fold) ---- */
+@keyframes load-up {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+.load-up {
+  opacity: 0;
+  animation: load-up 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ---- Reveal ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Marquee ---- */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+
+/* ---- Gauge / instrument ---- */
+@keyframes sweep {
+  0% { transform: rotate(-128deg); }
+  55% { transform: rotate(58deg); }
+  70% { transform: rotate(42deg); }
+  100% { transform: rotate(50deg); }
+}
+.gauge-needle {
+  transform-origin: bottom center;
+  animation: sweep 2.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes count-glow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float { animation: float 6.5s ease-in-out infinite; }
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.45); }
+  70% { box-shadow: 0 0 0 12px rgba(0, 230, 118, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+}
+.animate-ring { animation: pulse-ring 2.4s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .load-up { opacity: 1; animation: none; }
+  .gauge-needle, .animate-float, .animate-ring, .marquee-track { animation: none; }
+  .gauge-needle { transform: rotate(50deg); }
+}

@@ -123,7 +123,21 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Select-Object -First 40)",
       "PowerShell(npx tsc --noEmit --pretty 2>&1 | Select-Object -First 40)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "Bash(grep -E '\\\\.\\(ts|tsx|swift|kt\\)$')",
+      "PowerShell(Remove-Item *)",
+      "Bash(echo \"EXIT_TSC=$?\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"EXIT_LINT=$?\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(npx --no-install playwright --version)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1280,1700 --virtual-time-budget=3500 --screenshot=/tmp/s2.png \"http://localhost:3000\")",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1280,1700 --virtual-time-budget=3800 --screenshot=/tmp/s3.png \"http://localhost:3000\")",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1280,900 --virtual-time-budget=4000 --screenshot=/tmp/s4.png \"http://localhost:3000\")",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1280,4200 --virtual-time-budget=4500 --screenshot=/tmp/s5.png \"http://localhost:3000\")"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -21,7 +21,13 @@ jest.mock('../supabase', () => ({
   },
 }));
 
-import { effectiveFare, fetchRides, createRide } from '../ridesService';
+import {
+  effectiveFare,
+  fetchRides,
+  createRide,
+  updateRideStatus,
+  updateRideFare,
+} from '../ridesService';
 import { supabase } from '../supabase';
 
 beforeEach(() => {
@@ -41,6 +47,10 @@ describe('effectiveFare', () => {
     expect(effectiveFare({ fare_estimated: 0, fare_final: null })).toBe(0);
     expect(effectiveFare({ fare_estimated: 10, fare_final: 0 })).toBe(0);
   });
+
+  it('prefers fare_final even when it is lower than the estimate', () => {
+    expect(effectiveFare({ fare_estimated: 20, fare_final: 12 })).toBe(12);
+  });
 });
 
 describe('fetchRides', () => {
@@ -49,6 +59,19 @@ describe('fetchRides', () => {
     const since = new Date('2026-04-01');
     await fetchRides('user-123', since);
     expect(supabase.from).toHaveBeenCalledWith('rides');
+    expect(mockEq).toHaveBeenCalledWith('user_id', 'user-123');
+    expect(mockGte).toHaveBeenCalledWith('created_at', since.toISOString());
+  });
+
+  it('returns the rows returned by supabase', async () => {
+    const rows = [{ id: 'r1' }, { id: 'r2' }];
+    mockOrder.mockResolvedValueOnce({ data: rows, error: null });
+    await expect(fetchRides('user-123', new Date())).resolves.toEqual(rows);
+  });
+
+  it('returns an empty array when data is null', async () => {
+    mockOrder.mockResolvedValueOnce({ data: null, error: null });
+    await expect(fetchRides('user-123', new Date())).resolves.toEqual([]);
   });
 
   it('throws on supabase error', async () => {
@@ -77,5 +100,92 @@ describe('createRide', () => {
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({ platform: 'UBER' }),
     );
+  });
+
+  it('keeps a known platform unchanged and defaults status to PENDING', async () => {
+    mockSingle.mockResolvedValueOnce({ data: { id: '2', platform: 'BOLT' }, error: null });
+
+    await createRide({
+      userId: 'u1',
+      platform: 'BOLT',
+      fare: 12,
+      distanceKm: 4,
+      durationMin: 8,
+      hourlyRate: 60,
+      kmRate: 2,
+      pickupAddress: '1 rue A',
+      destinationAddress: '2 rue B',
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'BOLT',
+        status: 'PENDING',
+        fare_estimated: 12,
+        pickup_address: '1 rue A',
+        destination_address: '2 rue B',
+      }),
+    );
+  });
+
+  it('coalesces missing addresses to null', async () => {
+    mockSingle.mockResolvedValueOnce({ data: { id: '3' }, error: null });
+
+    await createRide({
+      userId: 'u1',
+      platform: 'HEETCH',
+      fare: 9,
+      distanceKm: 3,
+      durationMin: 6,
+      hourlyRate: 50,
+      kmRate: 2,
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ pickup_address: null, destination_address: null }),
+    );
+  });
+
+  it('throws when supabase rejects the insert', async () => {
+    mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'insert failed' } });
+    await expect(
+      createRide({
+        userId: 'u1',
+        platform: 'UBER',
+        fare: 10,
+        distanceKm: 5,
+        durationMin: 10,
+        hourlyRate: 60,
+        kmRate: 2,
+      }),
+    ).rejects.toBeDefined();
+  });
+});
+
+describe('updateRideStatus', () => {
+  it('updates the status filtered by id', async () => {
+    mockEq.mockReturnValueOnce({ error: null } as any);
+    await updateRideStatus('ride-1', 'ACCEPTED');
+    expect(mockUpdate).toHaveBeenCalledWith({ status: 'ACCEPTED' });
+    expect(mockEq).toHaveBeenCalledWith('id', 'ride-1');
+  });
+
+  it('throws on supabase error', async () => {
+    mockEq.mockReturnValueOnce({ error: { message: 'fail' } } as any);
+    await expect(updateRideStatus('ride-1', 'DECLINED')).rejects.toBeDefined();
+  });
+});
+
+describe('updateRideFare', () => {
+  it('writes fare_final filtered by id', async () => {
+    mockEq.mockReturnValueOnce({ error: null } as any);
+    await updateRideFare('ride-1', 23.5);
+    expect(mockUpdate).toHaveBeenCalledWith({ fare_final: 23.5 });
+    expect(mockEq).toHaveBeenCalledWith('id', 'ride-1');
+  });
+
+  it('throws on supabase error', async () => {
+    mockEq.mockReturnValueOnce({ error: { message: 'fail' } } as any);
+    await expect(updateRideFare('ride-1', 10)).rejects.toBeDefined();
   });
 });

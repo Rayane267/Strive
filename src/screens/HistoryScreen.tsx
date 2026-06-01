@@ -131,6 +131,23 @@ const RideCard = React.memo(({ ride, t }: { ride: Ride; t: any }) => {
             </Text>
           </View>
         </View>
+
+        {(ride.pickup_address || ride.destination_address) && (
+          <View style={styles.routeStrip}>
+            {!!ride.pickup_address && (
+              <View style={styles.routeRow}>
+                <View style={styles.routeDot} />
+                <Text style={styles.routeText} numberOfLines={1}>{ride.pickup_address}</Text>
+              </View>
+            )}
+            {!!ride.destination_address && (
+              <View style={styles.routeRow}>
+                <Feather name="map-pin" size={10} color={colors.textDimmed} />
+                <Text style={styles.routeText} numberOfLines={1}>{ride.destination_address}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -714,6 +731,10 @@ const styles = StyleSheet.create({
   },
   platformDot: { width: 7, height: 7, borderRadius: 4 },
   platformChipText: { color: colors.textMain, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  routeStrip: { marginTop: 10, gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 10 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  routeDot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 1, backgroundColor: colors.primary },
+  routeText: { color: colors.textMuted, fontSize: 12, flex: 1 },
   timeBlock: { alignItems: 'flex-end' },
   timeMain: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   timeAgo: { color: colors.textDimmed, fontSize: 11, marginTop: 2 },

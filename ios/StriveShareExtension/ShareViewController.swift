@@ -21,6 +21,14 @@ class ShareViewController: UIViewController {
   private static let scanResultKey = "lastScanResult"
   private static let scanTimestampKey = "lastScanTimestamp"
 
+  /// Résout la langue UI (fr/en) : pref synchronisée par l'app principale via
+  /// App Group (`appLanguage`), sinon locale système. Même logique que AnalyzeRideIntent.
+  private func localizedString(fr: String, en: String) -> String {
+    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
+    let lang = appLang ?? Locale.current.language.languageCode?.identifier ?? "en"
+    return lang.hasPrefix("fr") ? fr : en
+  }
+
   // MARK: - UI Elements
 
   private let containerView = UIView()
@@ -328,6 +336,12 @@ class ShareViewController: UIViewController {
     // Court-circuit : quota journalier atteint → on n'engage ni Vision ni
     // TomTom ni Gemini (zéro coût). L'utilisateur voit un message dédié.
     let defaults = UserDefaults(suiteName: Self.appGroupId)
+    // Scanner désactivé dans Strive (toggle "Trip ID actif") → on ne scanne pas.
+    // Défaut = activé (clé absente).
+    if let d = defaults, d.object(forKey: "scannerEnabled") != nil, !d.bool(forKey: "scannerEnabled") {
+      showScannerDisabled()
+      return
+    }
     if defaults?.bool(forKey: "scanQuotaReached") == true {
       showQuotaReached()
       return
@@ -395,6 +409,16 @@ class ShareViewController: UIViewController {
   }
 
   private func fallbackToGemini(image: UIImage) {
+    // Pré-filtre anti-pub : si l'OCR a lu du texte mais aucun signal d'offre VTC
+    // (prix €, km/min, plateforme), inutile de payer un appel Gemini — c'est
+    // probablement une pub ou un écran quelconque. (true aussi si OCR vide.)
+    guard ScanProcessor.shared.lastScanMayBeRide else {
+      showError(localizedString(
+        fr: "Aucune offre de course détectée",
+        en: "No ride offer detected"
+      ))
+      return
+    }
     statusLabel.text = "Analyse IA en cours…"
 
     // Charger la config Gemini depuis App Group — l'app principale a écrit ces
@@ -543,6 +567,18 @@ class ShareViewController: UIViewController {
     }
   }
 
+  private func showScannerDisabled() {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.text = localizedString(
+      fr: "⏸  Scanner désactivé\nActivez-le dans Strive › Préférences",
+      en: "⏸  Scanner disabled\nEnable it in Strive › Preferences"
+    )
+    statusLabel.numberOfLines = 0
+    statusLabel.textAlignment = .center
+    statusLabel.textColor = UIColor(white: 1.0, alpha: 0.6)
+  }
+
   private func showQuotaReached() {
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
@@ -678,8 +714,16 @@ private class GeminiVisionServiceLight {
       let bearer = (supabaseUserJwt?.isEmpty == false ? supabaseUserJwt! : anonKey)
       req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
       req.setValue(anonKey, forHTTPHeaderField: "apikey")
+      // L'edge function durcie n'accepte QUE le format natif Gemini
+      // (`contents[].parts[]`) — cf. isValidGeminiPayload dans gemini-proxy.
+      // Doit rester aligné avec GeminiVisionService.swift / geminiFallback.ts.
       req.httpBody = try? JSONSerialization.data(withJSONObject: [
-        "imageBase64": base64, "prompt": prompt
+        "contents": [[
+          "parts": [
+            ["inline_data": ["mime_type": "image/jpeg", "data": base64]],
+            ["text": prompt],
+          ]
+        ]]
       ])
       request = req
     } else if let key = apiKey,
@@ -724,7 +768,9 @@ private class GeminiVisionServiceLight {
             let platform = parsed["platform"] as? String,
             let fare = (parsed["fare"] as? NSNumber)?.doubleValue,
             let distKm = (parsed["distance_km"] as? NSNumber)?.doubleValue,
-            fare >= 3, fare <= 200, distKm >= 0.3, distKm <= 150
+            fare >= 3, fare <= 200, distKm >= 0.3, distKm <= 150,
+            // Ratio plausible : rejette les €/km démentiels (distance hallucinée).
+            fare / distKm >= 0.2, fare / distKm <= 15
       else { completion(nil); return }
 
       let durMin = (parsed["duration_min"] as? NSNumber)?.intValue

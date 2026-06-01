@@ -29,6 +29,13 @@ struct AnalyzeRideIntent: AppIntent {
   private static let overallTimeoutNs: UInt64 = 15_000_000_000
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    guard isScannerEnabled else {
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.scannerOff", fr: "Scanner désactivé — activez-le dans Strive › Préférences.", en: "Scanner disabled — enable it in Strive › Preferences.")
+      )
+      return .result(value: "scanner_off")
+    }
     guard isSessionOnline else {
       sendLocalNotification(
         title: localizedString("notif.session.title", fr: "Session requise", en: "Session required"),
@@ -125,6 +132,14 @@ struct AnalyzeRideIntent: AppIntent {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     return UserDefaults(suiteName: appGroupId)?.bool(forKey: "sessionOnline") ?? false
+  }
+
+  /// Scanner activé (toggle "Trip ID actif"). Défaut = activé si la clé est absente.
+  private var isScannerEnabled: Bool {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    let d = UserDefaults(suiteName: appGroupId)
+    return d?.object(forKey: "scannerEnabled") == nil ? true : d!.bool(forKey: "scannerEnabled")
   }
 
   private var useLiveActivity: Bool {

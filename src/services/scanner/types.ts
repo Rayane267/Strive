@@ -72,6 +72,10 @@ export interface ScannerService {
   /** Quota journalier atteint — la bulle / Share Extension affiche "Quota atteint"
    *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. */
   setQuotaReached(reached: boolean): void;
+  /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
+   *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
+   *  → un scan déclenché alors que désactivé est refusé avec un message. */
+  setScannerEnabled(enabled: boolean): void;
   /** Vérifie l'état complet des permissions */
   checkPermissions(): Promise<PermissionsStatus>;
   /** Ouvre les paramètres overlay */

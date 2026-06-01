@@ -1,7 +1,9 @@
 package com.strive.scanner
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.google.mlkit.vision.text.Text
+import com.strive.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -82,6 +84,30 @@ object OcrParser {
         Platform.BOLT   to listOf("bolt"),
         Platform.HEETCH to listOf("heetch"),
     )
+
+    /**
+     * Heuristique légère : le texte OCR ressemble-t-il à une offre VTC ?
+     * Permet de court-circuiter le fallback Gemini (coût) quand l'utilisateur
+     * scanne une pub / un écran quelconque. Bilingue FR + EN.
+     * Mirror de `ScanProcessor.looksLikeRideOffer` (iOS).
+     * Permissive volontairement : un faux positif coûte 1 appel Gemini, un faux
+     * négatif fait rater une course → on privilégie de laisser passer.
+     */
+    fun looksLikeRideOffer(rawText: String): Boolean {
+        val text = rawText.lowercase()
+        val hasPlatform = text.contains("uber") || text.contains("bolt") || text.contains("heetch")
+        val hasRideWords = listOf(
+            // FR
+            "course", "trajet", "prise en charge", "dépose", "gains", "accepter", "min de marche",
+            // EN
+            "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
+        ).any { text.contains(it) }
+        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*€""").containsMatchIn(text)
+            || Regex("""€\s*\d""").containsMatchIn(text)
+        val hasKm = Regex("""\d[\d.,]*\s*km""").containsMatchIn(text)
+        val hasMin = Regex("""\d+\s*min""").containsMatchIn(text)
+        return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
+    }
 
     // Mots-clés de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs
     private val addressStreetKeywords = listOf(
@@ -167,9 +193,12 @@ object OcrParser {
         if (blocks.isEmpty()) return null
 
         val fullText = blocks.joinToString(" ") { it.text }.lowercase()
+        // Détection texte d'abord (marque → tournures → mode), indépendante du
+        // dark/light mode. En dernier recours : couleur du BOUTON d'action (bas
+        // de l'écran), pas la carte → vert = Bolt, bleu = Uber.
         var platform = detectPlatform(fullText)
         if (platform == Platform.UNKNOWN && bitmap != null) {
-            platform = detectPlatformByColor(bitmap)
+            platform = detectPlatformByButtonColor(bitmap)
         }
 
         val fare = extractFare(blocks, platform, screenHeight) ?: return null
@@ -177,9 +206,22 @@ object OcrParser {
 
         // Invariant layout VTC : 1ʳᵉ adresse = pickup, 2ᵉ = destination. On s'en
         // sert pour catégoriser les km/min par zone verticale.
+        if (BuildConfig.DEBUG) {
+            Log.d("StriveScan", "──── OCR blocks (${blocks.size}) ────")
+            blocks.sortedBy { it.boundingBox?.top ?: 0 }.forEach {
+                Log.d("StriveScan", "  y=${it.boundingBox?.top} | ${it.text.replace("\n", " ⏎ ")}")
+            }
+            Log.d("StriveScan", "platform=$platform fare=$fare fareY=$fareBlockY")
+        }
+
         val addressBlocks = findAddressBlocks(blocks, screenHeight, fareBlockY)
         val pickupAddrBlock = addressBlocks.getOrNull(0)
         val destAddrBlock = addressBlocks.getOrNull(1)
+
+        if (BuildConfig.DEBUG) {
+            Log.d("StriveScan", "ADRESSES retenues (${addressBlocks.size}):")
+            addressBlocks.forEachIndexed { i, b -> Log.d("StriveScan", "  [$i] ${b.text.replace("\n", " ⏎ ")}") }
+        }
 
         val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock) ?: return null
         val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock)
@@ -206,39 +248,55 @@ object OcrParser {
      * court est juste en-dessous, aligné horizontalement, et ne ressemble pas à
      * une nouvelle adresse ni à une ligne de stats.
      */
+    /**
+     * Vrai si `tail` est la fin coupée de l'adresse `head` juste au-dessus :
+     * collée verticalement (≤ 1 ligne), alignée horizontalement, et SANS mot de
+     * voie ni numéro de rue en tête (sinon c'est une nouvelle adresse, pas une
+     * continuation). Ex: head="…Chennevières-sur-", tail="Marne 94430".
+     */
+    private fun isContinuationLine(head: Text.TextBlock, tail: Text.TextBlock): Boolean {
+        val hb = head.boundingBox ?: return false
+        val tb = tail.boundingBox ?: return false
+        if (tb.top <= hb.top) return false
+        if (tb.top - hb.bottom > hb.height()) return false
+        val xOverlap = minOf(hb.right, tb.right) - maxOf(hb.left, tb.left)
+        val minWidth = minOf(hb.width(), tb.width())
+        if (xOverlap < minWidth * 0.5) return false
+        val t = tail.text.trim()
+        if (t.isEmpty() || t.length > 60) return false
+        if (Regex("""\d\s*(?:km|min)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return false
+        if (Regex("""^\d{1,4}\s+[A-Za-zà-üÀ-Ü]""").containsMatchIn(t)) return false
+        // Un mot de voie ⇒ nouvelle rue, pas une continuation.
+        val hasStreetKw = addressStreetKeywords.any { kw ->
+            Regex("""(?<![a-zà-üß])${Regex.escape(kw)}(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(t)
+        }
+        if (hasStreetKw) return false
+        return true
+    }
+
     private fun mergeAddressContinuation(
         addrBlock: Text.TextBlock,
         allBlocks: List<Text.TextBlock>,
         screenHeight: Int,
     ): String {
-        val addrBox = addrBlock.boundingBox ?: return addrBlock.text.trim()
-        val baseText = addrBlock.text.trim()
-
-        val continuation = allBlocks.firstOrNull { other ->
-            if (other === addrBlock) return@firstOrNull false
-            val ob = other.boundingBox ?: return@firstOrNull false
-            if (ob.top <= addrBox.top) return@firstOrNull false
-            // Gap vertical ≤ 1 hauteur de ligne (tight)
-            if (ob.top - addrBox.bottom > addrBox.height()) return@firstOrNull false
-            // Chevauchement horizontal significatif
-            val xOverlap = minOf(addrBox.right, ob.right) - maxOf(addrBox.left, ob.left)
-            val minWidth = minOf(addrBox.width(), ob.width())
-            if (xOverlap < minWidth * 0.5) return@firstOrNull false
-            val t = other.text.trim()
-            if (t.isEmpty() || t.length > 60) return@firstOrNull false
-            // Exclus les lignes stats
-            if (Regex("""\d\s*(?:km|min)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return@firstOrNull false
-            // Exclus une nouvelle adresse (digit + nom de rue)
-            if (Regex("""^\d{1,4}\s+[A-Za-zà-üÀ-Ü]""").containsMatchIn(t)) return@firstOrNull false
-            // Exclus un autre bloc déjà classé adresse stricte
-            if (isAddressBlock(other, screenHeight)) return@firstOrNull false
-            true
-        } ?: return baseText
-
-        val contText = continuation.text.trim()
-        // Si l'adresse se termine par un tiret (mot coupé) → concat direct
-        // Sinon → newline (format cohérent avec "Libération, 94430\nChennevières-...")
-        return if (baseText.endsWith('-')) "$baseText$contText" else "$baseText\n$contText"
+        var result = cleanAddressText(addrBlock.text).trim()
+        if (addrBlock.boundingBox == null) return result
+        var current = addrBlock
+        val used = mutableListOf(current)
+        // Une adresse peut être coupée sur plusieurs lignes → on enchaîne les
+        // continuations (max 3) tant qu'on en trouve une sous la précédente.
+        repeat(3) {
+            val cont = allBlocks.firstOrNull { c -> used.none { it === c } && isContinuationLine(current, c) }
+                ?: return result
+            val contText = cleanAddressText(cont.text).trim()
+            // Tiret en fin de ligne OU en début de la suite (mot coupé) → collage
+            // direct ; sinon espace de mot (newline, converti en espace pour TomTom).
+            result = if (result.endsWith('-') || contText.startsWith('-')) "$result$contText"
+                     else "$result\n$contText"
+            used.add(cont)
+            current = cont
+        }
+        return result
     }
 
     /**
@@ -260,38 +318,78 @@ object OcrParser {
 
     // ─── Platform detection ───────────────────────────────────────────────────────
 
+    // Catégories de course propres à UNE seule plateforme — secours quand le nom
+    // de marque n'est pas capturé (logo en image, header cropé). Les modes
+    // AMBIGUS (Confort/Comfort, Green, XL, Pet, Premium…) existent chez Uber ET
+    // Bolt → volontairement exclus, on laisse la détection couleur trancher.
+    // Matchés en MOT ENTIER pour éviter les faux positifs (ex: "berline" dans une
+    // adresse, "van" dans "Vanves").
+    private val uberOnlyModes = listOf("uberx", "uberxl", "uberpool", "berline", "comfort electric", "share")
+    private val boltOnlyModes = listOf("bolt xl", "bolt comfort", "bolt premium", "bolt plus")
+
+    // Tournures de texte propres à une plateforme — secours quand la marque n'est
+    // pas capturée (ex: Uber dark mode affiche "Share · Exclusivité · Montant net
+    // de frais" SANS le mot "Uber" → était classé UNKNOWN). Validé sur captures réelles.
+    // FR + EN (les apps VTC peuvent être dans les 2 langues).
+    private val uberPhrases = listOf(
+        "exclusivité", "exclusivite", "montant net", "net de frais",  // FR
+        "exclusive", "net fare", "net earnings",                       // EN
+    )
+    private val heetchPhrases = listOf("proposer", "€ brut", "propose", "gross")
+    private val boltPhrases = listOf("net, ttc", "net,ttc", "incl. vat", "net, incl")
+
+    private fun containsWord(text: String, word: String): Boolean =
+        Regex("""(?<![a-zà-üß0-9])${Regex.escape(word)}(?![a-zà-üß0-9])""").containsMatchIn(text)
+
     private fun detectPlatform(fullText: String): Platform {
-        for ((platform, keywords) in platformKeywords) {
-            if (keywords.any { fullText.contains(it) }) return platform
-        }
+        // 1. Nom de marque explicite (signal fort).
+        if (fullText.contains("heetch")) return Platform.HEETCH
+        if (fullText.contains("uber")) return Platform.UBER
+        if (fullText.contains("bolt")) return Platform.BOLT
+        // 2. Tournures de texte propres à une plateforme.
+        val uberP = uberPhrases.any { fullText.contains(it) }
+        val heetchP = heetchPhrases.any { fullText.contains(it) }
+        val boltP = boltPhrases.any { fullText.contains(it) }
+        if (uberP && !heetchP && !boltP) return Platform.UBER
+        if (heetchP && !uberP && !boltP) return Platform.HEETCH
+        if (boltP && !uberP && !heetchP) return Platform.BOLT
+        // 3. Catégorie de course propre à une plateforme (mot entier).
+        val uberHint = uberOnlyModes.any { containsWord(fullText, it) }
+        val boltHint = boltOnlyModes.any { containsWord(fullText, it) }
+        if (uberHint && !boltHint) return Platform.UBER
+        if (boltHint && !uberHint) return Platform.BOLT
         return Platform.UNKNOWN
     }
 
-    fun detectPlatformByColor(bitmap: Bitmap): Platform {
-        val w = minOf(bitmap.width, 120)
-        val h = minOf(bitmap.height, 200)
-        val scaled = Bitmap.createScaledBitmap(bitmap, w, h, true)
-        val pixels = IntArray(w * h)
-        scaled.getPixels(pixels, 0, w, 0, 0, w, h)
+    /**
+     * Différencie Uber/Bolt via la couleur du BOUTON d'action (bas de l'écran) —
+     * PAS la carte (qui suit le thème + parcs verts / eau bleue trompeurs).
+     *   bouton VERT  → Bolt
+     *   bouton BLEU  → Uber  (Heetch a aussi un bouton bleu mais est déjà capté
+     *                          par le texte "Heetch"/"Proposer"/"brut").
+     * Échantillonne la bande basse (86-99% de la hauteur) = zone du bouton.
+     */
+    private fun detectPlatformByButtonColor(bitmap: Bitmap): Platform {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0) return Platform.UNKNOWN
+        val yStart = (h * 0.86).toInt().coerceIn(0, h - 1)
+        val bandH = (h * 0.13).toInt().coerceIn(1, h - yStart)
+        val pixels = IntArray(w * bandH)
+        bitmap.getPixels(pixels, 0, w, 0, yStart, w, bandH)
 
-        var greenCount = 0
-        var pinkCount = 0
-        var lightCount = 0
-
+        var green = 0
+        var blue = 0
         for (px in pixels) {
             val r = (px shr 16) and 0xFF
             val g = (px shr 8) and 0xFF
             val b = px and 0xFF
-            if (g > 140 && g > r + 30 && g > b + 20 && r < 120) greenCount++
-            if (r > 180 && g < 100 && b > 80) pinkCount++
-            if (r > 200 && g > 200 && b > 200) lightCount++
+            if (g > 120 && g > r + 25 && g > b + 10) green++
+            else if (b > 110 && b > r + 25 && b > g + 5) blue++
         }
-
-        val total = pixels.size
-        val threshold = total * 0.08
-        if (greenCount > threshold) return Platform.BOLT
-        if (pinkCount > threshold) return Platform.HEETCH
-        if (lightCount > total * 0.35) return Platform.UBER
+        val total = pixels.size.coerceAtLeast(1)
+        if (green > total * 0.12) return Platform.BOLT
+        if (blue > total * 0.12) return Platform.UBER
         return Platform.UNKNOWN
     }
 
@@ -523,7 +621,7 @@ object OcrParser {
         pickupAddr: Text.TextBlock?,
         destAddr: Text.TextBlock?,
     ): Int? {
-        data class Cand(val value: Int, val y: Int, val isPickupCombo: Boolean)
+        data class Cand(val value: Int, val km: Double?, val y: Int, val isPickupCombo: Boolean)
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
@@ -537,11 +635,18 @@ object OcrParser {
             val match = DURATION_REGEX.find(normalizedText) ?: continue
             val value = match.groupValues[1].toIntOrNull() ?: continue
             if (value !in 1..180) continue
-            candidates.add(Cand(value, block.boundingBox?.centerY() ?: 0, isPickupCombo))
+            // Pour un combo "X min • Y km", on capte aussi le km : il permet de
+            // distinguer l'approche (petit km) de la course (grand km) quand les
+            // DEUX lignes sont au format combo (cas Bolt).
+            val km = if (isPickupCombo) DISTANCE_REGEX.find(normalizedText)?.let {
+                cleanNum(it.groupValues[1]).toDoubleOrNull()
+            } else null
+            candidates.add(Cand(value, km, block.boundingBox?.centerY() ?: 0, isPickupCombo))
         }
 
         if (candidates.isEmpty()) return null
 
+        // 1. Idéal : une durée "pure" (sans km) dans la zone course.
         if (pickupAddr != null && destAddr != null) {
             val yMin = (pickupAddr.boundingBox?.top ?: 0) - 10
             val yMax = (destAddr.boundingBox?.bottom ?: Int.MAX_VALUE) + 10
@@ -549,8 +654,14 @@ object OcrParser {
             if (inCourseZone.isNotEmpty()) return inCourseZone.first().value
         }
         val nonPickup = candidates.filter { !it.isPickupCombo }
-        val pool = if (nonPickup.isNotEmpty()) nonPickup else candidates
-        return pool.first().value
+        if (nonPickup.isNotEmpty()) return nonPickup.first().value
+
+        // 2. Toutes les candidates sont des combos "min • km" (Bolt affiche
+        //    approche ET course ainsi) → la course = le combo au plus grand km.
+        val withKm = candidates.filter { it.km != null }
+        if (withKm.isNotEmpty()) return withKm.maxByOrNull { it.km!! }!!.value
+        // 3. Dernier recours : la plus grande durée (course > approche).
+        return candidates.maxByOrNull { it.value }!!.value
     }
 
     // ─── Pickup combo extraction ("X min • X,X km") ───────────────────────────────
@@ -597,39 +708,86 @@ object OcrParser {
 
     // ─── Address extraction ───────────────────────────────────────────────────────
 
-    private fun isAddressBlock(block: Text.TextBlock, screenHeight: Int): Boolean {
-        val text = block.text.lowercase().trim()
-        if (text.length < 8 || text.length > 80) return false
+    // Libellés UI / boutons / en-têtes — jamais une adresse, même bien placés.
+    private val actionWords = setOf(
+        "accepter", "refuser", "accept", "decline", "reject", "confirmer", "confirm",
+        "ignorer", "passer", "suivant", "next", "démarrer", "demarrer", "terminer",
+        "naviguer", "navigate", "voir", "détails", "details", "gains", "gain",
+        "revenu", "revenus", "total", "pourboire", "tip", "annuler", "cancel",
+        "course", "courses", "trajet", "trajets", "prise", "destination",
+        "arrivée", "arrivee", "départ", "depart", "note", "notes", "étoiles", "etoiles",
+    )
+    // Connecteurs FR/DE/ES/IT — confirment un toponyme ("Gare du Nord").
+    private val connectorWords = setOf(
+        "de", "du", "des", "la", "le", "les", "sur", "au", "aux",
+        "von", "der", "del", "della", "di",
+    )
 
-        // Filtre anti-stats : une ligne "Course de 11.8 km" ou "à 6 min (1.2 km)"
-        // n'est jamais une adresse, même si elle contiendrait un chiffre + mot-clé.
+    private fun hasActionWord(text: String): Boolean = actionWords.any { containsWord(text, it) }
+    private fun hasConnector(text: String): Boolean = connectorWords.any { containsWord(text, it) }
+    /** Nb de mots commençant par une majuscule (Title Case) — sur le texte ORIGINAL. */
+    private fun titleCaseWordCount(original: String): Int =
+        Regex("""(?<![\p{L}])[A-ZÀ-Ü][\p{L}'’.\-]+""").findAll(original).count()
+
+    private val STAT_LINE = Regex("""^\s*(?:à\s*)?\d+[\d.,\s]*\s*(?:km|min)\b.*$""", RegexOption.IGNORE_CASE)
+
+    /** Retire les lignes de stats ("49 min", "24.3 km", "3 min • 1.3 km") qu'OCR
+     *  colle parfois à l'adresse dans un même bloc → ne garde que l'adresse.
+     *  Ex: "49 min\n2 Rue Lefebvre, Paris" → "2 Rue Lefebvre, Paris". */
+    private fun cleanAddressText(raw: String): String =
+        raw.split("\n").map { it.trim() }
+            .filter { it.isNotEmpty() && !STAT_LINE.matches(it) }
+            .joinToString("\n")
+
+    private fun isAddressBlock(block: Text.TextBlock, screenHeight: Int): Boolean {
+        val original = cleanAddressText(block.text).trim()
+        val text = original.lowercase()
+        if (text.length < 6 || text.length > 90) return false
+
+        // ── Rejets durs ──
+        // Stats : "Course de 11.8 km" / "à 6 min (1.2 km)" ne sont jamais des adresses.
         if (Regex("""course\s+de""").containsMatchIn(text)) return false
         if (Regex("""\d[.,\s]*\d*\s*km\b""").containsMatchIn(text)) return false
         if (Regex("""\d\s*min\b""").containsMatchIn(text)) return false
-
+        // Prix isolé / note ("12,50 €", "4,9 ★").
+        if (Regex("""^\s*\d{1,3}[.,]\d{1,2}\s*€?\s*$""").containsMatchIn(text)) return false
+        // Toute ligne tarifaire ("19,38 € (net, TTC)") → jamais une adresse.
+        if (text.contains("€")) return false
+        if (text.contains("★") || text.contains("⭐") || Regex("""\brating\b""").containsMatchIn(text)) return false
+        // Ligne "note passager" : "Shirley 5.0 ★" / "Jean 4,9 *". Une note (0-5 avec
+        // décimale) n'apparaît jamais dans une adresse → évite de prendre le nom du
+        // passager pour l'adresse de départ (et de décaler toutes les adresses).
+        if (Regex("""\b[0-5][.,]\d\b""").containsMatchIn(text)) return false
         if (nonAddressWords.contains(text)) return false
-        // Rejet par substring : "3 UberX Exclusivité" ou "5 BoltPlus Confort" ne
-        // sont jamais des adresses même s'ils matchent le pattern digit+mot.
+        // Marque / mode ("UberX Exclusivité", "BoltPlus Confort").
         if (Regex("""\b(uber\w*|bolt\w*|heetch\w*)\b""").containsMatchIn(text)) return false
+        // Libellé UI / en-tête.
+        if (hasActionWord(text)) return false
 
-        // 1. Mots de voie matchés comme mot entier (lookbehind/lookahead non-lettre)
-        //    pour éviter "via" → "aviation", "rue" → "cruelty".
+        // ── Signaux positifs ──
+        // 1. Mot de voie (mot entier) : évite "via"→"aviation", "rue"→"cruelty".
         val wordBoundaryMatch = addressStreetKeywords.any { kw ->
             val escaped = Regex.escape(kw)
             Regex("""(?<![a-zà-üß])$escaped(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
         }
         if (wordBoundaryMatch) return true
-
-        // 2. Suffixes DE qui forment des mots composés ("Hauptstraße", "Berlinerstraße").
-        val suffixMatch = addressStreetSuffixes.any { suf ->
+        // 2. Suffixes DE composés ("Hauptstraße", "Berlinerstraße").
+        if (addressStreetSuffixes.any { suf ->
             Regex("""[a-zà-üß]+${Regex.escape(suf)}(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
-        }
-        if (suffixMatch) return true
-
-        // 3. Structure digit-first (FR/UK) : "10 rue de la Paix"
-        if (Regex("""^\d{1,4}\s+[a-zà-ü]{5,}""").containsMatchIn(text)) return true
-        // 4. Structure word-then-digit (DE/ES/IT) : "Hauptstraße 10", "Calle Alcalá, 10"
-        if (Regex("""[a-zà-üß]{5,}[\s,]+\d{1,4}\s*$""").containsMatchIn(text)) return true
+        }) return true
+        // 3. Numéro + voie (FR/UK) : "10 rue de la Paix".
+        if (Regex("""^\d{1,4}\s+[a-zà-ü]{3,}""").containsMatchIn(text)) return true
+        // 4. Voie + numéro (DE/ES/IT) : "Hauptstraße 10", "Calle Alcalá, 10".
+        if (Regex("""[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$""").containsMatchIn(text)) return true
+        // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris",
+        //    "Libération, 94430 Sucy". Couvre les adresses SANS mot de voie connu.
+        if (Regex("""\b\d{4,5}\b""").containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
+        // 6. Segment avec virgule + assez de lettres : "Châtelet, Paris".
+        if (text.contains(",") && Regex("""[a-zà-üß]""").findAll(text).count() >= 6) return true
+        // 7. Toponyme Title Case (≥2 mots capitalisés) AVEC connecteur : "Gare du
+        //    Nord", "Place de la République". Le connecteur évite les libellés type
+        //    "Voir Détails" (déjà filtrés) et réduit les faux positifs.
+        if (original.length >= 10 && titleCaseWordCount(original) >= 2 && hasConnector(text)) return true
         return false
     }
 
@@ -652,6 +810,7 @@ object OcrParser {
             .filter { (it.boundingBox?.centerY() ?: 0) > screenHeight * 0.25 }
             .filter { isAddressBlock(it, screenHeight) }
             .sortedBy { it.boundingBox?.centerY() ?: 0 }
+        if (BuildConfig.DEBUG) Log.d("StriveScan", "  candidats isAddressBlock: ${candidates.map { it.text.replace("\n", " ") }}")
 
         // Filtre ancre-prix : les vraies adresses sont dans le card-trip qui
         // englobe le prix. Fenêtre asymétrique : un peu au-dessus du prix (slack)
@@ -666,6 +825,7 @@ object OcrParser {
                 val y = b.boundingBox?.centerY() ?: return@filter false
                 y in yMin..yMax
             }
+            if (BuildConfig.DEBUG) Log.d("StriveScan", "  après fenêtre prix [$yMin..$yMax]: ${candidates.map { it.text.replace("\n", " ") }}")
         }
 
         // Filtre anti-map secondaire : si on a plus de 2 candidats après ancre
@@ -681,8 +841,17 @@ object OcrParser {
                     val y = b.boundingBox?.centerY() ?: return@filter false
                     metricYs.any { Math.abs(it - y) <= radius }
                 }
+                if (BuildConfig.DEBUG) Log.d("StriveScan", "  après proximité métrique (r=$radius, metricYs=$metricYs): ${candidates.map { it.text.replace("\n", " ") }}")
             }
         }
+
+        // Retire les fins d'adresse coupées sur 2 lignes (ex: "Marne 94430") :
+        // elles ne doivent pas occuper un slot adresse (sinon la destination est
+        // évincée). Re-fusionnées à l'affichage par mergeAddressContinuation.
+        candidates = candidates.filter { b ->
+            candidates.none { head -> head !== b && isContinuationLine(head, b) }
+        }
+        if (BuildConfig.DEBUG) Log.d("StriveScan", "  après filtre continuation: ${candidates.map { it.text.replace("\n", " ") }}")
 
         return dedupOverlappingAddresses(candidates)
     }

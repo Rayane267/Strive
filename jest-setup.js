@@ -73,6 +73,22 @@ jest.mock('@react-native-community/blur', () => ({
 
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
+// react-native-fbsdk-next instancie un NativeEventEmitter au require (module natif
+// absent côté Jest) — on fournit une façade pour permettre le rendu de l'app.
+jest.mock('react-native-fbsdk-next', () => ({
+  LoginManager: {
+    logInWithPermissions: jest.fn().mockResolvedValue({ isCancelled: true }),
+    logOut: jest.fn(),
+  },
+  AccessToken: {
+    getCurrentAccessToken: jest.fn().mockResolvedValue(null),
+  },
+  Settings: {
+    initializeSDK: jest.fn(),
+    setAppID: jest.fn(),
+  },
+}));
+
 // ScanBridge n'existe qu'en natif — fournit une façade vide pour les tests
 const { NativeModules } = require('react-native');
 NativeModules.ScanBridge = {

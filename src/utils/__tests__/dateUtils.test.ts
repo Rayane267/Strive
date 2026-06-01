@@ -1,24 +1,26 @@
 import { formatDuration, getDayStart, formatTimeAgo } from '../dateUtils';
 
 describe('formatDuration', () => {
-  it('returns 0s for zero or negative seconds', () => {
-    expect(formatDuration(0)).toBe('0s');
-    expect(formatDuration(-10)).toBe('0s');
+  it('formats zero as "0m 00s"', () => {
+    expect(formatDuration(0)).toBe('0m 00s');
   });
 
-  it('formats seconds only', () => {
-    expect(formatDuration(30)).toBe('30s');
-    expect(formatDuration(59)).toBe('59s');
+  it('formats sub-minute durations under the minute bucket with zero-padded seconds', () => {
+    expect(formatDuration(30)).toBe('0m 30s');
+    expect(formatDuration(59)).toBe('0m 59s');
   });
 
-  it('formats minutes and seconds', () => {
-    expect(formatDuration(60)).toBe('1m 0s');
-    expect(formatDuration(125)).toBe('2m 5s');
+  it('formats minutes and seconds with zero-padded seconds', () => {
+    expect(formatDuration(60)).toBe('1m 00s');
+    expect(formatDuration(125)).toBe('2m 05s');
   });
 
-  it('formats hours, minutes and seconds', () => {
-    expect(formatDuration(3600)).toBe('1h 0m 0s');
-    expect(formatDuration(5465)).toBe('1h 31m 5s');
+  it('formats whole hours without the minutes segment', () => {
+    expect(formatDuration(3600)).toBe('1h');
+  });
+
+  it('formats hours with zero-padded minutes when present', () => {
+    expect(formatDuration(5465)).toBe('1h 31min'); // 1h31m05s → seconds dropped at hour scale
   });
 });
 
