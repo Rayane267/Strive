@@ -153,7 +153,9 @@ final class TomTomService {
   private func getRoute(from: Coords, to: Coords) -> RouteResult? {
     guard let key = apiKey() else { return nil }
     let waypoints = "\(from.lat),\(from.lon):\(to.lat),\(to.lon)"
-    let urlString = "\(Self.baseRouting)/\(waypoints)/json?key=\(key)&travelMode=car&traffic=true"
+    // traffic=true + departAt=now → trafic temps réel (flux live + incidents) à
+    // l'instant du calcul ; routeType=fastest → meilleur trajet.
+    let urlString = "\(Self.baseRouting)/\(waypoints)/json?key=\(key)&travelMode=car&traffic=true&routeType=fastest&departAt=now"
     guard let url = URL(string: urlString),
           let data = httpGet(url),
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

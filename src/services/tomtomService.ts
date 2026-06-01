@@ -99,7 +99,9 @@ async function getRouteSummary(from: Coords, to: Coords): Promise<RouteSummary |
   if (!TOMTOM_API_KEY) return null;
   try {
     const waypoints = `${from.lat},${from.lon}:${to.lat},${to.lon}`;
-    const url = `${BASE_ROUTING}/${waypoints}/json?key=${TOMTOM_API_KEY}&travelMode=car&traffic=true`;
+    // traffic=true + departAt=now → trafic temps réel (flux live + incidents)
+    // pris en compte à l'instant du calcul ; routeType=fastest → meilleur trajet.
+    const url = `${BASE_ROUTING}/${waypoints}/json?key=${TOMTOM_API_KEY}&travelMode=car&traffic=true&routeType=fastest&departAt=now`;
     __DEV__ && console.log('[TomTom:route] → appel routing');
     const res = await fetchWithTimeout(url);
     if (!res.ok) {

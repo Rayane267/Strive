@@ -143,7 +143,9 @@ object TomTomService {
 
     private fun getRoute(from: Coords, to: Coords): RouteResult? {
         val waypoints = "${from.lat},${from.lon}:${to.lat},${to.lon}"
-        val url = "$BASE_ROUTING/$waypoints/json?key=$apiKey&travelMode=car&traffic=true"
+        // traffic=true + departAt=now → trafic temps réel (flux live + incidents)
+        // à l'instant du calcul ; routeType=fastest → meilleur trajet.
+        val url = "$BASE_ROUTING/$waypoints/json?key=$apiKey&travelMode=car&traffic=true&routeType=fastest&departAt=now"
         val json = httpGet(url) ?: return null
         return try {
             val summary = JSONObject(json)
