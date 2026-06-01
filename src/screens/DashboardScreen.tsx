@@ -168,6 +168,10 @@ const DashboardScreen = () => {
             })
             .eq('id', data.id);
           await supabase.from('profiles').update({ is_online: false }).eq('id', user.id);
+          // Coupe la session sur les 2 plateformes : scanner natif (bulle Android
+          // via stopScanner / scanner iOS) + Live Activity + flag online iOS.
+          try { await scannerService.stop(); } catch {}
+          setScannerActive(false);
           if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(false);
           if (Platform.OS === 'ios' && ScanBridge?.stopLiveActivity) ScanBridge.stopLiveActivity();
           notifySessionClosed();
@@ -599,6 +603,10 @@ const DashboardScreen = () => {
     const check = setInterval(() => {
       if (Date.now() - lastScanTimeRef.current > 3600_000) {
         notifySessionClosed();
+        // Stoppe aussi la bulle/scanner natif (Android : stopScanner) — sinon
+        // l'overlay reste affiché alors que la session est fermée.
+        scannerService.stop().catch(() => {});
+        setScannerActive(false);
         handleToggleOnlineRef.current?.();
       }
     }, 5 * 60_000);
