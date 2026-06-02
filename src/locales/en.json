@@ -226,13 +226,13 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "cardTextFree": "Go Plus for 15 scans/day instead of {{count}}.",
+      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 15 scans/day so you stop driving at a loss.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
     "upgradeCard": {
-      "title": "Upgrade to Strive Plus",
-      "sub": "15 scans/day · Live €/h · Full history",
+      "title": "Stop driving at a loss",
+      "sub": "Plus pays for itself in a single ride avoided",
       "perk1": "15 scans/day",
       "perk2": "Live €/h",
       "perk3": "History"

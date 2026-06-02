@@ -226,13 +226,13 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "cardTextFree": "Passez Plus pour obtenir 15 scans/jour au lieu de {{count}}.",
+      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que tu refuses. 15 scans/jour pour ne plus rouler à perte.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
     "upgradeCard": {
-      "title": "Passe à Strive Plus",
-      "sub": "15 scans/jour · €/h en direct · Historique complet",
+      "title": "Arrête de rouler à perte",
+      "sub": "Plus se rembourse en une seule course évitée",
       "perk1": "15 scans/jour",
       "perk2": "€/h en direct",
       "perk3": "Historique"

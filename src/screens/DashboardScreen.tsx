@@ -1014,8 +1014,8 @@ const DashboardScreen = () => {
                   <MaterialCommunityIcons name="crown" size={14} color="#062318" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Passe à Strive Plus')}</Text>
-                  <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', '15 scans/jour · €/h en direct · Historique complet')}</Text>
+                  <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
+                  <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.primary} />
               </View>
