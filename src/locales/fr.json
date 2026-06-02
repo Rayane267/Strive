@@ -234,7 +234,7 @@
       "lossTitle": "≈ {{eur}} € sous ton objectif cette semaine",
       "lossSub": "≈ {{eur}} €/mois à ce rythme",
       "cta": "Repère chaque course sous-payée → Strive Plus",
-      "prideTitle": "💪 {{count}} course(s) pourrie(s) évitée(s) cette semaine",
+      "prideTitle": "💪 {{count}} course(s) non rentable(s) évitée(s) cette semaine",
       "prideCta": "Vois ton bilan complet avec Plus"
     },
     "upgradeCard": {

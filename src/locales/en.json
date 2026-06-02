@@ -234,7 +234,7 @@
       "lossTitle": "≈ €{{eur}} below your target this week",
       "lossSub": "≈ €{{eur}}/mo at this rate",
       "cta": "Catch every underpaid ride → Strive Plus",
-      "prideTitle": "💪 {{count}} bad ride(s) dodged this week",
+      "prideTitle": "💪 {{count}} unprofitable ride(s) dodged this week",
       "prideCta": "See your full recap with Plus"
     },
     "upgradeCard": {
