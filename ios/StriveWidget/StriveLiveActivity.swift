@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 import ActivityKit
-			
+
 @available(iOS 16.2, *)
 struct StriveLiveActivity: Widget {
 
@@ -15,7 +15,10 @@ struct StriveLiveActivity: Widget {
       let isScanning = context.state.platform == "SCANNING"
       let isIdle = context.state.platform == "IDLE"
       let isError = context.state.platform == "ERROR"
+      // Teaser quota free : on réutilise le visuel résultat mais flouté + cadenas.
+      let isLocked = context.state.platform == "LOCKED"
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
+      let lockGreen = Color(red: 0.0, green: 0.78, blue: 0.32)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           if isError {
@@ -27,6 +30,11 @@ struct StriveLiveActivity: Widget {
             ProgressView()
               .tint(.white)
               .padding(.leading, 6)
+          } else if isLocked {
+            Image(systemName: "lock.fill")
+              .font(.system(size: 16, weight: .bold))
+              .foregroundColor(lockGreen)
+              .padding(.leading, 6)
           } else if !isIdle {
             Text(context.state.platform.capitalized)
               .font(.system(size: 14, weight: .semibold))
@@ -35,7 +43,7 @@ struct StriveLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          if !isScanning && !isIdle && !isError {
+          if !isScanning && !isIdle && !isError && !isLocked {
             KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
               .padding(.trailing, 6)
           }
@@ -49,6 +57,10 @@ struct StriveLiveActivity: Widget {
             Text("Analyse…")
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
+          } else if isLocked {
+            Text("Passe Plus pour voir")
+              .font(.system(size: 14, weight: .bold))
+              .foregroundColor(.white)
           } else if !isIdle {
             HStack(spacing: 10) {
               HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
@@ -61,6 +73,11 @@ struct StriveLiveActivity: Widget {
             Text("Réessayez avec une autre capture")
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
+              .padding(.vertical, 4)
+          } else if isLocked {
+            Text("Se rembourse en une course")
+              .font(.system(size: 12, weight: .medium))
+              .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
           } else if !isScanning && !isIdle {
             RouteRow(
@@ -80,6 +97,9 @@ struct StriveLiveActivity: Widget {
         } else if isScanning {
           ProgressView()
             .tint(.white)
+        } else if isLocked {
+          Image(systemName: "lock.fill")
+            .foregroundColor(lockGreen)
         } else if isIdle {
           EmptyView()
         } else {
@@ -95,6 +115,10 @@ struct StriveLiveActivity: Widget {
           Text("…")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white.opacity(0.6))
+        } else if isLocked {
+          Text("Plus")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(lockGreen)
         } else if isIdle {
           EmptyView()
         } else {
@@ -111,12 +135,15 @@ struct StriveLiveActivity: Widget {
         } else if isScanning {
           ProgressView()
             .tint(.white)
+        } else if isLocked {
+          Image(systemName: "lock.fill")
+            .foregroundColor(lockGreen)
         } else {
           Image(systemName: verdictIcon(context.state.verdictLevel))
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       }
-      .keylineTint(isError ? errorRed : (isIdle || isScanning) ? .white : verdictColor(context.state.verdictLevel))
+      .keylineTint(isError ? errorRed : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
     }
   }
 }
@@ -130,9 +157,50 @@ private struct LockScreenView: View {
     let isScanning = state.platform == "SCANNING"
     let isIdle = state.platform == "IDLE"
     let isError = state.platform == "ERROR"
-    let hasResult = !isScanning && !isIdle && !isError
+    let isLocked = state.platform == "LOCKED"
+    let hasResult = !isScanning && !isIdle && !isError && !isLocked
 
-    if hasResult {
+    if isLocked {
+      // ── Teaser quota free : vrai layout résultat (vert) mais flouté + cadenas ──
+      ZStack {
+        VStack(spacing: 12) {
+          HStack(spacing: 8) {
+            Text("Course")
+              .font(.system(size: 15, weight: .semibold))
+              .foregroundColor(.white.opacity(0.75))
+
+            HourlyRate(value: state.hourlyRate, level: state.verdictLevel)
+
+            Spacer()
+
+            FarePill(fare: state.fare, level: state.verdictLevel)
+
+            KmRateText(value: state.kmRate, level: state.verdictLevel)
+          }
+
+          RouteRow(
+            distanceKm: state.distanceKm,
+            durationMin: state.durationMin,
+            level: state.verdictLevel
+          )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .blur(radius: 7)
+
+        VStack(spacing: 3) {
+          Image(systemName: "lock.fill")
+            .font(.system(size: 17, weight: .bold))
+            .foregroundColor(.white)
+          Text("Passe Plus pour voir")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.white)
+          Text("Se rembourse en une course")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(0.6))
+        }
+      }
+    } else if hasResult {
       // ── Résultat scan — même layout que Dynamic Island expanded ──
       VStack(spacing: 12) {
         HStack(spacing: 8) {
@@ -421,6 +489,21 @@ private func verdictIcon(_ level: Int) -> String {
 } contentStates: {
   StriveActivityAttributes.ContentState(
     platform: "UBER",
+    fare: 24.0,
+    hourlyRate: 37,
+    kmRate: 1.52,
+    distanceKm: 12.6,
+    durationMin: 29,
+    verdictLevel: 2
+  )
+}
+
+@available(iOS 17.0, *)
+#Preview("Lock Screen — Verrouillé (quota free)", as: .content, using: StriveActivityAttributes()) {
+  StriveLiveActivity()
+} contentStates: {
+  StriveActivityAttributes.ContentState(
+    platform: "LOCKED",
     fare: 24.0,
     hourlyRate: 37,
     kmRate: 1.52,
