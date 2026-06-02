@@ -135,6 +135,31 @@ export function notifyQuotaReached(resetHour: number) {
  * Programme une notification "Session fermee automatiquement"
  * quand l'auto-close se declenche.
  */
+/**
+ * Récap hebdo (dimanche ~19h) — ré-engagement free → ouvre l'app → voit le
+ * tease de perte. Reprogrammé à chaque ouverture (one-shot) ; le montant est le
+ * cumul "cette semaine jusqu'ici" → ne peut que sous-estimer, jamais sur-promettre.
+ * `lossEur` optionnel : si absent/faible, message générique.
+ */
+export function scheduleWeeklyRecap(lossEur?: number) {
+  cancelNative('weekly-recap');
+  const now = new Date();
+  const next = new Date(now);
+  next.setDate(now.getDate() + ((7 - now.getDay()) % 7)); // prochain dimanche (0=dim)
+  next.setHours(19, 0, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 7);
+
+  const delayMs = next.getTime() - now.getTime();
+  const body = lossEur && lossEur >= 10
+    ? i18n.t('notifications.weeklyRecap.bodyLoss', { eur: Math.round(lossEur) })
+    : i18n.t('notifications.weeklyRecap.body');
+  scheduleNative('weekly-recap', i18n.t('notifications.weeklyRecap.title'), body, delayMs);
+}
+
+export function cancelWeeklyRecap() {
+  cancelNative('weekly-recap');
+}
+
 export function notifySessionClosed() {
   scheduleNative(
     'session-closed',

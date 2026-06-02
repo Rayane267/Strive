@@ -712,6 +712,11 @@
     "sessionClosed": {
       "title": "Session closed",
       "body": "Your session was closed after 1 hour of inactivity."
+    },
+    "weeklyRecap": {
+      "title": "📊 Your week in review",
+      "body": "See how much more you could earn with Strive.",
+      "bodyLoss": "≈ €{{eur}} below your target this week. See how to fix it."
     }
   },
   "tier": {

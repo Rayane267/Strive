@@ -54,6 +54,8 @@ import {
   scheduleQuotaResetNotification,
   notifyQuotaReached,
   notifySessionClosed,
+  scheduleWeeklyRecap,
+  cancelWeeklyRecap,
 } from '../services/localNotifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -274,13 +276,17 @@ const DashboardScreen = () => {
   useEffect(() => {
     if (tier !== 'free' || !user?.id) {
       setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
+      cancelWeeklyRecap();
       return;
     }
     (async () => {
       try {
         const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
         const weekRides = await fetchRides(user.id, since);
-        setWeeklyTease(computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate));
+        const tease = computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate);
+        setWeeklyTease(tease);
+        // Récap hebdo (dimanche 19h) : montant si perte significative, sinon générique.
+        scheduleWeeklyRecap(tease.state === 'loss' ? tease.lossWeek : undefined);
       } catch {
         setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
       }
