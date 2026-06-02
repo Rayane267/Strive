@@ -655,7 +655,10 @@ final class OcrParser {
       if !metricYs.isEmpty {
         let radius = max(Int(Double(screenHeight) * 0.15), 300)
         candidates = candidates.filter { b in
-          metricYs.contains(where: { abs($0 - b.box.centerY) <= radius })
+          // Adresse avec code postal (4-5 chiffres) = signal fort, jamais évincée
+          // même loin d'un bloc km/min (cas Heetch : adresses sans métrique proche).
+          if matches(b.text, pattern: #"\b\d{4,5}\b"#) { return true }
+          return metricYs.contains(where: { abs($0 - b.box.centerY) <= radius })
         }
       }
     }

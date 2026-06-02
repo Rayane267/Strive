@@ -529,6 +529,10 @@ function findAddressBlocks(
     if (metricYs.length > 0) {
       const radius = Math.max(screenHeight * 0.15, 300);
       candidates = candidates.filter(b => {
+        // Une adresse avec code postal (4-5 chiffres) est un signal fort et sans
+        // ambiguïté → jamais évincée, même loin d'un bloc km/min (cas Heetch dont
+        // les adresses n'ont aucune métrique à proximité).
+        if (/\b\d{4,5}\b/.test(b.text)) return true;
         const cy = b.y + b.height / 2;
         return metricYs.some(my => Math.abs(my - cy) <= radius);
       });

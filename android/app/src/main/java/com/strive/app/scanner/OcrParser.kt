@@ -824,6 +824,10 @@ object OcrParser {
             if (metricYs.isNotEmpty()) {
                 val radius = maxOf((screenHeight * 0.15).toInt(), 300)
                 candidates = candidates.filter { b ->
+                    // Adresse avec code postal (4-5 chiffres) = signal fort, jamais
+                    // évincée même loin d'un bloc km/min (cas Heetch : adresses sans
+                    // métrique à proximité).
+                    if (Regex("""\b\d{4,5}\b""").containsMatchIn(b.text)) return@filter true
                     val y = b.boundingBox?.centerY() ?: return@filter false
                     metricYs.any { Math.abs(it - y) <= radius }
                 }
