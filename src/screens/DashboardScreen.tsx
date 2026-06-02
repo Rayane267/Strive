@@ -596,12 +596,14 @@ const DashboardScreen = () => {
     return () => { clearInterval(interval); sub.remove(); };
   }, [isOnline, sessionStartTs]);
 
-  // Auto-close session after 1h without scan
+  // Auto-close session après SESSION_INACTIVITY_MS (2h) sans scan. La notif de
+  // rappel d'inactivité est planifiée séparément à 1h (scheduleInactivityReminder,
+  // resettée à chaque scan) : 1h → notif, 2h → coupure.
   useEffect(() => {
     if (!isOnline) return;
     lastScanTimeRef.current = Date.now();
     const check = setInterval(() => {
-      if (Date.now() - lastScanTimeRef.current > 3600_000) {
+      if (Date.now() - lastScanTimeRef.current > SESSION_INACTIVITY_MS) {
         notifySessionClosed();
         // Stoppe aussi la bulle/scanner natif (Android : stopScanner) — sinon
         // l'overlay reste affiché alors que la session est fermée.
