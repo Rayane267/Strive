@@ -574,12 +574,83 @@ class ShareViewController: UIViewController {
   }
 
   private func showQuotaReached() {
+    // Free → teaser verrouillé (vendre Plus). Plus → simple message (déjà abonné).
+    let isFree = (UserDefaults(suiteName: Self.appGroupId)?.object(forKey: "isFreeTier") as? Bool) ?? true
+    if isFree {
+      showQuotaLockedTeaser()
+      return
+    }
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
-    statusLabel.text = "🔒  Quota journalier atteint\nOuvrez Strive pour passer Plus"
+    statusLabel.text = localizedString(
+      fr: "🔒  Quota journalier atteint\nReviens demain ou achète des crédits",
+      en: "🔒  Daily quota reached\nCome back tomorrow or buy credits"
+    )
     statusLabel.numberOfLines = 0
     statusLabel.textAlignment = .center
     statusLabel.textColor = UIColor(red: 1.0, green: 0.60, blue: 0.0, alpha: 1.0)
+  }
+
+  /// Teaser quota free : on réutilise le VRAI affichage résultat avec une course
+  /// rentable factice (zéro scan, zéro API), puis on floute le tout + cadenas.
+  /// Le chauffeur voit qu'il rate une bonne course → pousse vers Plus.
+  private func showQuotaLockedTeaser() {
+    showResult(ParsedResult(
+      platform: "UBER",
+      fare: 24.0,
+      distanceKm: 12.6,
+      durationMin: 29,
+      pickupAddress: nil,
+      destinationAddress: nil
+    ))
+
+    // Flou par-dessus le résultat
+    let blur = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
+    blur.translatesAutoresizingMaskIntoConstraints = false
+    blur.layer.cornerRadius = 16
+    blur.clipsToBounds = true
+    resultContainer.addSubview(blur)
+
+    let lock = UILabel()
+    lock.text = "🔒"
+    lock.font = .systemFont(ofSize: 30)
+    lock.textAlignment = .center
+    lock.translatesAutoresizingMaskIntoConstraints = false
+
+    let title = UILabel()
+    title.text = localizedString(fr: "Passe Plus pour voir", en: "Go Plus to see")
+    title.font = .systemFont(ofSize: 17, weight: .bold)
+    title.textColor = .white
+    title.textAlignment = .center
+    title.translatesAutoresizingMaskIntoConstraints = false
+
+    let sub = UILabel()
+    sub.text = localizedString(fr: "Se rembourse en une course", en: "Pays for itself in one ride")
+    sub.font = .systemFont(ofSize: 13, weight: .medium)
+    sub.textColor = UIColor(white: 1.0, alpha: 0.7)
+    sub.textAlignment = .center
+    sub.numberOfLines = 0
+    sub.translatesAutoresizingMaskIntoConstraints = false
+
+    resultContainer.addSubview(lock)
+    resultContainer.addSubview(title)
+    resultContainer.addSubview(sub)
+
+    NSLayoutConstraint.activate([
+      blur.topAnchor.constraint(equalTo: resultContainer.topAnchor),
+      blur.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor),
+      blur.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor),
+      blur.bottomAnchor.constraint(equalTo: resultContainer.bottomAnchor),
+
+      title.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+      title.centerYAnchor.constraint(equalTo: resultContainer.centerYAnchor),
+      lock.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+      lock.bottomAnchor.constraint(equalTo: title.topAnchor, constant: -8),
+      sub.centerXAnchor.constraint(equalTo: resultContainer.centerXAnchor),
+      sub.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 6),
+      sub.leadingAnchor.constraint(equalTo: resultContainer.leadingAnchor, constant: 16),
+      sub.trailingAnchor.constraint(equalTo: resultContainer.trailingAnchor, constant: -16),
+    ])
   }
 
   private func showError(_ message: String) {
