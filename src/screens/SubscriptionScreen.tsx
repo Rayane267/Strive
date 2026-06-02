@@ -346,7 +346,7 @@ const SubscriptionScreen = () => {
                 <SafeGradient colors={['#A4FF6B', '#00FF8C', colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.popularBadgeInner}>
                   <MaterialCommunityIcons name={trialEligible ? 'gift-outline' : 'star-four-points'} size={10} color="#062318" />
                   <Text style={styles.popularBadgeText}>
-                    {trialEligible ? t('subscription.trialRibbon', '3 JOURS GRATUITS') : t('subscription.popular')}
+                    {trialEligible ? t('subscription.trialRibbon', '7 JOURS GRATUITS') : t('subscription.popular')}
                   </Text>
                 </SafeGradient>
               </View>
@@ -361,7 +361,7 @@ const SubscriptionScreen = () => {
                 </Text>
                 {trialEligible ? (
                   <>
-                    <Text style={styles.trialFreeLabel}>{t('subscription.trialFreeLabel', '0,00 € pendant 3 jours')}</Text>
+                    <Text style={styles.trialFreeLabel}>{t('subscription.trialFreeLabel', '0,00 € pendant 7 jours')}</Text>
                     <Text style={styles.trialThenPrice}>
                       {t('subscription.trialThenPrice', 'puis {{price}}/mois', { price: monthly?.priceString ?? t('subscription.monthlyFallbackPrice') })}
                     </Text>
