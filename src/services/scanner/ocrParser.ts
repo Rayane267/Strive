@@ -11,19 +11,22 @@ import { ScanResult, ScanPlatform, TextBlock } from './types';
 
 // ─── Remote config (patchable via Supabase sans republier) ───────────────────
 
-const PLATFORM_KEYWORDS: Record<ScanPlatform, string[]> = {
-  UBER:    ['uber'],
-  BOLT:    ['bolt'],
-  HEETCH:  ['heetch'],
-  UNKNOWN: [],
-};
-
 const PRICE_ANCHORS: Record<ScanPlatform, string[]> = {
   UBER:    ['total', 'fare', 'trip fare', 'estimated fare', 'net'],
   BOLT:    ['gain', 'earning', 'revenu', 'estimé', 'net'],
   HEETCH:  ['course', 'tarif', 'prix', 'net'],
   UNKNOWN: ['total', 'gain', 'fare', 'tarif', 'net'],
 };
+
+// Tournures propres à une plateforme — secours quand la marque n'est pas
+// capturée (ex: Uber dark mode "Share · Exclusivité · Montant net de frais"
+// SANS "Uber"). Mirror exact des parsers natifs. FR + EN.
+const UBER_PHRASES = ['exclusivité', 'exclusivite', 'montant net', 'net de frais', 'exclusive', 'net fare', 'net earnings'];
+const HEETCH_PHRASES = ['proposer', '€ brut', 'propose', 'gross'];
+const BOLT_PHRASES = ['net, ttc', 'net,ttc', 'incl. vat', 'net, incl'];
+// Catégories de course propres à une seule plateforme (mot entier).
+const UBER_ONLY_MODES = ['uberx', 'uberxl', 'uberpool', 'berline', 'comfort electric', 'share'];
+const BOLT_ONLY_MODES = ['bolt xl', 'bolt comfort', 'bolt premium', 'bolt plus'];
 
 // Tolère les espaces internes autour du séparateur : "17 , 18 €" ou "11 . 8 km"
 const PRICE_REGEX    = /(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)/;
@@ -176,11 +179,27 @@ function mergeAddressContinuation(addrBlock: TextBlock, allBlocks: TextBlock[]):
 
 // ─── Détection plateforme ─────────────────────────────────────────────────────
 
+function containsWord(text: string, word: string): boolean {
+  return new RegExp(`(?<![a-zà-üß0-9])${escapeRegex(word)}(?![a-zà-üß0-9])`, 'i').test(text);
+}
+
 function detectPlatform(fullText: string): ScanPlatform {
-  for (const [platform, keywords] of Object.entries(PLATFORM_KEYWORDS) as [ScanPlatform, string[]][]) {
-    if (platform === 'UNKNOWN') continue;
-    if (keywords.some(k => fullText.includes(k))) return platform;
-  }
+  // 1. Nom de marque explicite (signal fort).
+  if (fullText.includes('heetch')) return 'HEETCH';
+  if (fullText.includes('uber')) return 'UBER';
+  if (fullText.includes('bolt')) return 'BOLT';
+  // 2. Tournures propres à une plateforme (Uber dark mode sans "Uber", etc.).
+  const uberP = UBER_PHRASES.some(p => fullText.includes(p));
+  const heetchP = HEETCH_PHRASES.some(p => fullText.includes(p));
+  const boltP = BOLT_PHRASES.some(p => fullText.includes(p));
+  if (uberP && !heetchP && !boltP) return 'UBER';
+  if (heetchP && !uberP && !boltP) return 'HEETCH';
+  if (boltP && !uberP && !heetchP) return 'BOLT';
+  // 3. Catégorie de course propre à une plateforme (mot entier).
+  const uberHint = UBER_ONLY_MODES.some(m => containsWord(fullText, m));
+  const boltHint = BOLT_ONLY_MODES.some(m => containsWord(fullText, m));
+  if (uberHint && !boltHint) return 'UBER';
+  if (boltHint && !uberHint) return 'BOLT';
   return 'UNKNOWN';
 }
 
