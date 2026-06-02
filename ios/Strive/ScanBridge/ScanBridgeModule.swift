@@ -276,9 +276,12 @@ class ScanBridgeModule: RCTEventEmitter {
 
   /// Quota journalier atteint — sync via App Group pour que la Share Extension
   /// et l'AppIntent puissent court-circuiter le scan sans appeler TomTom/Gemini.
-  @objc func setQuotaReached(_ reached: Bool) {
+  @objc func setQuotaReached(_ reached: Bool, _ isFree: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
+      // Réserve le teaser verrouillé (vendre Plus) aux comptes free : un abonné
+      // Plus hors quota voit "reviens demain", pas un upsell Plus.
+      defaults.set(isFree, forKey: "isFreeTier")
     }
   }
 

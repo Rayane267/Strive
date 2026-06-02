@@ -224,8 +224,9 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     /** Quota journalier atteint — si true, la bulle affiche "Quota atteint"
      *  et n'exécute ni OCR ni TomTom au tap. À syncer depuis le Dashboard. */
     @ReactMethod
-    fun setQuotaReached(reached: Boolean) {
+    fun setQuotaReached(reached: Boolean, isFree: Boolean) {
         FloatingBubbleService.quotaReached = reached
+        FloatingBubbleService.isFreeTier = isFree
     }
 
 // ─── Native → JS (events) ────────────────────────────────────────────────────

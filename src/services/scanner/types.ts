@@ -70,8 +70,9 @@ export interface ScannerService {
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   setTomTomApiKey(key: string): void;
   /** Quota journalier atteint — la bulle / Share Extension affiche "Quota atteint"
-   *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. */
-  setQuotaReached(reached: boolean): void;
+   *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. `isFree` permet de
+   *  réserver le teaser verrouillé (vendre Plus) aux seuls comptes free. */
+  setQuotaReached(reached: boolean, isFree: boolean): void;
   /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
    *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
    *  → un scan déclenché alors que désactivé est refusé avec un message. */

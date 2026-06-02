@@ -263,9 +263,9 @@ const DashboardScreen = () => {
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
   useEffect(() => {
-    try { scannerService.setQuotaReached(!canScan); } catch {}
+    try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
     if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan]);
+  }, [canScan, tier]);
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
@@ -375,7 +375,7 @@ const DashboardScreen = () => {
       const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
-        try { scannerService.setQuotaReached(true); } catch {}
+        try { scannerService.setQuotaReached(true, tierRef.current === 'free'); } catch {}
         notifyQuotaReached(dayResetHourRef.current);
         scheduleQuotaResetNotification(dayResetHourRef.current);
       }

@@ -41,7 +41,7 @@ export const scannerService: ScannerService = {
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
-  setQuotaReached: (reached: boolean) => ScanBridge.setQuotaReached(reached),
+  setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
   setScannerEnabled: () => {},
 

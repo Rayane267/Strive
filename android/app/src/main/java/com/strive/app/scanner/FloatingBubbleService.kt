@@ -55,6 +55,11 @@ class FloatingBubbleService : Service() {
          *  Si true, triggerScan affiche un état "limite atteinte" sans lancer
          *  l'OCR ni TomTom → 0 coût Gemini/TomTom pour les users hors quota. */
         var quotaReached: Boolean = false
+
+        /** Compte free (synchronisé depuis JS via setQuotaReached). Réserve le
+         *  teaser verrouillé "passe Plus" aux free ; un abonné Plus hors quota
+         *  voit "reviens demain". */
+        var isFreeTier: Boolean = true
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
