@@ -436,12 +436,6 @@ class ShareViewController: UIViewController {
         if let result = result {
           self.showResult(result)
           self.saveResultForMainApp(result)
-          let dur = result.durationMin ?? Int(result.distanceKm / 25 * 60)
-          let hr = dur > 0 ? result.fare / (Double(dur) / 60.0) : 0
-          let km = result.distanceKm > 0 ? result.fare / result.distanceKm : 0
-          let prefs = UserDefaults(suiteName: Self.appGroupId)
-          let minH = prefs?.double(forKey: "minHourlyRate") ?? 25.0
-          let minK = prefs?.double(forKey: "minKmRate") ?? 1.2
         } else {
           self.showError("Impossible d'analyser cette image")
         }
