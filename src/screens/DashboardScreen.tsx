@@ -29,6 +29,7 @@ import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
 import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
+import { computeWeeklyTease, WeeklyTease } from '../utils/weeklyTease';
 import { fetchParserConfig } from '../services/parserConfigService';
 import { useTranslation } from 'react-i18next';
 import { Ride } from '../types/database';
@@ -110,6 +111,7 @@ const DashboardScreen = () => {
   const [fetchError, setFetchError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dayResetHour, setDayResetHour] = useState(0);
+  const [weeklyTease, setWeeklyTease] = useState<WeeklyTease>({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -266,6 +268,24 @@ const DashboardScreen = () => {
     try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
     if (!canScan) scheduleQuotaResetNotification(0);
   }, [canScan, tier]);
+
+  // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
+  // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
+  useEffect(() => {
+    if (tier !== 'free' || !user?.id) {
+      setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
+      return;
+    }
+    (async () => {
+      try {
+        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const weekRides = await fetchRides(user.id, since);
+        setWeeklyTease(computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate));
+      } catch {
+        setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
+      }
+    })();
+  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans]);
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
@@ -997,6 +1017,37 @@ const DashboardScreen = () => {
             <Text style={styles.scanLimitText}>{t('dashboard.scanLimit.comeBackTomorrow')}</Text>
           </View>
         )}
+        {tier === 'free' && weeklyTease.state !== 'none' && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('SubscriptionScreen')}
+            style={[
+              styles.teaseCard,
+              weeklyTease.state === 'loss'
+                ? { backgroundColor: 'rgba(255,77,79,0.08)', borderColor: 'rgba(255,77,79,0.35)' }
+                : { backgroundColor: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.35)' },
+            ]}
+          >
+            {weeklyTease.state === 'loss' ? (
+              <>
+                <Text style={styles.teaseTitle}>
+                  {t('dashboard.weeklyTease.lossTitle', { eur: weeklyTease.lossWeek.toFixed(0) })}
+                </Text>
+                <Text style={styles.teaseSub}>
+                  {t('dashboard.weeklyTease.lossSub', { eur: weeklyTease.lossMonth.toFixed(0) })}
+                </Text>
+                <Text style={styles.teaseCta}>{t('dashboard.weeklyTease.cta')}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.teaseTitle}>
+                  {t('dashboard.weeklyTease.prideTitle', { count: weeklyTease.avoided })}
+                </Text>
+                <Text style={styles.teaseCta}>{t('dashboard.weeklyTease.prideCta')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
         {!canScan && tier === 'free' && (
           <TouchableOpacity
             activeOpacity={0.9}
@@ -1326,6 +1377,10 @@ const styles = StyleSheet.create({
   },
   scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
   scanLimitText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  teaseCard: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14 },
+  teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: 8 },
+  teaseCta: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // UPGRADE CARD (Free tier — premium upsell)
   upgradeCard: {

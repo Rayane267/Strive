@@ -230,6 +230,13 @@
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
+    "weeklyTease": {
+      "lossTitle": "≈ €{{eur}} below your target this week",
+      "lossSub": "≈ €{{eur}}/mo at this rate",
+      "cta": "Catch every underpaid ride → Strive Plus",
+      "prideTitle": "💪 {{count}} bad ride(s) dodged this week",
+      "prideCta": "See your full recap with Plus"
+    },
     "upgradeCard": {
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
