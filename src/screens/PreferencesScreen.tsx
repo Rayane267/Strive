@@ -35,7 +35,7 @@ const PreferencesScreen = () => {
   const [saving, setSaving] = useState(false);
   const [minHr, setMinHr] = useState(25);
   const [minKm, setMinKm] = useState(1.2);
-  const [includePickup, setIncludePickup] = useState(false);
+  const [includePickup, setIncludePickup] = useState(true);
   const [useLiveActivity, setUseLiveActivityRaw] = useState(true);
   const setUseLiveActivity = (v: boolean) => {
     setUseLiveActivityRaw(v);
@@ -84,7 +84,7 @@ const PreferencesScreen = () => {
       if (data) {
         setMinHr(Number(data.min_hourly_rate));
         setMinKm(Number(data.min_km_rate));
-        setIncludePickup(data.include_pickup);
+        setIncludePickup(data.include_pickup ?? true); // ON par défaut sauf choix explicite
         setIsActive(data.is_active !== false); // null/undefined → activé par défaut
         if (data.day_reset_hour === 4) setDayResetHour(4);
         else setDayResetHour(0);

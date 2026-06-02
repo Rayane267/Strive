@@ -86,7 +86,7 @@ const DashboardScreen = () => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: false });
+  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true });
 
   const tier = getEffectivePlanTier(profile);
   const { dailyScans } = getPlanLimits(tier);
@@ -773,7 +773,8 @@ const DashboardScreen = () => {
         setPreferences({
           min_hourly_rate: Number.isFinite(minHourly) ? minHourly : 25,
           min_km_rate: Number.isFinite(minKm) ? minKm : 1.2,
-          include_pickup: Boolean(prefsData.include_pickup),
+          // Approche incluse par défaut : seul un choix explicite `false` la désactive.
+          include_pickup: prefsData.include_pickup ?? true,
         });
       }
 

@@ -156,7 +156,7 @@ final class ScanProcessor {
     let prefs = UserDefaults(suiteName: appGroupId)
     let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25.0
     let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
-    let includePickup = prefs?.bool(forKey: "includePickup") ?? false
+    let includePickup = prefs?.object(forKey: "includePickup") as? Bool ?? true
 
     let useApproach = includePickup
       && scan.pickupDurationMin != nil

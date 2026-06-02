@@ -89,7 +89,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const [previewIdx, setPreviewIdx] = useState(0);
   const [minHourly, setMinHourly] = useState(30);
   const [minKm, setMinKm] = useState(1.0);
-  const [includePickup, setIncludePickup] = useState(false);
+  const [includePickup, setIncludePickup] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState<string | null>('standard');
 
   const isLast = currentIndex === STEPS.length - 1;

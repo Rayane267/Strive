@@ -47,7 +47,7 @@ class FloatingBubbleService : Service() {
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
         /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
-        var includePickup: Boolean = false
+        var includePickup: Boolean = true
         /** Seuils utilisateur pour le verdict natif (synchronisés depuis JS). */
         var minHourlyRate: Double = 25.0
         var minKmRate: Double = 1.2
