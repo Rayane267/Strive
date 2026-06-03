@@ -269,6 +269,12 @@
   },
   "analytics": {
     "title": "Mes Statistiques",
+    "weeklyBilan": {
+      "title": "Bilan de la semaine",
+      "loss": "≈ {{eur}} € sous ton objectif cette semaine",
+      "avoided_one": "💪 {{count}} course non rentable évitée",
+      "avoided_other": "💪 {{count}} courses non rentables évitées"
+    },
     "netProfit": "Profit Net",
     "grossProfit": "Profit brut",
     "netAfterFuel": "Net après carburant",

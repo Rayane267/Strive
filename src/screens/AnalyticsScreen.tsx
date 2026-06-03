@@ -26,6 +26,8 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 import { getEffectivePlanTier, getPlanLimits } from '../services/subscriptionService';
+import { fetchRides } from '../services/ridesService';
+import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
 import { useNavigation } from '@react-navigation/native';
 import { getDayStart } from '../utils/dateUtils';
@@ -87,6 +89,26 @@ const AnalyticsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+
+  // Bilan de la semaine (Plus uniquement) : manque à gagner vs objectif + courses
+  // non rentables évitées, sur les 7 derniers jours. Insight, pas paywall.
+  useEffect(() => {
+    if (!user?.id || !isPremium) { setWeeklyBilan({ lossWeek: 0, avoided: 0 }); return; }
+    (async () => {
+      try {
+        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const [prefsRes, weekRides] = await Promise.all([
+          supabase.from('preferences').select('min_hourly_rate, min_km_rate').eq('id', user.id).single(),
+          fetchRides(user.id, since),
+        ]);
+        const mh = Number(prefsRes.data?.min_hourly_rate ?? 25) || 25;
+        const mk = Number(prefsRes.data?.min_km_rate ?? 1.2) || 1.2;
+        setWeeklyBilan(computeWeeklyBilan(weekRides, mh, mk));
+      } catch {
+        setWeeklyBilan({ lossWeek: 0, avoided: 0 });
+      }
+    })();
+  }, [user?.id, isPremium]);
   const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
@@ -120,6 +142,7 @@ const AnalyticsScreen = () => {
   };
 
   const [dailyEarnings, setDailyEarnings] = useState<{ label: string; earnings: number; isToday?: boolean }[]>([]);
+  const [weeklyBilan, setWeeklyBilan] = useState<{ lossWeek: number; avoided: number }>({ lossWeek: 0, avoided: 0 });
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
 
@@ -437,6 +460,22 @@ const AnalyticsScreen = () => {
           </View>
           <Feather name="chevron-down" size={18} color={colors.textDimmed} />
         </TouchableOpacity>
+
+        {isPremium && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
+          <View style={styles.bilanCard}>
+            <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
+            {weeklyBilan.lossWeek > 0 && (
+              <Text style={styles.bilanLoss}>
+                {t('analytics.weeklyBilan.loss', { eur: weeklyBilan.lossWeek.toFixed(0) })}
+              </Text>
+            )}
+            {weeklyBilan.avoided > 0 && (
+              <Text style={styles.bilanAvoided}>
+                {t('analytics.weeklyBilan.avoided', { count: weeklyBilan.avoided })}
+              </Text>
+            )}
+          </View>
+        )}
 
         {fetchError && (
           <View style={styles.errorCard}>
@@ -784,6 +823,17 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingVertical: 15 },
   headerTitle: { color: colors.textMain, fontSize: 24, fontWeight: 'bold' },
   scroll: { paddingHorizontal: 20 },
+  bilanCard: {
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    borderColor: 'rgba(0,230,118,0.25)',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+  },
+  bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
 
   // Date button
   dateBtn: {

@@ -25,11 +25,16 @@ const WEEKS_PER_MONTH = 4.3;
 const effectiveFare = (r: Ride): number =>
   r.fare_final != null ? r.fare_final : r.fare_estimated;
 
-export function computeWeeklyTease(
+/**
+ * Chiffres bruts du bilan hebdo (sans seuil de conversion) — pour l'affichage
+ * insight dans Stats (Plus). `lossWeek` = manque à gagner vs objectif horaire sur
+ * les courses acceptées ; `avoided` = courses non rentables refusées.
+ */
+export function computeWeeklyBilan(
   rides: Ride[],
   minHourlyRate: number,
   minKmRate: number,
-): WeeklyTease {
+): { lossWeek: number; avoided: number } {
   let lossWeek = 0;
   let avoided = 0;
 
@@ -47,6 +52,15 @@ export function computeWeeklyTease(
     }
   }
 
+  return { lossWeek, avoided };
+}
+
+export function computeWeeklyTease(
+  rides: Ride[],
+  minHourlyRate: number,
+  minKmRate: number,
+): WeeklyTease {
+  const { lossWeek, avoided } = computeWeeklyBilan(rides, minHourlyRate, minKmRate);
   const lossMonth = lossWeek * WEEKS_PER_MONTH;
 
   if (lossWeek >= LOSS_MIN_EUR) {

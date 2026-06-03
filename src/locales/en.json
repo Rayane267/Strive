@@ -269,6 +269,12 @@
   },
   "analytics": {
     "title": "My Analytics",
+    "weeklyBilan": {
+      "title": "This week's recap",
+      "loss": "≈ €{{eur}} below your target this week",
+      "avoided_one": "💪 {{count}} unprofitable ride dodged",
+      "avoided_other": "💪 {{count}} unprofitable rides dodged"
+    },
     "netProfit": "Net Profit",
     "grossProfit": "Gross profit",
     "netAfterFuel": "Net after fuel",
