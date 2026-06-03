@@ -267,14 +267,15 @@ const DashboardScreen = () => {
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
   useEffect(() => {
-    try {
-      scannerService.setQuotaReached(!canScan, tier === 'free');
-      // Compteur autoritatif poussé au natif → il applique le quota lui-même même
-      // quand le JS est suspendu (scan via Share Extension / bulle).
-      scannerService.setScanQuota(stats.scans, dailyScans ?? -1);
-    } catch {}
+    // Deux appels bridge ISOLÉS : si setQuotaReached échoue (ex: régression de
+    // signature native), setScanQuota — qui alimente le compteur natif, source
+    // du gate quota côté extension/bulle — doit quand même partir.
+    try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
+    // Compteur autoritatif poussé au natif → il applique le quota lui-même même
+    // quand le JS est suspendu (scan via Share Extension / bulle).
+    try { scannerService.setScanQuota(stats.scans, dailyScans ?? -1, dayResetHour); } catch {}
     if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan, tier, stats.scans, dailyScans]);
+  }, [canScan, tier, stats.scans, dailyScans, dayResetHour]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -403,7 +404,7 @@ const DashboardScreen = () => {
 
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
-      try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1); } catch {}
+      try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1, dayResetHourRef.current); } catch {}
       const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;

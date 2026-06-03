@@ -73,10 +73,11 @@ export interface ScannerService {
    *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. `isFree` permet de
    *  réserver le teaser verrouillé (vendre Plus) aux seuls comptes free. */
   setQuotaReached(reached: boolean, isFree: boolean): void;
-  /** Pousse le compteur de scans du jour (autoritatif) + la limite au natif, pour
-   *  qu'il applique le quota lui-même (scan via extension/bulle = JS suspendu).
-   *  `limit <= 0` = illimité. */
-  setScanQuota(countToday: number, limit: number): void;
+  /** Pousse le compteur de scans du jour (autoritatif) + la limite + l'heure de
+   *  reset du quota (0 ou 4h) au natif, pour qu'il applique le quota lui-même
+   *  (scan via extension/bulle = JS suspendu) en situant correctement la
+   *  frontière de journée. `limit <= 0` = illimité. */
+  setScanQuota(countToday: number, limit: number, resetHour: number): void;
   /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
    *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
    *  → un scan déclenché alors que désactivé est refusé avec un message. */

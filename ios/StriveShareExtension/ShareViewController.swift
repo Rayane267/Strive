@@ -586,12 +586,33 @@ class ShareViewController: UIViewController {
     if !isFree { return false }
     let limit = d.integer(forKey: "scanQuotaLimit")
     if limit <= 0 { return false }   // limite inconnue / illimitée → on ne bloque pas
-    return d.integer(forKey: "scanCountToday") >= limit
+    return Self.scanCountForToday(d) >= limit
+  }
+
+  /// Compteur du jour, en ignorant une valeur datée d'hier (app pas rouverte
+  /// depuis l'heure de reset → `scanCountToday` tiendrait encore le compte de la veille).
+  private static func scanCountForToday(_ d: UserDefaults) -> Int {
+    if d.integer(forKey: "scanCountDay") != currentQuotaDay(d) { return 0 }
+    return d.integer(forKey: "scanCountToday")
+  }
+
+  /// Jour de quota (yyyymmdd) en tenant compte du `quotaResetHour` (0 ou 4h)
+  /// poussé par le JS via setScanQuota. Aligné sur getDayStart() côté JS.
+  private static func currentQuotaDay(_ d: UserDefaults) -> Int {
+    let resetHour = d.integer(forKey: "quotaResetHour")
+    let shifted = Date().addingTimeInterval(TimeInterval(-resetHour * 3600))
+    let c = Calendar.current.dateComponents([.year, .month, .day], from: shifted)
+    return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
   }
 
   private func incrementScanCount() {
     guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
-    d.set(d.integer(forKey: "scanCountToday") + 1, forKey: "scanCountToday")
+    // Nouveau jour → on repart de 0 avant d'incrémenter (l'app n'a pas forcément
+    // été rouverte pour pousser le reset via setScanQuota).
+    let today = Self.currentQuotaDay(d)
+    let base = d.integer(forKey: "scanCountDay") == today ? d.integer(forKey: "scanCountToday") : 0
+    d.set(today, forKey: "scanCountDay")
+    d.set(base + 1, forKey: "scanCountToday")
   }
 
   private func showQuotaReached() {

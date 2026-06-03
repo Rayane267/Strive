@@ -31,7 +31,8 @@ RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
 RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached isFree:(BOOL)isFree)
 
 RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
-                  limit:(nonnull NSNumber *)limit)
+                  limit:(nonnull NSNumber *)limit
+                  resetHour:(nonnull NSNumber *)resetHour)
 
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 

@@ -112,8 +112,8 @@ export const scannerService: ScannerService = {
     ScanBridge?.setQuotaReached(reached, isFree);
   },
 
-  setScanQuota: (countToday: number, limit: number) => {
-    ScanBridge?.setScanQuota?.(countToday, limit);
+  setScanQuota: (countToday: number, limit: number, resetHour: number) => {
+    ScanBridge?.setScanQuota?.(countToday, limit, resetHour);
   },
 
   setScannerEnabled: (enabled: boolean) => {

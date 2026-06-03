@@ -233,9 +233,21 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
      *  que la bulle applique le quota elle-même même si le JS est suspendu.
      *  limite <= 0 = illimité. */
     @ReactMethod
-    fun setScanQuota(countToday: Int, limit: Int) {
-        FloatingBubbleService.scanCountToday = countToday
+    fun setScanQuota(countToday: Int, limit: Int, resetHour: Int) {
         FloatingBubbleService.scanQuotaLimit = limit
+        FloatingBubbleService.quotaResetHour = resetHour
+        // Réconciliation NON destructive : le compte DB peut sous-estimer les
+        // scans réels (scan effectué hors process JS pas encore inséré). Même
+        // jour → max(natif, DB) pour ne pas rendre du quota à tort ; nouveau
+        // jour → on fait confiance au compte DB (reset).
+        val today = FloatingBubbleService.todayKey()
+        if (FloatingBubbleService.scanCountDay != today) {
+            FloatingBubbleService.scanCountDay = today
+            FloatingBubbleService.scanCountToday = countToday
+        } else {
+            FloatingBubbleService.scanCountToday =
+                maxOf(FloatingBubbleService.scanCountToday, countToday)
+        }
     }
 
 // ─── Native → JS (events) ────────────────────────────────────────────────────

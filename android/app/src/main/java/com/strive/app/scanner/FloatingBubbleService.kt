@@ -66,6 +66,26 @@ class FloatingBubbleService : Service() {
          *  Le natif incrémente entre deux syncs ; le JS réécrit la valeur réelle. */
         var scanCountToday: Int = 0
         var scanQuotaLimit: Int = 0
+        /** Jour (yyyymmdd) du compteur, pour ignorer une valeur datée d'hier
+         *  si le process survit au-delà de l'heure de reset sans resync JS. */
+        var scanCountDay: Int = 0
+        /** Heure de reset du quota (0 ou 4h), poussée par le JS via setScanQuota. */
+        var quotaResetHour: Int = 0
+
+        /** Jour de quota tenant compte de quotaResetHour : un scan avant l'heure
+         *  de reset appartient encore à la journée de la veille. Aligné sur
+         *  getDayStart() côté JS. */
+        fun todayKey(): Int {
+            val c = java.util.Calendar.getInstance()
+            c.add(java.util.Calendar.HOUR_OF_DAY, -quotaResetHour)
+            return c.get(java.util.Calendar.YEAR) * 10000 +
+                (c.get(java.util.Calendar.MONTH) + 1) * 100 +
+                c.get(java.util.Calendar.DAY_OF_MONTH)
+        }
+
+        /** Compte du jour, 0 si la valeur stockée date d'un autre jour. */
+        fun scanCountForToday(): Int =
+            if (scanCountDay == todayKey()) scanCountToday else 0
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -205,7 +225,7 @@ class FloatingBubbleService : Service() {
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
         // on n'attend pas que le JS (suspendu pendant un scan) mette le flag à jour.
-        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountToday >= scanQuotaLimit
+        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             showQuotaReachedState()
             mainHandler.postDelayed({ showIdleState() }, 2500)
@@ -368,7 +388,10 @@ class FloatingBubbleService : Service() {
     ) {
         // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
         // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
-        scanCountToday += 1
+        // Nouveau jour → on repart de 0 avant d'incrémenter.
+        val today = todayKey()
+        scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
+        scanCountDay = today
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
