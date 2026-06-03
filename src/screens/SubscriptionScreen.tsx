@@ -69,7 +69,7 @@ const ORBS = [
 const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, markSubscribed } = useAuth();
   const { toast, showToast, dismissToast } = useToast();
 
   const tier = getEffectivePlanTier(profile);
@@ -161,11 +161,16 @@ const SubscriptionScreen = () => {
     if (!user || purchasing) return;
     setPurchasing(true);
     try {
-      await buyPlus(user.id, activeProductId);
-      await waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free');
-      await refreshProfile();
+      const { entitlement } = await buyPlus(user.id, activeProductId);
       hapticSuccess();
+      // Déblocage IMMÉDIAT : RevenueCat a confirmé l'achat → on débloque l'UI sans
+      // attendre le webhook (lent en sandbox). La DB est réconciliée en arrière-plan.
+      if (entitlement) markSubscribed(entitlement === 'premium' ? 'premium' : 'plus');
       navigation.goBack();
+      waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free', { maxWaitMs: 30000 })
+        .then(p => { if (p) refreshProfile(); })
+        .catch(() => {});
+      return;
     } catch (e: any) {
       if (e?.message === 'CANCELLED') return;
       hapticError();
@@ -181,10 +186,15 @@ const SubscriptionScreen = () => {
     try {
       const hasPlus = await restorePurchases(user.id);
       if (hasPlus) {
-        await waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free');
+        // Déblocage optimiste (la réconciliation arrière-plan fixera le vrai tier).
+        markSubscribed('plus');
+        hapticSuccess();
+        waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free', { maxWaitMs: 30000 })
+          .then(p => { if (p) refreshProfile(); })
+          .catch(() => {});
+      } else {
+        await refreshProfile();
       }
-      await refreshProfile();
-      if (hasPlus) hapticSuccess();
       showToast({
         type: 'success',
         title: hasPlus ? t('iap.restoreSuccess') : t('iap.restoreNone'),

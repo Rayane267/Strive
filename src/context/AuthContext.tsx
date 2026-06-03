@@ -16,6 +16,9 @@ interface AuthContextType {
   loading: boolean;
   profileError: boolean;
   refreshProfile: () => Promise<void>;
+  /** Déblocage optimiste après achat : met le tier en local immédiatement (RevenueCat
+   *  a confirmé l'achat) sans attendre le webhook → DB. Réconcilié ensuite. */
+  markSubscribed: (tier: 'plus' | 'premium') => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   profileError: false,
   refreshProfile: async () => {},
+  markSubscribed: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -141,9 +145,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (user) await loadProfile(user.id);
   };
 
+  // Déblocage optimiste post-achat : RevenueCat a confirmé l'entitlement, on
+  // débloque l'UI tout de suite (le webhook → DB suit en quelques secondes).
+  const markSubscribed = (tier: 'plus' | 'premium') => {
+    setProfile(prev => prev ? { ...prev, subscription_tier: tier, subscription_status: 'active' } : prev);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, profileError, refreshProfile }}
+      value={{ user, session, profile, loading, profileError, refreshProfile, markSubscribed }}
     >
       {children}
     </AuthContext.Provider>

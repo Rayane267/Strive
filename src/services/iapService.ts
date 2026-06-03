@@ -144,8 +144,8 @@ export async function buySubscription(productId: string): Promise<{ entitlement:
 
 // Backcompat : conserve l'ancienne signature buyPlus utilisée par SubscriptionScreen.
 // productId par défaut = monthly (anciens callers). Le nouveau paywall passe yearly/monthly explicitement.
-export async function buyPlus(_userId: string, productId: string = IAP_PRODUCTS.PLUS_MONTHLY): Promise<void> {
-  await buySubscription(productId);
+export async function buyPlus(_userId: string, productId: string = IAP_PRODUCTS.PLUS_MONTHLY): Promise<{ entitlement: string | null }> {
+  return buySubscription(productId);
 }
 
 // ─── Plus packages (monthly + yearly) avec prix réels du store ────────────────
