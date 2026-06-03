@@ -19,7 +19,6 @@ export interface Profile {
   subscription_status?: SubscriptionStatus | null;
   subscription_expires_at?: string | null;   // ISO timestamptz
   subscription_product_id?: string | null;
-  revenuecat_user_id?: string | null;
   extra_scan_credits: number;
   // Admin
   is_admin?: boolean;

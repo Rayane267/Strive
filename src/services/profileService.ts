@@ -7,7 +7,7 @@ import { Profile } from '../types/database';
 const PROFILE_COLUMNS =
   'id, first_name, last_name, email, phone, birth_date, avatar_url, is_online, ' +
   'subscription_tier, subscription_status, subscription_expires_at, ' +
-  'subscription_product_id, revenuecat_user_id, extra_scan_credits, ' +
+  'subscription_product_id, extra_scan_credits, ' +
   'car_make, car_model, car_year, car_reg, fuel_type, avg_cons';
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
