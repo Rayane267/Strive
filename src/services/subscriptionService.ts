@@ -17,6 +17,13 @@ const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
   premium: { dailyScans: null, analyticsRangeDays: null },
 };
 
+/**
+ * Seuils de rentabilité imposés au tier free (non personnalisables).
+ * La personnalisation des seuils est un avantage Plus → on force ces valeurs
+ * basiques pour les comptes free, où qu'ils soient lus.
+ */
+export const FREE_THRESHOLDS = { hourly: 25, km: 1.2 } as const;
+
 // Cache mémoire des limites fetched depuis la DB. Préchauffé au démarrage
 // via `fetchPlanLimits()` ; getPlanLimits() lit ce cache en priorité.
 let _runtimeLimits: Record<PlanTier, PlanLimits> | null = null;

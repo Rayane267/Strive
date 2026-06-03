@@ -19,6 +19,7 @@ import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { FREE_THRESHOLDS } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import BrandLoader from '../components/BrandLoader';
 
@@ -215,7 +216,7 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minHr', 'Tarif/heure min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{minHr}€/h</Text>
+                <Text style={styles.sliderValueText}>{(isPremium ? minHr : FREE_THRESHOLDS.hourly)}€/h</Text>
               </View>
             </View>
             <Slider
@@ -223,8 +224,9 @@ const PreferencesScreen = () => {
               minimumValue={10}
               maximumValue={80}
               step={1}
-              value={minHr}
-              onValueChange={setMinHr}
+              value={isPremium ? minHr : FREE_THRESHOLDS.hourly}
+              onValueChange={isPremium ? setMinHr : undefined}
+              disabled={!isPremium}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FFF"
@@ -247,7 +249,7 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minKm', 'Tarif/km min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{minKm.toFixed(2)}€/km</Text>
+                <Text style={styles.sliderValueText}>{(isPremium ? minKm : FREE_THRESHOLDS.km).toFixed(2)}€/km</Text>
               </View>
             </View>
             <Slider
@@ -255,8 +257,9 @@ const PreferencesScreen = () => {
               minimumValue={0.3}
               maximumValue={4.0}
               step={0.05}
-              value={minKm}
-              onValueChange={setMinKm}
+              value={isPremium ? minKm : FREE_THRESHOLDS.km}
+              onValueChange={isPremium ? setMinKm : undefined}
+              disabled={!isPremium}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FFF"
@@ -266,6 +269,20 @@ const PreferencesScreen = () => {
               <Text style={styles.sliderRangeText}>4.00€</Text>
             </View>
           </View>
+
+          {!isPremium && (
+            <TouchableOpacity
+              style={styles.thresholdLockCta}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('SubscriptionScreen')}
+            >
+              <Feather name="lock" size={13} color={colors.primary} />
+              <Text style={styles.thresholdLockText}>
+                {t('preferences.thresholdLock', 'Personnalise tes seuils avec Strive Plus')}
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── OPTIONS TRAJET ── */}
@@ -535,6 +552,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sliderRangeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
+  thresholdLockCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  thresholdLockText: { flex: 1, color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // Status message
   statusBox: {

@@ -36,7 +36,7 @@ import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 
-import { getEffectivePlanTier, getPlanLimits, getRemainingScans } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans, FREE_THRESHOLDS } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
@@ -796,9 +796,13 @@ const DashboardScreen = () => {
       if (prefsData) {
         const minHourly = Number(String(prefsData.min_hourly_rate ?? '25').replace(',', '.'));
         const minKm = Number(String(prefsData.min_km_rate ?? '1.2').replace(',', '.'));
+        // Tier free : seuils basiques IMPOSÉS (la personnalisation est un avantage
+        // Plus) — on ignore toute valeur custom en base. Toutes les utilisations
+        // en aval (verdict, push natif, tease) prennent donc le seuil forcé.
+        const isFreeTier = tierRef.current === 'free';
         setPreferences({
-          min_hourly_rate: Number.isFinite(minHourly) ? minHourly : 25,
-          min_km_rate: Number.isFinite(minKm) ? minKm : 1.2,
+          min_hourly_rate: isFreeTier ? FREE_THRESHOLDS.hourly : (Number.isFinite(minHourly) ? minHourly : 25),
+          min_km_rate: isFreeTier ? FREE_THRESHOLDS.km : (Number.isFinite(minKm) ? minKm : 1.2),
           // Approche incluse par défaut : seul un choix explicite `false` la désactive.
           include_pickup: prefsData.include_pickup ?? true,
         });

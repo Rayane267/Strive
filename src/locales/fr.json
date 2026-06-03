@@ -358,6 +358,7 @@
     "minimums": "VOS MINIMUMS",
     "minHr": "Minimum $/h",
     "minKm": "Minimum $/km",
+    "thresholdLock": "Personnalise tes seuils avec Strive Plus",
     "dayReset": "Reset de la journée",
     "dayResetSub": "Heure à laquelle vos stats du jour se réinitialisent",
     "dayReset4am": "Reset à 4h du matin",

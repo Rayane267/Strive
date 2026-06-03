@@ -358,6 +358,7 @@
     "minimums": "YOUR MINIMUMS",
     "minHr": "Minimum $/hr",
     "minKm": "Minimum $/km",
+    "thresholdLock": "Customize your thresholds with Strive Plus",
     "dayReset": "Day reset time",
     "dayResetSub": "Time at which your daily stats reset",
     "dayReset4am": "Reset at 4 AM",
