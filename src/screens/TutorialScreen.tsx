@@ -109,10 +109,12 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const savePreferences = async () => {
     if (!user?.id) return;
     try {
+      // On laisse l'utilisateur RÉGLER les seuils dans le tuto (il découvre qu'on
+      // peut personnaliser → désir de Plus), mais on ne les ENREGISTRE pas : en
+      // free les seuils sont imposés (FREE_THRESHOLDS). La personnalisation réelle
+      // est un avantage Plus. Seul `include_pickup` (non gated) est persisté.
       await supabase.from('preferences').upsert({
         id: user.id,
-        min_hourly_rate: minHourly,
-        min_km_rate: minKm,
         include_pickup: includePickup,
       });
     } catch {}
