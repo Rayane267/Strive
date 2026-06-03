@@ -267,9 +267,14 @@ const DashboardScreen = () => {
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
   useEffect(() => {
-    try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
+    try {
+      scannerService.setQuotaReached(!canScan, tier === 'free');
+      // Compteur autoritatif poussé au natif → il applique le quota lui-même même
+      // quand le JS est suspendu (scan via Share Extension / bulle).
+      scannerService.setScanQuota(stats.scans, dailyScans ?? -1);
+    } catch {}
     if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan, tier]);
+  }, [canScan, tier, stats.scans, dailyScans]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -398,6 +403,7 @@ const DashboardScreen = () => {
 
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
+      try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1); } catch {}
       const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;

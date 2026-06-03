@@ -229,6 +229,15 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.isFreeTier = isFree
     }
 
+    /** Compteur de scans du jour (autoritatif, poussé par le JS) + limite, pour
+     *  que la bulle applique le quota elle-même même si le JS est suspendu.
+     *  limite <= 0 = illimité. */
+    @ReactMethod
+    fun setScanQuota(countToday: Int, limit: Int) {
+        FloatingBubbleService.scanCountToday = countToday
+        FloatingBubbleService.scanQuotaLimit = limit
+    }
+
 // ─── Native → JS (events) ────────────────────────────────────────────────────
 
     companion object {

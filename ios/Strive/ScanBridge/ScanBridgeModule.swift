@@ -285,6 +285,18 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Compteur de scans autoritatif poussé par le JS (= nb de courses du jour) +
+  /// la limite. Le natif (Share Extension / AppIntent) l'utilise pour APPLIQUER
+  /// le quota lui-même — sans dépendre du JS, qui est suspendu pendant un scan
+  /// via l'extension. Le natif incrémente entre deux syncs ; le JS réécrit la
+  /// valeur réelle au foreground.
+  @objc func setScanQuota(_ countToday: NSNumber, limit: NSNumber) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(countToday.intValue, forKey: "scanCountToday")
+      defaults.set(limit.intValue, forKey: "scanQuotaLimit")
+    }
+  }
+
   /// Active/désactive le scanner (toggle "Trip ID actif", iOS). Lu par la Share
   /// Extension et l'AppIntent → un scan déclenché alors que désactivé est refusé.
   @objc func setScannerEnabled(_ enabled: Bool) {

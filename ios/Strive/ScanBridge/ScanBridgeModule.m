@@ -28,7 +28,10 @@ RCT_EXTERN_METHOD(setParserConfig:(NSString *)configJson)
 
 RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
 
-RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached)
+RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached isFree:(BOOL)isFree)
+
+RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
+                  limit:(nonnull NSNumber *)limit)
 
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 

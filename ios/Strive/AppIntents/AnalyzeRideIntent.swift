@@ -94,6 +94,7 @@ struct AnalyzeRideIntent: AppIntent {
               )
             }
 
+            self.incrementScanCount()
             self.saveResultForMainApp(result)
 
             let line = String(
@@ -149,10 +150,25 @@ struct AnalyzeRideIntent: AppIntent {
     return defaults?.object(forKey: "useLiveActivity") == nil ? true : defaults!.bool(forKey: "useLiveActivity")
   }
 
+  private var appGroupId: String {
+    (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String) ?? "group.com.striveapp.app"
+  }
+
+  /// Quota appliqué côté natif (compteur App Group poussé par le JS + incrémenté
+  /// localement) OU flag JS — indépendant du JS suspendu pendant le scan.
   private var isQuotaReached: Bool {
-    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
-      ?? "group.com.striveapp.app"
-    return UserDefaults(suiteName: appGroupId)?.bool(forKey: "scanQuotaReached") ?? false
+    let d = UserDefaults(suiteName: appGroupId)
+    if d?.bool(forKey: "scanQuotaReached") == true { return true }
+    let isFree = (d?.object(forKey: "isFreeTier") as? Bool) ?? true
+    guard isFree else { return false }
+    let limit = d?.integer(forKey: "scanQuotaLimit") ?? 0
+    if limit <= 0 { return false }
+    return (d?.integer(forKey: "scanCountToday") ?? 0) >= limit
+  }
+
+  private func incrementScanCount() {
+    let d = UserDefaults(suiteName: appGroupId)
+    d?.set((d?.integer(forKey: "scanCountToday") ?? 0) + 1, forKey: "scanCountToday")
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {

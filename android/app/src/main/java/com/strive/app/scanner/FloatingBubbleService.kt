@@ -60,6 +60,12 @@ class FloatingBubbleService : Service() {
          *  teaser verrouillé "passe Plus" aux free ; un abonné Plus hors quota
          *  voit "reviens demain". */
         var isFreeTier: Boolean = true
+
+        /** Compteur de scans du jour + limite (poussés par le JS via setScanQuota).
+         *  Permet d'appliquer le quota côté natif même quand le JS est suspendu.
+         *  Le natif incrémente entre deux syncs ; le JS réécrit la valeur réelle. */
+        var scanCountToday: Int = 0
+        var scanQuotaLimit: Int = 0
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -197,7 +203,10 @@ class FloatingBubbleService : Service() {
         if (scanInProgress) return
         // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
         // émis au JS, donc rien ne part en queue offline non plus.
-        if (quotaReached) {
+        // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
+        // on n'attend pas que le JS (suspendu pendant un scan) mette le flag à jour.
+        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountToday >= scanQuotaLimit
+        if (quotaReached || quotaByCount) {
             showQuotaReachedState()
             mainHandler.postDelayed({ showIdleState() }, 2500)
             return
@@ -357,6 +366,9 @@ class FloatingBubbleService : Service() {
         base64: String,
         debugBlocks: String?,
     ) {
+        // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
+        // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
+        scanCountToday += 1
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""

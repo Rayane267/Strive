@@ -342,7 +342,10 @@ class ShareViewController: UIViewController {
       showScannerDisabled()
       return
     }
-    if defaults?.bool(forKey: "scanQuotaReached") == true {
+    // Quota appliqué CÔTÉ NATIF (compteur App Group) → ne dépend pas du JS, qui
+    // est suspendu pendant un scan via l'extension. On bloque si le compteur
+    // natif atteint la limite OU si le flag JS le dit (ceinture + bretelles).
+    if isScanQuotaReached() || defaults?.bool(forKey: "scanQuotaReached") == true {
       showQuotaReached()
       return
     }
@@ -402,6 +405,7 @@ class ShareViewController: UIViewController {
           self.fallbackToGemini(image: image)
           return
         }
+        self.incrementScanCount()
         self.showResult(from: result)
         self.saveSharedResult(result)
       }
@@ -434,6 +438,7 @@ class ShareViewController: UIViewController {
       DispatchQueue.main.async {
         guard let self = self else { return }
         if let result = result {
+          self.incrementScanCount()
           self.showResult(result)
           self.saveResultForMainApp(result)
         } else {
@@ -571,6 +576,22 @@ class ShareViewController: UIViewController {
     statusLabel.numberOfLines = 0
     statusLabel.textAlignment = .center
     statusLabel.textColor = UIColor(white: 1.0, alpha: 0.6)
+  }
+
+  /// Quota appliqué côté natif : le JS pousse le compteur réel (`scanCountToday`)
+  /// + la limite ; le natif incrémente entre deux syncs. Indépendant du JS.
+  private func isScanQuotaReached() -> Bool {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return false }
+    let isFree = (d.object(forKey: "isFreeTier") as? Bool) ?? true
+    if !isFree { return false }
+    let limit = d.integer(forKey: "scanQuotaLimit")
+    if limit <= 0 { return false }   // limite inconnue / illimitée → on ne bloque pas
+    return d.integer(forKey: "scanCountToday") >= limit
+  }
+
+  private func incrementScanCount() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    d.set(d.integer(forKey: "scanCountToday") + 1, forKey: "scanCountToday")
   }
 
   private func showQuotaReached() {
