@@ -229,6 +229,14 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.isFreeTier = isFree
     }
 
+    /** Session active (chauffeur « en ligne »). Si false, la bulle bloque le
+     *  scan et notifie l'utilisateur de démarrer sa session. Mirror iOS
+     *  (AnalyzeRideIntent.isSessionOnline). */
+    @ReactMethod
+    fun setSessionOnline(online: Boolean) {
+        FloatingBubbleService.sessionOnline = online
+    }
+
     /** Compteur de scans du jour (autoritatif, poussé par le JS) + limite, pour
      *  que la bulle applique le quota elle-même même si le JS est suspendu.
      *  limite <= 0 = illimité. */

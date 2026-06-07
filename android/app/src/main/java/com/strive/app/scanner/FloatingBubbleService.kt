@@ -44,6 +44,11 @@ class FloatingBubbleService : Service() {
     companion object {
         private const val CHANNEL_ID = "strive_scanner_channel"
         private const val NOTIF_ID = 42
+        /** Channel + id pour les alertes ponctuelles (ex: session requise) —
+         *  importance DEFAULT pour être visible, distinct du channel silencieux
+         *  du foreground service. */
+        private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
+        private const val SESSION_NOTIF_ID = 43
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
         /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
@@ -60,6 +65,12 @@ class FloatingBubbleService : Service() {
          *  teaser verrouillé "passe Plus" aux free ; un abonné Plus hors quota
          *  voit "reviens demain". */
         var isFreeTier: Boolean = true
+
+        /** Session active (chauffeur « en ligne »). Synchronisé depuis JS via
+         *  setSessionOnline. Si false, triggerScan bloque le scan + notifie.
+         *  Défaut false = fail-safe (pas de scan tant que la session n'est pas
+         *  confirmée). Mirror iOS (AnalyzeRideIntent.isSessionOnline). */
+        var sessionOnline: Boolean = false
 
         /** Compteur de scans du jour + limite (poussés par le JS via setScanQuota).
          *  Permet d'appliquer le quota côté natif même quand le JS est suspendu.
@@ -221,6 +232,15 @@ class FloatingBubbleService : Service() {
 
     fun triggerScan() {
         if (scanInProgress) return
+        // Session non démarrée → on bloque le scan AVANT toute capture, et on
+        // notifie l'utilisateur de passer en ligne. Mirror iOS
+        // (AnalyzeRideIntent : refuse + notification si !sessionOnline).
+        if (!sessionOnline) {
+            notifySessionRequired()
+            showSessionRequiredState()
+            mainHandler.postDelayed({ showIdleState() }, 2500)
+            return
+        }
         // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
@@ -940,6 +960,58 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
+    /** Bulle « passez en ligne » — affichée quand on tente un scan hors session. */
+    private fun showSessionRequiredState() {
+        clearTransientState()
+        bubbleContainer.removeAllViews()
+
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(16), dpToPx(8))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#FF9800"))
+                cornerRadius = dpToPx(999).toFloat()
+            }
+            elevation = dpToPx(8).toFloat()
+            isClickable = true
+            setOnClickListener { openAppHistory() }
+        }
+        pill.addView(TextView(this).apply {
+            text = "⏸"; textSize = 14f
+            setPadding(0, 0, dpToPx(6), 0)
+        })
+        pill.addView(TextView(this).apply {
+            text = getString(com.strive.R.string.scanner_session_required_bubble)
+            textSize = 13f; setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        bubbleContainer.addView(pill, FrameLayout.LayoutParams(
+            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT
+        ))
+        animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    /** Notification système invitant à démarrer la session. Tap → ouvre l'app. */
+    private fun notifySessionRequired() {
+        val launch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val pi = android.app.PendingIntent.getActivity(
+            this, 0, launch ?: Intent(),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle(getString(com.strive.R.string.scanner_session_required_title))
+            .setContentText(getString(com.strive.R.string.scanner_session_required_body))
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(SESSION_NOTIF_ID, notif)
+    }
+
     private fun animateTo(w: Int, h: Int) {
         bubbleParams.width = w; bubbleParams.height = h
         runCatching { windowManager.updateViewLayout(bubbleContainer, bubbleParams) }
@@ -949,9 +1021,14 @@ class FloatingBubbleService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             val ch = NotificationChannel(CHANNEL_ID, "Scanner VTC", NotificationManager.IMPORTANCE_LOW)
                 .apply { description = "Bulle de scan active" }
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
+            mgr.createNotificationChannel(ch)
+            // Channel d'alertes ponctuelles (session requise) — visible.
+            val alertCh = NotificationChannel(ALERT_CHANNEL_ID, "Alertes Strive", NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = "Notifications d'action requise (session, quota)" }
+            mgr.createNotificationChannel(alertCh)
         }
     }
 

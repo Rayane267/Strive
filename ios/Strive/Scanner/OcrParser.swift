@@ -184,7 +184,7 @@ final class OcrParser {
 
     guard let distance = extractDistance(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
     else { return nil }
-    let duration = extractDuration(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
+    let duration = extractDuration(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock, courseDistanceKm: distance)
 
     if !isSane(fare: fare, distanceKm: distance) { return nil }
 
@@ -468,7 +468,7 @@ final class OcrParser {
 
   // MARK: - Duration extraction
 
-  private func extractDuration(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?) -> Int? {
+  private func extractDuration(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?, courseDistanceKm: Double) -> Int? {
     struct Cand { let value: Int; let km: Double?; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
@@ -518,11 +518,18 @@ final class OcrParser {
     }
     let nonPickup = candidates.filter { !$0.isPickupCombo }
     if !nonPickup.isEmpty { return nonPickup.first?.value }
-    // 2. Tout est en combo "min • km" → la course = le combo au plus grand km.
-    let withKm = candidates.filter { $0.km != nil }
-    if !withKm.isEmpty { return withKm.max(by: { ($0.km ?? 0) < ($1.km ?? 0) })?.value }
-    // 3. Dernier recours : la plus grande durée (course > approche).
-    return candidates.max(by: { $0.value < $1.value })?.value
+    // 2. Combos "min • km" : la course = le combo dont le km CORRESPOND à la
+    //    distance de course (pas l'approche, dont le km est petit). Évite
+    //    d'afficher le temps d'approche comme temps de course quand la course
+    //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+    let tol = max(2.0, courseDistanceKm * 0.2)
+    let courseCombo = candidates
+      .filter { $0.km != nil && abs($0.km! - courseDistanceKm) <= tol }
+      .max(by: { ($0.km ?? 0) < ($1.km ?? 0) })
+    if let c = courseCombo { return c.value }
+    // 3. Aucune durée fiable (seules des approches/bandeaux) → nil : estimation
+    //    de la durée de course via la distance (estimateDurationMin).
+    return nil
   }
 
   // MARK: - Pickup combo extraction
@@ -556,6 +563,9 @@ final class OcrParser {
       if mv < 1 || mv > 60 { continue }
       if kv < 0.1 || kv > 30.0 { continue }
       if abs(kv - courseDistanceKm) < 0.1 { continue }
+      // L'approche est toujours plus courte que la course → un combo dont le km
+      // ≥ distance de course est le bandeau nav (haut de l'écran), pas l'approche.
+      if kv >= courseDistanceKm { continue }
       matchesArr.append(PickupMatch(durationMin: mv, distanceKm: kv, y: block.box.centerY))
     }
 
@@ -579,11 +589,23 @@ final class OcrParser {
   /// Retire les lignes de stats ("49 min", "24.3 km") qu'OCR colle parfois à
   /// l'adresse dans un même bloc → ne garde que l'adresse. Mirror Android.
   /// Ex: "49 min\n2 Rue Lefebvre, Paris" → "2 Rue Lefebvre, Paris".
+  /// Retire un préfixe parasite en tête d'adresse (mirror Kotlin) : symboles
+  /// d'icône (● • * ▪), ou une lettre isolée issue d'une icône mal lue suivie
+  /// d'un numéro ("A 7 Rue…" → "7 Rue…", "t 5 Av…" → "5 Av…"). Répare la dédup
+  /// Heetch (icône lue "A" qui cassait le match par préfixe) et nettoie l'affichage.
+  private func stripLeadingAddressJunk(_ s: String) -> String {
+    var t = s.trimmingCharacters(in: .whitespaces)
+    t = replaceAll(t, pattern: #"^[^A-Za-zÀ-ÿ0-9]+"#, options: []) { _ in "" }
+    t = replaceAll(t, pattern: #"^[A-Za-zÀ-ÿ]\s+(?=[0-9])"#, options: []) { _ in "" }
+    return t.trimmingCharacters(in: .whitespaces)
+  }
+
   private func cleanAddressText(_ raw: String) -> String {
-    raw.split(separator: "\n", omittingEmptySubsequences: false)
+    let joined = raw.split(separator: "\n", omittingEmptySubsequences: false)
       .map { $0.trimmingCharacters(in: .whitespaces) }
       .filter { !$0.isEmpty && !matches($0, pattern: #"^\s*(?:à\s*)?\d+[\d.,\s]*\s*(?:km|min)\b.*$"#, caseInsensitive: true) }
       .joined(separator: "\n")
+    return stripLeadingAddressJunk(joined)
   }
 
   private func isAddressBlock(_ block: OcrTextBlock, screenHeight: Int) -> Bool {
@@ -603,6 +625,10 @@ final class OcrParser {
     // décimale n'apparaît jamais dans une adresse → évite de prendre le nom du
     // passager pour l'adresse de départ (et de décaler toutes les adresses).
     if matches(text, pattern: #"\b[0-5][.,]\d\b"#) { return false }
+    // Libellé tarifaire Uber "Montant net de frais" (souvent collé à la note
+    // "★ 4,79" en 2 décimales, qui échappe au reject note ci-dessus) → jamais
+    // une adresse. Sans ça la règle 6 (virgule) le classe pickup et décale tout.
+    if text.contains("net de frais") || text.contains("montant net") { return false }
     if nonAddressWords.contains(text) { return false }
     if matches(text, pattern: #"\b(uber\w*|bolt\w*|heetch\w*)\b"#) { return false }
     if hasActionWord(text) { return false }
@@ -628,8 +654,10 @@ final class OcrParser {
     if matches(text, pattern: #"[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$"#) { return true }
     // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris".
     if matches(text, pattern: #"\b\d{4,5}\b"#) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
-    // 6. Segment avec virgule + ≥6 lettres : "Châtelet, Paris".
-    if text.contains(","), text.filter({ $0.isLetter }).count >= 6 { return true }
+    // 6. Segment avec virgule SUIVIE d'une lettre + ≥6 lettres : "Châtelet, Paris".
+    //    On exige ", lettre" (pas une virgule décimale type "4,79") sinon une
+    //    ligne note/tarif passe pour une adresse.
+    if matches(text, pattern: #",\s*[a-zà-üß]"#), text.filter({ $0.isLetter }).count >= 6 { return true }
     return false
   }
 
@@ -675,7 +703,9 @@ final class OcrParser {
   }
 
   private func dedupOverlappingAddresses(_ candidates: [OcrTextBlock]) -> [OcrTextBlock] {
-    let texts = candidates.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
+    // courte soit reconnue comme préfixe de la version longue (cas Heetch).
+    let texts = candidates.map { cleanAddressText($0.text).trimmingCharacters(in: .whitespacesAndNewlines) }
     return candidates.enumerated().compactMap { (i, b) in
       let mine = texts[i]
       let hasLonger = candidates.indices.contains { j in

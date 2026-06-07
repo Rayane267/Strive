@@ -210,6 +210,14 @@ const DashboardScreen = () => {
     return () => sub.remove();
   }, [isOnline]);
 
+  // Sync l'état session → natif : garantit que la bulle (Android) / Share
+  // Extension (iOS) connaît l'état « en ligne » même après un redémarrage du
+  // process JS (sinon défaut natif = false → scan bloqué à tort). Idempotent ;
+  // double les appels explicites des handlers online/offline sans effet de bord.
+  useEffect(() => {
+    if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(isOnline);
+  }, [isOnline]);
+
   // ── Config scanner (edge function Gemini + remote config OCR + TomTom) ──
   useEffect(() => {
     scannerService.setGeminiConfig(
