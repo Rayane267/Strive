@@ -87,7 +87,10 @@ object TomTomService {
             if (best == null || hit.score > best.score) best = hit
             if (best.score >= MIN_SCORE + 2) return best
         }
-        return best
+        // Plancher de fiabilité : un score < MIN_SCORE = match centroïde ville/pays
+        // (adresse OCR douteuse). On préfère null → pas de "vraie" distance fausse :
+        // le pipeline retombe sur l'OCR plutôt qu'un trajet centre-à-centre.
+        return best?.takeIf { it.score >= MIN_SCORE }
     }
 
     /**

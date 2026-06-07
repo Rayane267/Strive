@@ -305,11 +305,13 @@ class FloatingBubbleService : Service() {
             val base64 = GeminiVisionService.encodeForBridge(bitmap)
             GeminiVisionService.analyze(bitmap) { result ->
                 bitmap.recycle()
-                mainHandler.post {
-                    if (result != null) {
-                        showResultState(result)
-                        ScanBridgeModule.emitScanResult(result, base64)
-                    } else {
+                if (result != null) {
+                    // B : on route le résultat Gemini par la MÊME résolution TomTom
+                    // que l'OCR (adresses → vraie distance). Gemini peut désormais
+                    // renvoyer pickup/destination → TomTom s'applique aussi ici.
+                    resolveTomTomAndEmit(result, base64, null)
+                } else {
+                    mainHandler.post {
                         onScanError()
                         ScanBridgeModule.emitScanFailed()
                     }
@@ -413,8 +415,8 @@ class FloatingBubbleService : Service() {
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom route=$route (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
             val finalResult = if (route != null
-                && route.distanceKm in 0.3..120.0
-                && route.durationMin != null && route.durationMin <= 180
+                && route.distanceKm in 0.3..500.0
+                && route.durationMin != null && route.durationMin <= 300
                 && ratio in 0.2..12.0) {
                 ocr.copy(
                     distanceKm = route.distanceKm,

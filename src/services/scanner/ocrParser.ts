@@ -100,10 +100,10 @@ const NON_ADDRESS_WORDS = [
 
 // ─── Sanity bounds ────────────────────────────────────────────────────────────
 
-const FARE_MIN = 3;
+const FARE_MIN = 5;
 const FARE_MAX = 200;
 const DIST_MIN = 0.3;
-const DIST_MAX = 1000;
+const DIST_MAX = 500;
 const RATE_MIN = 0.4;  // €/km
 const RATE_MAX = 12;   // €/km
 

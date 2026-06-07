@@ -237,15 +237,15 @@ describe('parseBlocks', () => {
   });
 
   it('handles fare right at the boundary values', () => {
-    // Exactly at FARE_MIN (3.00) with valid ratio
+    // Exactly at FARE_MIN (5.00) with valid ratio
     const blocks = [
       makeBlock('bolt', 50),
-      makeBlock('Gain 3.00', 200, 40),
+      makeBlock('Gain 5.00', 200, 40),
       makeBlock('2.0 km', 400, 15),
     ];
     const result = parseBlocks(blocks, 1920);
     expect(result).not.toBeNull();
-    expect(result!.fare).toBe(3.00);
+    expect(result!.fare).toBe(5.00);
   });
 
   it('picks course distance over pickup distance (UberX FR layout)', () => {

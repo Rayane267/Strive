@@ -435,15 +435,45 @@ class ShareViewController: UIViewController {
     service.supabaseUserJwt = defaults?.string(forKey: "supabaseUserJwt")
 
     service.analyze(image: image) { [weak self] result in
-      DispatchQueue.main.async {
-        guard let self = self else { return }
-        if let result = result {
+      guard let self = self else { return }
+      guard let result = result else {
+        DispatchQueue.main.async { self.showError("Impossible d'analyser cette image") }
+        return
+      }
+
+      // B : si Gemini a récupéré les 2 adresses, on les envoie à TomTom pour la
+      // VRAIE distance/durée — c'est le cœur du produit (les valeurs affichées
+      // par Uber/Bolt sont minorées). Sinon on affiche le résultat Gemini brut.
+      let pickup = result.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let dest = result.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+      guard !pickup.isEmpty, !dest.isEmpty, TomTomService.shared.isReady else {
+        DispatchQueue.main.async {
           self.incrementScanCount()
           self.showResult(result)
           self.saveResultForMainApp(result)
-        } else {
-          self.showError("Impossible d'analyser cette image")
         }
+        return
+      }
+
+      DispatchQueue.main.async { self.statusLabel.text = "Calcul de l'itinéraire…" }
+      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
+        // calculateRoute rend la main sur le main thread.
+        var refined = result
+        if let route = route,
+           route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 {
+          let ratio = result.fare / route.distanceKm
+          if ratio >= 0.2, ratio <= 12.0 {
+            refined = ShareViewController.ParsedResult(
+              platform: result.platform, fare: result.fare,
+              distanceKm: route.distanceKm, durationMin: route.durationMin,
+              pickupAddress: result.pickupAddress, destinationAddress: result.destinationAddress
+            )
+          }
+        }
+        self.incrementScanCount()
+        self.showResult(refined)
+        self.saveResultForMainApp(refined)
       }
     }
   }
@@ -473,7 +503,10 @@ class ShareViewController: UIViewController {
       pickupAddress: final.scan.pickupAddress,
       destinationAddress: final.scan.destinationAddress
     )
-    showResult(legacy)
+    // On passe les valeurs déjà calculées par computeFinal (qui gère
+    // l'inclusion du trajet d'approche selon includePickup) au lieu de les
+    // recalculer ici → cohérence stricte avec l'app principale et le verdict.
+    showResult(legacy, hourlyRate: final.hourlyRate, kmRate: final.kmRate, verdictLevel: final.verdictLevel)
   }
 
   /// Sauve le résultat pour que l'app principale puisse le picker au foreground.
@@ -506,7 +539,16 @@ class ShareViewController: UIViewController {
 
   // MARK: - Display Result
 
-  private func showResult(_ result: ParsedResult) {
+  /// Affiche le résultat. `hourlyRate`/`kmRate`/`verdictLevel` optionnels :
+  /// fournis pour le chemin principal (valeurs autoritatives de computeFinal),
+  /// `nil` pour les chemins sans FinalResult (teaser quota, fallback Gemini) →
+  /// recalcul local de secours.
+  private func showResult(
+    _ result: ParsedResult,
+    hourlyRate hourlyRateOverride: Double? = nil,
+    kmRate kmRateOverride: Double? = nil,
+    verdictLevel verdictOverride: Int? = nil
+  ) {
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
     statusLabel.isHidden = true
@@ -522,10 +564,10 @@ class ShareViewController: UIViewController {
     // Fare
     fareLabel.text = String(format: "%.2f €", result.fare)
 
-    // Rates
+    // Rates — valeurs autoritatives si fournies, sinon recalcul de secours.
     let durationMin = result.durationMin ?? Int(result.distanceKm / 25 * 60)
-    let hourlyRate = result.fare / (Double(durationMin) / 60.0)
-    let kmRate = result.fare / result.distanceKm
+    let hourlyRate = hourlyRateOverride ?? result.fare / (Double(durationMin) / 60.0)
+    let kmRate = kmRateOverride ?? result.fare / result.distanceKm
 
     hourlyRateLabel.text = String(format: "%.0f €/h", hourlyRate)
     kmRateLabel.text = String(format: "%.2f €/km", kmRate)
@@ -546,13 +588,19 @@ class ShareViewController: UIViewController {
       destinationLabel.text = ""
     }
 
-    // Verdict color
-    let prefs = UserDefaults(suiteName: Self.appGroupId)
-    let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25
-    let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
-
-    let hrOk = hourlyRate >= minHourly
-    let kmOk = kmRate >= minKm
+    // Verdict color — niveau autoritatif si fourni, sinon recalcul local.
+    let hrOk: Bool
+    let kmOk: Bool
+    if let level = verdictOverride {
+      hrOk = level >= 1
+      kmOk = level >= 2
+    } else {
+      let prefs = UserDefaults(suiteName: Self.appGroupId)
+      let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25
+      let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
+      hrOk = hourlyRate >= minHourly
+      kmOk = kmRate >= minKm
+    }
 
     if hrOk && kmOk {
       hourlyRateLabel.textColor = primaryColor
@@ -797,17 +845,21 @@ private class GeminiVisionServiceLight {
     }
     let base64 = jpegData.base64EncodedString()
     let prompt = """
-    Analyse cette capture d'écran d'une offre de course VTC (Uber, Bolt ou Heetch).
-    Retourne UNIQUEMENT un objet JSON avec ces champs :
+    Tu es un extracteur de données pour un chauffeur VTC. Analyse cette capture d'écran d'une offre de course (Uber, Bolt ou Heetch).
+    Règle 1 : l'adresse de DÉPART (pickup) est TOUJOURS la première affichée en haut de l'écran ; l'adresse de DESTINATION est TOUJOURS en dessous.
+    Règle 2 : ne confonds JAMAIS une ligne stat ("Course de 11.8 km", "à 6 min (1.2 km)") avec une adresse.
+    Retourne UNIQUEMENT un objet JSON sans markdown, avec ces champs :
     {
       "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
-      "fare": <montant en euros, ex: 12.50>,
+      "fare": <montant total en euros, ex: 12.50>,
       "distance_km": <distance de la COURSE en km, ex: 11.8>,
-      "duration_min": <durée de la course en minutes ou null si non visible>
+      "duration_min": <durée de la course en minutes ou null si non visible>,
+      "pickup_address": <adresse de départ exacte lue à l'écran, string ou null>,
+      "destination_address": <adresse de destination exacte lue à l'écran, string ou null>
     }
     IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
     Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
-    Ne retourne rien d'autre que le JSON.
+    Extrais les adresses EXACTES lues à l'écran (ne devine pas). Ne retourne rien d'autre que le JSON.
     """
 
     let request: URLRequest
@@ -875,16 +927,25 @@ private class GeminiVisionServiceLight {
             let platform = parsed["platform"] as? String,
             let fare = (parsed["fare"] as? NSNumber)?.doubleValue,
             let distKm = (parsed["distance_km"] as? NSNumber)?.doubleValue,
-            fare >= 3, fare <= 200, distKm >= 0.3, distKm <= 150,
+            fare >= 5, fare <= 200, distKm >= 0.3, distKm <= 500,
             // Ratio plausible : rejette les €/km démentiels (distance hallucinée).
             fare / distKm >= 0.2, fare / distKm <= 15
       else { completion(nil); return }
 
       let durMin = (parsed["duration_min"] as? NSNumber)?.intValue
 
+      // Adresses (string non vide) — alimentent TomTom pour la VRAIE distance.
+      func cleanAddr(_ key: String) -> String? {
+        guard let s = (parsed[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !s.isEmpty, s.lowercased() != "null" else { return nil }
+        return s
+      }
+
       completion(ShareViewController.ParsedResult(
         platform: platform, fare: fare, distanceKm: distKm,
-        durationMin: durMin, pickupAddress: nil, destinationAddress: nil
+        durationMin: durMin,
+        pickupAddress: cleanAddr("pickup_address"),
+        destinationAddress: cleanAddr("destination_address")
       ))
     }.resume()
   }

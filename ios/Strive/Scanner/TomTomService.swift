@@ -87,7 +87,11 @@ final class TomTomService {
       if best == nil || hit.score > best!.score { best = hit }
       if best!.score >= Self.minScore + 2 { return best }
     }
-    return best
+    // Plancher de fiabilité : un score < minScore = match centroïde ville/pays
+    // (adresse OCR douteuse). On préfère nil → pas de "vraie" distance fausse :
+    // le pipeline retombe sur l'OCR plutôt que de présenter un trajet centre-à-centre.
+    guard let b = best, b.score >= Self.minScore else { return nil }
+    return b
   }
 
   private func buildAddressVariants(_ address: String) -> [String] {

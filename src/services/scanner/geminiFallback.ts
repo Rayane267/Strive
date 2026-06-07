@@ -30,10 +30,10 @@ Extrais les données EXACTES lues à l'écran (ne devine pas) et renvoie UNIQUEM
 }
 Si ce n'est pas un écran d'offre VTC : {"error":"not_a_ride"}.`;
 
-const FARE_MIN = 3;
+const FARE_MIN = 5;
 const FARE_MAX = 200;
 const DIST_MIN = 0.3;
-const DIST_MAX = 1000;
+const DIST_MAX = 500;
 
 export async function extractWithGemini(base64Image: string): Promise<ScanResult | null> {
   if (!base64Image || !PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_KEY) return null;
