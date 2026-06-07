@@ -40,14 +40,19 @@ public struct ScanResultModel {
     self.pickupDistanceKm = pickupDistanceKm
   }
 
-  func copy(distanceKm: Double? = nil, durationMin: Int? = nil) -> ScanResultModel {
+  func copy(
+    distanceKm: Double? = nil,
+    durationMin: Int? = nil,
+    pickupAddress: String? = nil,
+    destinationAddress: String? = nil
+  ) -> ScanResultModel {
     return ScanResultModel(
       platform: self.platform,
       fare: self.fare,
       distanceKm: distanceKm ?? self.distanceKm,
       durationMin: durationMin ?? self.durationMin,
-      pickupAddress: self.pickupAddress,
-      destinationAddress: self.destinationAddress,
+      pickupAddress: pickupAddress ?? self.pickupAddress,
+      destinationAddress: destinationAddress ?? self.destinationAddress,
       pickupDurationMin: self.pickupDurationMin,
       pickupDistanceKm: self.pickupDistanceKm
     )

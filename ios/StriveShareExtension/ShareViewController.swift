@@ -467,7 +467,8 @@ class ShareViewController: UIViewController {
             refined = ShareViewController.ParsedResult(
               platform: result.platform, fare: result.fare,
               distanceKm: route.distanceKm, durationMin: route.durationMin,
-              pickupAddress: result.pickupAddress, destinationAddress: result.destinationAddress
+              pickupAddress: route.pickupFormatted ?? result.pickupAddress,
+              destinationAddress: route.destFormatted ?? result.destinationAddress
             )
           }
         }

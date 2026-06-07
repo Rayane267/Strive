@@ -441,6 +441,10 @@ class FloatingBubbleService : Service() {
                 ocr.copy(
                     distanceKm = route.distanceKm,
                     durationMin = route.durationMin,
+                    // Adresses canoniques TomTom (propres) plutôt que le texte OCR
+                    // bruité (ex: "All AV. … Çueue") — fallback OCR si absentes.
+                    pickupAddress = route.pickupFormatted ?: ocr.pickupAddress,
+                    destinationAddress = route.destFormatted ?: ocr.destinationAddress,
                 )
             } else {
                 ocr

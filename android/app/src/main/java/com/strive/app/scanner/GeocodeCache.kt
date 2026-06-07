@@ -20,7 +20,9 @@ import java.text.Normalizer
 object GeocodeCache {
 
     private const val PREFS_NAME = "strive_geocode_cache"
-    private const val KEY_PREFIX = "g:"
+    // v2 : ajout du libellé canonique `formatted`. Bump du préfixe → les entrées
+    // v1 (sans formatted) sont ignorées et re-géocodées une fois (avec formatted).
+    private const val KEY_PREFIX = "g2:"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -38,6 +40,7 @@ object GeocodeCache {
             TomTomService.GeocodeHit(
                 coords = TomTomService.Coords(obj.getDouble("lat"), obj.getDouble("lon")),
                 score = obj.optDouble("score", 0.0),
+                formatted = obj.optString("formatted").takeIf { it.isNotBlank() },
             )
         } catch (e: Exception) {
             null
@@ -50,6 +53,7 @@ object GeocodeCache {
             put("lat", hit.coords.lat)
             put("lon", hit.coords.lon)
             put("score", hit.score)
+            hit.formatted?.let { put("formatted", it) }
         }.toString()
         p.edit().putString(KEY_PREFIX + normalize(address), json).apply()
     }

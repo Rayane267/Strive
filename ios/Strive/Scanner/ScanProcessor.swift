@@ -108,7 +108,14 @@ final class ScanProcessor {
           return
         }
 
-        let updated = result.copy(distanceKm: route.distanceKm, durationMin: route.durationMin)
+        // Affiche les adresses canoniques TomTom (propres) plutôt que le texte
+        // OCR bruité (ex: "All AV. … Çueue") — fallback OCR si TomTom n'en fournit pas.
+        let updated = result.copy(
+          distanceKm: route.distanceKm,
+          durationMin: route.durationMin,
+          pickupAddress: route.pickupFormatted,
+          destinationAddress: route.destFormatted
+        )
         gate.fire(self.computeFinal(scan: updated))
       }
     }
