@@ -41,6 +41,7 @@ import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
 import { extractWithGemini } from '../services/scanner/geminiFallback';
+import { logScanEvent, fareBucket } from '../services/telemetryService';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
@@ -365,10 +366,11 @@ const DashboardScreen = () => {
         !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
 
       let result = nativeResult;
+      let usedGemini = false;
       if (ocrLooksBad && nativeResult.imageBase64) {
         __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
         const gemini = await extractWithGemini(nativeResult.imageBase64);
-        if (gemini) result = { ...gemini, imageBase64: undefined };
+        if (gemini) { result = { ...gemini, imageBase64: undefined }; usedGemini = true; }
       }
 
       const includePickup = preferences.include_pickup
@@ -430,6 +432,17 @@ const DashboardScreen = () => {
         kmRate,
         verdict: level,
         includePickup,
+      });
+
+      // Télémétrie non nominative (taux de détection adresse, coût Gemini) —
+      // fire-and-forget, jamais bloquant. Aucune donnée perso (cf. scan_events).
+      logScanEvent({
+        platform: result.platform,
+        addressesFound: (result.pickupAddress ? 1 : 0) + (result.destinationAddress ? 1 : 0),
+        geminiFallback: usedGemini,
+        durationSource: (result.durationMin && result.durationMin > 0) ? 'reported' : 'estimated',
+        verdict: level,
+        fareBucket: fareBucket(result.fare),
       });
 
       // ── Log en DB (valeurs finales). Si Supabase tombe, on queue hors-ligne
