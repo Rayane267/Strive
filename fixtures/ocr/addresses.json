@@ -1,0 +1,114 @@
+[
+  {
+    "name": "extracts-pickup-and-destination",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
+      { "text": "Total 15.50", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 300, "width": 200, "height": 15 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "45 avenue des Champs-Élysées", "x": 50, "y": 700, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "UBER", "fare": 15.5, "distanceKm": 8.2,
+      "pickupAddressContains": "Rivoli",
+      "destinationAddressContains": "Champs"
+    }
+  },
+  {
+    "name": "addresses-in-top-quarter-of-screen-ignored",
+    "description": "y=100 < 25% de 1920 → filtrée ; seule Champs-Élysées reste (devient pickup, pas de destination)",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
+      { "text": "Total 15.50", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 300, "width": 200, "height": 15 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 100, "width": 200, "height": 15 },
+      { "text": "45 avenue des Champs-Élysées", "x": 50, "y": 700, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "UBER", "fare": 15.5, "distanceKm": 8.2,
+      "pickupAddressContains": "Champs",
+      "destinationAddressContains": null
+    }
+  },
+  {
+    "name": "uberx-fr-layout-course-vs-pickup-distance",
+    "description": "Écran Uber réel : 'à 6 min (1.2 km)' = approche, 'Course de 11.8 km' = course. Ne pas prendre 1.2.",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uberx", "x": 50, "y": 300, "width": 200, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 400, "width": 200, "height": 50 },
+      { "text": "Montant net de frais", "x": 50, "y": 500, "width": 200, "height": 15 },
+      { "text": "à 6 min (1.2 km)", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 200, "height": 15 },
+      { "text": "Course de 11.8 km", "x": 50, "y": 700, "width": 200, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 750, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "UBER", "fare": 17.18, "distanceKm": 11.8,
+      "pickupDistanceKm": 1.2, "pickupDurationMin": 6
+    }
+  },
+  {
+    "name": "pickup-eta-not-mistaken-for-course-duration",
+    "description": "'à 6 min (1.2 km)' contient '6 min' mais c'est l'approche — la durée course est absente → null",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uberx", "x": 50, "y": 300, "width": 200, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 400, "width": 200, "height": 50 },
+      { "text": "à 6 min (1.2 km)", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "Course de 11.8 km", "x": 50, "y": 700, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 11.8, "durationMin": null }
+  },
+  {
+    "name": "course-line-never-treated-as-address",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 200, "height": 15 },
+      { "text": "Course de 11.8 km", "x": 50, "y": 700, "width": 200, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 800, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "UBER", "fare": 17.18, "distanceKm": 11.8,
+      "pickupAddressContains": "Libération",
+      "destinationAddressContains": "Charles Pathé"
+    }
+  },
+  {
+    "name": "airport-and-gare-pois-are-valid-addresses",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "42,00 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "Aéroport Charles de Gaulle Terminal 2", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "Gare de Lyon Paris", "x": 50, "y": 700, "width": 200, "height": 15 },
+      { "text": "35.0 km", "x": 50, "y": 800, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "UBER", "fare": 42.0, "distanceKm": 35.0,
+      "pickupAddressContains": "Aéroport",
+      "destinationAddressContains": "Gare"
+    }
+  },
+  {
+    "name": "addresses-sorted-by-y-pickup-always-top",
+    "description": "Blocs volontairement hors ordre de lecture — le plus haut (Y min) = pickup",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "bolt", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "15,00 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.0 km", "x": 50, "y": 400, "width": 200, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 900, "width": 200, "height": 15 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 500, "width": 200, "height": 15 }
+    ],
+    "expected": {
+      "platform": "BOLT", "fare": 15.0, "distanceKm": 8.0,
+      "pickupAddressContains": "Rivoli",
+      "destinationAddressContains": "Vaugirard"
+    }
+  }
+]

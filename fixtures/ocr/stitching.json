@@ -1,0 +1,135 @@
+[
+  {
+    "name": "tolerates-spaces-in-distance",
+    "description": "ML Kit splitte parfois '11.8' en '11 . 8'",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 200, "height": 15 },
+      { "text": "Course de 11 . 8 km", "x": 50, "y": 700, "width": 200, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 750, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 11.8 }
+  },
+  {
+    "name": "tolerates-spaces-in-price",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "17 , 18 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 8.2 }
+  },
+  {
+    "name": "restitch-fragmented-decimal-distance-dot",
+    "description": "ML Kit coupe 'Course de 11.8 km' en 'Course de 11.' + '8 km' côte à côte",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 200, "width": 120, "height": 40 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 300, "height": 15 },
+      { "text": "Course de 11.", "x": 50, "y": 700, "width": 200, "height": 15 },
+      { "text": "8 km", "x": 280, "y": 700, "width": 80, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 11.8 }
+  },
+  {
+    "name": "restitch-fragmented-distance-comma",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "bolt", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "Gain 14,50", "x": 50, "y": 200, "width": 150, "height": 40 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "Course 11,", "x": 50, "y": 700, "width": 140, "height": 15 },
+      { "text": "8 km", "x": 220, "y": 700, "width": 80, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "BOLT", "fare": 14.5, "distanceKm": 11.8 }
+  },
+  {
+    "name": "no-restitch-across-different-rows",
+    "description": "Δy > 1.5× height entre les deux blocs → pas de recollage, distance brute 8",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "Total 15,00", "x": 50, "y": 200, "width": 150, "height": 40 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "Course de 11.", "x": 50, "y": 680, "width": 200, "height": 15 },
+      { "text": "8 km", "x": 280, "y": 740, "width": 80, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 820, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 15.0, "distanceKm": 8 }
+  },
+  {
+    "name": "no-restitch-without-trailing-digit-separator",
+    "description": "Le bloc de gauche finit par 'Course' (pas 'NN.' ni 'NN,') → pas de recollage",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "Total 15,00", "x": 50, "y": 200, "width": 150, "height": 40 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "Course", "x": 50, "y": 700, "width": 100, "height": 15 },
+      { "text": "8 km", "x": 180, "y": 700, "width": 80, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 15.0, "distanceKm": 8 }
+  },
+  {
+    "name": "permissive-restitch-when-dot-fully-lost",
+    "description": "'Course de 11' + '8 km' : le point décimal a disparu — recollage permissif car raw à 1 chiffre",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 200, "width": 120, "height": 40 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 300, "height": 15 },
+      { "text": "Course de 11", "x": 50, "y": 700, "width": 180, "height": 15 },
+      { "text": "8 km", "x": 260, "y": 700, "width": 80, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 11.8 }
+  },
+  {
+    "name": "intra-block-restitch-dot-lost-in-same-block",
+    "description": "'Course de 11 8 km' dans un seul bloc → 11.8",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "17,18 €", "x": 50, "y": 200, "width": 120, "height": 40 },
+      { "text": "65 Route de la Libération", "x": 50, "y": 650, "width": 300, "height": 15 },
+      { "text": "Course de 11 8 km", "x": 50, "y": 700, "width": 260, "height": 15 },
+      { "text": "16 Rue Charles Pathé", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.18, "distanceKm": 11.8 }
+  },
+  {
+    "name": "intra-block-stitch-anchored-on-matched-raw",
+    "description": "'4 1 2 km' : la paire doit coller au raw matché ('2') → pickup 1.2, pas 4.1/4.2. Course = 10.",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "Total 20,00", "x": 50, "y": 200, "width": 150, "height": 40 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 200, "height": 15 },
+      { "text": "10 km", "x": 50, "y": 700, "width": 80, "height": 15 },
+      { "text": "4 1 2 km", "x": 50, "y": 750, "width": 120, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 20.0, "distanceKm": 10 }
+  },
+  {
+    "name": "no-permissive-restitch-for-multi-digit-raw",
+    "description": "'Course 12' + '50 km' : raw à 2 chiffres → pas de recollage permissif, on garde 50",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 80, "height": 30 },
+      { "text": "Total 40,00", "x": 50, "y": 200, "width": 150, "height": 40 },
+      { "text": "12 rue de Rivoli", "x": 50, "y": 600, "width": 140, "height": 15 },
+      { "text": "Course 12", "x": 50, "y": 700, "width": 100, "height": 15 },
+      { "text": "50 km", "x": 180, "y": 700, "width": 80, "height": 15 },
+      { "text": "25 rue de Vaugirard", "x": 50, "y": 800, "width": 250, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 40.0, "distanceKm": 50 }
+  }
+]
