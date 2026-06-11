@@ -77,6 +77,20 @@ const ProfileScreen = () => {
     }
     setDeleting(true);
     try {
+      // RGPD : purge l'avatar du Storage AVANT delete_account (après, plus de
+      // session pour le faire ; un DELETE SQL sur storage.objects laisserait
+      // le fichier orphelin côté S3). Best-effort : un échec ne bloque pas la
+      // suppression du compte.
+      if (user?.id) {
+        try {
+          const { data: files } = await supabase.storage.from('avatars').list(user.id);
+          if (files && files.length > 0) {
+            await supabase.storage
+              .from('avatars')
+              .remove(files.map(f => `${user.id}/${f.name}`));
+          }
+        } catch {}
+      }
       const { error } = await supabase.rpc('delete_account');
       if (error) throw error;
       try { await GoogleSignin.signOut(); } catch {}
