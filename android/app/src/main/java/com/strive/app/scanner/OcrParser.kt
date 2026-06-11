@@ -147,6 +147,11 @@ object OcrParser {
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
     private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)""")
+    // Tarif sans séparateur ("1743€" ou "17 €"). Min 2 chiffres : un "5€" sec
+    // n'est jamais un tarif — contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
+    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6})\s*€""")
+    // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
+    private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")
     private val DISTANCE_REGEX = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
@@ -311,9 +316,14 @@ object OcrParser {
             "$euros,${"%02d".format(cents)}",
             "$euros.${"%02d".format(cents)}",
         )
-        return blocks.firstOrNull { b ->
+        blocks.firstOrNull { b ->
             patterns.any { p -> b.text.contains(p) }
-        }?.boundingBox?.centerY()
+        }?.boundingBox?.centerY()?.let { return it }
+        // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
+        // matcher un code postal ou une heure qui contiendrait la même suite.
+        val glued = "$euros${"%02d".format(cents)}"
+        return blocks.firstOrNull { it.text.contains(glued) && it.text.contains("€") }
+            ?.boundingBox?.centerY()
     }
 
     // ─── Platform detection ───────────────────────────────────────────────────────
@@ -413,10 +423,24 @@ object OcrParser {
                 || blockLower.contains("étoile") || blockLower.contains("etoile")
                 || blockLower.contains("rating") || blockLower.contains("note")) return@forEachIndexed
 
-            val match = PRICE_REGEX.find(normalizedText) ?: return@forEachIndexed
-            val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
-            val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
-            val value = "$intPart.$decPart".toDoubleOrNull() ?: return@forEachIndexed
+            // Retire le segment note ("* 5,00") : un nombre précédé d'une étoile/
+            // astérisque n'est jamais un tarif (cas "* 5,00 Montant net de frais"
+            // collé sous le prix — aligné TS/Swift).
+            val deRated = normalizedText.replace(RATING_SEGMENT_REGEX, " ")
+
+            val match = PRICE_REGEX.find(deRated)
+            val value: Double = if (match != null) {
+                val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
+                val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
+                "$intPart.$decPart".toDoubleOrNull() ?: return@forEachIndexed
+            } else {
+                // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" →
+                // "1743€"). Les apps VTC affichent toujours 2 décimales : au-delà
+                // du plafond plausible, les 2 derniers chiffres sont des centimes.
+                val glued = PRICE_GLUED_REGEX.find(deRated) ?: return@forEachIndexed
+                val raw = glued.groupValues[1].toDoubleOrNull() ?: return@forEachIndexed
+                if (raw > fareMax) raw / 100 else raw
+            }
 
             if (value !in fareMin..fareMax) return@forEachIndexed
 
