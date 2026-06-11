@@ -94,8 +94,10 @@ final class OcrParser {
 
   private static let priceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
+  // Min 2 chiffres : un "5€" sec n'est jamais un tarif (pourboire, pack, note).
+  // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS.
   private static let priceWholeRegex = try! NSRegularExpression(
-    pattern: #"(\d{1,6})\s*€"#)
+    pattern: #"(\d{2,6})\s*€"#)
   // Retire la note de l'app ("★ 5,00", "* 5,00") avant de chercher un tarif.
   private static let ratingRegex = try! NSRegularExpression(
     pattern: #"[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}"#)
