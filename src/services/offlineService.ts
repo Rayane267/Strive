@@ -8,6 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { Ride } from '../types/database';
+import { notifySyncDropped } from './localNotifications';
 
 const CACHE_VERSION = 1;
 const CACHE_VERSION_KEY = '@strive_cache_version';
@@ -172,6 +173,7 @@ export async function syncOfflineQueue(
     const retries: Record<number, number> = retryRaw ? JSON.parse(retryRaw) : {};
 
     let synced = 0;
+    let dropped = 0;
     const failed: Omit<Ride, 'id'>[] = [];
     const newRetries: Record<number, number> = {};
 
@@ -181,6 +183,7 @@ export async function syncOfflineQueue(
 
       // Drop rides that failed too many times
       if (retryCount >= MAX_RETRY_COUNT) {
+        dropped++;
         Sentry.captureMessage(`Offline ride dropped after ${MAX_RETRY_COUNT} retries`, {
           level: 'warning',
           tags: { flow: 'offline_sync' },
@@ -207,6 +210,12 @@ export async function syncOfflineQueue(
 
     if (synced > 0) {
       Sentry.addBreadcrumb({ category: 'offline', message: `Synced ${synced} ride(s), ${failed.length} remaining`, level: 'info' });
+    }
+
+    // L'utilisateur doit savoir que des revenus manquent — sinon il découvre
+    // des courses absentes de ses stats sans explication.
+    if (dropped > 0) {
+      notifySyncDropped(dropped);
     }
 
     return synced;

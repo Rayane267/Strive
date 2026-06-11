@@ -29,6 +29,12 @@ const GEMINI_URL =
 const MAX_BODY_BYTES = 2 * 1024 * 1024;        // 2 MB hard cap
 const RATE_LIMIT_PER_HOUR = 60;                // 60 calls / heure / user
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+// Circuit breaker coût : plafond GLOBAL d'appels Gemini par 24h glissantes,
+// tous users confondus. Protège la facture contre l'abus multi-comptes
+// (le rate limit par user ne suffit pas : 100 comptes free = 6000 appels/h).
+// Ajustable sans redéploiement via secret GEMINI_DAILY_BUDGET_CALLS.
+const GLOBAL_DAILY_LIMIT = parseInt(Deno.env.get('GEMINI_DAILY_BUDGET_CALLS') ?? '2000', 10);
+const GLOBAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Origines acceptées : app native (no Origin header), Supabase Studio, capacitor.
 const ALLOWED_ORIGINS = new Set<string>([
@@ -79,18 +85,35 @@ async function verifyAuth(req: Request): Promise<string | null> {
   return data.user.id;
 }
 
-/** Compte les appels gemini_call de l'user dans la dernière heure (audit_log). */
-async function isRateLimited(userId: string): Promise<boolean> {
-  if (!supabaseAdmin) return false;
-  const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
-  const { count, error } = await supabaseAdmin
-    .from('audit_log')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('action', 'gemini_call')
-    .gte('created_at', since);
-  if (error) return false;                           // fail-open : pas de blocage si DB down
-  return (count ?? 0) >= RATE_LIMIT_PER_HOUR;
+/**
+ * Rate limit user (60/h) + budget global (24h glissantes), via audit_log.
+ * FAIL-CLOSED : si la DB est injoignable on refuse — Gemini n'est qu'un
+ * fallback de l'OCR local, mieux vaut le perdre temporairement que de
+ * laisser le compteur de coûts sans garde-fou.
+ */
+async function isRateLimited(userId: string): Promise<'user' | 'global' | null> {
+  if (!supabaseAdmin) return 'user';
+  const userSince = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const globalSince = new Date(Date.now() - GLOBAL_WINDOW_MS).toISOString();
+
+  const [userRes, globalRes] = await Promise.all([
+    supabaseAdmin
+      .from('audit_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('action', 'gemini_call')
+      .gte('created_at', userSince),
+    supabaseAdmin
+      .from('audit_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('action', 'gemini_call')
+      .gte('created_at', globalSince),
+  ]);
+
+  if (userRes.error || globalRes.error) return 'user';   // fail-closed
+  if ((userRes.count ?? 0) >= RATE_LIMIT_PER_HOUR) return 'user';
+  if ((globalRes.count ?? 0) >= GLOBAL_DAILY_LIMIT) return 'global';
+  return null;
 }
 
 async function logCall(userId: string, status: number, bytes: number): Promise<void> {
@@ -134,9 +157,11 @@ serve(async (req: Request) => {
     return jsonResponse(401, { error: 'unauthorized' }, origin);
   }
 
-  // 2. Rate-limit
-  if (await isRateLimited(userId)) {
-    return jsonResponse(429, { error: 'rate_limit_exceeded' }, origin);
+  // 2. Rate-limit user + budget global (fail-closed)
+  const limited = await isRateLimited(userId);
+  if (limited) {
+    if (limited === 'global') console.error('GEMINI GLOBAL BUDGET EXHAUSTED');
+    return jsonResponse(429, { error: 'rate_limit_exceeded', scope: limited }, origin);
   }
 
   // 3. Plafond body

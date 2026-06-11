@@ -30,6 +30,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 interface RevenueCatEvent {
+  id?: string;
   type: string;
   app_user_id: string;
   original_app_user_id?: string;
@@ -130,6 +131,9 @@ serve(async (req: Request) => {
     p_product_id: event.product_id,
     p_expires_at: expiresAt,
     p_status: statusForEvent(event.type, event.cancel_reason),
+    // Déduplication : RC rejoue les webhooks sans 200 → la RPC ignore les
+    // event.id déjà traités (table processed_webhook_events).
+    p_event_id: event.id ?? null,
   });
 
   if (error) {
