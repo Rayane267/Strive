@@ -82,15 +82,6 @@ async function geocodeBest(candidates: string[]): Promise<GeocodeResult | null> 
   return best;
 }
 
-async function geocode(address: string): Promise<Coords | null> {
-  const result = await geocodeWithScore(address);
-  if (!result) return null;
-  if (__DEV__ && result.score < MIN_CONFIDENCE) {
-    console.warn('[TomTom] géocodage à faible confiance', { address, score: result.score });
-  }
-  return result.coords;
-}
-
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 interface RouteSummary { durationMin: number; distanceKm: number }
@@ -150,7 +141,21 @@ export async function calculateRoute(
   ]);
 
   if (!from || !to) {
-    Sentry.addBreadcrumb({ category: 'tomtom', message: 'Geocode failed', data: { pickupAddress, destinationAddress }, level: 'warning' });
+    // Pas d'adresses dans le breadcrumb (PII géographique → Sentry) : on ne
+    // logge que des métadonnées suffisantes pour diagnostiquer l'échec OCR.
+    Sentry.addBreadcrumb({
+      category: 'tomtom',
+      message: 'Geocode failed',
+      data: {
+        failedSide: !from && !to ? 'both' : !from ? 'pickup' : 'destination',
+        pickupLen: pickupAddress.length,
+        destinationLen: destinationAddress.length,
+        pickupHasNumber: /\d/.test(pickupAddress),
+        destinationHasNumber: /\d/.test(destinationAddress),
+        fallbackCounts: [pickupFallbacks.length, destinationFallbacks.length],
+      },
+      level: 'warning',
+    });
     __DEV__ && console.warn('[TomTom] geocode failed', { pickupAddress, destinationAddress, from, to });
     return null;
   }

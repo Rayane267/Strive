@@ -20,6 +20,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const WEBHOOK_AUTH = Deno.env.get('REVENUECAT_WEBHOOK_AUTH') ?? '';
+// Sandbox : par défaut on IGNORE les events SANDBOX (achats TestFlight/sandbox
+// gratuits → sinon premium réel offert). Mettre REVENUECAT_ALLOW_SANDBOX=true
+// sur un projet Supabase de test pour les accepter.
+const ALLOW_SANDBOX = Deno.env.get('REVENUECAT_ALLOW_SANDBOX') === 'true';
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -43,7 +47,7 @@ interface RevenueCatPayload {
 }
 
 // Mapping event → status pour les events non-couverts par la RPC
-function statusForEvent(eventType: string, cancelReason?: string): string | null {
+function statusForEvent(eventType: string, _cancelReason?: string): string | null {
   switch (eventType) {
     case 'INITIAL_PURCHASE':
     case 'RENEWAL':
@@ -85,6 +89,15 @@ serve(async (req: Request) => {
   const event = payload.event;
   if (!event || !event.type || !event.app_user_id || !event.product_id) {
     return new Response('Missing event fields', { status: 400 });
+  }
+
+  // Events SANDBOX : jamais appliqués en prod (un achat sandbox est gratuit —
+  // l'appliquer offrirait un vrai premium). 200 pour que RC ne retry pas.
+  if (event.environment === 'SANDBOX' && !ALLOW_SANDBOX) {
+    return new Response(JSON.stringify({ ok: true, ignored: 'sandbox' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // Events ignorés (transferts entre comptes, tests sandbox côté RC, etc.)
