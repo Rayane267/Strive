@@ -4,49 +4,41 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const GOUV_API =
   "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records";
 
-const PARIS_DEPARTMENTS = ["75", "92", "93", "94"];
-
-async function fetchAveragePrice(fuelId: string): Promise<number | null> {
-  const where = PARIS_DEPARTMENTS.map(d => `cp LIKE '${d}%'`).join(" OR ");
-  const params = new URLSearchParams({
-    select: "prix_valeur",
-    where: `(${where}) AND prix_nom='${fuelId}'`,
-    limit: "200",
-  });
-
-  const res = await fetch(`${GOUV_API}?${params}`);
-  if (!res.ok) return null;
-
-  const data = await res.json();
-  const prices: number[] = (data.results || [])
-    .map((r: any) => r.prix_valeur)
-    .filter((v: any) => typeof v === "number" && v > 0);
-
-  if (prices.length === 0) return null;
-  return prices.reduce((a: number, b: number) => a + b, 0) / prices.length / 1000;
-}
-
-serve(async (req) => {
+serve(async () => {
   try {
-    const [sp95, gazole, e10, e85] = await Promise.all([
-      fetchAveragePrice("SP95"),
-      fetchAveragePrice("Gazole"),
-      fetchAveragePrice("E10"),
-      fetchAveragePrice("E85"),
-    ]);
+    // Schéma 2026 : une colonne par carburant, déjà en €/L. On échantillonne
+    // les stations d'Île-de-France (75/92/93/94) et on moyenne.
+    const params = new URLSearchParams({
+      select: "e10_prix,sp95_prix,gazole_prix,e85_prix",
+      where: 'code_departement in ("75","92","93","94")',
+      limit: "100", // max autorisé par l'API v2.1
+    });
+
+    const res = await fetch(`${GOUV_API}?${params}`);
+    if (!res.ok) throw new Error(`API gouv ${res.status}`);
+    const data = await res.json();
+    const rows: any[] = data.results || [];
+
+    const avg = (key: string): number | null => {
+      const vals = rows
+        .map(r => r[key])
+        .filter((v: any) => typeof v === "number" && v > 0);
+      if (vals.length === 0) return null;
+      return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
+    };
 
     const prices = {
-      essence: e10 ?? sp95,
-      diesel: gazole,
-      e85,
+      essence: avg("e10_prix") ?? avg("sp95_prix"),
+      diesel: avg("gazole_prix"),
+      e85: avg("e85_prix"),
       updated_at: new Date().toISOString(),
       region: "paris",
     };
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
     await supabase.from("fuel_prices").upsert(
       {
         id: "paris",
@@ -55,7 +47,7 @@ serve(async (req) => {
         e85: prices.e85,
         updated_at: prices.updated_at,
       },
-      { onConflict: "id" }
+      { onConflict: "id" },
     );
 
     return new Response(JSON.stringify(prices), {

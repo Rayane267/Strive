@@ -218,13 +218,27 @@ function extractFare(
     const normalizedText = normalizeOcrDigits(block.text);
     // Exclut les boutons de suggestion de prix Heetch ("Proposer X €")
     if (/proposer/i.test(normalizedText)) return;
-    const match = PRICE_REGEX.exec(normalizedText);
-    if (!match) return;
 
-    const intPart = match[1].replace(/\s+/g, '');
-    const decPart = match[2].replace(/\s+/g, '');
-    const value = parseFloat(`${intPart}.${decPart}`);
-    if (value < FARE_MIN || value > FARE_MAX) return;
+    // Retire la note de l'app ("★ 5,00", "* 5,00") : un nombre précédé d'une
+    // étoile n'est jamais un tarif. Évite que "5,00" l'emporte via l'ancre "net"
+    // du libellé "Montant net de frais" collé juste à côté.
+    const deRated = normalizedText.replace(/[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}/g, ' ');
+
+    let value: number | null = null;
+    const match = PRICE_REGEX.exec(deRated);
+    if (match) {
+      value = parseFloat(`${match[1].replace(/\s+/g, '')}.${match[2].replace(/\s+/g, '')}`);
+    } else {
+      // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" → "1743€").
+      // Les apps VTC affichent toujours 2 décimales : si l'entier dépasse le
+      // plafond plausible, on réinterprète les 2 derniers chiffres en centimes.
+      const glued = /(\d{2,6})\s*€/.exec(deRated);
+      if (glued) {
+        const raw = parseInt(glued[1], 10);
+        value = raw > FARE_MAX ? raw / 100 : raw;
+      }
+    }
+    if (value === null || value < FARE_MIN || value > FARE_MAX) return;
 
     let score = 0;
 
@@ -580,7 +594,13 @@ function locateFareBlockY(blocks: TextBlock[], fare: number): number | null {
   const cents = Math.round((fare - euros) * 100);
   const centsStr = cents.toString().padStart(2, '0');
   const patterns = [`${euros},${centsStr}`, `${euros}.${centsStr}`];
-  const match = blocks.find(b => patterns.some(p => b.text.includes(p)));
+  let match = blocks.find(b => patterns.some(p => b.text.includes(p)));
+  // Repli : tarif collé sans virgule ("1743€") — on exige le € pour éviter de
+  // matcher un code postal ou une heure qui contiendrait la même suite.
+  if (!match) {
+    const glued = `${euros}${centsStr}`;
+    match = blocks.find(b => b.text.includes(glued) && b.text.includes('€'));
+  }
   if (!match) return null;
   return match.y + match.height / 2;
 }

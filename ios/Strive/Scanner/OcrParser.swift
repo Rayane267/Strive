@@ -95,7 +95,10 @@ final class OcrParser {
   private static let priceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
   private static let priceWholeRegex = try! NSRegularExpression(
-    pattern: #"(\d{1,3})\s*€"#)
+    pattern: #"(\d{1,6})\s*€"#)
+  // Retire la note de l'app ("★ 5,00", "* 5,00") avant de chercher un tarif.
+  private static let ratingRegex = try! NSRegularExpression(
+    pattern: #"[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}"#)
   private static let distanceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#, options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
@@ -303,18 +306,33 @@ final class OcrParser {
         || blockLower.contains("étoile") || blockLower.contains("etoile")
         || blockLower.contains("rating") || blockLower.contains("note") { continue }
 
-      let nsNorm = normalized as NSString
+      // Retire le segment note ("* 5,00") : un nombre précédé d'une étoile/astérisque
+      // n'est jamais un tarif (cas "* 5,00 Montant net de frais" collé sous le prix).
+      let deRated = Self.ratingRegex.stringByReplacingMatches(
+        in: normalized, options: [],
+        range: NSRange(location: 0, length: (normalized as NSString).length),
+        withTemplate: " ")
+      let nsNorm = deRated as NSString
       var value: Double?
       var isWhole = false
 
-      if let m = Self.priceRegex.firstMatch(in: normalized, range: NSRange(location: 0, length: nsNorm.length)) {
+      if let m = Self.priceRegex.firstMatch(in: deRated, range: NSRange(location: 0, length: nsNorm.length)) {
         let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
         let decPart = nsNorm.substring(with: m.range(at: 2)).replacingOccurrences(of: " ", with: "")
         value = Double("\(intPart).\(decPart)")
-      } else if let m = Self.priceWholeRegex.firstMatch(in: normalized, range: NSRange(location: 0, length: nsNorm.length)) {
+      } else if let m = Self.priceWholeRegex.firstMatch(in: deRated, range: NSRange(location: 0, length: nsNorm.length)) {
         let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
-        value = Double(intPart)
-        isWhole = true
+        if let raw = Double(intPart) {
+          // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" → "1743€").
+          // Les apps VTC affichent toujours 2 décimales : si l'entier dépasse le
+          // plafond plausible, on réinterprète les 2 derniers chiffres en centimes.
+          if raw > fareMax {
+            value = raw / 100
+          } else {
+            value = raw
+            isWhole = true
+          }
+        }
       }
 
       guard let v = value, v >= fareMin, v <= fareMax else { continue }
@@ -349,7 +367,13 @@ final class OcrParser {
       String(format: "%d,%02d", euros, cents),
       String(format: "%d.%02d", euros, cents),
     ]
-    return blocks.first(where: { b in patterns.contains(where: { b.text.contains($0) }) })?.box.centerY
+    if let m = blocks.first(where: { b in patterns.contains(where: { b.text.contains($0) }) }) {
+      return m.box.centerY
+    }
+    // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
+    // matcher un code postal ou une heure qui contiendrait la même suite.
+    let glued = String(format: "%d%02d", euros, cents)
+    return blocks.first(where: { $0.text.contains(glued) && $0.text.contains("€") })?.box.centerY
   }
 
   // MARK: - Distance extraction
