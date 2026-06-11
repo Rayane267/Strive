@@ -47,6 +47,16 @@ class ScanBridgeModule: RCTEventEmitter {
     return false
   }
 
+  /// Version réelle du bundle (celle des stores, auto-incrémentée par EAS) —
+  /// exposée au JS pour l'email support et le release Sentry. Évite les
+  /// versions hardcodées qui dérivent à chaque release.
+  override func constantsToExport() -> [AnyHashable: Any]! {
+    return [
+      "appVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+      "buildNumber": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+    ]
+  }
+
   override func supportedEvents() -> [String]! {
     return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed"]
   }

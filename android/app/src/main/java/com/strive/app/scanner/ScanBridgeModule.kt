@@ -15,6 +15,28 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
 
     override fun getName() = "ScanBridge"
 
+    /**
+     * Version réelle du package (versionName/versionCode du build installé) —
+     * exposée au JS pour l'email support et le release Sentry. Évite les
+     * versions hardcodées qui dérivent à chaque release.
+     */
+    override fun getConstants(): Map<String, Any> {
+        return try {
+            val info = reactContext.packageManager.getPackageInfo(reactContext.packageName, 0)
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION") info.versionCode.toLong()
+            }
+            mapOf(
+                "appVersion" to (info.versionName ?: ""),
+                "buildNumber" to code.toString(),
+            )
+        } catch (e: Exception) {
+            mapOf("appVersion" to "", "buildNumber" to "")
+        }
+    }
+
     private var mediaProjectionPromise: Promise? = null
 
     // ─── JS → Native ──────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { APP_VERSION_LABEL } from '../utils/appVersion';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -23,7 +24,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const SUPPORT_EMAIL = 'supportstriveapp@gmail.com';
-const APP_VERSION = 'v2.4.1 (Build 204)';
 
 const FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
 
@@ -42,7 +42,7 @@ const HelpScreen = () => {
     // Contexte technique pré-rempli pour accélérer le diagnostic côté support.
     const body = encodeURIComponent(
       `\n\n———\n${t('help.mailContext', 'Infos techniques (ne pas supprimer)')}\n` +
-        `App : Strive ${APP_VERSION}\n` +
+        `App : Strive ${APP_VERSION_LABEL}\n` +
         `OS : ${Platform.OS} ${Platform.Version}\n`,
     );
     Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => {});
