@@ -66,6 +66,8 @@ const PreferencesScreen = () => {
     AsyncStorage.getItem('@strive_use_live_activity').then(v => {
       if (v !== null) setUseLiveActivityRaw(v === '1');
     });
+    // Mount-only : fetchPreferences est stable au premier render, pas de re-fetch voulu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchPreferences = async () => {
@@ -101,6 +103,9 @@ const PreferencesScreen = () => {
     if (statusMessage.type !== null) {
       setStatusMessage({ text: '', type: null });
     }
+    // statusMessage.type est exclu volontairement : l'ajouter effacerait le
+    // message immédiatement après son affichage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minHr, minKm, includePickup, isActive, dayResetHour]);
 
   // --- SAUVEGARDE ---

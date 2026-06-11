@@ -77,6 +77,11 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
   );
 };
 
+// Stocké en DB = clé stable ('essence'|'diesel'|'electric'), affiché en UI = label traduit.
+// Permet de respecter le CHECK constraint Supabase et de switch FR↔EN sans perdre la valeur.
+const FUEL_KEYS = ['essence', 'diesel', 'electric'] as const;
+type FuelKey = typeof FUEL_KEYS[number];
+
 const CarSettingsScreen = () => {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
@@ -85,10 +90,6 @@ const CarSettingsScreen = () => {
   const tier = profile?.subscription_tier?.toLowerCase();
   const isPremium = tier === 'plus' || tier === 'pro' || tier === 'premium';
 
-  // Stocké en DB = clé stable ('essence'|'diesel'|'electric'), affiché en UI = label traduit.
-  // Permet de respecter le CHECK constraint Supabase et de switch FR↔EN sans perdre la valeur.
-  const FUEL_KEYS = ['essence', 'diesel', 'electric'] as const;
-  type FuelKey = typeof FUEL_KEYS[number];
   const FUEL_LABEL: Record<FuelKey, string> = {
     essence: t('settings.fuel.essence'),
     diesel: t('settings.fuel.diesel'),

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -25,10 +25,6 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
-
-// Suffixe iOS uniquement sur les étapes où le flow diffère (scanner + lancement).
-// Les écrans bienvenue / analytics restent identiques aux deux plateformes.
-const SUFFIX = Platform.OS === 'ios' ? '_ios' : '';
 
 // URL iCloud du raccourci pré-construit ("Prendre une capture" + "Analyser
 // une course avec Strive"). Si renseignée, le bouton "Obtenir le raccourci"

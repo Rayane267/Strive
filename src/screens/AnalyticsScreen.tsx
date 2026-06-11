@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   Pressable,
   RefreshControl,
@@ -36,6 +35,16 @@ import KpiTrendChart from '../components/KpiTrendChart';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 import BrandLoader from '../components/BrandLoader';
 import { cacheStats, getCachedStats } from '../services/offlineService';
+
+// Prix unitaires de repli (€/L, ou €/kWh pour l'électrique) quand la table
+// `fuel_prices` n'est pas alimentée. Moyennes France ~2026, volontairement
+// prudentes. L'électrique n'a pas de colonne en base → toujours ce repli.
+const DEFAULT_FUEL_PRICE: Record<string, number> = {
+  essence: 1.85,
+  diesel: 1.80,
+  e85: 0.95,
+  electric: 0.25,
+};
 
 LocaleConfig.locales['fr'] = {
   monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
@@ -134,6 +143,14 @@ const AnalyticsScreen = () => {
   const flipAnim = useRef(new Animated.Value(0)).current;
   const hasFuelData = stats.fuelCost > 0;
 
+  // Vue brut/net synchronisée : le profit affiché pilote aussi €/h et €/km.
+  // Ces deux KPI sont linéaires en profit (profit/h, profit/km) → on applique
+  // le même ratio net/brut pour rester exact sans recalculer heures/distance.
+  const displayProfit = showNet ? stats.totalProfit - stats.fuelCost : stats.totalProfit;
+  const netRatio = stats.totalProfit > 0 ? displayProfit / stats.totalProfit : 1;
+  const displayHourly = stats.hourlyRate * netRatio;
+  const displayPerKm = stats.pricePerKm * netRatio;
+
   const toggleProfitView = () => {
     if (!hasFuelData) return;
     const toNet = !showNet;
@@ -196,7 +213,7 @@ const AnalyticsScreen = () => {
       if (sessionsError) throw sessionsError;
 
       if (!rides || rides.length === 0) {
-        const emptyStats = { totalProfit: 0, totalDistance: 0, totalDurationMin: 0, hourlyRate: 0, pricePerKm: 0, acceptedCount: 0, appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 }, appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 } };
+        const emptyStats = { totalProfit: 0, totalDistance: 0, totalDurationMin: 0, hourlyRate: 0, pricePerKm: 0, acceptedCount: 0, fuelCost: 0, appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 }, appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 } };
         setStats(emptyStats);
         setDailyEarnings([]);
         setHourlyTrend([]);
@@ -276,12 +293,18 @@ const AnalyticsScreen = () => {
       const fuelType = profileData?.fuel_type ?? 'essence';
       let fuelPrice = 0;
       if (avgCons > 0) {
-        const { data: fp } = await supabase
-          .from('fuel_prices')
-          .select(fuelType === 'diesel' ? 'diesel' : fuelType === 'e85' ? 'e85' : 'essence')
-          .eq('id', 'paris')
-          .single();
-        if (fp) fuelPrice = Object.values(fp)[0] as number ?? 0;
+        // L'électrique n'a pas de colonne en base → repli direct. Pour les
+        // carburants liquides on tente la table, puis on retombe sur le repli.
+        if (fuelType !== 'electric') {
+          const col = fuelType === 'diesel' ? 'diesel' : fuelType === 'e85' ? 'e85' : 'essence';
+          const { data: fp } = await supabase
+            .from('fuel_prices')
+            .select(col)
+            .eq('id', 'paris')
+            .single();
+          if (fp) fuelPrice = (Object.values(fp)[0] as number) ?? 0;
+        }
+        if (fuelPrice <= 0) fuelPrice = DEFAULT_FUEL_PRICE[fuelType] ?? DEFAULT_FUEL_PRICE.essence;
       }
       const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
@@ -311,12 +334,13 @@ const AnalyticsScreen = () => {
       setFetchError(true);
       // Fallback to cached stats when offline
       const cached = await getCachedStats();
-      if (cached) setStats(cached);
+      // fuelCost ajouté après coup : les payloads AsyncStorage existants ne l'ont pas
+      if (cached) setStats({ ...cached, fuelCost: cached.fuelCost ?? 0 });
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user, dateRange, resetHour]);
+  }, [user, dateRange, resetHour, i18n.language]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -512,12 +536,11 @@ const AnalyticsScreen = () => {
 
               <View style={styles.heroTop}>
                 <Text style={styles.heroLabel}>{t('analytics.netProfit').toUpperCase()}</Text>
-                <Text style={styles.heroBefore}>{t('analytics.beforeTax')}</Text>
               </View>
               <TouchableOpacity onPress={toggleProfitView} activeOpacity={hasFuelData ? 0.7 : 1}>
                 <Animated.View style={{ transform: [{ scale: flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.92, 1] }) }] }}>
                   <Text style={styles.heroAmount}>
-                    €{showNet ? (stats.totalProfit - stats.fuelCost).toFixed(2) : stats.totalProfit.toFixed(2)}
+                    €{displayProfit.toFixed(2)}
                   </Text>
                 </Animated.View>
                 {hasFuelData && (
@@ -581,7 +604,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.hourlyRate')}</Text>
-                  <Text style={styles.kpiValue}>€{stats.hourlyRate.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>€{displayHourly.toFixed(2)}</Text>
                 </View>
               </View>
               <View style={styles.kpiCard}>
@@ -604,7 +627,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.priceKm')}</Text>
-                  <Text style={styles.kpiValue}>€{stats.pricePerKm.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>€{displayPerKm.toFixed(2)}</Text>
                 </View>
               </View>
             </View>

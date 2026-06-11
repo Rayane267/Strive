@@ -247,7 +247,7 @@ const DashboardScreen = () => {
         }
       } catch {}
     }
-  }, [user?.id]);
+  }, [user?.id, i18n.language]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {

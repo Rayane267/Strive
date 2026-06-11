@@ -34,19 +34,13 @@ jobs:
       # (babel.config.js) et `@env` est résolu vers __mocks__/env.js. Les tests
       # sont donc hermétiques.
 
-      # Non-bloquant pour l'instant : ~17 erreurs lint préexistantes dans le code
-      # applicatif (imports inutilisés, deps de hooks). Les tests restent la
-      # barrière dure ci-dessous. À repasser en bloquant après nettoyage.
+      # Bloquant depuis le nettoyage 2026-06 (0 erreur lint/types). Les warnings
+      # ESLint restent tolérés ; seules les erreurs font échouer le job.
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
-      # Non-bloquant pour l'instant : 2 erreurs de types préexistantes dans
-      # AnalyticsScreen.tsx (champ `fuelCost` manquant). À repasser en bloquant
-      # une fois corrigées.
       - name: Typecheck
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: Tests
         run: npm test -- --ci --coverage --maxWorkers=2

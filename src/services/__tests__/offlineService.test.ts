@@ -84,6 +84,7 @@ describe('offlineService — stats', () => {
     hourlyRate: 30,
     pricePerKm: 1.87,
     acceptedCount: 12,
+    fuelCost: 0,
     appDistribution: { UBER: 60, BOLT: 30, HEETCH: 10 },
     appEarnings: { UBER: 90, BOLT: 45, HEETCH: 15 },
   };
@@ -219,7 +220,7 @@ describe('offlineService — clearOfflineCache', () => {
     await cacheRides([]);
     await cacheStats({
       totalProfit: 0, totalDistance: 0, totalDurationMin: 0,
-      hourlyRate: 0, pricePerKm: 0, acceptedCount: 0,
+      hourlyRate: 0, pricePerKm: 0, acceptedCount: 0, fuelCost: 0,
       appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 },
       appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 },
     });

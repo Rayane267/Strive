@@ -48,6 +48,7 @@ interface CachedStats {
   hourlyRate: number;
   pricePerKm: number;
   acceptedCount: number;
+  fuelCost: number;
   appDistribution: { UBER: number; BOLT: number; HEETCH: number };
   appEarnings: { UBER: number; BOLT: number; HEETCH: number };
 }
