@@ -29,7 +29,7 @@ export default function Home() {
       <Header />
 
       {/* ───────────────── HERO ───────────────── */}
-      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 pb-28 pt-36 text-center">
+      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-start overflow-hidden px-5 pb-24 pt-32 text-center">
         <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
 
         <div className="relative z-10 flex flex-col items-center">
@@ -81,7 +81,7 @@ export default function Home() {
 
         {/* Vitrine produit — le verdict réel par-dessus une offre VTC */}
         <div
-          className="load-up relative z-10 mt-16 flex justify-center"
+          className="load-up relative z-10 mt-12 flex w-full justify-center"
           style={{ animationDelay: '560ms' }}
         >
           <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/12 blur-[90px]" />
