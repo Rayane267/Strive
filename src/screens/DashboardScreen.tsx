@@ -42,6 +42,8 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
 import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
+import { logScanDebug } from '../services/scanDebugService';
+import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
@@ -481,6 +483,32 @@ const DashboardScreen = () => {
         verdict: level,
         fareBucket: fareBucket(result.fare),
       });
+
+      // Capture diagnostique (bêta) : si le parser NATIF a raté une adresse, on
+      // stocke les blocs OCR pour reproduire le cas en fixture + amorcer un
+      // dataset (native vs gemini). Données perso → table scan_debug privée,
+      // RLS owner-only, rétention 30 j. Fire-and-forget.
+      const nativePickupMissing = !nativeResult.pickupAddress;
+      const nativeDestMissing = !nativeResult.destinationAddress;
+      if (nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
+        logScanDebug({
+          platform: nativeResult.platform,
+          screenHeight: nativeResult.screenHeight ?? null,
+          blocksJson: nativeResult.debugBlocks,
+          nativePickup: nativeResult.pickupAddress ?? null,
+          nativeDestination: nativeResult.destinationAddress ?? null,
+          nativeFare: nativeResult.fare,
+          nativeDistanceKm: nativeResult.distanceKm,
+          nativeDurationMin: nativeResult.durationMin ?? null,
+          pickupMissing: nativePickupMissing,
+          destMissing: nativeDestMissing,
+          geminiUsed: usedGemini,
+          // Ce que Gemini a récupéré sur le champ que le natif avait raté = label approché.
+          geminiPickup: usedGemini && nativePickupMissing ? (result.pickupAddress ?? null) : null,
+          geminiDestination: usedGemini && nativeDestMissing ? (result.destinationAddress ?? null) : null,
+          appVersion: APP_VERSION_LABEL,
+        });
+      }
 
       // ── Log en DB (valeurs finales). Si Supabase tombe, on queue hors-ligne
       // pour garantir zéro scan perdu — useOfflineSync re-tente à la reconnexion.

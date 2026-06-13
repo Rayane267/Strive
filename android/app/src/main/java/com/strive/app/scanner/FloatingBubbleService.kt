@@ -296,8 +296,9 @@ class FloatingBubbleService : Service() {
                     //         (b) TomTom skip/KO → fallback OCR.
                     // Évite le flash de valeurs OCR provisoires qui pouvaient
                     // donner un verdict différent du verdict final.
-                    val debug = if (BuildConfig.DEBUG) debugBlocks else null
-                    resolveTomTomAndEmit(result, base64, debug)
+                    // Blocs émis en release (et non plus DEBUG-only) : alimentent
+                    // scan_debug côté JS quand une adresse manque.
+                    resolveTomTomAndEmit(result, base64, debugBlocks, h)
                     scanInProgress = false
                 } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
                     fallbackGemini(fullBitmap)
@@ -407,6 +408,7 @@ class FloatingBubbleService : Service() {
         ocr: OcrParser.ScanResult,
         base64: String,
         debugBlocks: String?,
+        screenHeight: Int = 0,
     ) {
         // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
         // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
@@ -427,7 +429,7 @@ class FloatingBubbleService : Service() {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
             mainHandler.post { showResultState(ocr); applyVerdict(ocr) }
-            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks)
+            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks, screenHeight)
             return
         }
 
@@ -450,7 +452,7 @@ class FloatingBubbleService : Service() {
                 ocr
             }
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult) }
-            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks)
+            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks, screenHeight)
         }
     }
 

@@ -18,8 +18,11 @@ export interface ScanResult {
   pickupDistanceKm?: number;
   /** Image JPEG compressée en base64 — servie par le natif pour alimenter le fallback LLM JS */
   imageBase64?: string;
-  /** Dump JSON des blocs ML Kit/Vision pour diagnostic — populé en DEV uniquement côté natif */
+  /** Dump JSON des blocs ML Kit/Vision pour diagnostic — émis en release pour
+   *  alimenter scan_debug quand une adresse manque. Format : [{text,x,y,w,h}]. */
   debugBlocks?: string;
+  /** Hauteur de l'image OCR (px) — nécessaire pour rejouer un cas en fixture. */
+  screenHeight?: number;
 }
 
 /** Bloc texte brut retourné par ML Kit (Android) ou Vision (iOS) */

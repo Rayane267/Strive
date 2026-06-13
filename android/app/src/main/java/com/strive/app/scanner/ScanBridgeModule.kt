@@ -290,6 +290,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             result: OcrParser.ScanResult,
             imageBase64: String? = null,
             debugBlocks: String? = null,
+            screenHeight: Int = 0,
         ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
@@ -308,9 +309,12 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // Image (JPEG compressée, base64) pour fallback Gemini côté JS
                 if (imageBase64 != null) putString("imageBase64", imageBase64)
                 else putNull("imageBase64")
-                // Dump des blocs ML Kit pour diagnostic (JSON) — consommé en DEV
+                // Dump des blocs ML Kit (JSON) — émis en release pour alimenter
+                // scan_debug côté JS quand une adresse manque.
                 if (debugBlocks != null) putString("debugBlocks", debugBlocks)
                 else putNull("debugBlocks")
+                // Hauteur image OCR (px) — pour rejouer un cas en fixture.
+                putInt("screenHeight", screenHeight)
             }
             emit("onScanResult", map)
         }
