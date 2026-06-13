@@ -14,6 +14,10 @@ L'Application est un outil d'aide à la décision destiné aux chauffeurs de Vé
 
 **En créant un compte, en installant ou en utilisant l'Application, vous reconnaissez avoir lu, compris et accepté sans réserve les présentes CGU.** Si vous n'acceptez pas ces conditions, vous devez renoncer à utiliser le Service.
 
+> ⚠️ **À retenir avant tout :**
+> **Strive est un éditeur 100 % indépendant. L'Application n'a aucun lien — de quelque nature que ce soit — avec Uber, Bolt, Heetch ou toute autre plateforme VTC : aucune affiliation, aucun partenariat, aucune approbation, aucun accès à leurs systèmes ou à leurs comptes.**
+> **Strive n'exploite, ne revend et ne cède aucune de vos données ni celle des passagers. Aucune publicité, aucun traçage publicitaire.**
+
 ## Article 1 — Définitions
 
 - **Application / Service** : l'application mobile Strive, ses fonctionnalités, son site web et ses services associés.

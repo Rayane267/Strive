@@ -2,136 +2,109 @@
 
 [🇫🇷 Français](./PRIVACY_POLICY.md) · 🇬🇧 English
 
-**Last updated: May 29, 2026**
-
-Strive (the "App") is a mobile application for ride-hailing drivers that scans the ride offers displayed in the Uber, Bolt and Heetch apps in order to calculate ride profitability in real time. This policy describes how we process your data.
-
-**Publisher:** [Your name / company]
-**Contact:** [your-email@domain.com]
-**Hosting:** Supabase (user data), Sentry (errors), Google Firebase (push notifications)
+**Last updated: June 13, 2026**
 
 ---
 
-## 1. Data collected
+## Preamble
 
-### 1.1 Account data
-When you create an account, we collect:
-- **Email address** (via direct sign-up or Google/Apple OAuth)
-- **Anonymous Google/Apple identifier** (if OAuth)
-- **User preferences** (€/h and €/km thresholds, pickup inclusion, verdict sound)
+This Privacy Policy describes how the publisher of the Strive mobile application (the "**Publisher**", "**we**") collects, uses, shares and protects the personal data of users (the "**User**", "**you**"), in accordance with Regulation (EU) 2016/679 ("**GDPR**") and applicable data-protection law.
 
-### 1.2 Ride data
-Each time you scan a ride offer, we record:
-- **Platform** (Uber / Bolt / Heetch)
-- **Displayed fare** (net)
-- **Estimated distance and duration**
-- **Pickup and destination addresses**
-- **Calculated hourly and per-kilometer rates**
-- **Ride status** (accepted, declined, pending)
-- **Timestamp**
+Strive is a decision-support tool for self-employed VTC drivers: at the User's request, the Application reads a ride offer displayed on screen in order to estimate its profitability. Protecting your privacy is at the core of the Service's design (*privacy by design*).
 
-This data is used to display your history and compute your statistics. It is never sold or shared with commercial third parties.
+> 🔒 **Our core commitments.** Strive is **fully independent and has no connection with Uber, Bolt, Heetch** or any other VTC platform. We **do not exploit, resell or transfer any of your data**, nor that of passengers who may appear on screen. **No advertising, no ad tracking, no data brokering.** Your data is used solely to provide the Service you request.
 
-The **pickup and destination addresses** form your professional logbook (a record of your driving activity). For data minimization, these addresses are **automatically erased after 12 months**; the rest of the ride (fare, distance, duration, status) is kept for your statistics. You can also delete your entire history at any time (see §5).
+## 1. Data controller
 
-### 1.3 Technical data
-- **Device identifier** (for push notifications via Firebase)
-- **Anonymized error logs** (via Sentry, for bug diagnosis)
-- **RevenueCat subscription** (active/inactive status, no payment information)
+The data controller is the publisher of Strive:
 
-### 1.4 What we do NOT collect
-- Content of the Uber, Bolt, Heetch screens beyond the fields extracted by OCR
-- Browsing history
-- Real-time geolocation (we do not access GPS)
-- Contacts, photos, personal files
-- Banking data (RevenueCat handles payments directly via the App Store / Play Store)
+> **[TO BE COMPLETED: company name or individual, legal form, registration number, registered office]**
 
----
+**Contact (and to exercise your rights):** supportstriveapp@gmail.com — **[TO BE COMPLETED: Data Protection Officer details, if any]**
 
-## 2. Android accessibility service
+## 2. Data we process
 
-Strive uses the **Android accessibility service** and **screen capture (MediaProjection)** exclusively to:
-- Allow the floating bubble to appear over the ride-hailing apps
-- Capture the screen, **only when you tap the scan button**, to analyze the offer via OCR (Google ML Kit, on-device analysis)
+We apply the principle of minimisation: we only process data necessary for the Service.
 
-**No screen capture is performed without your explicit action.** No personal data is read from other apps. OCR analysis runs locally; the captured image is not sent to any third-party server, except when local OCR fails entirely — in that case, and only then, a compressed image is sent to our Supabase Edge Function, which analyzes it via Gemini (Google AI) and then deletes it immediately.
+**2.1 — Account data**: email address, account identifier; sign-in method (email, Google, Apple).
 
----
+**2.2 — Profile & vehicle**: make, model, year, fuel type and average consumption of your vehicle; device language and time zone; preferences (minimum €/h and €/km thresholds, day-reset time, display options).
 
-## 3. Processors and transfers
+**2.3 — Scanned rides**: platform, proposed fare, distance, duration, status (accepted / declined), timestamp; pickup and drop-off addresses present in the offer (used to compute real distance/duration and feed your history); driving sessions (start, end, duration).
 
-Your data may be processed by the following processors:
+**2.4 — Subscription data**: subscription status and type, Scan credits, technical identifier from our subscription-management provider. **We have no access to any banking data**: payments are handled by the App Store or Google Play.
 
-| Processor | Role | Hosting |
-|---|---|---|
-| **Supabase** | Database, authentication, edge functions | EU (Frankfurt) |
-| **Google Firebase** | Push notifications (FCM) | EU / US |
-| **Sentry** | Anonymized error diagnosis | EU |
-| **RevenueCat** | Subscription management | US |
-| **TomTom** | Address geocoding, route calculation | EU (Amsterdam) |
-| **Google Gemini** | OCR fallback (only if local OCR fails) | US |
+**2.5 — Technical data & notifications**: push notification token; technical logs of sensitive actions and error/crash reports (security, stability).
 
-Transfers outside the EU are governed by the European Commission's Standard Contractual Clauses or the Data Privacy Framework.
+**2.6 — Quality measurement & diagnostics**
+- **Non-identifying telemetry**: per Scan, aggregatable indicators (platform, number of addresses detected, price bracket, verdict, whether cloud fallback was used). **Never the exact amount, addresses or coordinates.**
+- **Diagnostic capture (beta, with consent)**: when local analysis fails to read an address, the Application may store the OCR text blocks of the scanned screen (which may contain addresses) to improve reliability. These captures are **private, visible to you only, kept for 30 days maximum**, and limited to the testing phase.
 
----
+## 3. OCR technology: how it works and our safeguards
 
-## 4. Retention period
+- **Voluntary, one-off reading**: OCR is only triggered by a deliberate action (the Scan). The Application does not read the screen continuously and does not monitor your activity in the background.
+- **Mainly local processing**: analysis runs on your device (ML Kit on Android, Vision on iOS). **No screenshot is stored.**
+- **Cloud fallback**: where local reading fails, the offer image may be securely transmitted, for the duration of the analysis only, to our image-analysis provider (Google Gemini API).
+- **No exploitation of passenger data**: any third-party data visible on screen (a passenger's first name or exact address) is **neither exploited nor resold**, and is used only for the profitability calculation you request. It is never included in telemetry.
 
-- **Account data**: as long as the account is active, then 30 days after deletion
-- **Ride history**: kept as long as the account is active. **Pickup/destination addresses are automatically erased after 12 months**; other ride data (fare, distance, duration, status) remains available for your statistics. You can delete your entire history at any time from the app (see §5)
-- **Sentry error logs**: 90 days maximum
-- **RevenueCat billing data**: legal retention period (10 years)
+## 4. Purposes and legal bases
 
----
+| Purpose | Legal basis (GDPR) |
+|---|---|
+| Provide the Service (scan, verdict, history, statistics, subscription) | Performance of the contract (Art. 6.1.b) |
+| Improve OCR reliability, prevent fraud and abuse, ensure security | Legitimate interest (Art. 6.1.f) |
+| Push notifications and diagnostic capture (beta) | Consent (Art. 6.1.a), revocable at any time |
+| Comply with legal obligations | Legal obligation (Art. 6.1.c) |
 
-## 5. Your rights (GDPR)
+## 5. Recipients and processors
 
-In accordance with the GDPR, you have the following rights:
-- **Access**: obtain a copy of your data
-- **Rectification**: correct inaccurate data
-- **Erasure**: delete your account and all associated data
-- **Portability**: receive your data in a machine-readable format (JSON)
-- **Objection**: object to processing for statistical purposes
+We **sell no data** and display **no advertising**. We use technical processors (Art. 28 GDPR) strictly necessary for the Service:
 
-To exercise these rights, contact us at **[your-email@domain.com]**. You may also lodge a complaint with your data protection authority (in France, the CNIL — www.cnil.fr).
+- **Supabase** — hosting, database and authentication;
+- **Google (Gemini API)** — cloud image-analysis fallback;
+- **Google (Firebase, Sign-In, Play)** — notifications, sign-in, distribution;
+- **TomTom** — geolocation, geocoding and route calculation;
+- **RevenueCat** — technical subscription management (via the stores);
+- **Apple** — sign-in and App Store distribution;
+- **Sentry** — error and crash monitoring.
 
-### Account deletion
-You can delete your account directly from the app: **Profile → Settings → Delete account**. Deletion is permanent and irreversible after a 7-day grace period.
+## 6. Transfers outside the European Union
 
-### Ride history deletion
-You can erase your entire ride history (including addresses) without deleting your account: **Profile → Account information → Delete my history**. This deletion is permanent and immediate.
+**[TO BE COMPLETED: data-hosting location (Supabase region).]** Some providers (Google, Sentry…) may process data outside the EU; such transfers are framed by appropriate safeguards (Standard Contractual Clauses or an equivalent mechanism) under Articles 44 et seq. of the GDPR.
 
----
+## 7. Retention periods
 
-## 6. Security
+- **Account, profile, rides, sessions**: kept while your account is active; deleted upon account deletion;
+- **Diagnostic captures (beta)**: 30 days maximum;
+- **Non-identifying telemetry**: kept in aggregated form;
+- **Error reports (Sentry)**: per the service's retention (typically 90 days).
 
-- Encrypted TLS 1.3 connections to all servers
-- Authentication via OAuth 2.0 (Google, Apple) or email + hashed password (bcrypt, via Supabase Auth)
-- RLS (Row Level Security) on Supabase: each user can only read/write their own data
-- No sensitive API key is stored on the client (Gemini calls routed via an edge function)
+## 8. Your rights
 
----
+Under the GDPR, you have the rights of access (Art. 15), rectification (Art. 16), erasure (Art. 17), data portability (Art. 20), objection and restriction (Arts. 18 and 21), and the right to withdraw consent at any time. You can:
 
-## 7. Cookies and trackers
+- view and edit your data from the application;
+- **delete your account and all your data in a single action** from Profile → Account (rides, sessions, vehicles, preferences, profile, photo and account);
+- contact us at supportstriveapp@gmail.com.
 
-The mobile app does not use cookies. No advertising tracker is integrated.
+You may also lodge a complaint with the French data-protection authority (CNIL — <https://www.cnil.fr>) or your local supervisory authority.
 
----
+## 9. Security
 
-## 8. Children
+Data in transit is encrypted (HTTPS); data access is partitioned per user (each driver accesses only their own data); authentication tokens are stored in the operating system's secure vault (Keychain / Keystore); sensitive operations are enforced server-side.
 
-Strive is intended for professional adults (ride-hailing drivers). The app is not designed for minors and does not knowingly collect their data.
+## 10. Cookies (website)
 
----
+The marketing website uses no advertising cookies or profiling trackers. **[TO BE COMPLETED if an analytics tool is added.]**
 
-## 9. Changes
+## 11. Minors
 
-This policy may be updated. The "Last updated" date indicates the version in force. Substantial changes will be notified in the app.
+The Service is intended for professional VTC drivers and is not directed at persons under 18.
 
----
+## 12. Changes
 
-## 10. Contact
+We may update this Policy. In the event of a material change, you will be informed in the application or by email.
 
-**Publisher:** [Your name / company]
-**Email:** [your-email@domain.com]
-**Address:** [Your postal address if sole trader]
+## 13. Contact
+
+For any question regarding your data: **supportstriveapp@gmail.com**.

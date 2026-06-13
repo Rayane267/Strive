@@ -12,6 +12,9 @@ La présente Politique de Confidentialité décrit la manière dont l'éditeur d
 
 Strive est un outil d'aide à la décision pour chauffeurs VTC indépendants : à la demande de l'Utilisateur, l'Application lit une proposition de course affichée à l'écran afin d'en estimer la rentabilité. La protection de votre vie privée est au cœur de la conception du Service (*privacy by design*).
 
+> 🔒 **Nos engagements fondamentaux :**
+> **Strive est totalement indépendant et n'a aucun lien avec Uber, Bolt, Heetch ou toute autre plateforme VTC.** Nous **n'exploitons, ne revendons et ne cédons aucune de vos données**, ni celles des passagers susceptibles d'apparaître à l'écran. **Aucune publicité, aucun traçage publicitaire, aucun courtage de données.** Vos données servent uniquement à vous fournir le Service que vous demandez.
+
 ## 1. Responsable du traitement
 
 Le responsable du traitement est :
