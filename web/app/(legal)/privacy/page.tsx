@@ -106,6 +106,7 @@ export default function PrivacyPage() {
       <h2>7. Durées de conservation</h2>
       <ul>
         <li><strong>Compte, profil, courses, sessions</strong> : tant que le compte est actif ; supprimés à la suppression du compte ;</li>
+        <li><strong>Adresses des courses</strong> : effacées automatiquement au-delà de <strong>12 mois</strong> (la course et ses métriques sont conservées, mais les adresses de prise en charge et de destination sont supprimées) ;</li>
         <li><strong>Captures de diagnostic (bêta)</strong> : 30 jours maximum ;</li>
         <li><strong>Télémétrie non nominative</strong> : conservée sous forme agrégée ;</li>
         <li><strong>Rapports d&apos;erreurs (Sentry)</strong> : selon la rétention du service (généralement 90 jours).</li>
