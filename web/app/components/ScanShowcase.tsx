@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -15,7 +16,7 @@ const ACCENT = '#00e676';
 
 // L'offre du scénario (celle du screenshot réel)
 const OFFER = {
-  category: 'UberX',
+  category: 'Standard',
   fare: '17,18 €',
   rating: '5,00',
   pickup: { eta: 'à 6 min (1.2 km)', addr: '65 Route de la Libération, 94430 Chennevières-sur-Marne' },
@@ -98,7 +99,7 @@ export default function ScanShowcase() {
             {phase === 'done' && (
               <div className="showcase-pop absolute inset-x-3 top-[3.4rem] rounded-[1.4rem] bg-[#0b0d0c] p-3.5 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-white/90">Uber</span>
+                  <span className="text-[13px] font-semibold text-white/90">VTC · Course</span>
                   <span className="flex items-center gap-1 text-[13px] font-bold text-white">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="3"><path d="M7 17L17 7M17 7H9M17 7v8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     {VERDICT.kmRate}
@@ -162,15 +163,15 @@ export default function ScanShowcase() {
             <button
               onClick={phase === 'done' ? replay : scan}
               aria-label={phase === 'done' ? 'Rejouer' : 'Scanner avec Strive'}
-              className={`absolute bottom-[42%] right-3 z-30 flex h-14 w-14 items-center justify-center rounded-full text-[#05140c] transition-transform active:scale-95 ${phase === 'ring' ? 'animate-ring' : ''}`}
-              style={{ background: ACCENT, boxShadow: `0 10px 30px -6px ${ACCENT}aa` }}
+              className={`absolute bottom-[42%] right-3 z-30 flex h-14 w-14 items-center justify-center rounded-full transition-transform active:scale-95 ${phase === 'ring' ? 'animate-ring' : ''}`}
+              style={{ background: '#0b1310', border: `1.5px solid ${ACCENT}`, boxShadow: `0 10px 30px -6px ${ACCENT}aa` }}
             >
               {phase === 'scan' ? (
-                <svg className="scan-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#05140c" strokeWidth="2.5"><path d="M21 12a9 9 0 11-6.2-8.6" strokeLinecap="round" /></svg>
+                <svg className="scan-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><path d="M21 12a9 9 0 11-6.2-8.6" strokeLinecap="round" /></svg>
               ) : phase === 'done' ? (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05140c" strokeWidth="2.5"><path d="M3 12a9 9 0 109-9" strokeLinecap="round" /><path d="M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><path d="M3 12a9 9 0 109-9" strokeLinecap="round" /><path d="M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               ) : (
-                <span className="font-display text-2xl font-extrabold">S</span>
+                <Image src="/strive-logo.png" alt="Strive" width={34} height={34} className="h-9 w-9 rounded-[10px]" />
               )}
             </button>
 
@@ -214,21 +215,52 @@ function Leg({ dot, head, sub, last }: { dot: 'o' | 'sq'; head: string; sub: str
 
 function Map() {
   return (
-    <svg viewBox="0 0 340 720" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden>
-      <rect width="340" height="720" fill="#dfe5ea" />
-      <path d="M-10 120 Q60 90 120 140 T260 130 360 180 360 260 200 240 60 280 -10 250Z" fill="#cfe3d2" opacity="0.7" />
-      <circle cx="40" cy="520" r="70" fill="#cfe3d2" opacity="0.6" />
-      <path d="M-10 470 C90 440 160 520 250 480 340 450 360 470 360 470" stroke="#bcd4ea" strokeWidth="22" fill="none" opacity="0.8" />
-      {[160, 300, 430, 560].map((y) => (
-        <path key={y} d={`M-10 ${y} C100 ${y - 30} 220 ${y + 30} 360 ${y - 10}`} stroke="#ffffff" strokeWidth="6" fill="none" opacity="0.85" />
+    <svg viewBox="0 0 340 720" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden fontFamily="var(--font-body)">
+      <rect width="340" height="720" fill="#e4e8ec" />
+
+      {/* espaces verts */}
+      <path d="M-10 110 Q60 80 120 130 T260 120 360 170 360 250 200 230 60 270 -10 240Z" fill="#d2e6d4" opacity="0.8" />
+      <circle cx="36" cy="540" r="74" fill="#d2e6d4" opacity="0.7" />
+      <rect x="232" y="300" width="86" height="64" rx="10" fill="#d2e6d4" opacity="0.6" />
+
+      {/* rivière (la Marne) */}
+      <path d="M-10 460 C90 432 160 512 250 472 340 444 360 462 360 462" stroke="#bcd4ea" strokeWidth="20" fill="none" opacity="0.85" />
+
+      {/* boulevards (larges) */}
+      <path d="M-10 300 C100 270 220 330 360 300" stroke="#ffffff" strokeWidth="9" fill="none" />
+      <path d="M120 -10 C150 200 110 480 150 730" stroke="#ffffff" strokeWidth="9" fill="none" />
+      {/* rues secondaires */}
+      {[150, 210, 380, 600, 660].map((y) => (
+        <path key={y} d={`M-10 ${y} C110 ${y - 26} 230 ${y + 26} 360 ${y - 8}`} stroke="#ffffff" strokeWidth="4.5" fill="none" opacity="0.9" />
       ))}
-      {[70, 180, 270].map((x) => (
-        <path key={x} d={`M${x} -10 C${x + 20} 200 ${x - 20} 480 ${x + 10} 730`} stroke="#ffffff" strokeWidth="5" fill="none" opacity="0.6" />
+      {[60, 250, 300].map((x) => (
+        <path key={x} d={`M${x} -10 C${x + 18} 220 ${x - 18} 480 ${x + 8} 730`} stroke="#ffffff" strokeWidth="4" fill="none" opacity="0.7" />
       ))}
-      <path d="M70 250 C110 300 150 300 175 360 C205 430 250 470 285 540" stroke="#9aa1a8" strokeWidth="9" fill="none" strokeLinecap="round" />
+
+      {/* itinéraire */}
+      <path d="M70 250 C110 300 150 300 175 360 C205 430 250 470 285 540" stroke="#8b929a" strokeWidth="9" fill="none" strokeLinecap="round" />
+
+      {/* labels communes / voies */}
+      <g fill="#6b7480" fontWeight="600">
+        <text x="150" y="196" fontSize="13">Nogent-sur-Marne</text>
+        <text x="120" y="430" fontSize="13">Champigny-sur-Marne</text>
+        <text x="20" y="612" fontSize="13">Créteil</text>
+        <text x="300" y="500" fontSize="13" textAnchor="end">Vincennes</text>
+      </g>
+      <g fill="#9aa1a8" fontWeight="500" fontSize="9">
+        <text x="30" y="292" transform="rotate(-12 30 292)">Bd. de Strasbourg</text>
+        <text x="160" y="350" transform="rotate(64 160 350)">Av. Roger Salengro</text>
+        <text x="210" y="660">Rue Charles Pathé</text>
+      </g>
+      {/* écusson route */}
+      <g><rect x="206" y="612" width="30" height="17" rx="4" fill="#f4d35e" /><text x="221" y="625" fontSize="11" fontWeight="700" fill="#3a3a2a" textAnchor="middle">D4</text></g>
+
+      {/* pin départ (prise en charge) */}
       <circle cx="70" cy="250" r="13" fill="#0b0d0c" /><circle cx="70" cy="250" r="4.5" fill="#fff" />
+      {/* passager */}
       <circle cx="285" cy="525" r="13" fill="#3b6cf6" /><circle cx="285" cy="521" r="3.2" fill="#fff" />
       <path d="M285 524c-3 0-4.5 4-4.5 7h9c0-3-1.5-7-4.5-7Z" fill="#fff" />
+      {/* position chauffeur */}
       <circle cx="300" cy="552" r="16" fill="#fff" stroke="#0b0d0c" strokeWidth="2" />
       <path d="M300 544l6 12-6-3-6 3z" fill="#0b0d0c" />
     </svg>
