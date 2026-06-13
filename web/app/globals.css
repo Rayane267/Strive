@@ -350,6 +350,14 @@ body {
   animation: pulse-ring 2.4s ease-out infinite;
 }
 
+/* Pop-in de la bulle de verdict (au changement Rentable/Piège) */
+@keyframes showcase-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.showcase-pop { animation: showcase-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) { .showcase-pop { animation: none; } }
+
 /* Réservé au survol des badges de store */
 .store-badge { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, background 0.3s ease; }
 .store-badge:hover { transform: translateY(-3px); border-color: rgba(0, 230, 118, 0.4); }

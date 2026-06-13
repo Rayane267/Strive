@@ -1,7 +1,7 @@
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Reveal from './components/Reveal';
-import InstrumentCluster from './components/InstrumentCluster';
+import ScanShowcase from './components/ScanShowcase';
 import Pricing from './components/Pricing';
 import Faq from './components/Faq';
 
@@ -79,17 +79,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Panneau produit glass — le verdict en vitrine */}
+        {/* Vitrine produit — le verdict réel par-dessus une offre VTC */}
         <div
-          className="load-up relative z-10 mt-16 w-full max-w-3xl"
+          className="load-up relative z-10 mt-16 flex justify-center"
           style={{ animationDelay: '560ms' }}
         >
-          <div className="glass relative overflow-hidden rounded-[2rem] p-6 sm:p-10">
-            <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
-            <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/15 blur-3xl" />
-            <div className="relative flex justify-center">
-              <InstrumentCluster />
-            </div>
+          <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/12 blur-[90px]" />
+          <div className="relative">
+            <ScanShowcase />
           </div>
         </div>
       </section>
