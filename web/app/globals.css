@@ -350,13 +350,35 @@ body {
   animation: pulse-ring 2.4s ease-out infinite;
 }
 
-/* Pop-in de la bulle de verdict (au changement Rentable/Piège) */
+/* Pop-in de la bulle de verdict */
 @keyframes showcase-pop {
   from { opacity: 0; transform: translateY(-8px) scale(0.97); }
   to   { opacity: 1; transform: none; }
 }
 .showcase-pop { animation: showcase-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
-@media (prefers-reduced-motion: reduce) { .showcase-pop { animation: none; } }
+
+/* La carte d'offre « sonne » (attente d'action) */
+@keyframes showcase-ring {
+  0%, 100% { transform: translateY(0); box-shadow: 0 -10px 30px -12px rgba(0,0,0,0.25); }
+  50%      { transform: translateY(-4px); box-shadow: 0 -14px 36px -10px rgba(59,108,246,0.45); }
+}
+.showcase-ring { animation: showcase-ring 1.5s ease-in-out infinite; }
+
+/* Balayage OCR : la ligne descend puis remonte pendant le scan */
+@keyframes scan-line {
+  0%   { top: 6%; opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { top: 92%; opacity: 0; }
+}
+.scan-line { animation: scan-line 1.45s cubic-bezier(0.4, 0, 0.2, 1); }
+
+@keyframes scan-spin { to { transform: rotate(360deg); } }
+.scan-spin { animation: scan-spin 0.8s linear infinite; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-pop, .showcase-ring, .scan-line, .scan-spin { animation: none; }
+}
 
 /* Réservé au survol des badges de store */
 .store-badge { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, background 0.3s ease; }
