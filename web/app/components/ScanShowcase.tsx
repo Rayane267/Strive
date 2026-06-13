@@ -62,13 +62,41 @@ export default function ScanShowcase() {
   return (
     <div className="flex flex-col items-center">
       <div className="relative w-[300px] sm:w-[336px]">
-        <div className="relative rounded-[3rem] border border-white/12 bg-[#05140c] p-2.5 shadow-[0_50px_120px_-30px_rgba(0,0,0,0.9)]">
-          <div className="relative aspect-[9/19] overflow-hidden rounded-[2.4rem] bg-[#e9eef3]">
-            <Map />
+        {/* Boutons latéraux (titane) */}
+        <span className="absolute -left-[3px] top-[120px] h-7 w-[3px] rounded-l" style={{ background: 'linear-gradient(180deg,#42473f,#23271f)' }} />
+        <span className="absolute -left-[3px] top-[168px] h-12 w-[3px] rounded-l" style={{ background: 'linear-gradient(180deg,#42473f,#23271f)' }} />
+        <span className="absolute -left-[3px] top-[228px] h-12 w-[3px] rounded-l" style={{ background: 'linear-gradient(180deg,#42473f,#23271f)' }} />
+        <span className="absolute -right-[3px] top-[196px] h-16 w-[3px] rounded-r" style={{ background: 'linear-gradient(180deg,#42473f,#23271f)' }} />
+
+        {/* Châssis titane */}
+        <div
+          className="relative rounded-[3.2rem] p-[11px] shadow-[0_50px_120px_-30px_rgba(0,0,0,0.9)]"
+          style={{ background: 'linear-gradient(150deg,#5b6158,#2b2f29 28%,#3c413a 60%,#23271f)' }}
+        >
+          {/* Liseré interne noir */}
+          <div className="overflow-hidden rounded-[2.7rem] bg-black p-[2px]">
+            <div className="relative aspect-[9/19.5] overflow-hidden rounded-[2.55rem] bg-[#e9eef3]">
+              <Map />
+
+              {/* Barre d'état iOS */}
+              <div className="absolute inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-7 pt-1">
+                <span className="font-display text-[14px] font-semibold text-[#0b0d0c]">9:41</span>
+                <span className="flex items-center gap-1.5 text-[#0b0d0c]">
+                  {/* réseau */}
+                  <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1" /><rect x="4.5" y="5" width="3" height="6" rx="1" /><rect x="9" y="2.5" width="3" height="8.5" rx="1" /><rect x="13.5" y="0" width="3" height="11" rx="1" /></svg>
+                  {/* wifi */}
+                  <svg width="16" height="11" viewBox="0 0 16 12" fill="currentColor"><path d="M8 2.5c2.6 0 5 1 6.8 2.7l-1.5 1.6A7.4 7.4 0 008 4.7c-2 0-3.9.8-5.3 2.1L1.2 5.2A9.6 9.6 0 018 2.5z" opacity="0.95" /><path d="M8 6.6c1.4 0 2.7.5 3.7 1.5l-1.6 1.6A2.9 2.9 0 008 8.8c-.8 0-1.5.3-2.1.9L4.3 8.1A5.1 5.1 0 018 6.6z" /><circle cx="8" cy="11" r="1.3" /></svg>
+                  {/* batterie */}
+                  <span className="flex items-center"><span className="relative h-[11px] w-[22px] rounded-[3px] border border-[#0b0d0c]/40"><span className="absolute inset-[1.5px] right-[5px] rounded-[1px] bg-[#0b0d0c]" /></span><span className="ml-[1px] h-[4px] w-[1.5px] rounded-r bg-[#0b0d0c]/40" /></span>
+                </span>
+              </div>
+
+              {/* Dynamic Island */}
+              <div className="absolute left-1/2 top-2 z-50 h-[26px] w-[88px] -translate-x-1/2 rounded-full bg-black" />
 
             {/* ── Bulle de verdict (phase done) ── */}
             {phase === 'done' && (
-              <div className="showcase-pop absolute inset-x-3 top-3 rounded-[1.4rem] bg-[#0b0d0c] p-3.5 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
+              <div className="showcase-pop absolute inset-x-3 top-[3.4rem] rounded-[1.4rem] bg-[#0b0d0c] p-3.5 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-semibold text-white/90">Uber</span>
                   <span className="flex items-center gap-1 text-[13px] font-bold text-white">
@@ -145,6 +173,10 @@ export default function ScanShowcase() {
                 <span className="font-display text-2xl font-extrabold">S</span>
               )}
             </button>
+
+              {/* Barre d'accueil iOS */}
+              <span className="absolute bottom-1.5 left-1/2 z-40 h-1 w-28 -translate-x-1/2 rounded-full bg-[#0b0d0c]/35" />
+            </div>
           </div>
         </div>
       </div>
