@@ -41,7 +41,7 @@ export default function Home() {
           </div>
 
           <h1
-            className="load-up mx-auto mt-9 max-w-5xl font-display text-[3.3rem] font-extrabold leading-[0.9] tracking-[-0.025em] sm:text-[6.8rem]"
+            className="load-up mx-auto mt-7 max-w-4xl font-display text-[3rem] font-extrabold leading-[0.9] tracking-[-0.025em] sm:text-[5.6rem]"
             style={{ animationDelay: '140ms' }}
           >
             La bonne course,<br />
@@ -50,7 +50,7 @@ export default function Home() {
           </h1>
 
           <p
-            className="load-up mx-auto mt-7 max-w-xl text-lg leading-relaxed text-muted sm:text-xl"
+            className="load-up mx-auto mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg"
             style={{ animationDelay: '240ms' }}
           >
             Strive scanne chaque offre Uber, Bolt et Heetch en
@@ -60,7 +60,7 @@ export default function Home() {
 
           <div
             id="download"
-            className="load-up mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
+            className="load-up mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
             style={{ animationDelay: '340ms' }}
           >
             <StoreBadge store="apple" />
@@ -81,7 +81,7 @@ export default function Home() {
 
         {/* Vitrine produit — le verdict réel par-dessus une offre VTC */}
         <div
-          className="load-up relative z-10 mt-12 flex w-full justify-center"
+          className="load-up relative z-10 mt-10 flex w-full justify-center"
           style={{ animationDelay: '560ms' }}
         >
           <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/12 blur-[90px]" />
