@@ -19,6 +19,7 @@ type Scenario = {
   kind: Kind;
   accent: string;
   caption: string;
+  why: { head: string; body: string };
   bubble: { kmRate: string; hourly: string; net: string; durationMin: string; distanceKm: string };
   offer: {
     category: string;
@@ -29,12 +30,16 @@ type Scenario = {
   };
 };
 
+// Chiffres cohérents : total = approche + course ; €/h = tarif / durée ;
+// €/km = tarif / distance totale.
 const SCENARIOS: Scenario[] = [
   {
+    // 17,18 € · 1,2 + 11,8 = 13,0 km · 27 min → 38 €/h · 1,32 €/km
     kind: 'go',
     accent: '#00e676',
     caption: 'Verdict : prends-la.',
-    bubble: { kmRate: '€1.35/km', hourly: '38', net: '€17', durationMin: '27min', distanceKm: '12.7km' },
+    why: { head: 'Une vraie bonne course', body: '13 km, 27 min approche comprise → 38 €/h net. Les deux seuils sont dépassés : fonce.' },
+    bubble: { kmRate: '€1.32/km', hourly: '38', net: '€17', durationMin: '27min', distanceKm: '13.0km' },
     offer: {
       category: 'Standard',
       fare: '17,18 €',
@@ -44,10 +49,12 @@ const SCENARIOS: Scenario[] = [
     },
   },
   {
+    // 12,40 € · 3,1 + 8,1 = 11,2 km · 31 min → 24 €/h · 1,11 €/km
     kind: 'mid',
     accent: '#ffc24b',
     caption: 'Verdict : à toi de voir.',
-    bubble: { kmRate: '€0.98/km', hourly: '23', net: '€11', durationMin: '31min', distanceKm: '11.2km' },
+    why: { head: 'Correcte, sans plus', body: '24 €/h une fois l\'approche déduite. Ça passe ou ça casse selon ta zone et l\'heure — à toi de juger.' },
+    bubble: { kmRate: '€1.11/km', hourly: '24', net: '€12', durationMin: '31min', distanceKm: '11.2km' },
     offer: {
       category: 'Standard',
       fare: '12,40 €',
@@ -57,16 +64,18 @@ const SCENARIOS: Scenario[] = [
     },
   },
   {
+    // 8,90 € · 6,4 + 3,1 = 9,5 km · 38 min → 14 €/h · 0,94 €/km
     kind: 'skip',
     accent: '#ff5a4d',
     caption: 'Verdict : laisse-la.',
-    bubble: { kmRate: '€0.62/km', hourly: '11', net: '€6', durationMin: '38min', distanceKm: '14.4km' },
+    why: { head: 'Le piège classique', body: 'Tarif alléchant… mais 18 min d\'approche pour 3 km de course. Résultat : 14 €/h. Strive te le dit avant que tu acceptes.' },
+    bubble: { kmRate: '€0.94/km', hourly: '14', net: '€9', durationMin: '38min', distanceKm: '9.5km' },
     offer: {
       category: 'Standard',
       fare: '8,90 €',
       rating: '4,80',
-      pickup: { eta: 'à 16 min (5.6 km)', addr: '8 Avenue de la République, 94000 Créteil' },
-      dest: { course: 'Course de 3.2 km', addr: '2 Rue du Pont, 94100 Saint-Maur-des-Fossés' },
+      pickup: { eta: 'à 18 min (6.4 km)', addr: '8 Avenue de la République, 94000 Créteil' },
+      dest: { course: 'Course de 3.1 km', addr: '2 Rue du Pont, 94100 Saint-Maur-des-Fossés' },
     },
   },
 ];
@@ -120,7 +129,8 @@ export default function ScanShowcase() {
     : s.caption;
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-16">
+      <div className="flex flex-col items-center">
       <div className="relative w-[300px] sm:w-[336px]">
         {/* Boutons latéraux (titane) */}
         <span className="absolute -left-[3px] top-[120px] h-7 w-[3px] rounded-l" style={{ background: 'linear-gradient(180deg,#42473f,#23271f)' }} />
@@ -244,6 +254,55 @@ export default function ScanShowcase() {
         {phase === 'done' && (
           <button onClick={replay} className="ml-1 text-signal underline-offset-4 hover:underline">Rejouer</button>
         )}
+      </div>
+      </div>
+
+      <ValuePanel s={s} revealed={phase === 'done'} />
+    </div>
+  );
+}
+
+function ValuePanel({ s, revealed }: { s: Scenario; revealed: boolean }) {
+  const points = [
+    { t: 'Le €/h réel', d: 'Temps d\'approche inclus — pas le tarif brut qui t\'illusionne.' },
+    { t: 'Net après carburant', d: 'La conso de ton véhicule déduite, automatiquement.' },
+    { t: 'Verdict en 2 secondes', d: 'Avant d\'accepter, sans quitter ton app de course.' },
+  ];
+  return (
+    <div className="max-w-sm text-left lg:max-w-xs">
+      <span className="eyebrow">Ce que l&apos;app voit</span>
+      <h3 className="mt-4 font-display text-2xl font-bold leading-tight">
+        Le tarif ment.<br />Le <span className="text-signal">€/h</span> dit la vérité.
+      </h3>
+
+      <ul className="mt-7 space-y-5">
+        {points.map((p) => (
+          <li key={p.t} className="flex gap-3">
+            <span className="mt-1 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-signal/15 text-signal ring-1 ring-signal/25">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-fg">{p.t}</p>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{p.d}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Lecture dynamique du verdict courant */}
+      <div
+        className="glass mt-8 rounded-2xl p-4 transition-opacity duration-500"
+        style={{ opacity: revealed ? 1 : 0.35, borderColor: revealed ? `${s.accent}40` : undefined }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ background: revealed ? s.accent : '#d8dee0' }} />
+          <p className="font-display text-sm font-bold" style={{ color: revealed ? s.accent : 'var(--color-muted)' }}>
+            {revealed ? s.why.head : 'Analyse en cours…'}
+          </p>
+        </div>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+          {revealed ? s.why.body : 'Lance le scan : Strive lit l\'offre et explique son verdict.'}
+        </p>
       </div>
     </div>
   );
