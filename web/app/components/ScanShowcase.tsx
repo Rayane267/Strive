@@ -137,7 +137,7 @@ export default function ScanShowcase() {
               </div>
               <div className="mt-2.5 flex items-center gap-1.5">
                 <span className="font-display text-[1.9rem] font-extrabold leading-none text-[#0b0d0c]">{OFFER.fare}</span>
-                <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-[#0b0d0c] text-[8px] text-white">⚡</span>
+                <svg width="17" height="19" viewBox="0 0 17 19" className="text-[#9aa1a8]" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8.5 1l6.5 3.75v7.5L8.5 16 2 12.25v-7.5z" /><path d="M9 6l-2.5 3.4h2L8 13l2.6-3.6h-2z" fill="currentColor" stroke="none" /></svg>
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className="rounded-md bg-[#f1f2f4] px-2 py-1 text-[12px] font-semibold text-[#0b0d0c]">★ {OFFER.rating}</span>
@@ -204,7 +204,7 @@ function Leg({ dot, head, sub, last }: { dot: 'o' | 'sq'; head: string; sub: str
         <span className={`h-2.5 w-2.5 border-2 border-[#0b0d0c] ${dot === 'o' ? 'rounded-full' : 'rounded-[3px]'}`} />
         {!last && <span className="my-0.5 h-5 w-[2px] bg-[#d4d7da]" />}
       </div>
-      <div className={last ? '' : 'pb-1.5'}>
+      <div className={`text-left ${last ? '' : 'pb-1.5'}`}>
         <p className="text-[12.5px] font-semibold leading-tight text-[#0b0d0c]">{head}</p>
         <p className="text-[11px] leading-snug text-[#6b7178]">{sub}</p>
       </div>
