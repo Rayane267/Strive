@@ -44,6 +44,7 @@ import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
+import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import DashboardRideCard from '../components/DashboardRideCard';
@@ -272,6 +273,21 @@ const DashboardScreen = () => {
   useEffect(() => { extraCreditsRef.current = extraCredits; }, [extraCredits]);
   useEffect(() => { dayResetHourRef.current = dayResetHour; }, [dayResetHour]);
 
+  // Carburant : conso/type du profil + prix unitaire résolu UNE fois (table
+  // fuel_prices, repli constante). Lu via ref dans le listener de scan pour
+  // figer le coût carburant de chaque course sans recalcul à la volée.
+  const fuelRef = useRef({ avgCons: 0, fuelType: 'essence', fuelPrice: 0 });
+  useEffect(() => {
+    const avgCons = profile?.avg_cons ?? 0;
+    const fuelType = profile?.fuel_type ?? 'essence';
+    fuelRef.current = { ...fuelRef.current, avgCons, fuelType };
+    if (avgCons > 0) {
+      fetchFuelPrice(fuelType).then(fuelPrice => {
+        fuelRef.current = { avgCons, fuelType, fuelPrice };
+      });
+    }
+  }, [profile?.avg_cons, profile?.fuel_type]);
+
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
@@ -371,6 +387,21 @@ const DashboardScreen = () => {
         __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
         const gemini = await extractWithGemini(nativeResult.imageBase64);
         if (gemini) { result = { ...gemini, imageBase64: undefined }; usedGemini = true; }
+      } else if (nativeResult.imageBase64 && (!result.pickupAddress || !result.destinationAddress)) {
+        // Récupération CIBLÉE d'adresse : l'OCR a le prix/distance mais a raté une
+        // adresse (souvent une destination POI sans mot-clé de voie ni numéro).
+        // On ne refait pas tout le parse — Gemini comble uniquement l'adresse
+        // manquante, on garde les valeurs natives. Borné par le budget Gemini.
+        __DEV__ && console.info('[Scanner:Fallback] adresse manquante — Gemini (ciblé)');
+        const gemini = await extractWithGemini(nativeResult.imageBase64);
+        if (gemini) {
+          result = {
+            ...result,
+            pickupAddress: result.pickupAddress ?? gemini.pickupAddress,
+            destinationAddress: result.destinationAddress ?? gemini.destinationAddress,
+          };
+          usedGemini = true;
+        }
       }
 
       const includePickup = preferences.include_pickup
@@ -407,6 +438,12 @@ const DashboardScreen = () => {
       const hrOk = hourlyRate >= preferences.min_hourly_rate;
       const kmOk = kmRate >= preferences.min_km_rate;
       const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
+
+      // Net carburant figé au moment du scan (prix du jour) → dataset daté.
+      // Non affiché par course (le verdict suffit) ; alimente les stats / modèles.
+      const { avgCons, fuelPrice } = fuelRef.current;
+      const fuelCost = computeFuelCost(totalDistance, avgCons, fuelPrice);
+      const netProfit = Math.round((result.fare - fuelCost) * 100) / 100;
 
       hapticHeavy();
       lastScanTimeRef.current = Date.now();
@@ -456,6 +493,8 @@ const DashboardScreen = () => {
           durationMin: totalDuration,
           hourlyRate,
           kmRate,
+          fuelCost,
+          netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
         });
@@ -472,6 +511,8 @@ const DashboardScreen = () => {
             durationMin: queuedRide.duration_min,
             hourlyRate: queuedRide.hourly_rate,
             kmRate: queuedRide.km_rate,
+            fuelCost: queuedRide.fuel_cost,
+            netProfit: queuedRide.net_profit,
             pickupAddress: queuedRide.pickup_address,
             destinationAddress: queuedRide.destination_address,
           });
@@ -488,6 +529,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          fuel_cost: fuelCost,
+          net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),
@@ -504,6 +547,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          fuel_cost: fuelCost,
+          net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),
