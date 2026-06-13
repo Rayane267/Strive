@@ -572,7 +572,7 @@
       "q5": "Comment annuler mon abonnement Plus ?",
       "a5": "Sur Android : Google Play → Abonnements. Sur iOS : Réglages → Votre nom → Abonnements. Trouvez Strive et appuyez sur Annuler.",
       "q6": "Mes données sont-elles en sécurité ?",
-      "a6": "Oui. Le scan se fait sur votre appareil et aucune capture d'écran n'est conservée. Vos courses sont stockées de façon chiffrée, jamais revendues, et les adresses sont automatiquement effacées après 12 mois. Vous pouvez tout supprimer depuis Profil → Compte."
+      "a6": "Oui. Le scan se fait sur votre appareil et aucune capture d'écran n'est conservée. Vos courses sont stockées de façon sécurisée, jamais revendues ni cédées, et Strive n'a aucun lien avec les plateformes VTC. Vous pouvez tout supprimer à tout moment depuis Profil → Compte."
     }
   },
   "iap": {

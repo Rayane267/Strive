@@ -572,7 +572,7 @@
       "q5": "How do I cancel my Plus subscription?",
       "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
       "q6": "Is my data safe?",
-      "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored encrypted, never sold, and addresses are automatically deleted after 12 months. You can wipe everything from Profile → Account."
+      "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account."
     }
   },
   "iap": {
