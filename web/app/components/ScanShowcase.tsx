@@ -84,6 +84,9 @@ export default function ScanShowcase() {
 
   const s = SCENARIOS[idx];
   const accent = s.accent;
+  // Couleur neutre tant que le verdict n'est pas révélé : on ne spoile pas
+  // vert/ambre/rouge pendant l'attente et le scan.
+  const c = phase === 'done' ? accent : '#d8dee0';
 
   // Mount : tire un scénario au hasard, puis auto-démo (sauf reduced-motion)
   useEffect(() => {
@@ -203,8 +206,8 @@ export default function ScanShowcase() {
               {/* ── Balayage OCR (phase scan) ── */}
               {phase === 'scan' && (
                 <div className="pointer-events-none absolute inset-0 z-20">
-                  <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 40%, ${accent}22, transparent 60%)` }} />
-                  <div className="scan-line absolute inset-x-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)`, boxShadow: `0 0 16px 2px ${accent}` }} />
+                  <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 40%, ${c}33, transparent 60%)` }} />
+                  <div className="scan-line absolute inset-x-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${c}, transparent)`, boxShadow: `0 0 16px 2px ${c}` }} />
                 </div>
               )}
 
@@ -213,12 +216,12 @@ export default function ScanShowcase() {
                 onClick={phase === 'done' ? replay : scan}
                 aria-label={phase === 'done' ? 'Rejouer' : 'Scanner avec Strive'}
                 className={`absolute bottom-[42%] right-3 z-30 flex h-14 w-14 items-center justify-center rounded-full transition-transform active:scale-95 ${phase === 'ring' ? 'animate-ring' : ''}`}
-                style={{ background: '#0b1310', border: `1.5px solid ${accent}`, boxShadow: `0 10px 30px -6px ${accent}aa` }}
+                style={{ background: '#0b1310', border: `1.5px solid ${c}`, boxShadow: `0 10px 30px -6px ${c}aa` }}
               >
                 {phase === 'scan' ? (
-                  <svg className="scan-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.5"><path d="M21 12a9 9 0 11-6.2-8.6" strokeLinecap="round" /></svg>
+                  <svg className="scan-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5"><path d="M21 12a9 9 0 11-6.2-8.6" strokeLinecap="round" /></svg>
                 ) : phase === 'done' ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.5"><path d="M3 12a9 9 0 109-9" strokeLinecap="round" /><path d="M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5"><path d="M3 12a9 9 0 109-9" strokeLinecap="round" /><path d="M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 ) : (
                   <Image src="/strive-logo.png" alt="Strive" width={34} height={34} className="h-9 w-9 rounded-[10px]" />
                 )}
@@ -233,7 +236,10 @@ export default function ScanShowcase() {
 
       {/* ── Légende d'état + rejouer ── */}
       <div className="mt-7 flex h-6 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em]">
-        <span className="live-dot" style={phase !== 'ring' ? { background: accent } : { opacity: 0.4 }} />
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full"
+          style={{ background: c, opacity: phase === 'ring' ? 0.4 : 1 }}
+        />
         <span className="text-muted">{caption}</span>
         {phase === 'done' && (
           <button onClick={replay} className="ml-1 text-signal underline-offset-4 hover:underline">Rejouer</button>
