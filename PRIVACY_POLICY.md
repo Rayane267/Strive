@@ -95,8 +95,7 @@ Certains prestataires (notamment Google et Sentry) peuvent traiter des données 
 
 ## 7. Durées de conservation
 
-- **Compte, profil, courses, sessions** : conservés tant que votre compte est actif ; supprimés lors de la suppression du compte ;
-- **Adresses des courses** : automatiquement effacées au-delà de **12 mois** (la course et ses métriques sont conservées pour votre historique, mais les adresses de prise en charge et de destination sont supprimées) ;
+- **Compte, profil, courses (adresses incluses), sessions** : conservés tant que votre compte est actif, afin de vous fournir votre historique et vos statistiques ; supprimés lors de la suppression du compte ;
 - **Captures de diagnostic (bêta)** : trente (30) jours maximum ;
 - **Télémétrie non nominative** : conservée sous forme agrégée à des fins de suivi qualité ;
 - **Rapports d'erreurs (Sentry)** : selon la durée de rétention du service (généralement quatre-vingt-dix (90) jours).

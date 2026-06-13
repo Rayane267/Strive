@@ -74,8 +74,7 @@ We **sell no data** and display **no advertising**. We use technical processors 
 
 ## 7. Retention periods
 
-- **Account, profile, rides, sessions**: kept while your account is active; deleted upon account deletion;
-- **Ride addresses**: automatically erased after **12 months** (the ride and its metrics are kept for your history, but the pickup and drop-off addresses are removed);
+- **Account, profile, rides (including addresses), sessions**: kept while your account is active, to provide your history and statistics; deleted upon account deletion;
 - **Diagnostic captures (beta)**: 30 days maximum;
 - **Non-identifying telemetry**: kept in aggregated form;
 - **Error reports (Sentry)**: per the service's retention (typically 90 days).
