@@ -90,6 +90,7 @@ export default function ScanShowcase() {
   const [phase, setPhase] = useState<Phase>('ring');
   const [idx, setIdx] = useState(0); // déterministe au SSR ; randomisé au mount
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const s = SCENARIOS[idx];
   const accent = s.accent;
@@ -97,13 +98,25 @@ export default function ScanShowcase() {
   // vert/ambre/rouge pendant l'attente et le scan.
   const c = phase === 'done' ? accent : '#d8dee0';
 
-  // Mount : tire un scénario au hasard, puis auto-démo (sauf reduced-motion)
+  // Mount : tire un scénario au hasard, puis auto-démo QUAND la démo entre à
+  // l'écran (la section est sous la ligne de flottaison).
   useEffect(() => {
     setIdx(randomIdx());
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (reduce) { setPhase('done'); return; }
-    autoTimer.current = setTimeout(() => setPhase((p) => (p === 'ring' ? 'scan' : p)), 2600);
-    return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
+    const el = rootRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          obs.disconnect();
+          autoTimer.current = setTimeout(() => setPhase((p) => (p === 'ring' ? 'scan' : p)), 1100);
+        }
+      },
+      { threshold: 0.4 },
+    );
+    obs.observe(el);
+    return () => { obs.disconnect(); if (autoTimer.current) clearTimeout(autoTimer.current); };
   }, []);
 
   // Dès qu'on entre en scan, programmer la chute du verdict
@@ -129,7 +142,7 @@ export default function ScanShowcase() {
     : s.caption;
 
   return (
-    <div className="flex flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-16">
+    <div ref={rootRef} className="flex flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-16">
       <div className="flex flex-col items-center">
       <div className="relative w-[300px] sm:w-[336px]">
         {/* Boutons latéraux (titane) */}

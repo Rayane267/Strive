@@ -29,7 +29,7 @@ export default function Home() {
       <Header />
 
       {/* ───────────────── HERO ───────────────── */}
-      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-start overflow-hidden px-5 pb-24 pt-32 text-center">
+      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-32 text-center">
         <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
 
         <div className="relative z-10 flex flex-col items-center">
@@ -79,11 +79,25 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Vitrine produit — le verdict réel par-dessus une offre VTC */}
-        <div
-          className="load-up relative z-10 mt-10 flex w-full justify-center"
-          style={{ animationDelay: '560ms' }}
-        >
+        {/* Indice de scroll */}
+        <div className="load-up absolute bottom-7 left-1/2 -translate-x-1/2" style={{ animationDelay: '640ms' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-float text-faint"><path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </div>
+      </section>
+
+      {/* ───────────────── DÉMO (révélée au scroll) ───────────────── */}
+      <section className="showcase-stage relative overflow-hidden px-5 py-24 sm:py-28">
+        <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
+        <Reveal className="relative mx-auto max-w-2xl text-center">
+          <span className="eyebrow">01 — Le verdict</span>
+          <h2 className="mx-auto mt-5 max-w-md font-display text-4xl font-bold leading-[1.05] tracking-[-0.02em] sm:text-5xl">
+            Un coup d&apos;œil suffit.
+          </h2>
+          <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted">
+            Une course arrive, tu scannes, le verdict tombe. Essaie la démo.
+          </p>
+        </Reveal>
+        <div className="relative mt-14 flex justify-center">
           <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/12 blur-[90px]" />
           <div className="relative">
             <ScanShowcase />
