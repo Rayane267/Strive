@@ -15,11 +15,11 @@ export default function Faq() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-28 sm:px-8">
+    <section id="faq" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
       <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
         <Reveal>
           <span className="eyebrow">05 — FAQ</span>
-          <h2 className="mt-4 font-display text-4xl font-bold leading-tight sm:text-5xl">
+          <h2 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-[-0.02em] sm:text-[3.4rem]">
             Les questions<br />qui reviennent.
           </h2>
           <p className="mt-5 max-w-xs text-sm text-muted">
@@ -27,12 +27,12 @@ export default function Faq() {
           </p>
         </Reveal>
 
-        <div>
+        <div className="glass rounded-3xl px-6 sm:px-8">
           {faqs.map((f, i) => {
             const isOpen = open === i;
             return (
               <Reveal key={f.q} delay={i * 50}>
-                <div className="border-b border-line">
+                <div className={i === faqs.length - 1 ? '' : 'border-b border-line'}>
                   <button
                     onClick={() => setOpen(isOpen ? null : i)}
                     className="flex w-full items-center justify-between gap-4 py-5 text-left"

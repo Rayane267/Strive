@@ -24,23 +24,24 @@ const marquee = ['Uber', '€/h en direct', 'Bolt', 'Scan 2s', 'Heetch', 'Sans e
 
 export default function Home() {
   return (
-    <main id="top">
+    <main id="top" className="relative">
+      <div className="aurora-mesh" />
       <Header />
 
-      {/* ───────────────── HERO (full bleed) ───────────────── */}
-      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-32 text-center sm:pt-36">
-        <div className="grid-lines pointer-events-none absolute inset-0 opacity-25" />
+      {/* ───────────────── HERO ───────────────── */}
+      <section className="hero-bg relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 pb-28 pt-36 text-center">
+        <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
 
-        <div className="relative">
-          <div className="load-up flex justify-center" style={{ animationDelay: '40ms' }}>
-            <span className="eyebrow inline-flex items-center gap-2 rounded-full border border-signal/25 bg-signal/5 px-4 py-1.5">
-              <span className="h-1 w-1 rounded-full bg-signal" />
-              Sache · Décide · Gagne
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="load-up" style={{ animationDelay: '40ms' }}>
+            <span className="glass inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-[12px] tracking-wide text-muted">
+              <span className="live-dot" />
+              <span className="text-fg">Sache</span> · Décide · Gagne
             </span>
           </div>
 
           <h1
-            className="load-up mx-auto mt-8 max-w-5xl font-display text-[3.4rem] font-extrabold leading-[0.88] tracking-[-0.02em] sm:text-[7.5rem]"
+            className="load-up mx-auto mt-9 max-w-5xl font-display text-[3.3rem] font-extrabold leading-[0.9] tracking-[-0.025em] sm:text-[6.8rem]"
             style={{ animationDelay: '140ms' }}
           >
             La bonne course,<br />
@@ -49,7 +50,7 @@ export default function Home() {
           </h1>
 
           <p
-            className="load-up mx-auto mt-8 max-w-lg text-lg leading-relaxed text-muted sm:text-xl"
+            className="load-up mx-auto mt-7 max-w-xl text-lg leading-relaxed text-muted sm:text-xl"
             style={{ animationDelay: '240ms' }}
           >
             Strive scanne chaque offre Uber, Bolt et Heetch en
@@ -65,59 +66,52 @@ export default function Home() {
             <StoreBadge store="apple" />
             <StoreBadge store="google" />
           </div>
+
+          <div
+            className="load-up mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-faint"
+            style={{ animationDelay: '440ms' }}
+          >
+            <span>iOS &amp; Android</span>
+            <span className="text-line">·</span>
+            <span>3 jours gratuits</span>
+            <span className="text-line">·</span>
+            <span>sans engagement</span>
+          </div>
         </div>
 
-        {/* trust caption */}
-        <div className="load-up absolute inset-x-0 bottom-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 font-mono text-[10px] uppercase tracking-[0.16em] text-faint" style={{ animationDelay: '440ms' }}>
-          <span className="text-signal">strive</span>
-          <span>disponible sur iOS &amp; Android</span>
-          <span className="text-line">·</span>
-          <span>3 jours gratuits</span>
-          <span className="text-line">·</span>
-          <span>sans engagement</span>
+        {/* Panneau produit glass — le verdict en vitrine */}
+        <div
+          className="load-up relative z-10 mt-16 w-full max-w-3xl"
+          style={{ animationDelay: '560ms' }}
+        >
+          <div className="glass relative overflow-hidden rounded-[2rem] p-6 sm:p-10">
+            <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
+            <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal/15 blur-3xl" />
+            <div className="relative flex justify-center">
+              <InstrumentCluster />
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ───────────────── SHOWCASE ───────────────── */}
-      <section className="showcase-stage relative overflow-hidden py-24 sm:py-28">
-        <div className="grid-lines pointer-events-none absolute inset-0 opacity-30" />
-        <div className="relative mx-auto max-w-2xl px-5 text-center">
-          <Reveal>
-            <span className="eyebrow">01 — Le verdict</span>
-            <h2 className="mx-auto mt-4 max-w-md font-display text-3xl font-bold leading-tight sm:text-4xl">
-              Un coup d&apos;œil suffit.
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted">
-              €/h, €/km, total et verdict — tout s&apos;affiche en direct, par-dessus ton app VTC.
-            </p>
-          </Reveal>
-        </div>
-        <div className="relative mt-12 flex justify-center px-5">
-          <span className="stage-floor" />
-          <Reveal className="relative">
-            <InstrumentCluster />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* Marquee */}
-      <div className="relative border-y border-line bg-ink/40 py-4">
+      {/* Marquee glass */}
+      <div className="glass-soft relative overflow-hidden py-4">
         <div className="marquee-track">
           {[...marquee, ...marquee].map((m, i) => (
             <span key={i} className="flex items-center">
-              <span className="px-7 font-mono text-sm uppercase tracking-[0.2em] text-muted">{m}</span>
-              <span className="text-signal/50">◇</span>
+              <span className="px-7 font-mono text-xs uppercase tracking-[0.2em] text-muted">{m}</span>
+              <span className="text-signal/40">◇</span>
             </span>
           ))}
         </div>
       </div>
 
-      {/* ───────────────── FEATURES ───────────────── */}
-      <section id="features" className="relative mx-auto max-w-7xl scroll-mt-24 px-5 py-28 sm:px-8">
-        <Reveal className="flex flex-col justify-between gap-6 border-b border-line pb-10 md:flex-row md:items-end">
+      {/* ───────────────── FEATURES (bento glass) ───────────────── */}
+      <section id="features" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
+        <Reveal className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
             <span className="eyebrow">02 — Fonctions</span>
-            <h2 className="mt-4 max-w-xl font-display text-4xl font-bold leading-tight sm:text-5xl">
+            <h2 className="mt-5 max-w-xl font-display text-4xl font-bold leading-[1.05] tracking-[-0.02em] sm:text-[3.4rem]">
               Un cockpit pour rouler rentable.
             </h2>
           </div>
@@ -125,16 +119,19 @@ export default function Home() {
             Chaque fonction sert un seul but : que tu ne prennes plus jamais une course qui te coûte.
           </p>
         </Reveal>
+        <div className="rule-fade mt-10" />
 
-        <div className="mt-10 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((f, i) => (
-            <Reveal key={f.k} delay={(i % 3) * 80} className="bg-canvas">
-              <div className="group flex h-full flex-col p-8 transition-colors hover:bg-ink/60">
+            <Reveal key={f.k} delay={(i % 3) * 80} className={i === 0 ? 'sm:col-span-2 lg:col-span-1' : ''}>
+              <div className="glass card-rise group flex h-full flex-col rounded-3xl p-8">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs tracking-widest text-signal">{f.k}</span>
-                  <span className="h-px w-8 bg-line transition-all group-hover:w-14 group-hover:bg-signal/60" />
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-signal/10 font-mono text-xs tracking-widest text-signal ring-1 ring-signal/20">
+                    {f.k}
+                  </span>
+                  <span className="h-px w-8 bg-line transition-all duration-500 group-hover:w-14 group-hover:bg-signal/60" />
                 </div>
-                <h3 className="mt-6 font-display text-xl font-bold">{f.title}</h3>
+                <h3 className="mt-7 font-display text-xl font-bold">{f.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-muted">{f.desc}</p>
               </div>
             </Reveal>
@@ -143,22 +140,26 @@ export default function Home() {
       </section>
 
       {/* ───────────────── HOW IT WORKS ───────────────── */}
-      <section id="how" className="relative scroll-mt-24 overflow-hidden border-y border-line bg-ink/30 py-28">
-        <div className="grid-lines pointer-events-none absolute inset-0 opacity-40" />
+      <section id="how" className="relative z-10 scroll-mt-28 overflow-hidden py-32">
+        <div className="grid-lines pointer-events-none absolute inset-0 opacity-25" />
         <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
-          <Reveal>
+          <Reveal className="text-center">
             <span className="eyebrow">03 — Méthode</span>
-            <h2 className="mt-4 max-w-2xl font-display text-4xl font-bold leading-tight sm:text-5xl">
+            <h2 className="mx-auto mt-5 max-w-2xl font-display text-4xl font-bold leading-[1.05] tracking-[-0.02em] sm:text-[3.4rem]">
               Trois temps. Zéro friction.
             </h2>
           </Reveal>
 
-          <div className="mt-16 grid gap-px border border-line bg-line md:grid-cols-3">
+          <div className="relative mt-16 grid gap-4 md:grid-cols-3">
+            {/* Filet connecteur */}
+            <div className="absolute left-0 right-0 top-[4.5rem] hidden h-px bg-gradient-to-r from-transparent via-signal/30 to-transparent md:block" />
             {steps.map((s, i) => (
               <Reveal key={s.n} delay={i * 120}>
-                <div className="h-full bg-canvas p-9">
-                  <span className="font-display text-7xl font-extrabold text-fg/8">{s.n}</span>
-                  <h3 className="mt-2 font-display text-2xl font-bold">{s.t}</h3>
+                <div className="glass card-rise relative h-full rounded-3xl p-9">
+                  <span className="relative z-10 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-canvas font-mono text-sm font-bold text-signal ring-1 ring-signal/25">
+                    {s.n}
+                  </span>
+                  <h3 className="mt-6 font-display text-2xl font-bold">{s.t}</h3>
                   <p className="mt-3 text-sm leading-relaxed text-muted">{s.d}</p>
                 </div>
               </Reveal>
@@ -168,16 +169,16 @@ export default function Home() {
       </section>
 
       {/* ───────────────── STATS ───────────────── */}
-      <section className="mx-auto max-w-7xl px-5 py-28 sm:px-8">
-        <div className="grid gap-px border border-line bg-line sm:grid-cols-3">
+      <section className="relative z-10 mx-auto max-w-7xl px-5 py-12 sm:px-8">
+        <div className="glass grid divide-y divide-white/[0.06] overflow-hidden rounded-3xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[
             { v: '2,0s', l: 'pour analyser une offre' },
             { v: '∞', l: 'scans en illimité avec Plus' },
             { v: '3', l: 'plateformes prises en charge' },
           ].map((s, i) => (
             <Reveal key={s.l} delay={i * 100}>
-              <div className="bg-canvas px-8 py-12 text-center">
-                <div className="font-mono text-6xl font-bold text-signal text-signal-glow">{s.v}</div>
+              <div className="px-8 py-14 text-center">
+                <div className="font-display text-6xl font-extrabold tracking-tight text-signal text-signal-glow">{s.v}</div>
                 <p className="mt-3 text-sm text-muted">{s.l}</p>
               </div>
             </Reveal>
@@ -189,22 +190,22 @@ export default function Home() {
       <Faq />
 
       {/* ───────────────── FINAL CTA ───────────────── */}
-      <section className="relative mx-auto max-w-7xl px-5 pb-28 sm:px-8">
+      <section className="relative z-10 mx-auto max-w-7xl px-5 pb-32 sm:px-8">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] border border-line bg-ink p-10 text-center sm:p-20">
+          <div className="glass ring-signal relative overflow-hidden rounded-[2.5rem] p-10 text-center sm:p-20">
             <div className="aurora pointer-events-none absolute inset-0" />
-            <div className="grid-lines pointer-events-none absolute inset-0 opacity-50" />
+            <div className="grid-lines pointer-events-none absolute inset-0 opacity-30" />
             <div className="relative">
               <span className="eyebrow">Prêt à rouler</span>
-              <h2 className="mx-auto mt-5 max-w-2xl font-display text-4xl font-extrabold leading-tight sm:text-6xl">
+              <h2 className="mx-auto mt-6 max-w-2xl font-display text-4xl font-extrabold leading-[1.02] tracking-[-0.02em] sm:text-6xl">
                 Arrête de deviner.<br />
-                <span className="text-signal text-signal-glow">Commence à gagner.</span>
+                <span className="font-serif font-normal italic text-signal text-signal-glow">Commence à gagner.</span>
               </h2>
-              <p className="mx-auto mt-5 max-w-md text-muted">
+              <p className="mx-auto mt-6 max-w-md text-muted">
                 Rejoins les chauffeurs qui ne prennent plus une course non rentable. Essai gratuit
                 3 jours, sans engagement.
               </p>
-              <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <StoreBadge store="apple" />
                 <StoreBadge store="google" />
               </div>
@@ -223,7 +224,7 @@ function StoreBadge({ store }: { store: 'apple' | 'google' }) {
   return (
     <a
       href="#"
-      className="group flex items-center gap-3 rounded-xl border border-line bg-ink px-5 py-3 transition-all hover:-translate-y-0.5 hover:border-signal/40 hover:bg-ink-2"
+      className="store-badge glass group flex items-center gap-3 rounded-2xl px-5 py-3"
     >
       {isApple ? (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-fg">

@@ -2,7 +2,7 @@ import Logo from './Logo';
 
 export default function Footer() {
   return (
-    <footer className="border-t border-line bg-ink/40">
+    <footer className="glass-soft relative z-10 mt-8 border-t border-line">
       <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="flex flex-col gap-12 md:flex-row md:justify-between">
           <div className="max-w-xs">

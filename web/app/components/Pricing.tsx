@@ -29,10 +29,10 @@ export default function Pricing() {
   const equiv = yearly ? 'soit 6,66 € / mois' : 'Sans engagement';
 
   return (
-    <section id="pricing" className="relative mx-auto max-w-7xl scroll-mt-24 px-5 py-28 sm:px-8">
+    <section id="pricing" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
       <Reveal>
         <span className="eyebrow">04 — Tarifs</span>
-        <h2 className="mt-4 max-w-2xl font-display text-4xl font-bold leading-tight sm:text-5xl">
+        <h2 className="mt-5 max-w-2xl font-display text-4xl font-bold leading-[1.05] tracking-[-0.02em] sm:text-[3.4rem]">
           Gratuit pour commencer. <span className="text-muted">Plus quand tu veux plus.</span>
         </h2>
       </Reveal>
@@ -61,10 +61,10 @@ export default function Pricing() {
         </span>
       </Reveal>
 
-      <div className="mt-12 grid gap-px border border-line bg-line md:grid-cols-2 md:items-stretch">
+      <div className="mt-12 grid gap-4 md:grid-cols-2 md:items-stretch">
         {/* Free */}
-        <Reveal className="bg-canvas">
-          <div className="flex h-full flex-col p-9">
+        <Reveal className="h-full">
+          <div className="glass card-rise flex h-full flex-col rounded-3xl p-9">
             <h3 className="font-display text-lg font-bold">Gratuit</h3>
             <p className="mt-1 text-sm text-muted">Pour tester Strive</p>
             <div className="mt-6 flex items-baseline gap-1.5">
@@ -85,8 +85,9 @@ export default function Pricing() {
         </Reveal>
 
         {/* Plus */}
-        <Reveal delay={100} className="relative bg-gradient-to-b from-ink-2 to-ink">
-          <div className="flex h-full flex-col p-9">
+        <Reveal delay={100} className="h-full">
+          <div className="glass ring-signal relative flex h-full flex-col rounded-3xl p-9">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal/60 to-transparent" />
             <span className="absolute right-9 top-9 rounded-full bg-signal px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-[#05140c]">
               Populaire
             </span>
@@ -104,7 +105,7 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <a href="#download" className="btn btn-signal mt-8 rounded-full py-3 text-sm">
+            <a href="#download" className="btn btn-signal shimmer mt-8 rounded-full py-3 text-sm">
               Commencer mes 3 jours gratuits
             </a>
             <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-widest text-faint">
