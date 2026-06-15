@@ -41,8 +41,12 @@ import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
 import { extractWithGemini } from '../services/scanner/geminiFallback';
+import { logScanEvent, fareBucket } from '../services/telemetryService';
+import { logScanDebug } from '../services/scanDebugService';
+import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
+import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import DashboardRideCard from '../components/DashboardRideCard';
@@ -210,6 +214,14 @@ const DashboardScreen = () => {
     return () => sub.remove();
   }, [isOnline]);
 
+  // Sync l'état session → natif : garantit que la bulle (Android) / Share
+  // Extension (iOS) connaît l'état « en ligne » même après un redémarrage du
+  // process JS (sinon défaut natif = false → scan bloqué à tort). Idempotent ;
+  // double les appels explicites des handlers online/offline sans effet de bord.
+  useEffect(() => {
+    if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(isOnline);
+  }, [isOnline]);
+
   // ── Config scanner (edge function Gemini + remote config OCR + TomTom) ──
   useEffect(() => {
     scannerService.setGeminiConfig(
@@ -238,7 +250,7 @@ const DashboardScreen = () => {
         }
       } catch {}
     }
-  }, [user?.id]);
+  }, [user?.id, i18n.language]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -263,18 +275,34 @@ const DashboardScreen = () => {
   useEffect(() => { extraCreditsRef.current = extraCredits; }, [extraCredits]);
   useEffect(() => { dayResetHourRef.current = dayResetHour; }, [dayResetHour]);
 
+  // Carburant : conso/type du profil + prix unitaire résolu UNE fois (table
+  // fuel_prices, repli constante). Lu via ref dans le listener de scan pour
+  // figer le coût carburant de chaque course sans recalcul à la volée.
+  const fuelRef = useRef({ avgCons: 0, fuelType: 'essence', fuelPrice: 0 });
+  useEffect(() => {
+    const avgCons = profile?.avg_cons ?? 0;
+    const fuelType = profile?.fuel_type ?? 'essence';
+    fuelRef.current = { ...fuelRef.current, avgCons, fuelType };
+    if (avgCons > 0) {
+      fetchFuelPrice(fuelType).then(fuelPrice => {
+        fuelRef.current = { avgCons, fuelType, fuelPrice };
+      });
+    }
+  }, [profile?.avg_cons, profile?.fuel_type]);
+
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
   // atteint. Économise les coûts cloud + signale clairement à l'utilisateur.
   useEffect(() => {
-    try {
-      scannerService.setQuotaReached(!canScan, tier === 'free');
-      // Compteur autoritatif poussé au natif → il applique le quota lui-même même
-      // quand le JS est suspendu (scan via Share Extension / bulle).
-      scannerService.setScanQuota(stats.scans, dailyScans ?? -1);
-    } catch {}
+    // Deux appels bridge ISOLÉS : si setQuotaReached échoue (ex: régression de
+    // signature native), setScanQuota — qui alimente le compteur natif, source
+    // du gate quota côté extension/bulle — doit quand même partir.
+    try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
+    // Compteur autoritatif poussé au natif → il applique le quota lui-même même
+    // quand le JS est suspendu (scan via Share Extension / bulle).
+    try { scannerService.setScanQuota(stats.scans, dailyScans ?? -1, dayResetHour); } catch {}
     if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan, tier, stats.scans, dailyScans]);
+  }, [canScan, tier, stats.scans, dailyScans, dayResetHour]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -356,10 +384,26 @@ const DashboardScreen = () => {
         !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
 
       let result = nativeResult;
+      let usedGemini = false;
       if (ocrLooksBad && nativeResult.imageBase64) {
         __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
         const gemini = await extractWithGemini(nativeResult.imageBase64);
-        if (gemini) result = { ...gemini, imageBase64: undefined };
+        if (gemini) { result = { ...gemini, imageBase64: undefined }; usedGemini = true; }
+      } else if (nativeResult.imageBase64 && (!result.pickupAddress || !result.destinationAddress)) {
+        // Récupération CIBLÉE d'adresse : l'OCR a le prix/distance mais a raté une
+        // adresse (souvent une destination POI sans mot-clé de voie ni numéro).
+        // On ne refait pas tout le parse — Gemini comble uniquement l'adresse
+        // manquante, on garde les valeurs natives. Borné par le budget Gemini.
+        __DEV__ && console.info('[Scanner:Fallback] adresse manquante — Gemini (ciblé)');
+        const gemini = await extractWithGemini(nativeResult.imageBase64);
+        if (gemini) {
+          result = {
+            ...result,
+            pickupAddress: result.pickupAddress ?? gemini.pickupAddress,
+            destinationAddress: result.destinationAddress ?? gemini.destinationAddress,
+          };
+          usedGemini = true;
+        }
       }
 
       const includePickup = preferences.include_pickup
@@ -397,13 +441,19 @@ const DashboardScreen = () => {
       const kmOk = kmRate >= preferences.min_km_rate;
       const level = hrOk && kmOk ? 2 : (hrOk || kmOk) ? 1 : 0;
 
+      // Net carburant figé au moment du scan (prix du jour) → dataset daté.
+      // Non affiché par course (le verdict suffit) ; alimente les stats / modèles.
+      const { avgCons, fuelPrice } = fuelRef.current;
+      const fuelCost = computeFuelCost(totalDistance, avgCons, fuelPrice);
+      const netProfit = Math.round((result.fare - fuelCost) * 100) / 100;
+
       hapticHeavy();
       lastScanTimeRef.current = Date.now();
       resetInactivityReminder();
 
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
-      try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1); } catch {}
+      try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1, dayResetHourRef.current); } catch {}
       const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
@@ -423,6 +473,43 @@ const DashboardScreen = () => {
         includePickup,
       });
 
+      // Télémétrie non nominative (taux de détection adresse, coût Gemini) —
+      // fire-and-forget, jamais bloquant. Aucune donnée perso (cf. scan_events).
+      logScanEvent({
+        platform: result.platform,
+        addressesFound: (result.pickupAddress ? 1 : 0) + (result.destinationAddress ? 1 : 0),
+        geminiFallback: usedGemini,
+        durationSource: (result.durationMin && result.durationMin > 0) ? 'reported' : 'estimated',
+        verdict: level,
+        fareBucket: fareBucket(result.fare),
+      });
+
+      // Capture diagnostique (bêta) : si le parser NATIF a raté une adresse, on
+      // stocke les blocs OCR pour reproduire le cas en fixture + amorcer un
+      // dataset (native vs gemini). Données perso → table scan_debug privée,
+      // RLS owner-only, rétention 30 j. Fire-and-forget.
+      const nativePickupMissing = !nativeResult.pickupAddress;
+      const nativeDestMissing = !nativeResult.destinationAddress;
+      if (nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
+        logScanDebug({
+          platform: nativeResult.platform,
+          screenHeight: nativeResult.screenHeight ?? null,
+          blocksJson: nativeResult.debugBlocks,
+          nativePickup: nativeResult.pickupAddress ?? null,
+          nativeDestination: nativeResult.destinationAddress ?? null,
+          nativeFare: nativeResult.fare,
+          nativeDistanceKm: nativeResult.distanceKm,
+          nativeDurationMin: nativeResult.durationMin ?? null,
+          pickupMissing: nativePickupMissing,
+          destMissing: nativeDestMissing,
+          geminiUsed: usedGemini,
+          // Ce que Gemini a récupéré sur le champ que le natif avait raté = label approché.
+          geminiPickup: usedGemini && nativePickupMissing ? (result.pickupAddress ?? null) : null,
+          geminiDestination: usedGemini && nativeDestMissing ? (result.destinationAddress ?? null) : null,
+          appVersion: APP_VERSION_LABEL,
+        });
+      }
+
       // ── Log en DB (valeurs finales). Si Supabase tombe, on queue hors-ligne
       // pour garantir zéro scan perdu — useOfflineSync re-tente à la reconnexion.
       try {
@@ -434,6 +521,8 @@ const DashboardScreen = () => {
           durationMin: totalDuration,
           hourlyRate,
           kmRate,
+          fuelCost,
+          netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
         });
@@ -450,6 +539,8 @@ const DashboardScreen = () => {
             durationMin: queuedRide.duration_min,
             hourlyRate: queuedRide.hourly_rate,
             kmRate: queuedRide.km_rate,
+            fuelCost: queuedRide.fuel_cost,
+            netProfit: queuedRide.net_profit,
             pickupAddress: queuedRide.pickup_address,
             destinationAddress: queuedRide.destination_address,
           });
@@ -466,6 +557,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          fuel_cost: fuelCost,
+          net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),
@@ -482,6 +575,8 @@ const DashboardScreen = () => {
           duration_min: totalDuration,
           hourly_rate: hourlyRate,
           km_rate: kmRate,
+          fuel_cost: fuelCost,
+          net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
           created_at: new Date().toISOString(),

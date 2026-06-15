@@ -119,12 +119,15 @@ object GeminiVisionService {
               "distance_km": <distance TOTALE de la course, souvent libellée "Course de X km">,
               "duration_min": <durée totale de la course en minutes ; null si non visible>,
               "pickup_duration_min": <temps d'approche vers le client ; null si non visible>,
-              "pickup_distance_km": <distance d'approche vers le client ; null si non visible>
+              "pickup_distance_km": <distance d'approche vers le client ; null si non visible>,
+              "pickup_address": <adresse de DÉPART exacte lue à l'écran ; null si absente>,
+              "destination_address": <adresse de DESTINATION exacte lue à l'écran ; null si absente>
             }
             IMPORTANT :
             - distance_km et duration_min concernent la COURSE (trajet client → destination).
             - pickup_* concerne l'APPROCHE (position actuelle → client), typiquement affichée "X min • Y km" ou "à X min (Y km)" sous l'adresse de prise en charge.
             - Ne PAS confondre les deux. La distance de course est presque toujours plus grande que le pickup.
+            - pickup_address = la PREMIÈRE adresse affichée en haut ; destination_address = celle EN DESSOUS. Ne confonds jamais une ligne stat ("Course de 11.8 km") avec une adresse.
             - Retourne les valeurs exactes lues à l'écran, ne devine pas.
             Si ce n'est pas un écran d'offre de course VTC, réponds : {"error": "not_a_ride"}
         """.trimIndent()
@@ -196,9 +199,14 @@ object GeminiVisionService {
                                     else data.optInt("pickup_duration_min").takeIf { it in 1..60 }
             val pickupDistanceKm = if (data.isNull("pickup_distance_km")) null
                                    else data.optDouble("pickup_distance_km").takeIf { it in 0.1..30.0 }
+            // Adresses → alimentent TomTom pour la VRAIE distance (cœur du produit).
+            val pickupAddress = data.optString("pickup_address")
+                .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+            val destinationAddress = data.optString("destination_address")
+                .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
 
-            if (fare < 3 || fare > 200) return null
-            if (distanceKm < 0.3 || distanceKm > 1000) return null
+            if (fare < 5 || fare > 200) return null
+            if (distanceKm < 0.3 || distanceKm > 500) return null
             // Ratio plausible : rejette les combinaisons aberrantes (distance
             // hallucinée minuscule → €/km démentiel). Mirror JS / iOS.
             val ratio = fare / distanceKm
@@ -211,6 +219,8 @@ object GeminiVisionService {
                 durationMin = durationMin,
                 pickupDurationMin = pickupDurationMin,
                 pickupDistanceKm = pickupDistanceKm,
+                pickupAddress = pickupAddress,
+                destinationAddress = destinationAddress,
             )
         } catch (e: Exception) {
             null

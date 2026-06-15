@@ -148,7 +148,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Déblocage optimiste post-achat : RevenueCat a confirmé l'entitlement, on
   // débloque l'UI tout de suite (le webhook → DB suit en quelques secondes).
   const markSubscribed = (tier: 'plus' | 'premium') => {
-    setProfile(prev => prev ? { ...prev, subscription_tier: tier, subscription_status: 'active' } : prev);
+    // On pousse aussi une expiration future : sans ça, un ancien
+    // subscription_expires_at dans le passé (ré-abonné) ferait redémoter
+    // getEffectivePlanTier() en 'free' aussitôt → déblocage optimiste annulé.
+    // La réconciliation (refreshProfile) écrasera ensuite avec la vraie date.
+    const optimisticExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    setProfile(prev => prev ? {
+      ...prev,
+      subscription_tier: tier,
+      subscription_status: 'active',
+      subscription_expires_at: optimisticExpiry,
+    } : prev);
   };
 
   return (

@@ -5,5 +5,5 @@
 
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods", "supabase/functions"]
+  "exclude": ["**/node_modules", "**/Pods", "supabase/functions", "web"]
 }

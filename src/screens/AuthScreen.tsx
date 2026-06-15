@@ -8,15 +8,12 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SafeGradient from '../components/SafeGradient';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Image } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { sha256 } from 'js-sha256';
-import { LoginManager, AccessToken } from 'react-native-fbsdk-next';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
@@ -124,26 +121,6 @@ const AuthScreen = () => {
     } catch (error: any) {
       if (error?.code === appleAuth.Error.CANCELED) return;
       showToast({ type: 'error', title: t('auth.errors.appleTitle'), message: mapAuthError(error.message) });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    setLoading(true);
-    try {
-      const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
-      if (result.isCancelled) return;
-      const tokenData = await AccessToken.getCurrentAccessToken();
-      if (!tokenData?.accessToken) throw new Error('No access token');
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'facebook',
-        token: tokenData.accessToken.toString(),
-      });
-      if (error) throw error;
-      if (data.user) await checkNewUserQuota(data.user.created_at);
-    } catch (error: any) {
-      showToast({ type: 'error', title: t('auth.errors.facebookTitle', 'Erreur Facebook'), message: mapAuthError(error.message) });
     } finally {
       setLoading(false);
     }

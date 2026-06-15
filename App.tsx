@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/react-native';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme/colors';
 import { SENTRY_DSN } from '@env';
-import { version as appVersion } from './package.json';
+import { APP_VERSION, BUILD_NUMBER } from './src/utils/appVersion';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -25,7 +25,10 @@ import './src/i18n';
 Sentry.init({
   dsn: SENTRY_DSN || '',
   enabled: !__DEV__ && !!SENTRY_DSN,
-  release: `com.striveapp.app@${appVersion}`,
+  // Version native du build (store) — package.json restait à 1.0.0, donc
+  // toutes les releases Sentry étaient regroupées sous la même version.
+  release: `com.striveapp.app@${APP_VERSION}`,
+  dist: BUILD_NUMBER || undefined,
   tracesSampleRate: 0.2,
   enableAutoSessionTracking: true,
   attachStacktrace: true,

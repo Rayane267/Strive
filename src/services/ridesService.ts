@@ -21,6 +21,8 @@ export async function createRide(params: {
   durationMin: number;
   hourlyRate: number;
   kmRate: number;
+  fuelCost?: number | null;
+  netProfit?: number | null;
   pickupAddress?: string | null;
   destinationAddress?: string | null;
 }): Promise<Ride> {
@@ -35,6 +37,8 @@ export async function createRide(params: {
       duration_min: params.durationMin,
       hourly_rate: params.hourlyRate,
       km_rate: params.kmRate,
+      fuel_cost: params.fuelCost ?? null,
+      net_profit: params.netProfit ?? null,
       pickup_address: params.pickupAddress ?? null,
       destination_address: params.destinationAddress ?? null,
     })

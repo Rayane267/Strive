@@ -2,4 +2,7 @@
     <string name="app_name">Strive</string>
     <string name="accessibility_service_description">Strive is a professional tool for ride-hailing drivers. This accessibility service is used exclusively to capture the screen of Uber, Bolt, and Heetch apps when the user taps the scan button, to automatically extract ride information (fare, distance, addresses) via on-device OCR. No personal data is read or collected. Analysis runs locally on the device and is only triggered by an explicit user action.</string>
     <string name="scanner_not_a_ride">No ride offer detected</string>
+    <string name="scanner_session_required_bubble">Go online to scan</string>
+    <string name="scanner_session_required_title">Session required</string>
+    <string name="scanner_session_required_body">Start your session in Strive to scan rides.</string>
 </resources>

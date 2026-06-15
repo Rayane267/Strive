@@ -168,3 +168,17 @@ export function notifySessionClosed() {
     0,
   );
 }
+
+/**
+ * Prévient l'utilisateur que des courses hors-ligne n'ont pas pu être
+ * synchronisées (abandonnées après MAX_RETRY_COUNT tentatives). Sans ça,
+ * des revenus disparaissent silencieusement de ses stats.
+ */
+export function notifySyncDropped(count: number) {
+  scheduleNative(
+    'sync-dropped',
+    i18n.t('notifications.syncDropped.title'),
+    i18n.t('notifications.syncDropped.body', { count }),
+    0,
+  );
+}

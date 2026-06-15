@@ -163,12 +163,30 @@ struct AnalyzeRideIntent: AppIntent {
     guard isFree else { return false }
     let limit = d?.integer(forKey: "scanQuotaLimit") ?? 0
     if limit <= 0 { return false }
-    return (d?.integer(forKey: "scanCountToday") ?? 0) >= limit
+    guard let d = d else { return false }
+    return Self.scanCountForToday(d) >= limit
+  }
+
+  /// Compteur du jour, en ignorant une valeur datée d'hier.
+  private static func scanCountForToday(_ d: UserDefaults) -> Int {
+    if d.integer(forKey: "scanCountDay") != currentQuotaDay(d) { return 0 }
+    return d.integer(forKey: "scanCountToday")
+  }
+
+  /// Jour de quota (yyyymmdd) tenant compte du `quotaResetHour` (0 ou 4h).
+  private static func currentQuotaDay(_ d: UserDefaults) -> Int {
+    let resetHour = d.integer(forKey: "quotaResetHour")
+    let shifted = Date().addingTimeInterval(TimeInterval(-resetHour * 3600))
+    let c = Calendar.current.dateComponents([.year, .month, .day], from: shifted)
+    return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
   }
 
   private func incrementScanCount() {
-    let d = UserDefaults(suiteName: appGroupId)
-    d?.set((d?.integer(forKey: "scanCountToday") ?? 0) + 1, forKey: "scanCountToday")
+    guard let d = UserDefaults(suiteName: appGroupId) else { return }
+    let today = Self.currentQuotaDay(d)
+    let base = d.integer(forKey: "scanCountDay") == today ? d.integer(forKey: "scanCountToday") : 0
+    d.set(today, forKey: "scanCountDay")
+    d.set(base + 1, forKey: "scanCountToday")
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {

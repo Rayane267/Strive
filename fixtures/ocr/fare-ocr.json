@@ -1,0 +1,47 @@
+[
+  {
+    "name": "rating-star-never-mistaken-for-fare",
+    "description": "'* 5,00 Montant net de frais' : la note précédée d'une étoile/astérisque n'est jamais un tarif, même boostée par l'ancre 'net'",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "17,43 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "* 5,00 Montant net de frais", "x": 50, "y": 260, "width": 200, "height": 15 },
+      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.43, "distanceKm": 8.2 }
+  },
+  {
+    "name": "glued-fare-comma-lost-by-ocr",
+    "description": "'17,43 €' lu '1743€' : au-delà du plafond plausible, les 2 derniers chiffres sont des centimes",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "1743€", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17.43, "distanceKm": 8.2 }
+  },
+  {
+    "name": "whole-euro-fare-two-digits-accepted",
+    "description": "'17 €' sans décimales : accepté tel quel (sous le plafond)",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "17 €", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+    ],
+    "expected": { "platform": "UBER", "fare": 17, "distanceKm": 8.2 }
+  },
+  {
+    "name": "single-digit-whole-euro-rejected",
+    "description": "DÉCISION CANONIQUE : '5€' sec n'est pas un tarif (pourboire suggéré, pack, note). Swift doit s'aligner (priceWholeRegex \\d{2,6}, pas \\d{1,6}).",
+    "screenHeight": 1920,
+    "blocks": [
+      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
+      { "text": "5€", "x": 50, "y": 200, "width": 200, "height": 40 },
+      { "text": "2.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+    ],
+    "expected": null
+  }
+]

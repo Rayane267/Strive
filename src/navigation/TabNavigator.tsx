@@ -60,7 +60,7 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
       stiffness: 220,
       mass: 0.75,
     }).start();
-  }, [state.index]);
+  }, [state.index, animIndex]);
 
   const indicatorX = animIndex.interpolate({
     inputRange: state.routes.map((_, i) => i),

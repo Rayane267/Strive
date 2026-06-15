@@ -25,30 +25,48 @@ describe('formatDuration', () => {
 });
 
 describe('getDayStart', () => {
-  it('returns today at midnight by default', () => {
+  // Fake timers → toutes les branches sont couvertes de façon déterministe
+  // (les anciens tests étaient skippés selon l'heure réelle d'exécution).
+  afterEach(() => jest.useRealTimers());
+
+  it('resetHour=0 → minuit du jour courant', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 7, 10, 30, 0)); // 7 juin 2026 10:30 local
     const result = getDayStart(0);
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(5);
+    expect(result.getDate()).toBe(7);
     expect(result.getHours()).toBe(0);
     expect(result.getMinutes()).toBe(0);
     expect(result.getSeconds()).toBe(0);
   });
 
-  it('returns today at 3h when resetHour=3 and current time is after 3h', () => {
-    const now = new Date();
-    if (now.getHours() >= 3) {
-      const result = getDayStart(3);
-      expect(result.getHours()).toBe(3);
-      expect(result.getDate()).toBe(now.getDate());
-    }
+  it('resetHour=4, AVANT l\'heure de reset (02:00) → la journée d\'hier à 4h', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 7, 2, 0, 0));
+    const result = getDayStart(4);
+    expect(result.getDate()).toBe(6);
+    expect(result.getHours()).toBe(4);
   });
 
-  it('returns yesterday at 3h when resetHour=3 and current time is before 3h', () => {
-    // This test depends on current time — skipped at 3h+
-    const now = new Date();
-    if (now.getHours() < 3) {
-      const result = getDayStart(3);
-      expect(result.getHours()).toBe(3);
-      expect(result.getDate()).toBe(now.getDate() - 1);
-    }
+  it('resetHour=4, APRÈS l\'heure de reset (10:00) → la journée courante à 4h', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 7, 10, 0, 0));
+    const result = getDayStart(4);
+    expect(result.getDate()).toBe(7);
+    expect(result.getHours()).toBe(4);
+  });
+
+  it('resetHour=4, pile à l\'heure de reset (04:00) → jour courant', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 7, 4, 0, 0));
+    const result = getDayStart(4);
+    expect(result.getDate()).toBe(7);
+    expect(result.getHours()).toBe(4);
+  });
+
+  it('gère le passage de mois (1er à 02:00, resetHour=4 → dernier jour du mois précédent)', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 1, 2, 0, 0)); // 1er juin 02:00
+    const result = getDayStart(4);
+    expect(result.getMonth()).toBe(4); // mai
+    expect(result.getDate()).toBe(31);
+    expect(result.getHours()).toBe(4);
   });
 });
 

@@ -25,6 +25,18 @@ class ScanBridgeModule: RCTEventEmitter {
   static let scanResultKey = "lastScanResult"
   static let scanTimestampKey = "lastScanTimestamp"
 
+  /// Jour de quota courant (yyyymmdd) en tenant compte du `day_reset_hour`
+  /// (0 ou 4h) poussé par le JS : un scan avant l'heure de reset appartient
+  /// encore à la journée de la veille. Aligné sur getDayStart() côté JS.
+  /// Dupliqué à l'identique dans ShareViewController / AnalyzeRideIntent (targets
+  /// séparés, pas de type partagé sans toucher au project.pbxproj).
+  static func currentQuotaDay(_ defaults: UserDefaults?) -> Int {
+    let resetHour = defaults?.integer(forKey: "quotaResetHour") ?? 0
+    let shifted = Date().addingTimeInterval(TimeInterval(-resetHour * 3600))
+    let c = Calendar.current.dateComponents([.year, .month, .day], from: shifted)
+    return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
+  }
+
   // MARK: - RCTEventEmitter
 
   override static func moduleName() -> String! {
@@ -33,6 +45,16 @@ class ScanBridgeModule: RCTEventEmitter {
 
   @objc override static func requiresMainQueueSetup() -> Bool {
     return false
+  }
+
+  /// Version réelle du bundle (celle des stores, auto-incrémentée par EAS) —
+  /// exposée au JS pour l'email support et le release Sentry. Évite les
+  /// versions hardcodées qui dérivent à chaque release.
+  override func constantsToExport() -> [AnyHashable: Any]! {
+    return [
+      "appVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+      "buildNumber": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+    ]
   }
 
   override func supportedEvents() -> [String]! {
@@ -276,7 +298,7 @@ class ScanBridgeModule: RCTEventEmitter {
 
   /// Quota journalier atteint — sync via App Group pour que la Share Extension
   /// et l'AppIntent puissent court-circuiter le scan sans appeler TomTom/Gemini.
-  @objc func setQuotaReached(_ reached: Bool, _ isFree: Bool) {
+  @objc func setQuotaReached(_ reached: Bool, isFree: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
       // Réserve le teaser verrouillé (vendre Plus) aux comptes free : un abonné
@@ -290,10 +312,27 @@ class ScanBridgeModule: RCTEventEmitter {
   /// le quota lui-même — sans dépendre du JS, qui est suspendu pendant un scan
   /// via l'extension. Le natif incrémente entre deux syncs ; le JS réécrit la
   /// valeur réelle au foreground.
-  @objc func setScanQuota(_ countToday: NSNumber, limit: NSNumber) {
-    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+  @objc func setScanQuota(_ countToday: NSNumber, limit: NSNumber, resetHour: NSNumber) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    defaults.set(limit.intValue, forKey: "scanQuotaLimit")
+    // Persisté AVANT le calcul du jour : l'extension/AppIntent (sans JS) en ont
+    // besoin pour situer la frontière de journée (0h ou 4h).
+    defaults.set(resetHour.intValue, forKey: "quotaResetHour")
+
+    // Réconciliation NON destructive : un scan fait dans la Share Extension
+    // (app fermée) n'insère pas de ride en DB tant que l'app n'est pas rouverte
+    // → `countToday` (compte DB) SOUS-ESTIME les scans réels du jour. Si on
+    // écrasait bêtement, on rabaisserait le compteur natif → quota rendu à tort.
+    // Donc : même jour → on garde le max(natif, DB) ; nouveau jour → on fait
+    // confiance au compte DB (reset).
+    let today = Self.currentQuotaDay(defaults)
+    let storedDay = defaults.integer(forKey: "scanCountDay")
+    if storedDay != today {
+      defaults.set(today, forKey: "scanCountDay")
       defaults.set(countToday.intValue, forKey: "scanCountToday")
-      defaults.set(limit.intValue, forKey: "scanQuotaLimit")
+    } else {
+      let current = defaults.integer(forKey: "scanCountToday")
+      defaults.set(max(current, countToday.intValue), forKey: "scanCountToday")
     }
   }
 

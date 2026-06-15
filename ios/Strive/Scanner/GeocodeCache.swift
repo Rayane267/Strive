@@ -11,7 +11,9 @@ final class GeocodeCache {
   static let shared = GeocodeCache()
   private init() {}
 
-  private static let keyPrefix = "g:"
+  // v2 : ajout du libellé canonique `formatted`. Bump du préfixe → les entrées
+  // v1 (sans formatted) sont ignorées et re-géocodées une fois (avec formatted).
+  private static let keyPrefix = "g2:"
 
   private var defaults: UserDefaults? {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
@@ -27,16 +29,19 @@ final class GeocodeCache {
     let score = (dict["score"] as? Double) ?? 0.0
     return TomTomService.GeocodeHit(
       coords: TomTomService.Coords(lat: lat, lon: lon),
-      score: score
+      score: score,
+      formatted: dict["formatted"] as? String
     )
   }
 
   func put(address: String, hit: TomTomService.GeocodeHit) {
-    defaults?.set([
+    var entry: [String: Any] = [
       "lat":   hit.coords.lat,
       "lon":   hit.coords.lon,
       "score": hit.score,
-    ], forKey: Self.keyPrefix + normalize(address))
+    ]
+    if let f = hit.formatted { entry["formatted"] = f }
+    defaults?.set(entry, forKey: Self.keyPrefix + normalize(address))
   }
 
   /// Normalisation identique à GeocodeCache.kt : lowercase, accents retirés,

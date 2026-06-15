@@ -1,137 +1,140 @@
-# Politique de confidentialité — Strive
+# Politique de Confidentialité — Strive
 
 🇫🇷 Français · [🇬🇧 English](./PRIVACY_POLICY.en.md)
 
-**Dernière mise à jour : 29 mai 2026**
-
-Strive (« l'Application ») est une application mobile destinée aux chauffeurs VTC qui scanne les offres de course affichées dans les applications Uber, Bolt et Heetch afin de calculer la rentabilité des courses en temps réel. La présente politique décrit comment nous traitons vos données.
-
-**Éditeur :** [Ton nom / raison sociale]
-**Contact :** [ton-email@domaine.com]
-**Hébergement :** Supabase (données utilisateur), Sentry (erreurs), Google Firebase (notifications push)
+**Dernière mise à jour : 13 juin 2026**
 
 ---
 
-## 1. Données collectées
+## Préambule
 
-### 1.1 Données de compte
-Lorsque vous créez un compte, nous collectons :
-- **Adresse e-mail** (via inscription directe ou OAuth Google/Apple)
-- **Identifiant Google/Apple anonyme** (si OAuth)
-- **Préférences utilisateur** (seuils €/h, €/km, activation pickup, son verdict)
+La présente Politique de Confidentialité décrit la manière dont l'éditeur de l'application mobile **Strive** (l'« **Éditeur** », « **nous** ») collecte, utilise, partage et protège les données à caractère personnel des utilisateurs (l'« **Utilisateur** », « **vous** »), conformément au Règlement (UE) 2016/679 (« **RGPD** ») et à la loi n° 78-17 du 6 janvier 1978 modifiée (« Informatique et Libertés »).
 
-### 1.2 Données de course
-À chaque scan d'une offre VTC, nous enregistrons :
-- **Plateforme** (Uber / Bolt / Heetch)
-- **Tarif affiché** (net)
-- **Distance et durée estimées**
-- **Adresses de prise en charge et de destination**
-- **Taux horaire et taux kilométrique calculés**
-- **Statut de la course** (acceptée, refusée, en attente)
-- **Horodatage**
+Strive est un outil d'aide à la décision pour chauffeurs VTC indépendants : à la demande de l'Utilisateur, l'Application lit une proposition de course affichée à l'écran afin d'en estimer la rentabilité. La protection de votre vie privée est au cœur de la conception du Service (*privacy by design*).
 
-Ces données sont utilisées pour afficher votre historique et calculer vos statistiques. Elles ne sont jamais revendues ni partagées avec des tiers commerciaux.
+> 🔒 **Nos engagements fondamentaux :**
+> **Strive est totalement indépendant et n'a aucun lien avec Uber, Bolt, Heetch ou toute autre plateforme VTC.** Nous **n'exploitons, ne revendons et ne cédons aucune de vos données**, ni celles des passagers susceptibles d'apparaître à l'écran. **Aucune publicité, aucun traçage publicitaire, aucun courtage de données.** Vos données servent uniquement à vous fournir le Service que vous demandez.
 
-Les **adresses de prise en charge et de destination** constituent votre carnet de bord professionnel (suivi de votre activité de chauffeur). Par souci de minimisation, ces adresses sont **automatiquement effacées au bout de 12 mois** ; le reste de la course (tarif, distance, durée, statut) est conservé pour vos statistiques. Vous pouvez également supprimer l'intégralité de votre historique à tout moment (voir §5).
+## 1. Responsable du traitement
 
-### 1.3 Données techniques
-- **Identifiant appareil** (pour les notifications push via Firebase)
-- **Journaux d'erreurs anonymisés** (via Sentry, pour diagnostic bugs)
-- **Abonnement RevenueCat** (statut actif/inactif, pas d'information de paiement)
+Le responsable du traitement est :
 
-### 1.4 Ce que nous NE collectons PAS
-- Contenu des écrans d'Uber, Bolt, Heetch au-delà des champs extraits par OCR
-- Historique de navigation
-- Géolocalisation en temps réel (nous n'accédons pas au GPS)
-- Contacts, photos, fichiers personnels
-- Données bancaires (RevenueCat gère les paiements directement via App Store / Play Store)
+> **[À COMPLÉTER : raison sociale ou nom, forme juridique, SIREN, siège social]**
 
----
+**Contact (et exercice des droits) :** supportstriveapp@gmail.com
 
-## 2. Service d'accessibilité Android
+> **[À COMPLÉTER, le cas échéant : coordonnées du Délégué à la Protection des Données (DPO)]**
 
-Strive utilise le **service d'accessibilité Android** et la **capture d'écran (MediaProjection)** exclusivement pour :
-- Permettre à la bulle flottante d'apparaître par-dessus les applications VTC
-- Capturer l'écran, **uniquement lorsque vous appuyez sur le bouton de scan**, pour analyser l'offre via OCR (ML Kit de Google, analyse locale sur votre appareil)
+## 2. Données que nous traitons
 
-**Aucune capture d'écran n'est effectuée sans votre action explicite.** Aucune donnée personnelle n'est lue dans d'autres applications. L'analyse OCR est réalisée localement ; l'image capturée n'est pas envoyée à un serveur tiers sauf dans le cas où l'OCR local échoue totalement — dans ce cas, et uniquement dans ce cas, une image compressée est envoyée à notre fonction Edge Supabase qui l'analyse via Gemini (Google AI) puis la supprime immédiatement.
+Nous appliquons le principe de **minimisation** : nous ne traitons que les données nécessaires au fonctionnement du Service.
 
----
+**2.1 — Données de compte**
+- Adresse e-mail, identifiant de compte ;
+- Méthode de connexion (e-mail, Google, Apple).
 
-## 3. Sous-traitants et transferts
+**2.2 — Données de profil et de véhicule**
+- Marque, modèle, année, type de carburant et consommation moyenne du véhicule ;
+- Langue et fuseau horaire de l'appareil ;
+- Préférences : seuils minimum €/h et €/km, heure de réinitialisation de la journée, options d'affichage.
 
-Vos données peuvent être traitées par les sous-traitants suivants :
+**2.3 — Données relatives aux courses scannées**
+- Plateforme, tarif proposé, distance, durée, statut (acceptée / refusée), horodatage ;
+- Adresses de prise en charge et de destination de la course, lorsqu'elles figurent dans l'offre, utilisées pour calculer la distance et la durée réelles et alimenter votre historique et vos statistiques ;
+- Sessions de conduite (début, fin, durée).
 
-| Sous-traitant | Rôle | Hébergement |
-|---|---|---|
-| **Supabase** | Base de données, authentification, edge functions | UE (Francfort) |
-| **Google Firebase** | Notifications push (FCM) | UE / US |
-| **Sentry** | Diagnostic d'erreurs anonymisé | UE |
-| **RevenueCat** | Gestion des abonnements | US |
-| **TomTom** | Géocodage d'adresses, calcul d'itinéraires | UE (Amsterdam) |
-| **Google Gemini** | Fallback OCR (uniquement si OCR local échoue) | US |
+**2.4 — Données d'abonnement**
+- Statut et type d'abonnement, crédits de Scans, identifiant technique transmis par notre prestataire de gestion d'abonnement. **Nous n'avons accès à aucune donnée bancaire** : les paiements sont gérés par l'App Store ou Google Play.
 
-Les transferts hors UE sont encadrés par les clauses contractuelles types de la Commission européenne ou le Data Privacy Framework.
+**2.5 — Données techniques et notifications**
+- Jeton de notification push (rappels de session, recharge de quota) ;
+- Journaux techniques d'actions sensibles et rapports d'erreurs / de plantages aux fins de sécurité et de stabilité.
 
----
+**2.6 — Mesure de qualité et diagnostic**
+- **Télémétrie non nominative** : pour chaque Scan, des indicateurs agrégeables (plateforme, nombre d'adresses détectées, tranche de prix, verdict, recours ou non au traitement cloud de secours). **Cette télémétrie ne contient ni montant exact, ni adresse, ni coordonnée.**
+- **Capture de diagnostic (phase bêta, sur consentement)** : lorsque l'analyse locale ne parvient pas à lire une adresse, l'Application peut enregistrer les blocs de texte issus de l'OCR de l'écran scanné (lesquels peuvent contenir des adresses) afin d'améliorer la fiabilité de l'outil. Ces captures sont **privées, accessibles à vous seul, conservées trente (30) jours au maximum**, et réservées à la phase de test.
 
-## 4. Durée de conservation
+## 3. La technologie OCR : fonctionnement et garanties
 
-- **Données de compte** : tant que le compte est actif, puis 30 jours après suppression
-- **Historique des courses** : conservé tant que le compte est actif. Les **adresses de départ/destination sont automatiquement effacées après 12 mois** ; les autres données de course (tarif, distance, durée, statut) restent disponibles pour vos statistiques. Vous pouvez supprimer tout votre historique à tout moment depuis l'application (voir §5)
-- **Journaux d'erreurs Sentry** : 90 jours maximum
-- **Données de facturation RevenueCat** : durée légale (10 ans)
+**3.1 — Une lecture volontaire et ponctuelle.** L'OCR n'est déclenché que par une **action délibérée de l'Utilisateur** (le Scan). L'Application ne lit pas l'écran en continu et ne surveille pas votre activité en arrière-plan. La lecture vise uniquement à extraire les **métriques de la course** (prix, temps, distance, adresses de l'offre).
 
----
+**3.2 — Un traitement principalement local.** L'analyse OCR s'effectue **directement sur votre appareil** (technologies ML Kit sous Android et Vision sous iOS). **Aucune capture d'écran n'est conservée.**
 
-## 5. Vos droits (RGPD)
+**3.3 — Traitement cloud de secours.** Lorsque la lecture locale échoue sur une image complexe, l'image de l'offre peut être transmise de manière sécurisée, **le temps de l'analyse uniquement**, à notre prestataire d'analyse d'image (API Google Gemini), afin d'en extraire les informations utiles.
+
+**3.4 — Non-exploitation des données des passagers.** Les éventuelles **données personnelles de tiers** (par exemple le prénom ou l'adresse exacte d'un passager) susceptibles d'apparaître à l'écran **ne sont ni exploitées à des fins commerciales, ni revendues, ni utilisées à d'autres fins que le calcul de rentabilité demandé par l'Utilisateur**. Elles ne sont jamais incluses dans la télémétrie non nominative.
+
+## 4. Finalités et bases légales
+
+| Finalité | Base légale (RGPD) |
+|---|---|
+| Fournir le Service (scan, verdict, historique, statistiques, abonnement) | Exécution du contrat (art. 6.1.b) |
+| Améliorer la fiabilité de l'OCR, prévenir la fraude et les abus, garantir la sécurité | Intérêt légitime (art. 6.1.f) |
+| Notifications push et capture de diagnostic (bêta) | Consentement (art. 6.1.a), révocable à tout moment |
+| Respect de nos obligations légales (comptables, demandes légitimes) | Obligation légale (art. 6.1.c) |
+
+## 5. Destinataires et sous-traitants
+
+Nous **ne vendons aucune donnée** et n'affichons **aucune publicité**. Nous recourons à des prestataires techniques (sous-traitants au sens de l'art. 28 RGPD), strictement nécessaires au Service :
+
+- **Supabase** — hébergement, base de données et authentification ;
+- **Google (API Gemini)** — traitement d'image cloud de secours ;
+- **Google (Firebase, Google Sign-In, Play)** — notifications, connexion, distribution ;
+- **TomTom** — géolocalisation, géocodage et calcul d'itinéraire (les adresses textuelles peuvent y être transmises pour le calcul de distance/durée) ;
+- **RevenueCat** — gestion technique des abonnements (via les stores) ;
+- **Apple** — connexion et distribution App Store ;
+- **Sentry** — supervision des erreurs et des plantages.
+
+Chacun de ces prestataires est lié par un engagement de confidentialité et de conformité.
+
+## 6. Transferts hors Union européenne
+
+> **[À COMPLÉTER : localisation d'hébergement des données (région Supabase)]**
+
+Certains prestataires (notamment Google et Sentry) peuvent traiter des données en dehors de l'Union européenne. Ces transferts sont encadrés par des garanties appropriées au sens des articles 44 et suivants du RGPD, notamment les **clauses contractuelles types** de la Commission européenne ou un mécanisme équivalent.
+
+## 7. Durées de conservation
+
+- **Compte, profil, courses (adresses incluses), sessions** : conservés tant que votre compte est actif, afin de vous fournir votre historique et vos statistiques ; supprimés lors de la suppression du compte ;
+- **Captures de diagnostic (bêta)** : trente (30) jours maximum ;
+- **Télémétrie non nominative** : conservée sous forme agrégée à des fins de suivi qualité ;
+- **Rapports d'erreurs (Sentry)** : selon la durée de rétention du service (généralement quatre-vingt-dix (90) jours).
+
+## 8. Vos droits
 
 Conformément au RGPD, vous disposez des droits suivants :
-- **Accès** : obtenir une copie de vos données
-- **Rectification** : corriger des données inexactes
-- **Effacement** : supprimer votre compte et toutes vos données associées
-- **Portabilité** : recevoir vos données dans un format lisible par machine (JSON)
-- **Opposition** : vous opposer au traitement à des fins de statistiques
 
-Pour exercer ces droits, contactez-nous à **[ton-email@domaine.com]**. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr).
+- **Droit d'accès** (art. 15) : obtenir la confirmation que des données vous concernant sont traitées et en obtenir copie ;
+- **Droit de rectification** (art. 16) : corriger des données inexactes ;
+- **Droit à l'effacement** (art. 17) : supprimer vos données ;
+- **Droit à la portabilité** (art. 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine, et les transmettre à un autre responsable ;
+- **Droit d'opposition et de limitation** (art. 18 et 21) ;
+- **Droit de retirer votre consentement** à tout moment, sans remettre en cause la licéité des traitements antérieurs ;
+- **Directives relatives au sort de vos données après votre décès.**
 
-### Suppression du compte
-Vous pouvez supprimer votre compte directement depuis l'application : **Profil → Paramètres → Supprimer le compte**. La suppression est définitive et irréversible après un délai de grâce de 7 jours.
+**Exercice de vos droits :**
+- Vous pouvez consulter et modifier vos données directement depuis l'Application ;
+- Vous pouvez **supprimer votre compte et l'intégralité de vos données en une seule action** depuis *Profil → Compte* (cette opération efface vos courses, sessions, véhicules, préférences, votre profil, votre photo et votre compte) ;
+- Vous pouvez nous écrire à **supportstriveapp@gmail.com**.
 
-### Suppression de l'historique de courses
-Vous pouvez effacer l'intégralité de votre historique de courses (adresses incluses) sans supprimer votre compte : **Profil → Informations du compte → Supprimer mon historique**. Cette suppression est définitive et immédiate.
+Vous disposez enfin du droit d'introduire une réclamation auprès de la **Commission Nationale de l'Informatique et des Libertés (CNIL)** — <https://www.cnil.fr>.
 
----
+## 9. Sécurité
 
-## 6. Sécurité
+Nous mettons en œuvre des mesures techniques et organisationnelles appropriées : chiffrement des échanges en transit (HTTPS), **cloisonnement des données par utilisateur** (chaque chauffeur n'accède qu'à ses propres données), stockage des jetons d'authentification dans le coffre sécurisé du système d'exploitation (Keychain / Keystore), et contrôle des opérations sensibles côté serveur.
 
-- Connexions chiffrées TLS 1.3 vers tous les serveurs
-- Authentification via OAuth 2.0 (Google, Apple) ou e-mail + mot de passe haché (bcrypt, via Supabase Auth)
-- RLS (Row Level Security) sur Supabase : chaque utilisateur ne peut lire/écrire que ses propres données
-- Aucune clé API sensible n'est stockée côté client (appels Gemini routés via edge function)
+## 10. Cookies (site web)
 
----
+Le site web de présentation de Strive n'utilise pas de cookies publicitaires ni de traceurs tiers à des fins de profilage. **[À COMPLÉTER si des outils de mesure d'audience sont ajoutés.]**
 
-## 7. Cookies et traceurs
+## 11. Mineurs
 
-L'application mobile n'utilise pas de cookies. Aucun traceur publicitaire n'est intégré.
+Le Service s'adresse à des chauffeurs VTC professionnels et **n'est pas destiné aux personnes de moins de 18 ans**. Nous ne collectons pas sciemment de données relatives à des mineurs.
 
----
+## 12. Modifications
 
-## 8. Enfants
+La présente Politique peut être mise à jour. En cas de modification substantielle, vous en serez informé dans l'Application ou par courriel. La date de dernière mise à jour figure en tête du présent document.
 
-Strive est destiné aux professionnels majeurs (chauffeurs VTC). L'application n'est pas conçue pour les mineurs et ne collecte pas sciemment leurs données.
+## 13. Contact
 
----
-
-## 9. Modifications
-
-Cette politique peut être mise à jour. La date « Dernière mise à jour » indique la version en vigueur. Les modifications substantielles vous seront notifiées dans l'application.
-
----
-
-## 10. Contact
-
-**Éditeur :** [Ton nom / raison sociale]
-**E-mail :** [ton-email@domaine.com]
-**Adresse :** [Ton adresse postale si auto-entrepreneur]
+Pour toute question relative à la protection de vos données : **supportstriveapp@gmail.com**.

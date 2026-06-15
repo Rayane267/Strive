@@ -40,14 +40,19 @@ public struct ScanResultModel {
     self.pickupDistanceKm = pickupDistanceKm
   }
 
-  func copy(distanceKm: Double? = nil, durationMin: Int? = nil) -> ScanResultModel {
+  func copy(
+    distanceKm: Double? = nil,
+    durationMin: Int? = nil,
+    pickupAddress: String? = nil,
+    destinationAddress: String? = nil
+  ) -> ScanResultModel {
     return ScanResultModel(
       platform: self.platform,
       fare: self.fare,
       distanceKm: distanceKm ?? self.distanceKm,
       durationMin: durationMin ?? self.durationMin,
-      pickupAddress: self.pickupAddress,
-      destinationAddress: self.destinationAddress,
+      pickupAddress: pickupAddress ?? self.pickupAddress,
+      destinationAddress: destinationAddress ?? self.destinationAddress,
       pickupDurationMin: self.pickupDurationMin,
       pickupDistanceKm: self.pickupDistanceKm
     )
@@ -60,10 +65,16 @@ public struct ScanResultModel {
 public struct OcrTextBlock {
   public let text: String
   public let box: OcrRect
+  /// Confiance OCR de la ligne (0–1). Vision la fournit par observation ; on la
+  /// porte ici pour servir de tie-breaker aux heuristiques d'adresse (leviers
+  /// géométrie / multi-candidats). Défaut 1.0 = appelants qui ne la fournissent
+  /// pas (legacy) non impactés.
+  public let confidence: Float
 
-  public init(text: String, box: OcrRect) {
+  public init(text: String, box: OcrRect, confidence: Float = 1.0) {
     self.text = text
     self.box = box
+    self.confidence = confidence
   }
 }
 

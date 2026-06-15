@@ -33,10 +33,10 @@ object OcrParser {
 
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
-    private var fareMin = 8.0
+    private var fareMin = 5.0
     private var fareMax = 200.0
     private var distMin = 0.3
-    private var distMax = 120.0
+    private var distMax = 500.0
     private var rateMin = 0.4
     private var rateMax = 12.0
 
@@ -147,6 +147,11 @@ object OcrParser {
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
     private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)""")
+    // Tarif sans séparateur ("1743€" ou "17 €"). Min 2 chiffres : un "5€" sec
+    // n'est jamais un tarif — contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
+    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6})\s*€""")
+    // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
+    private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")
     private val DISTANCE_REGEX = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
@@ -224,7 +229,7 @@ object OcrParser {
         }
 
         val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock) ?: return null
-        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock)
+        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock, distance)
 
         if (!isSane(fare, distance)) return null
 
@@ -311,9 +316,14 @@ object OcrParser {
             "$euros,${"%02d".format(cents)}",
             "$euros.${"%02d".format(cents)}",
         )
-        return blocks.firstOrNull { b ->
+        blocks.firstOrNull { b ->
             patterns.any { p -> b.text.contains(p) }
-        }?.boundingBox?.centerY()
+        }?.boundingBox?.centerY()?.let { return it }
+        // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
+        // matcher un code postal ou une heure qui contiendrait la même suite.
+        val glued = "$euros${"%02d".format(cents)}"
+        return blocks.firstOrNull { it.text.contains(glued) && it.text.contains("€") }
+            ?.boundingBox?.centerY()
     }
 
     // ─── Platform detection ───────────────────────────────────────────────────────
@@ -413,10 +423,24 @@ object OcrParser {
                 || blockLower.contains("étoile") || blockLower.contains("etoile")
                 || blockLower.contains("rating") || blockLower.contains("note")) return@forEachIndexed
 
-            val match = PRICE_REGEX.find(normalizedText) ?: return@forEachIndexed
-            val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
-            val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
-            val value = "$intPart.$decPart".toDoubleOrNull() ?: return@forEachIndexed
+            // Retire le segment note ("* 5,00") : un nombre précédé d'une étoile/
+            // astérisque n'est jamais un tarif (cas "* 5,00 Montant net de frais"
+            // collé sous le prix — aligné TS/Swift).
+            val deRated = normalizedText.replace(RATING_SEGMENT_REGEX, " ")
+
+            val match = PRICE_REGEX.find(deRated)
+            val value: Double = if (match != null) {
+                val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
+                val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
+                "$intPart.$decPart".toDoubleOrNull() ?: return@forEachIndexed
+            } else {
+                // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" →
+                // "1743€"). Les apps VTC affichent toujours 2 décimales : au-delà
+                // du plafond plausible, les 2 derniers chiffres sont des centimes.
+                val glued = PRICE_GLUED_REGEX.find(deRated) ?: return@forEachIndexed
+                val raw = glued.groupValues[1].toDoubleOrNull() ?: return@forEachIndexed
+                if (raw > fareMax) raw / 100 else raw
+            }
 
             if (value !in fareMin..fareMax) return@forEachIndexed
 
@@ -620,6 +644,7 @@ object OcrParser {
         blocks: List<Text.TextBlock>,
         pickupAddr: Text.TextBlock?,
         destAddr: Text.TextBlock?,
+        courseDistanceKm: Double,
     ): Int? {
         data class Cand(val value: Int, val km: Double?, val y: Int, val isPickupCombo: Boolean)
         val candidates = mutableListOf<Cand>()
@@ -656,12 +681,18 @@ object OcrParser {
         val nonPickup = candidates.filter { !it.isPickupCombo }
         if (nonPickup.isNotEmpty()) return nonPickup.first().value
 
-        // 2. Toutes les candidates sont des combos "min • km" (Bolt affiche
-        //    approche ET course ainsi) → la course = le combo au plus grand km.
-        val withKm = candidates.filter { it.km != null }
-        if (withKm.isNotEmpty()) return withKm.maxByOrNull { it.km!! }!!.value
-        // 3. Dernier recours : la plus grande durée (course > approche).
-        return candidates.maxByOrNull { it.value }!!.value
+        // 2. Combos "min • km" : la course = le combo dont le km CORRESPOND à la
+        //    distance de course (pas l'approche, dont le km est petit). Évite
+        //    d'afficher le temps d'approche comme temps de course quand la course
+        //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+        val tol = maxOf(2.0, courseDistanceKm * 0.2)
+        val courseCombo = candidates
+            .filter { it.km != null && Math.abs(it.km!! - courseDistanceKm) <= tol }
+            .maxByOrNull { it.km!! }
+        if (courseCombo != null) return courseCombo.value
+        // 3. Aucune durée fiable (seules des approches/bandeaux) → null : le calcul
+        //    estimera la durée de course via la distance (estimateDurationMin).
+        return null
     }
 
     // ─── Pickup combo extraction ("X min • X,X km") ───────────────────────────────
@@ -696,6 +727,10 @@ object OcrParser {
             if (mv !in 1..60) continue
             if (kv !in 0.1..30.0) continue
             if (Math.abs(kv - courseDistanceKm) < 0.1) continue // c'est la course
+            // L'approche est toujours plus courte que la course → un combo dont le
+            // km ≥ distance de course est le bandeau nav (haut de l'écran), pas
+            // l'approche. L'exclure évite de gonfler durée/distance totales.
+            if (kv >= courseDistanceKm) continue
 
             val y = block.boundingBox?.centerY() ?: 0
             matches.add(PickupMatch(mv, kv, y))
@@ -724,10 +759,23 @@ object OcrParser {
     /** Retire les lignes de stats ("49 min", "24.3 km", "3 min • 1.3 km") qu'OCR
      *  colle parfois à l'adresse dans un même bloc → ne garde que l'adresse.
      *  Ex: "49 min\n2 Rue Lefebvre, Paris" → "2 Rue Lefebvre, Paris". */
+    /** Retire un préfixe parasite en tête d'adresse : symboles d'icône (● • * ▪),
+     *  ou une lettre isolée issue d'une icône mal lue par l'OCR suivie d'un numéro
+     *  ("A 7 Rue…" → "7 Rue…", "t 5 Av…" → "5 Av…"). Répare la dédup Heetch (icône
+     *  lue "A" qui cassait le match par préfixe) et nettoie l'adresse géocodée. */
+    private fun stripLeadingAddressJunk(s: String): String {
+        var t = s.trimStart()
+        t = t.replace(Regex("""^[^A-Za-zÀ-ÿ0-9]+"""), "")        // symboles/bullets
+        t = t.replace(Regex("""^[A-Za-zÀ-ÿ]\s+(?=[0-9])"""), "") // lettre isolée + n°
+        return t.trimStart()
+    }
+
     private fun cleanAddressText(raw: String): String =
-        raw.split("\n").map { it.trim() }
-            .filter { it.isNotEmpty() && !STAT_LINE.matches(it) }
-            .joinToString("\n")
+        stripLeadingAddressJunk(
+            raw.split("\n").map { it.trim() }
+                .filter { it.isNotEmpty() && !STAT_LINE.matches(it) }
+                .joinToString("\n")
+        )
 
     private fun isAddressBlock(block: Text.TextBlock, screenHeight: Int): Boolean {
         val original = cleanAddressText(block.text).trim()
@@ -748,6 +796,10 @@ object OcrParser {
         // décimale) n'apparaît jamais dans une adresse → évite de prendre le nom du
         // passager pour l'adresse de départ (et de décaler toutes les adresses).
         if (Regex("""\b[0-5][.,]\d\b""").containsMatchIn(text)) return false
+        // Libellé tarifaire Uber "Montant net de frais" (souvent collé à la note
+        // "★ 4,79" en 2 décimales, qui échappe au reject note ci-dessus) → jamais
+        // une adresse. Sans ça, la règle 6 (virgule) le classe pickup et décale tout.
+        if (text.contains("net de frais") || text.contains("montant net")) return false
         if (nonAddressWords.contains(text)) return false
         // Marque / mode ("UberX Exclusivité", "BoltPlus Confort").
         if (Regex("""\b(uber\w*|bolt\w*|heetch\w*)\b""").containsMatchIn(text)) return false
@@ -772,8 +824,11 @@ object OcrParser {
         // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris",
         //    "Libération, 94430 Sucy". Couvre les adresses SANS mot de voie connu.
         if (Regex("""\b\d{4,5}\b""").containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
-        // 6. Segment avec virgule + assez de lettres : "Châtelet, Paris".
-        if (text.contains(",") && Regex("""[a-zà-üß]""").findAll(text).count() >= 6) return true
+        // 6. Segment avec virgule SUIVIE d'une lettre + assez de lettres :
+        //    "Châtelet, Paris". On exige ", lettre" (pas une virgule décimale type
+        //    "4,79") sinon une ligne note/tarif passe pour une adresse.
+        if (Regex(""",\s*[a-zà-üß]""").containsMatchIn(text) &&
+            Regex("""[a-zà-üß]""").findAll(text).count() >= 6) return true
         return false
     }
 
@@ -853,7 +908,9 @@ object OcrParser {
      * postal + ville est précieuse pour le géocodage TomTom.
      */
     private fun dedupOverlappingAddresses(candidates: List<Text.TextBlock>): List<Text.TextBlock> {
-        val texts = candidates.map { it.text.trim() }
+        // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
+        // courte soit bien reconnue comme préfixe de la version longue (cas Heetch).
+        val texts = candidates.map { cleanAddressText(it.text).trim() }
         return candidates.filterIndexed { i, _ ->
             val mine = texts[i]
             candidates.indices.none { j ->

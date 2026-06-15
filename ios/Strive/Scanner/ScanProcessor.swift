@@ -96,8 +96,8 @@ final class ScanProcessor {
       TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
         guard let route = route,
               route.distanceKm >= 0.3,
-              route.distanceKm <= 120,
-              route.durationMin <= 180 else {
+              route.distanceKm <= 500,
+              route.durationMin <= 300 else {
           gate.fire(self.computeFinal(scan: result))
           return
         }
@@ -108,7 +108,14 @@ final class ScanProcessor {
           return
         }
 
-        let updated = result.copy(distanceKm: route.distanceKm, durationMin: route.durationMin)
+        // Affiche les adresses canoniques TomTom (propres) plutôt que le texte
+        // OCR bruité (ex: "All AV. … Çueue") — fallback OCR si TomTom n'en fournit pas.
+        let updated = result.copy(
+          distanceKm: route.distanceKm,
+          durationMin: route.durationMin,
+          pickupAddress: route.pickupFormatted,
+          destinationAddress: route.destFormatted
+        )
         gate.fire(self.computeFinal(scan: updated))
       }
     }
@@ -214,6 +221,11 @@ final class ScanProcessor {
         guard let candidate = obs.topCandidates(1).first else { continue }
         let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty { continue }
+        // Levier 2 : on jette le bruit OCR très basse confiance (< 0.3). En mode
+        // .accurate, Vision score >0.5 pour du vrai texte d'écran ; sous 0.3 =
+        // artefact illisible. Seuil volontairement TRÈS bas pour ne jamais
+        // risquer d'évincer une vraie adresse — on coupe juste le bruit franc.
+        if candidate.confidence < 0.3 { continue }
         let bbox = obs.boundingBox
         let left = Int(bbox.origin.x * CGFloat(imageWidth))
         let width = Int(bbox.width * CGFloat(imageWidth))
@@ -222,7 +234,8 @@ final class ScanProcessor {
         let top = Int(topNormalized * CGFloat(imageHeight))
         blocks.append(OcrTextBlock(
           text: text,
-          box: OcrRect(left: left, top: top, right: left + width, bottom: top + height)
+          box: OcrRect(left: left, top: top, right: left + width, bottom: top + height),
+          confidence: candidate.confidence
         ))
       }
       completion(blocks, imageWidth, imageHeight)

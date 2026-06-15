@@ -15,6 +15,28 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
 
     override fun getName() = "ScanBridge"
 
+    /**
+     * Version réelle du package (versionName/versionCode du build installé) —
+     * exposée au JS pour l'email support et le release Sentry. Évite les
+     * versions hardcodées qui dérivent à chaque release.
+     */
+    override fun getConstants(): Map<String, Any> {
+        return try {
+            val info = reactContext.packageManager.getPackageInfo(reactContext.packageName, 0)
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION") info.versionCode.toLong()
+            }
+            mapOf(
+                "appVersion" to (info.versionName ?: ""),
+                "buildNumber" to code.toString(),
+            )
+        } catch (e: Exception) {
+            mapOf("appVersion" to "", "buildNumber" to "")
+        }
+    }
+
     private var mediaProjectionPromise: Promise? = null
 
     // ─── JS → Native ──────────────────────────────────────────────────────────────
@@ -229,13 +251,33 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.isFreeTier = isFree
     }
 
+    /** Session active (chauffeur « en ligne »). Si false, la bulle bloque le
+     *  scan et notifie l'utilisateur de démarrer sa session. Mirror iOS
+     *  (AnalyzeRideIntent.isSessionOnline). */
+    @ReactMethod
+    fun setSessionOnline(online: Boolean) {
+        FloatingBubbleService.sessionOnline = online
+    }
+
     /** Compteur de scans du jour (autoritatif, poussé par le JS) + limite, pour
      *  que la bulle applique le quota elle-même même si le JS est suspendu.
      *  limite <= 0 = illimité. */
     @ReactMethod
-    fun setScanQuota(countToday: Int, limit: Int) {
-        FloatingBubbleService.scanCountToday = countToday
+    fun setScanQuota(countToday: Int, limit: Int, resetHour: Int) {
         FloatingBubbleService.scanQuotaLimit = limit
+        FloatingBubbleService.quotaResetHour = resetHour
+        // Réconciliation NON destructive : le compte DB peut sous-estimer les
+        // scans réels (scan effectué hors process JS pas encore inséré). Même
+        // jour → max(natif, DB) pour ne pas rendre du quota à tort ; nouveau
+        // jour → on fait confiance au compte DB (reset).
+        val today = FloatingBubbleService.todayKey()
+        if (FloatingBubbleService.scanCountDay != today) {
+            FloatingBubbleService.scanCountDay = today
+            FloatingBubbleService.scanCountToday = countToday
+        } else {
+            FloatingBubbleService.scanCountToday =
+                maxOf(FloatingBubbleService.scanCountToday, countToday)
+        }
     }
 
 // ─── Native → JS (events) ────────────────────────────────────────────────────
@@ -248,6 +290,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             result: OcrParser.ScanResult,
             imageBase64: String? = null,
             debugBlocks: String? = null,
+            screenHeight: Int = 0,
         ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
@@ -266,9 +309,12 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // Image (JPEG compressée, base64) pour fallback Gemini côté JS
                 if (imageBase64 != null) putString("imageBase64", imageBase64)
                 else putNull("imageBase64")
-                // Dump des blocs ML Kit pour diagnostic (JSON) — consommé en DEV
+                // Dump des blocs ML Kit (JSON) — émis en release pour alimenter
+                // scan_debug côté JS quand une adresse manque.
                 if (debugBlocks != null) putString("debugBlocks", debugBlocks)
                 else putNull("debugBlocks")
+                // Hauteur image OCR (px) — pour rejouer un cas en fixture.
+                putInt("screenHeight", screenHeight)
             }
             emit("onScanResult", map)
         }

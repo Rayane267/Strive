@@ -44,6 +44,11 @@ class FloatingBubbleService : Service() {
     companion object {
         private const val CHANNEL_ID = "strive_scanner_channel"
         private const val NOTIF_ID = 42
+        /** Channel + id pour les alertes ponctuelles (ex: session requise) —
+         *  importance DEFAULT pour être visible, distinct du channel silencieux
+         *  du foreground service. */
+        private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
+        private const val SESSION_NOTIF_ID = 43
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
         /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
@@ -61,11 +66,37 @@ class FloatingBubbleService : Service() {
          *  voit "reviens demain". */
         var isFreeTier: Boolean = true
 
+        /** Session active (chauffeur « en ligne »). Synchronisé depuis JS via
+         *  setSessionOnline. Si false, triggerScan bloque le scan + notifie.
+         *  Défaut false = fail-safe (pas de scan tant que la session n'est pas
+         *  confirmée). Mirror iOS (AnalyzeRideIntent.isSessionOnline). */
+        var sessionOnline: Boolean = false
+
         /** Compteur de scans du jour + limite (poussés par le JS via setScanQuota).
          *  Permet d'appliquer le quota côté natif même quand le JS est suspendu.
          *  Le natif incrémente entre deux syncs ; le JS réécrit la valeur réelle. */
         var scanCountToday: Int = 0
         var scanQuotaLimit: Int = 0
+        /** Jour (yyyymmdd) du compteur, pour ignorer une valeur datée d'hier
+         *  si le process survit au-delà de l'heure de reset sans resync JS. */
+        var scanCountDay: Int = 0
+        /** Heure de reset du quota (0 ou 4h), poussée par le JS via setScanQuota. */
+        var quotaResetHour: Int = 0
+
+        /** Jour de quota tenant compte de quotaResetHour : un scan avant l'heure
+         *  de reset appartient encore à la journée de la veille. Aligné sur
+         *  getDayStart() côté JS. */
+        fun todayKey(): Int {
+            val c = java.util.Calendar.getInstance()
+            c.add(java.util.Calendar.HOUR_OF_DAY, -quotaResetHour)
+            return c.get(java.util.Calendar.YEAR) * 10000 +
+                (c.get(java.util.Calendar.MONTH) + 1) * 100 +
+                c.get(java.util.Calendar.DAY_OF_MONTH)
+        }
+
+        /** Compte du jour, 0 si la valeur stockée date d'un autre jour. */
+        fun scanCountForToday(): Int =
+            if (scanCountDay == todayKey()) scanCountToday else 0
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -201,11 +232,20 @@ class FloatingBubbleService : Service() {
 
     fun triggerScan() {
         if (scanInProgress) return
+        // Session non démarrée → on bloque le scan AVANT toute capture, et on
+        // notifie l'utilisateur de passer en ligne. Mirror iOS
+        // (AnalyzeRideIntent : refuse + notification si !sessionOnline).
+        if (!sessionOnline) {
+            notifySessionRequired()
+            showSessionRequiredState()
+            mainHandler.postDelayed({ showIdleState() }, 2500)
+            return
+        }
         // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
         // on n'attend pas que le JS (suspendu pendant un scan) mette le flag à jour.
-        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountToday >= scanQuotaLimit
+        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             showQuotaReachedState()
             mainHandler.postDelayed({ showIdleState() }, 2500)
@@ -256,8 +296,9 @@ class FloatingBubbleService : Service() {
                     //         (b) TomTom skip/KO → fallback OCR.
                     // Évite le flash de valeurs OCR provisoires qui pouvaient
                     // donner un verdict différent du verdict final.
-                    val debug = if (BuildConfig.DEBUG) debugBlocks else null
-                    resolveTomTomAndEmit(result, base64, debug)
+                    // Blocs émis en release (et non plus DEBUG-only) : alimentent
+                    // scan_debug côté JS quand une adresse manque.
+                    resolveTomTomAndEmit(result, base64, debugBlocks, h)
                     scanInProgress = false
                 } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
                     fallbackGemini(fullBitmap)
@@ -285,11 +326,13 @@ class FloatingBubbleService : Service() {
             val base64 = GeminiVisionService.encodeForBridge(bitmap)
             GeminiVisionService.analyze(bitmap) { result ->
                 bitmap.recycle()
-                mainHandler.post {
-                    if (result != null) {
-                        showResultState(result)
-                        ScanBridgeModule.emitScanResult(result, base64)
-                    } else {
+                if (result != null) {
+                    // B : on route le résultat Gemini par la MÊME résolution TomTom
+                    // que l'OCR (adresses → vraie distance). Gemini peut désormais
+                    // renvoyer pickup/destination → TomTom s'applique aussi ici.
+                    resolveTomTomAndEmit(result, base64, null)
+                } else {
+                    mainHandler.post {
                         onScanError()
                         ScanBridgeModule.emitScanFailed()
                     }
@@ -365,10 +408,14 @@ class FloatingBubbleService : Service() {
         ocr: OcrParser.ScanResult,
         base64: String,
         debugBlocks: String?,
+        screenHeight: Int = 0,
     ) {
         // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
         // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
-        scanCountToday += 1
+        // Nouveau jour → on repart de 0 avant d'incrémenter.
+        val today = todayKey()
+        scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
+        scanCountDay = today
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
@@ -382,7 +429,7 @@ class FloatingBubbleService : Service() {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
             mainHandler.post { showResultState(ocr); applyVerdict(ocr) }
-            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks)
+            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks, screenHeight)
             return
         }
 
@@ -390,18 +437,22 @@ class FloatingBubbleService : Service() {
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom route=$route (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
             val finalResult = if (route != null
-                && route.distanceKm in 0.3..120.0
-                && route.durationMin != null && route.durationMin <= 180
+                && route.distanceKm in 0.3..500.0
+                && route.durationMin != null && route.durationMin <= 300
                 && ratio in 0.2..12.0) {
                 ocr.copy(
                     distanceKm = route.distanceKm,
                     durationMin = route.durationMin,
+                    // Adresses canoniques TomTom (propres) plutôt que le texte OCR
+                    // bruité (ex: "All AV. … Çueue") — fallback OCR si absentes.
+                    pickupAddress = route.pickupFormatted ?: ocr.pickupAddress,
+                    destinationAddress = route.destFormatted ?: ocr.destinationAddress,
                 )
             } else {
                 ocr
             }
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult) }
-            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks)
+            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks, screenHeight)
         }
     }
 
@@ -915,6 +966,58 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
+    /** Bulle « passez en ligne » — affichée quand on tente un scan hors session. */
+    private fun showSessionRequiredState() {
+        clearTransientState()
+        bubbleContainer.removeAllViews()
+
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(16), dpToPx(8))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#FF9800"))
+                cornerRadius = dpToPx(999).toFloat()
+            }
+            elevation = dpToPx(8).toFloat()
+            isClickable = true
+            setOnClickListener { openAppHistory() }
+        }
+        pill.addView(TextView(this).apply {
+            text = "⏸"; textSize = 14f
+            setPadding(0, 0, dpToPx(6), 0)
+        })
+        pill.addView(TextView(this).apply {
+            text = getString(com.strive.R.string.scanner_session_required_bubble)
+            textSize = 13f; setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        bubbleContainer.addView(pill, FrameLayout.LayoutParams(
+            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT
+        ))
+        animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    /** Notification système invitant à démarrer la session. Tap → ouvre l'app. */
+    private fun notifySessionRequired() {
+        val launch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val pi = android.app.PendingIntent.getActivity(
+            this, 0, launch ?: Intent(),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle(getString(com.strive.R.string.scanner_session_required_title))
+            .setContentText(getString(com.strive.R.string.scanner_session_required_body))
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(SESSION_NOTIF_ID, notif)
+    }
+
     private fun animateTo(w: Int, h: Int) {
         bubbleParams.width = w; bubbleParams.height = h
         runCatching { windowManager.updateViewLayout(bubbleContainer, bubbleParams) }
@@ -924,9 +1027,14 @@ class FloatingBubbleService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             val ch = NotificationChannel(CHANNEL_ID, "Scanner VTC", NotificationManager.IMPORTANCE_LOW)
                 .apply { description = "Bulle de scan active" }
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
+            mgr.createNotificationChannel(ch)
+            // Channel d'alertes ponctuelles (session requise) — visible.
+            val alertCh = NotificationChannel(ALERT_CHANNEL_ID, "Alertes Strive", NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = "Notifications d'action requise (session, quota)" }
+            mgr.createNotificationChannel(alertCh)
         }
     }
 

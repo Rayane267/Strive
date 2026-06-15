@@ -558,6 +558,8 @@
     "contactTitle": "CONTACT",
     "contactDesc": "A question not covered here? Write to us — we reply within 24h.",
     "contactBtn": "Contact by email",
+    "mailSubject": "Strive Support",
+    "mailContext": "Technical info (please keep)",
     "faq": {
       "q1": "How does the scanner work?",
       "a1": "The scanner captures your VTC app's screen via the accessibility service, extracts trip details (fare, distance, duration) using OCR, and shows you a verdict based on your minimum rates.",
@@ -568,7 +570,9 @@
       "q4": "How do I change my minimum rates?",
       "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-km rate. Changes apply immediately.",
       "q5": "How do I cancel my Plus subscription?",
-      "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel."
+      "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
+      "q6": "Is my data safe?",
+      "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account."
     }
   },
   "iap": {
@@ -719,6 +723,10 @@
     "sessionClosed": {
       "title": "Session closed",
       "body": "Your session was closed after 1 hour of inactivity."
+    },
+    "syncDropped": {
+      "title": "Sync incomplete",
+      "body": "{{count}} ride(s) scanned offline could not be saved. Please check your history."
     },
     "weeklyRecap": {
       "title": "📊 Your week in review",

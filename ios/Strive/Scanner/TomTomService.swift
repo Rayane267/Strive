@@ -35,8 +35,14 @@ final class TomTomService {
   var isReady: Bool { apiKey() != nil }
 
   struct Coords { let lat: Double; let lon: Double }
-  struct GeocodeHit { let coords: Coords; let score: Double }
-  struct RouteResult { let distanceKm: Double; let durationMin: Int }
+  struct GeocodeHit { let coords: Coords; let score: Double; let formatted: String? }
+  struct RouteResult {
+    let distanceKm: Double
+    let durationMin: Int
+    /// Adresses canoniques renvoyées par TomTom (affichage propre vs texte OCR bruité).
+    let pickupFormatted: String?
+    let destFormatted: String?
+  }
 
   /// Calcule le trajet entre 2 adresses texte. Renvoie nil si TomTom n'est
   /// pas configuré, si une adresse est vide, ou si geocoding/routing échoue.
@@ -74,7 +80,12 @@ final class TomTomService {
         completion(nil); return
       }
       let route = self.getRoute(from: from.coords, to: to.coords)
-      DispatchQueue.main.async { completion(route) }
+      // Enrichit avec les adresses canoniques TomTom → affichage propre.
+      let enriched = route.map {
+        RouteResult(distanceKm: $0.distanceKm, durationMin: $0.durationMin,
+                    pickupFormatted: from.formatted, destFormatted: to.formatted)
+      }
+      DispatchQueue.main.async { completion(enriched) }
     }
   }
 
@@ -87,7 +98,11 @@ final class TomTomService {
       if best == nil || hit.score > best!.score { best = hit }
       if best!.score >= Self.minScore + 2 { return best }
     }
-    return best
+    // Plancher de fiabilité : un score < minScore = match centroïde ville/pays
+    // (adresse OCR douteuse). On préfère nil → pas de "vraie" distance fausse :
+    // le pipeline retombe sur l'OCR plutôt que de présenter un trajet centre-à-centre.
+    guard let b = best, b.score >= Self.minScore else { return nil }
+    return b
   }
 
   private func buildAddressVariants(_ address: String) -> [String] {
@@ -141,7 +156,8 @@ final class TomTomService {
           let lon = (pos["lon"] as? NSNumber)?.doubleValue
     else { return nil }
     let score = (first["score"] as? NSNumber)?.doubleValue ?? 0
-    let hit = GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score)
+    let formatted = (first["address"] as? [String: Any])?["freeformAddress"] as? String
+    let hit = GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score, formatted: formatted)
     // Persiste uniquement les résultats fiables — un faux match (score bas)
     // cacherait à vie un mauvais POI. Seuil aligné sur geocodeBestVariant.
     if score >= Self.minScore { GeocodeCache.shared.put(address: address, hit: hit) }
@@ -167,7 +183,8 @@ final class TomTomService {
 
     return RouteResult(
       distanceKm: (meters / 100.0).rounded() / 10.0,
-      durationMin: Int((seconds / 60.0).rounded())
+      durationMin: Int((seconds / 60.0).rounded()),
+      pickupFormatted: nil, destFormatted: nil
     )
   }
 

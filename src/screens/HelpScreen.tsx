@@ -16,13 +16,14 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { APP_VERSION_LABEL } from '../utils/appVersion';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const SUPPORT_EMAIL = 'support@strive.app';
+const SUPPORT_EMAIL = 'supportstriveapp@gmail.com';
 
 const FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
 
@@ -37,7 +38,14 @@ const HelpScreen = () => {
   };
 
   const handleEmail = () => {
-    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Strive%20Support`);
+    const subject = encodeURIComponent(t('help.mailSubject', 'Support Strive'));
+    // Contexte technique pré-rempli pour accélérer le diagnostic côté support.
+    const body = encodeURIComponent(
+      `\n\n———\n${t('help.mailContext', 'Infos techniques (ne pas supprimer)')}\n` +
+        `App : Strive ${APP_VERSION_LABEL}\n` +
+        `OS : ${Platform.OS} ${Platform.Version}\n`,
+    );
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => {});
   };
 
   return (
@@ -101,7 +109,9 @@ const HelpScreen = () => {
             <Feather name="mail" size={16} color={colors.background} />
             <Text style={styles.contactBtnText}>{t('help.contactBtn')}</Text>
           </TouchableOpacity>
-          <Text style={styles.contactEmail}>{SUPPORT_EMAIL}</Text>
+          <TouchableOpacity onPress={handleEmail} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.contactEmail}>{SUPPORT_EMAIL}</Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>

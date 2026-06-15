@@ -26,8 +26,14 @@ object TomTomService {
     val isReady get() = apiKey.isNotEmpty()
 
     data class Coords(val lat: Double, val lon: Double)
-    data class GeocodeHit(val coords: Coords, val score: Double)
-    data class RouteResult(val distanceKm: Double, val durationMin: Int)
+    data class GeocodeHit(val coords: Coords, val score: Double, val formatted: String? = null)
+    data class RouteResult(
+        val distanceKm: Double,
+        val durationMin: Int,
+        // Adresses canoniques TomTom (affichage propre vs texte OCR bruité).
+        val pickupFormatted: String? = null,
+        val destFormatted: String? = null,
+    )
 
     // Seuil de confiance sous lequel on retente avec des variantes d'adresse
     // (suffixe pays enlevé, seul code postal, etc.)
@@ -64,7 +70,11 @@ object TomTomService {
                     callback(null); return@Thread
                 }
                 Log.i(TAG, "geocode scores pickup=${"%.1f".format(from.score)} dest=${"%.1f".format(to.score)}")
-                val route = getRoute(from.coords, to.coords)
+                // Enrichit avec les adresses canoniques TomTom → affichage propre.
+                val route = getRoute(from.coords, to.coords)?.copy(
+                    pickupFormatted = from.formatted,
+                    destFormatted = to.formatted,
+                )
                 callback(route)
             } catch (e: Exception) {
                 Log.w(TAG, "exception", e)
@@ -87,7 +97,10 @@ object TomTomService {
             if (best == null || hit.score > best.score) best = hit
             if (best.score >= MIN_SCORE + 2) return best
         }
-        return best
+        // Plancher de fiabilité : un score < MIN_SCORE = match centroïde ville/pays
+        // (adresse OCR douteuse). On préfère null → pas de "vraie" distance fausse :
+        // le pipeline retombe sur l'OCR plutôt qu'un trajet centre-à-centre.
+        return best?.takeIf { it.score >= MIN_SCORE }
     }
 
     /**
@@ -128,7 +141,9 @@ object TomTomService {
             val first = results.getJSONObject(0)
             val pos = first.getJSONObject("position")
             val score = first.optDouble("score", 0.0)
-            GeocodeHit(Coords(pos.getDouble("lat"), pos.getDouble("lon")), score)
+            val formatted = first.optJSONObject("address")
+                ?.optString("freeformAddress")?.takeIf { it.isNotBlank() }
+            GeocodeHit(Coords(pos.getDouble("lat"), pos.getDouble("lon")), score, formatted)
         } catch (e: Exception) {
             Log.w(TAG, "geocode parse", e); null
         }
