@@ -42,6 +42,8 @@ export interface Ride {
   duration_min: number;
   hourly_rate: number;
   km_rate: number;
+  fuel_cost?: number | null;    // coût carburant figé au scan
+  net_profit?: number | null;   // tarif − fuel_cost (net réel daté)
   pickup_address?: string | null;
   destination_address?: string | null;
   created_at: string;
