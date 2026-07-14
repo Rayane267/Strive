@@ -19,11 +19,11 @@ Strive est un outil d'aide à la décision pour chauffeurs VTC indépendants : �
 
 Le responsable du traitement est :
 
-> **[À COMPLÉTER : raison sociale ou nom, forme juridique, SIREN, siège social]**
+> **Rayane TALEB** — entrepreneur individuel (auto-entrepreneur), éditeur de l'application **Strive**.
+> SIREN : **988 905 394**.
+> Siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
 
-**Contact (et exercice des droits) :** supportstriveapp@gmail.com
-
-> **[À COMPLÉTER, le cas échéant : coordonnées du Délégué à la Protection des Données (DPO)]**
+**Contact (et exercice des droits) :** contact@striveapp.fr
 
 ## 2. Données que nous traitons
 
@@ -89,7 +89,7 @@ Chacun de ces prestataires est lié par un engagement de confidentialité et de 
 
 ## 6. Transferts hors Union européenne
 
-> **[À COMPLÉTER : localisation d'hébergement des données (région Supabase)]**
+> Vos données sont hébergées par **Supabase** dans la région **`eu-west-1` (Irlande)**, soit **au sein de l'Union européenne**.
 
 Certains prestataires (notamment Google et Sentry) peuvent traiter des données en dehors de l'Union européenne. Ces transferts sont encadrés par des garanties appropriées au sens des articles 44 et suivants du RGPD, notamment les **clauses contractuelles types** de la Commission européenne ou un mécanisme équivalent.
 
@@ -115,7 +115,7 @@ Conformément au RGPD, vous disposez des droits suivants :
 **Exercice de vos droits :**
 - Vous pouvez consulter et modifier vos données directement depuis l'Application ;
 - Vous pouvez **supprimer votre compte et l'intégralité de vos données en une seule action** depuis *Profil → Compte* (cette opération efface vos courses, sessions, véhicules, préférences, votre profil, votre photo et votre compte) ;
-- Vous pouvez nous écrire à **supportstriveapp@gmail.com**.
+- Vous pouvez nous écrire à **contact@striveapp.fr**.
 
 Vous disposez enfin du droit d'introduire une réclamation auprès de la **Commission Nationale de l'Informatique et des Libertés (CNIL)** — <https://www.cnil.fr>.
 
@@ -125,7 +125,7 @@ Nous mettons en œuvre des mesures techniques et organisationnelles appropriées
 
 ## 10. Cookies (site web)
 
-Le site web de présentation de Strive n'utilise pas de cookies publicitaires ni de traceurs tiers à des fins de profilage. **[À COMPLÉTER si des outils de mesure d'audience sont ajoutés.]**
+Le site web de présentation de Strive n'utilise pas de cookies publicitaires ni de traceurs tiers à des fins de profilage.
 
 ## 11. Mineurs
 
@@ -137,4 +137,4 @@ La présente Politique peut être mise à jour. En cas de modification substanti
 
 ## 13. Contact
 
-Pour toute question relative à la protection de vos données : **supportstriveapp@gmail.com**.
+Pour toute question relative à la protection de vos données : **contact@striveapp.fr**.

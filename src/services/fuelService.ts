@@ -24,8 +24,12 @@ export const DEFAULT_FUEL_PRICE: Record<string, number> = {
  * (région Paris) puis repli sur DEFAULT_FUEL_PRICE. À appeler UNE fois (au
  * montage), pas à chaque scan — le scan est sensible à la latence.
  */
-export async function fetchFuelPrice(fuelType: string): Promise<number> {
-  if (fuelType === 'electric') return DEFAULT_FUEL_PRICE.electric;
+export async function fetchFuelPrice(fuelType: string, elecPrice?: number | null): Promise<number> {
+  // Électrique : prix €/kWh personnalisé par l'utilisateur (profiles.elec_price),
+  // repli sur le défaut. Pas de source marché (recharge très variable domicile/borne).
+  if (fuelType === 'electric') {
+    return elecPrice && elecPrice > 0 ? elecPrice : DEFAULT_FUEL_PRICE.electric;
+  }
   try {
     const col = fuelType === 'diesel' ? 'diesel' : fuelType === 'e85' ? 'e85' : 'essence';
     const { data } = await supabase

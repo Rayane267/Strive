@@ -11,5 +11,8 @@ module.exports = {
   // on résout `@env` vers un mock déterministe.
   moduleNameMapper: {
     '^@env$': '<rootDir>/__mocks__/env.js',
+    // Assets vidéo (démo AssistiveTouch du tuto) : la preset RN ne mappe que les
+    // images — on stub les .mov/.mp4 pour que require() ne casse pas les tests.
+    '\\.(mov|mp4)$': '<rootDir>/__mocks__/fileMock.js',
   },
 };

@@ -31,9 +31,12 @@ L'Application est un outil d'aide à la décision destiné aux chauffeurs de Vé
 
 L'Application est éditée par :
 
-> **[À COMPLÉTER : raison sociale ou nom, forme juridique, capital social, numéro SIREN/RCS, siège social, directeur de la publication]**
+> **Rayane TALEB** — entrepreneur individuel (auto-entrepreneur).
+> SIREN : **988 905 394**.
+> Siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
+> Directeur de la publication : Rayane TALEB.
 
-**Contact :** supportstriveapp@gmail.com
+**Contact :** contact@striveapp.fr
 
 ## Article 3 — Acceptation et modification des CGU
 
@@ -129,9 +132,7 @@ L'Utilisateur peut supprimer son compte à tout moment depuis l'Application. L'�
 
 14.1 — Les présentes CGU sont régies par le **droit français**.
 
-14.2 — **Médiation de la consommation.** Conformément aux articles L.611-1 et suivants du Code de la consommation, l'Utilisateur consommateur a le droit de recourir gratuitement à un médiateur de la consommation en vue de la résolution amiable de tout litige l'opposant à l'Éditeur :
-
-> **[À COMPLÉTER : nom et coordonnées du médiateur de la consommation désigné]**
+14.2 — **Médiation de la consommation.** Conformément aux articles L.611-1 et suivants du Code de la consommation, l'Utilisateur consommateur a le droit de recourir gratuitement à un médiateur de la consommation en vue de la résolution amiable de tout litige l'opposant à l'Éditeur. Toute demande peut être adressée à contact@striveapp.fr.
 
 La plateforme européenne de Règlement en Ligne des Litiges est par ailleurs accessible à l'adresse : <https://ec.europa.eu/consumers/odr>.
 
@@ -139,4 +140,4 @@ La plateforme européenne de Règlement en Ligne des Litiges est par ailleurs ac
 
 ## Article 15 — Contact
 
-Pour toute question relative aux présentes CGU : **supportstriveapp@gmail.com**.
+Pour toute question relative aux présentes CGU : **contact@striveapp.fr**.

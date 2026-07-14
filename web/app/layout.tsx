@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://strive.app'),
+  metadataBase: new URL('https://striveapp.fr'),
+  alternates: { canonical: '/' },
   title: 'Strive — Sache. Décide. Gagne.',
   description:
     'L\'assistant des chauffeurs VTC. Scanne chaque offre Uber, Bolt et Heetch en 2 secondes et n\'accepte plus jamais une course non rentable.',

@@ -10,6 +10,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { navigateFromNotification } from '../navigation/navigationRef';
 
 const FCM_TOKEN_KEY = '@strive_fcm_token';
 const LAST_REMINDER_KEY = '@strive_last_reminder';
@@ -101,6 +102,17 @@ export function setupNotificationListeners(
         }
       });
       cleanups.push(unsubToken);
+
+      // Tap sur une notif alors que l'app est en arrière-plan → deep-link.
+      const unsubOpened = fcm.onNotificationOpenedApp(messagingInstance, (remoteMessage: any) => {
+        navigateFromNotification(remoteMessage?.data);
+      });
+      cleanups.push(unsubOpened);
+
+      // App lancée depuis l'état tué via une notif → deep-link initial.
+      fcm.getInitialNotification(messagingInstance).then((remoteMessage: any) => {
+        if (remoteMessage) navigateFromNotification(remoteMessage.data);
+      });
     } catch (e) {
       __DEV__ && console.warn('[NOTIF] setupNotificationListeners error:', e);
     }
@@ -157,6 +169,8 @@ async function getMessagingApi(): Promise<{
   getToken: (m: any) => Promise<string>;
   onMessage: (m: any, cb: (msg: any) => void) => () => void;
   onTokenRefresh: (m: any, cb: (token: string) => void) => () => void;
+  onNotificationOpenedApp: (m: any, cb: (msg: any) => void) => () => void;
+  getInitialNotification: (m: any) => Promise<any>;
   AuthorizationStatus: { AUTHORIZED: number; PROVISIONAL: number; DENIED: number; NOT_DETERMINED: number };
 } | null> {
   try {
@@ -169,6 +183,8 @@ async function getMessagingApi(): Promise<{
       getToken: messagingMod.getToken,
       onMessage: messagingMod.onMessage,
       onTokenRefresh: messagingMod.onTokenRefresh,
+      onNotificationOpenedApp: messagingMod.onNotificationOpenedApp,
+      getInitialNotification: messagingMod.getInitialNotification,
       AuthorizationStatus: messagingMod.AuthorizationStatus,
     };
   } catch {

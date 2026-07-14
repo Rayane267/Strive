@@ -6,4 +6,9 @@
   <string name="scanner_session_required_bubble">Passez en ligne pour scanner</string>
   <string name="scanner_session_required_title">Session requise</string>
   <string name="scanner_session_required_body">Démarrez votre session dans Strive pour scanner vos courses.</string>
+  <string name="scanner_notif_active_title">Scanner Strive actif</string>
+  <string name="scanner_notif_active_body">Appuyez sur la pastille pour scanner</string>
+  <string name="scanner_notif_online">en ligne</string>
+  <string name="scanner_ride_accept">✅ Course prise</string>
+  <string name="scanner_ride_decline">❌ Refusée</string>
 </resources>

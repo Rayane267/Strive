@@ -31,9 +31,12 @@ The Application is a decision-support tool for self-employed private-hire (VTC) 
 
 The Application is published by:
 
-> **[TO BE COMPLETED: company name or individual, legal form, registration number, registered office, publication director]**
+> **Rayane TALEB** — sole trader (*auto-entrepreneur*).
+> SIREN: **988 905 394**.
+> Registered office: 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
+> Publication director: Rayane TALEB.
 
-**Contact:** supportstriveapp@gmail.com
+**Contact:** contact@striveapp.fr
 
 ## Article 3 — Acceptance and amendment of the Terms
 
@@ -98,8 +101,8 @@ The User may delete their account at any time from the Application. The Publishe
 
 ## Article 14 — Governing law and disputes
 
-These Terms are governed by **French law**. Under Articles L.611-1 et seq. of the French Consumer Code, a consumer User may use, free of charge, a consumer mediator: **[TO BE COMPLETED: name and contact details of the mediator]**. The EU Online Dispute Resolution platform is available at <https://ec.europa.eu/consumers/odr>. Failing amicable resolution, the French courts have jurisdiction.
+These Terms are governed by **French law**. Under Articles L.611-1 et seq. of the French Consumer Code, a consumer User may use, free of charge, a consumer mediator; any request may be sent to contact@striveapp.fr. The EU Online Dispute Resolution platform is available at <https://ec.europa.eu/consumers/odr>. Failing amicable resolution, the French courts have jurisdiction.
 
 ## Article 15 — Contact
 
-For any question: **supportstriveapp@gmail.com**.
+For any question: **contact@striveapp.fr**.

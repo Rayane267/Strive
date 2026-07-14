@@ -9,6 +9,8 @@ import android.os.Build
 import android.provider.Settings
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     : ReactContextBaseJavaModule(reactContext), ActivityEventListener {
@@ -243,6 +245,46 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         TomTomService.apiKey = key
     }
 
+    /** Purge le cache de géocodage local (adresses = PII). Appelé par le JS au
+     *  logout et après suppression de compte — l'effacement RGPD couvre aussi le
+     *  cache sur l'appareil, hors de portée de la RPC serveur delete_account. */
+    @ReactMethod
+    fun clearGeocodeCache() {
+        GeocodeCache.clear()
+    }
+
+    /** KPI de session du jour poussés par le JS (gains, €/h, km, minutes en
+     *  ligne) → affichés dans la notification persistante du foreground service.
+     *  Équivalent Android du tableau de bord Live Activity iOS (updateSessionKPI). */
+    @ReactMethod
+    fun updateSessionKPI(payload: ReadableMap) {
+        FloatingBubbleService.updateSessionKpi(
+            todayEarnings = if (payload.hasKey("todayEarnings")) payload.getDouble("todayEarnings") else 0.0,
+            todayHourlyRate = if (payload.hasKey("todayHourlyRate")) payload.getDouble("todayHourlyRate") else 0.0,
+            todayKm = if (payload.hasKey("todayKm")) payload.getDouble("todayKm") else 0.0,
+            onlineMinutes = if (payload.hasKey("onlineMinutes")) payload.getInt("onlineMinutes") else 0,
+        )
+    }
+
+    /** Vidange du buffer de décisions Accepter/Refuser vers le JS — appelée à
+     *  l'abonnement onRideDecision (couvre le cas où la décision a été tapée alors
+     *  que le process RN était mort). Idempotent : si déjà émise en direct,
+     *  applyRideDecision côté JS retague la même course sans effet de bord. */
+    @ReactMethod
+    fun drainRideDecisions() {
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(DECISIONS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            emit("onRideDecision", Arguments.createMap().apply {
+                putDouble("scanTs", o.getDouble("scanTs"))
+                putString("status", o.getString("status"))
+            })
+        }
+        prefs.edit().remove(DECISIONS_KEY).apply()
+    }
+
     /** Quota journalier atteint — si true, la bulle affiche "Quota atteint"
      *  et n'exécute ni OCR ni TomTom au tap. À syncer depuis le Dashboard. */
     @ReactMethod
@@ -286,11 +328,32 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         private const val REQUEST_MEDIA_PROJECTION = 1001
         private var moduleInstance: ScanBridgeModule? = null
 
+        /** Buffer des décisions Accepter/Refuser (survit à un process RN mort). */
+        const val DECISIONS_PREFS = "strive_ride_decisions"
+        const val DECISIONS_KEY = "pending"
+
+        /** Relaie une décision course (Accepter/Refuser) tapée sur la notification
+         *  de résultat. Bufferise (SharedPreferences) pour survivre à un process
+         *  RN mort, ET émet en direct quand l'app tourne encore (cas fréquent :
+         *  foreground service vivant). Le JS draine le buffer à l'abonnement.
+         *  Équivalent de l'AppDelegate iOS (appendRideDecision + Darwin notif). */
+        fun emitRideDecision(ctx: Context, scanTs: Double, status: String) {
+            val prefs = ctx.getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
+            val arr = try { JSONArray(prefs.getString(DECISIONS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+            arr.put(JSONObject().put("scanTs", scanTs).put("status", status))
+            prefs.edit().putString(DECISIONS_KEY, arr.toString()).apply()
+            emit("onRideDecision", Arguments.createMap().apply {
+                putDouble("scanTs", scanTs)
+                putString("status", status)
+            })
+        }
+
         fun emitScanResult(
             result: OcrParser.ScanResult,
             imageBase64: String? = null,
             debugBlocks: String? = null,
             screenHeight: Int = 0,
+            scanTs: Double = 0.0,
         ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
@@ -315,6 +378,9 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 else putNull("debugBlocks")
                 // Hauteur image OCR (px) — pour rejouer un cas en fixture.
                 putInt("screenHeight", screenHeight)
+                // Horodatage du scan (secondes epoch) — corrélation course ↔ décision
+                // Accepter/Refuser (DashboardScreen mappe scanTs → ride id). Mirror iOS.
+                if (scanTs > 0) putDouble("scanTs", scanTs) else putNull("scanTs")
             }
             emit("onScanResult", map)
         }

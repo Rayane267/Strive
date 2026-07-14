@@ -28,6 +28,8 @@ RCT_EXTERN_METHOD(setParserConfig:(NSString *)configJson)
 
 RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
 
+RCT_EXTERN_METHOD(clearGeocodeCache)
+
 RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached isFree:(BOOL)isFree)
 
 RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday

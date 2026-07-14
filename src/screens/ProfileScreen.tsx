@@ -155,6 +155,13 @@ const ProfileScreen = () => {
       sub: t('profile.helpSub'),
       onPress: () => navigation.navigate('Help'),
     },
+    {
+      icon: 'lifebuoy',
+      iconLib: 'mc',
+      title: t('support.title', 'Mes tickets'),
+      sub: t('support.menuSub', 'Contacter le support, suivre tes demandes'),
+      onPress: () => navigation.navigate('SupportTickets'),
+    },
   ];
 
   const renderIcon = (item: MenuItem) => {
@@ -307,17 +314,6 @@ const ProfileScreen = () => {
         <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.language')}</Text>
         <View style={styles.langRow}>
           <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
-            onPress={() => changeLanguage('en')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="English"
-            accessibilityState={{ selected: i18n.language === 'en' }}
-          >
-            <Text style={styles.langFlag}>🇬🇧</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
             onPress={() => changeLanguage('fr')}
             activeOpacity={0.7}
@@ -327,6 +323,17 @@ const ProfileScreen = () => {
           >
             <Text style={styles.langFlag}>🇫🇷</Text>
             <Text style={[styles.langBtnText, i18n.language === 'fr' && styles.langBtnTextActive]}>Français</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
+            onPress={() => changeLanguage('en')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="English"
+            accessibilityState={{ selected: i18n.language === 'en' }}
+          >
+            <Text style={styles.langFlag}>🇬🇧</Text>
+            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
           </TouchableOpacity>
         </View>
 
@@ -373,11 +380,11 @@ const ProfileScreen = () => {
 
         {/* ── FOOTER ── */}
         <View style={styles.legalLinksRow}>
-          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/privacy')}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/privacy')}>
             <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
           </TouchableOpacity>
           <Text style={styles.legalSep}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/terms')}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/terms')}>
             <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
           </TouchableOpacity>
         </View>

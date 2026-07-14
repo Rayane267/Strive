@@ -19,7 +19,7 @@ import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { FREE_THRESHOLDS } from '../services/subscriptionService';
+import { FREE_THRESHOLDS, getEffectivePlanTier } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import BrandLoader from '../components/BrandLoader';
 
@@ -28,8 +28,7 @@ const PreferencesScreen = () => {
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
 
-  const tier = profile?.subscription_tier?.toLowerCase();
-  const isPremium = tier === 'plus' || tier === 'pro' || tier === 'premium';
+  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   // --- ÉTATS ---
   const [loading, setLoading] = useState(true);

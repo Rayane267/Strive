@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Reveal from './Reveal';
 
 const plusFeatures = [
-  'Scans illimités',
+  '15 scans par jour',
   'Taux horaire €/h en direct',
+  'Trafic en temps réel (€/h ajusté aux embouteillages)',
   'Filtre intelligent des courses',
   'Seuils €/h et €/km personnalisés',
   'Historique complet des courses',
@@ -15,7 +16,7 @@ const plusFeatures = [
 ];
 
 const freeFeatures = [
-  '1 scan par jour',
+  '3 scans par jour',
   'Estimations basiques',
   'Dashboard basique',
   'Historique du jour seulement',
@@ -24,9 +25,9 @@ const freeFeatures = [
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
 
-  const price = yearly ? '79,99 €' : '9,99 €';
+  const price = yearly ? '89,99 €' : '9,99 €';
   const cycle = yearly ? '/an' : '/mois';
-  const equiv = yearly ? 'soit 6,66 € / mois' : 'Sans engagement';
+  const equiv = yearly ? 'soit 7,49 € / mois' : 'Sans engagement';
 
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
@@ -106,7 +107,7 @@ export default function Pricing() {
               ))}
             </ul>
             <a href="#download" className="btn btn-signal shimmer mt-8 rounded-full py-3 text-sm">
-              Commencer mes 3 jours gratuits
+              Commencer mes 7 jours gratuits
             </a>
             <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-widest text-faint">
               Puis {price}{cycle} · Annulable

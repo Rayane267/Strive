@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   FlatList,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -25,27 +26,56 @@ import { useAuth } from '../context/AuthContext';
 // ─── Indicatifs pays ──────────────────────────────────────────────────────────
 
 const DIAL_CODES = [
-  { code: '+33',  flag: '🇫🇷', nameKey: 'countries.fr',  digits: [9] },
-  { code: '+32',  flag: '🇧🇪', nameKey: 'countries.be',  digits: [8, 9] },
-  { code: '+41',  flag: '🇨🇭', nameKey: 'countries.ch',  digits: [9] },
-  { code: '+352', flag: '🇱🇺', nameKey: 'countries.lu',  digits: [6, 7, 8, 9] },
-  { code: '+213', flag: '🇩🇿', nameKey: 'countries.dz',  digits: [9] },
-  { code: '+212', flag: '🇲🇦', nameKey: 'countries.ma',  digits: [9] },
-  { code: '+216', flag: '🇹🇳', nameKey: 'countries.tn',  digits: [8] },
-  { code: '+221', flag: '🇸🇳', nameKey: 'countries.sn',  digits: [9] },
-  { code: '+225', flag: '🇨🇮', nameKey: 'countries.ci',  digits: [10] },
-  { code: '+237', flag: '🇨🇲', nameKey: 'countries.cm',  digits: [9] },
-  { code: '+223', flag: '🇲🇱', nameKey: 'countries.ml',  digits: [8] },
-  { code: '+224', flag: '🇬🇳', nameKey: 'countries.gn',  digits: [9] },
-  { code: '+351', flag: '🇵🇹', nameKey: 'countries.pt',  digits: [9] },
-  { code: '+34',  flag: '🇪🇸', nameKey: 'countries.es',  digits: [9] },
-  { code: '+39',  flag: '🇮🇹', nameKey: 'countries.it',  digits: [9, 10] },
-  { code: '+44',  flag: '🇬🇧', nameKey: 'countries.gb',  digits: [10] },
-  { code: '+49',  flag: '🇩🇪', nameKey: 'countries.de',  digits: [10, 11] },
-  { code: '+40',  flag: '🇷🇴', nameKey: 'countries.ro',  digits: [9] },
-  { code: '+48',  flag: '🇵🇱', nameKey: 'countries.pl',  digits: [9] },
-  { code: '+1',   flag: '🇺🇸', nameKey: 'countries.us',  digits: [10] },
+  { code: '+33',  iso: 'FR', flag: '🇫🇷', nameKey: 'countries.fr',  digits: [9] },
+  { code: '+32',  iso: 'BE', flag: '🇧🇪', nameKey: 'countries.be',  digits: [8, 9] },
+  { code: '+41',  iso: 'CH', flag: '🇨🇭', nameKey: 'countries.ch',  digits: [9] },
+  { code: '+352', iso: 'LU', flag: '🇱🇺', nameKey: 'countries.lu',  digits: [6, 7, 8, 9] },
+  { code: '+213', iso: 'DZ', flag: '🇩🇿', nameKey: 'countries.dz',  digits: [9] },
+  { code: '+212', iso: 'MA', flag: '🇲🇦', nameKey: 'countries.ma',  digits: [9] },
+  { code: '+216', iso: 'TN', flag: '🇹🇳', nameKey: 'countries.tn',  digits: [8] },
+  { code: '+221', iso: 'SN', flag: '🇸🇳', nameKey: 'countries.sn',  digits: [9] },
+  { code: '+225', iso: 'CI', flag: '🇨🇮', nameKey: 'countries.ci',  digits: [10] },
+  { code: '+237', iso: 'CM', flag: '🇨🇲', nameKey: 'countries.cm',  digits: [9] },
+  { code: '+223', iso: 'ML', flag: '🇲🇱', nameKey: 'countries.ml',  digits: [8] },
+  { code: '+224', iso: 'GN', flag: '🇬🇳', nameKey: 'countries.gn',  digits: [9] },
+  { code: '+351', iso: 'PT', flag: '🇵🇹', nameKey: 'countries.pt',  digits: [9] },
+  { code: '+34',  iso: 'ES', flag: '🇪🇸', nameKey: 'countries.es',  digits: [9] },
+  { code: '+39',  iso: 'IT', flag: '🇮🇹', nameKey: 'countries.it',  digits: [9, 10] },
+  { code: '+44',  iso: 'GB', flag: '🇬🇧', nameKey: 'countries.gb',  digits: [10] },
+  { code: '+49',  iso: 'DE', flag: '🇩🇪', nameKey: 'countries.de',  digits: [10, 11] },
+  { code: '+40',  iso: 'RO', flag: '🇷🇴', nameKey: 'countries.ro',  digits: [9] },
+  { code: '+48',  iso: 'PL', flag: '🇵🇱', nameKey: 'countries.pl',  digits: [9] },
+  { code: '+1',   iso: 'US', flag: '🇺🇸', nameKey: 'countries.us',  digits: [10] },
 ];
+
+// Région (pays) de l'appareil → indicatif par défaut. On lit le code pays ISO
+// depuis la locale Intl (ex. "fr-FR" → "FR"), avec fallback NativeModules.
+function getDeviceRegion(): string | null {
+  const pickRegion = (raw?: string | null): string | null => {
+    if (typeof raw !== 'string') return null;
+    // On saute le 1er sous-tag (langue) et on cherche un token pays à 2 lettres.
+    const region = raw.split(/[-_]/).slice(1).find(p => /^[A-Za-z]{2}$/.test(p));
+    return region ? region.toUpperCase() : null;
+  };
+  try {
+    const fromIntl = pickRegion(Intl.DateTimeFormat().resolvedOptions().locale);
+    if (fromIntl) return fromIntl;
+    const raw = Platform.OS === 'ios'
+      ? NativeModules.SettingsManager?.settings?.AppleLocale ||
+        NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
+      : NativeModules.I18nManager?.localeIdentifier;
+    return pickRegion(raw);
+  } catch {
+    return null;
+  }
+}
+
+const DEFAULT_DIAL =
+  DIAL_CODES.find(d => d.iso === getDeviceRegion()) ?? DIAL_CODES[0];
+
+// Normalise pour la recherche : minuscules + suppression des accents.
+const normalizeSearch = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // ─── Validation — retourne des clés i18n ─────────────────────────────────────
 
@@ -86,7 +116,7 @@ export default function ProfileSetupScreen() {
 
   const [firstName, setFirstName]     = useState('');
   const [lastName, setLastName]       = useState('');
-  const [dialCode, setDialCode]       = useState(DIAL_CODES[0]);
+  const [dialCode, setDialCode]       = useState(DEFAULT_DIAL);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [dobDay, setDobDay]           = useState('');
   const [dobMonth, setDobMonth]       = useState('');
@@ -94,6 +124,16 @@ export default function ProfileSetupScreen() {
   const [avatarUrl, setAvatarUrl]     = useState('');
   const [loading, setLoading]         = useState(false);
   const [dialPickerOpen, setDialPickerOpen] = useState(false);
+  const [dialQuery, setDialQuery] = useState('');
+
+  const filteredDialCodes = useMemo(() => {
+    const q = normalizeSearch(dialQuery.trim());
+    if (!q) return DIAL_CODES;
+    return DIAL_CODES.filter(item =>
+      normalizeSearch(t(item.nameKey)).includes(q) ||
+      item.code.replace('+', '').includes(q.replace('+', '')),
+    );
+  }, [dialQuery, t]);
 
   const [errors, setErrors] = useState({
     firstName: '', lastName: '', phone: '', dob: '',
@@ -325,25 +365,47 @@ export default function ProfileSetupScreen() {
         visible={dialPickerOpen}
         animationType="slide"
         transparent
-        onRequestClose={() => setDialPickerOpen(false)}
+        onRequestClose={() => { setDialPickerOpen(false); setDialQuery(''); }}
       >
         <View style={styles.modalOverlay}>
           <SafeAreaView style={styles.modalSheet} edges={['bottom']}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('profile.setup.dialPickerTitle')}</Text>
-              <TouchableOpacity onPress={() => setDialPickerOpen(false)}>
+              <TouchableOpacity onPress={() => { setDialPickerOpen(false); setDialQuery(''); }}>
                 <Feather name="x" size={20} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
+            <View style={styles.dialSearchWrap}>
+              <Feather name="search" size={16} color={colors.textDimmed} style={styles.dialSearchIcon} />
+              <TextInput
+                style={styles.dialSearchInput}
+                placeholder={t('profile.setup.dialSearchPlaceholder', 'Rechercher un pays ou un indicatif')}
+                placeholderTextColor={colors.textDimmed}
+                value={dialQuery}
+                onChangeText={setDialQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {dialQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setDialQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name="x-circle" size={16} color={colors.textDimmed} />
+                </TouchableOpacity>
+              )}
+            </View>
             <FlatList
-              data={DIAL_CODES}
+              data={filteredDialCodes}
               keyExtractor={item => item.code + item.nameKey}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.dialEmpty}>{t('profile.setup.dialNoResult', 'Aucun pays trouvé')}</Text>
+              }
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.dialItem, item.code === dialCode.code && styles.dialItemActive]}
-                  onPress={() => { setDialCode(item); setDialPickerOpen(false); }}
+                  onPress={() => { setDialCode(item); setDialPickerOpen(false); setDialQuery(''); }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.dialItemFlag}>{item.flag}</Text>
@@ -448,6 +510,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', marginBottom: 8,
   },
   modalTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700' },
+  dialSearchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.background, borderRadius: 12,
+    paddingHorizontal: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  dialSearchIcon: { marginRight: 2 },
+  dialSearchInput: { flex: 1, paddingVertical: 11, fontSize: 15, color: colors.textMain },
+  dialEmpty: { color: colors.textDimmed, fontSize: 14, textAlign: 'center', paddingVertical: 28 },
   dialItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   dialItemActive: { backgroundColor: 'rgba(0,230,118,0.05)' },
   dialItemFlag: { fontSize: 22 },

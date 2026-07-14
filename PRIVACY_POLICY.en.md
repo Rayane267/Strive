@@ -18,9 +18,11 @@ Strive is a decision-support tool for self-employed VTC drivers: at the User's r
 
 The data controller is the publisher of Strive:
 
-> **[TO BE COMPLETED: company name or individual, legal form, registration number, registered office]**
+> **Rayane TALEB** — sole trader (*auto-entrepreneur*), publisher of the **Strive** application.
+> SIREN: **988 905 394**.
+> Registered office: 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
 
-**Contact (and to exercise your rights):** supportstriveapp@gmail.com — **[TO BE COMPLETED: Data Protection Officer details, if any]**
+**Contact (and to exercise your rights):** contact@striveapp.fr
 
 ## 2. Data we process
 
@@ -70,7 +72,7 @@ We **sell no data** and display **no advertising**. We use technical processors 
 
 ## 6. Transfers outside the European Union
 
-**[TO BE COMPLETED: data-hosting location (Supabase region).]** Some providers (Google, Sentry…) may process data outside the EU; such transfers are framed by appropriate safeguards (Standard Contractual Clauses or an equivalent mechanism) under Articles 44 et seq. of the GDPR.
+Your data is hosted by **Supabase** in the **`eu-west-1` (Ireland)** region, i.e. **within the European Union**. Some providers (Google, Sentry…) may process data outside the EU; such transfers are framed by appropriate safeguards (Standard Contractual Clauses or an equivalent mechanism) under Articles 44 et seq. of the GDPR.
 
 ## 7. Retention periods
 
@@ -85,7 +87,7 @@ Under the GDPR, you have the rights of access (Art. 15), rectification (Art. 16)
 
 - view and edit your data from the application;
 - **delete your account and all your data in a single action** from Profile → Account (rides, sessions, vehicles, preferences, profile, photo and account);
-- contact us at supportstriveapp@gmail.com.
+- contact us at contact@striveapp.fr.
 
 You may also lodge a complaint with the French data-protection authority (CNIL — <https://www.cnil.fr>) or your local supervisory authority.
 
@@ -95,7 +97,7 @@ Data in transit is encrypted (HTTPS); data access is partitioned per user (each 
 
 ## 10. Cookies (website)
 
-The marketing website uses no advertising cookies or profiling trackers. **[TO BE COMPLETED if an analytics tool is added.]**
+The marketing website uses no advertising cookies or profiling trackers.
 
 ## 11. Minors
 
@@ -107,4 +109,4 @@ We may update this Policy. In the event of a material change, you will be inform
 
 ## 13. Contact
 
-For any question regarding your data: **supportstriveapp@gmail.com**.
+For any question regarding your data: **contact@striveapp.fr**.

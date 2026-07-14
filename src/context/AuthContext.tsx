@@ -1,4 +1,5 @@
-import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react';
+import { AppState } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
 import { fetchProfile } from '../services/profileService';
@@ -6,6 +7,7 @@ import { fetchPlanLimits } from '../services/subscriptionService';
 import { initPurchases, logoutPurchases } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import { scannerService } from '../services/scanner';
+import { clearOfflineCache } from '../services/offlineService';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '../types/database';
 
@@ -126,6 +128,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         Sentry.addBreadcrumb({ category: 'auth', message: 'User signed out', level: 'info' });
         // Purge le JWT côté natif au logout.
         try { scannerService.setSupabaseUserJwt(''); } catch {}
+        // RGPD : vide les caches locaux porteurs d'adresses (géocodage + courses
+        // hors-ligne) pour qu'un user suivant sur le même appareil n'en hérite
+        // pas. Couvre aussi la suppression de compte (qui se termine par signOut).
+        try { scannerService.clearGeocodeCache(); } catch {}
+        clearOfflineCache().catch(() => {});
         setProfile(null);
         setProfileError(false);
         notifCleanupRef.current?.();
@@ -141,33 +148,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (user) await loadProfile(user.id);
-  };
+  }, [user]);
+
+  // Refresh du profil au retour en premier plan : capte les changements
+  // d'abonnement (renouvellement, upgrade/downgrade, expiration) survenus
+  // pendant que l'app était en arrière-plan, sans attendre un cold start.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && user) {
+        loadProfile(user.id).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [user]);
 
   // Déblocage optimiste post-achat : RevenueCat a confirmé l'entitlement, on
   // débloque l'UI tout de suite (le webhook → DB suit en quelques secondes).
-  const markSubscribed = (tier: 'plus' | 'premium') => {
+  const markSubscribed = useCallback((tier: 'plus' | 'premium') => {
     // On pousse aussi une expiration future : sans ça, un ancien
     // subscription_expires_at dans le passé (ré-abonné) ferait redémoter
     // getEffectivePlanTier() en 'free' aussitôt → déblocage optimiste annulé.
-    // La réconciliation (refreshProfile) écrasera ensuite avec la vraie date.
-    const optimisticExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    // La réconciliation (refreshProfile, foreground + poll post-achat) écrasera
+    // avec la vraie date. Fenêtre de 24h : si le webhook RC tarde ou échoue,
+    // l'utilisateur qui a payé garde l'accès au lieu de retomber free en 1h.
+    const optimisticExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     setProfile(prev => prev ? {
       ...prev,
       subscription_tier: tier,
       subscription_status: 'active',
       subscription_expires_at: optimisticExpiry,
     } : prev);
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{ user, session, profile, loading, profileError, refreshProfile, markSubscribed }}
-    >
-      {children}
-    </AuthContext.Provider>
+  // Mémoïsé : sans ça l'objet value est recréé à chaque render du provider →
+  // tous les consommateurs de useAuth() (≈ tous les écrans) re-render à chaque
+  // TOKEN_REFRESHED (~1×/h), changement de loading, etc.
+  const value = useMemo(
+    () => ({ user, session, profile, loading, profileError, refreshProfile, markSubscribed }),
+    [user, session, profile, loading, profileError, refreshProfile, markSubscribed],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

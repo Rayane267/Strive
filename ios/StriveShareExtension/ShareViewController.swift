@@ -405,6 +405,16 @@ class ShareViewController: UIViewController {
           self.fallbackToGemini(image: image)
           return
         }
+        // Sans les 2 adresses, TomTom n'a pas pu géocoder → les métriques
+        // viennent de l'OCR brut (durée d'approche souvent confondue avec la
+        // course → €/h gonflé). On ne valide pas une telle course : on tente
+        // Gemini, qui récupère les adresses puis relance TomTom.
+        let pickup = result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let dest = result.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !pickup.isEmpty, !dest.isEmpty else {
+          self.fallbackToGemini(image: image)
+          return
+        }
         self.incrementScanCount()
         self.showResult(from: result)
         self.saveSharedResult(result)
@@ -447,7 +457,20 @@ class ShareViewController: UIViewController {
       let pickup = result.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let dest = result.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-      guard !pickup.isEmpty, !dest.isEmpty, TomTomService.shared.isReady else {
+      // Gemini n'a pas lu les 2 adresses → ni géocodage ni métriques fiables
+      // possibles. Règle produit : pas de course sans ses 2 adresses. On affiche
+      // scan échoué et on n'enregistre RIEN (ni UI extension, ni App Group).
+      guard !pickup.isEmpty, !dest.isEmpty else {
+        DispatchQueue.main.async {
+          self.showError(self.localizedString(
+            fr: "Scan échoué — adresses illisibles, réessaie",
+            en: "Scan failed — addresses unreadable, try again"
+          ))
+        }
+        return
+      }
+
+      guard TomTomService.shared.isReady else {
         DispatchQueue.main.async {
           self.incrementScanCount()
           self.showResult(result)

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RNBootSplash from 'react-native-bootsplash';
 import * as Sentry from '@sentry/react-native';
 import RootNavigator from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 import { colors } from './src/theme/colors';
 import { SENTRY_DSN } from '@env';
 import { APP_VERSION, BUILD_NUMBER } from './src/utils/appVersion';
@@ -37,7 +38,7 @@ Sentry.init({
 // MainTabs est un BottomTabNavigator imbriqué → `screens` nested.
 // `any` évite de dupliquer la déclaration du RootParamList pour le typage strict.
 const linking: LinkingOptions<any> = {
-  prefixes: ['strive://', 'https://strive.app'],
+  prefixes: ['strive://', 'https://striveapp.fr'],
   config: {
     screens: {
       MainTabs: {
@@ -67,6 +68,7 @@ const AppContent = () => {
       />
       <OfflineBanner />
       <NavigationContainer
+        ref={navigationRef}
         linking={linking}
         theme={AppTheme}
         onReady={() => {

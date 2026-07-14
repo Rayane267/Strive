@@ -38,8 +38,10 @@ export default function TermsPage() {
       <h2>2. Identité de l&apos;Éditeur</h2>
       <p>
         L&apos;Application est éditée par :{' '}
-        <strong>[À COMPLÉTER : raison sociale ou nom, forme juridique, SIREN/RCS, siège social, directeur de la publication]</strong>.
-        Contact : <a href="mailto:supportstriveapp@gmail.com">supportstriveapp@gmail.com</a>.
+        <strong>Rayane TALEB</strong>, entrepreneur individuel (auto-entrepreneur),
+        SIREN 988 905 394, siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
+        Directeur de la publication : Rayane TALEB.
+        Contact : <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.
       </p>
 
       <h2>3. Acceptation et modification des CGU</h2>
@@ -83,7 +85,7 @@ export default function TermsPage() {
       <h2>7. Abonnements, achats et facturation</h2>
       <ul>
         <li><strong>Offre gratuite</strong> : accès assorti d&apos;un quota limité de Scans par jour.</li>
-        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (Scans illimités + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 3 jours</strong>.</li>
+        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (15 scans/jour + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 7 jours</strong>.</li>
         <li><strong>Packs de Scans</strong> : crédits ponctuels (achats non renouvelables).</li>
         <li><strong>Facturation via les stores</strong> : tous les paiements sont traités par l&apos;App Store (Apple) ou Google Play, selon leurs conditions. L&apos;Éditeur n&apos;a accès à aucune donnée bancaire.</li>
         <li><strong>Renouvellement automatique</strong> pour une période identique, sauf résiliation au moins 24 h avant la fin de la période en cours ; en cas d&apos;essai, facturation à l&apos;issue si non annulé à temps.</li>
@@ -155,8 +157,8 @@ export default function TermsPage() {
       <p>
         Les présentes CGU sont régies par le <strong>droit français</strong>. Conformément aux
         articles L.611-1 et suivants du Code de la consommation, l&apos;Utilisateur consommateur peut
-        recourir gratuitement à un médiateur de la consommation :{' '}
-        <strong>[À COMPLÉTER : nom et coordonnées du médiateur]</strong>. La plateforme européenne de
+        recourir gratuitement à un médiateur de la consommation ; toute demande peut être adressée à{' '}
+        <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>. La plateforme européenne de
         Règlement en Ligne des Litiges est accessible sur{' '}
         <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noreferrer">ec.europa.eu/consumers/odr</a>.
         À défaut de résolution amiable, les tribunaux français sont compétents.
@@ -164,7 +166,7 @@ export default function TermsPage() {
 
       <h2>15. Contact</h2>
       <p>
-        Pour toute question : <a href="mailto:supportstriveapp@gmail.com">supportstriveapp@gmail.com</a>.
+        Pour toute question : <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.
       </p>
     </>
   );

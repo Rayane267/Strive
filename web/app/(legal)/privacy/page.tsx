@@ -27,10 +27,10 @@ export default function PrivacyPage() {
       <h2>1. Responsable du traitement</h2>
       <p>
         Le responsable du traitement est l&apos;éditeur de Strive :{' '}
-        <strong>[À COMPLÉTER : raison sociale ou nom, forme juridique, SIREN, siège social]</strong>.
+        <strong>Rayane TALEB</strong>, entrepreneur individuel (auto-entrepreneur),
+        SIREN 988 905 394, siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
         Pour toute question ou pour exercer vos droits :{' '}
-        <a href="mailto:supportstriveapp@gmail.com">supportstriveapp@gmail.com</a>.{' '}
-        <strong>[À COMPLÉTER : coordonnées du DPO le cas échéant.]</strong>
+        <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.
       </p>
 
       <h2>2. Données que nous traitons</h2>
@@ -97,7 +97,8 @@ export default function PrivacyPage() {
 
       <h2>6. Transferts hors Union européenne</h2>
       <p>
-        <strong>[À COMPLÉTER : localisation d&apos;hébergement (région Supabase).]</strong> Certains
+        Vos données sont hébergées par <strong>Supabase</strong> dans la région{' '}
+        <strong>eu-west-1 (Irlande)</strong>, soit au sein de l&apos;Union européenne. Certains
         prestataires (Google, Sentry…) peuvent traiter des données hors UE ; ces transferts sont
         encadrés par des garanties appropriées (clauses contractuelles types ou mécanisme
         équivalent), conformément aux articles 44 et suivants du RGPD.
@@ -116,7 +117,7 @@ export default function PrivacyPage() {
       <ul>
         <li>consulter et modifier vos données depuis l&apos;application ;</li>
         <li><strong>supprimer votre compte et l&apos;intégralité de vos données en une seule action</strong> depuis Profil → Compte (courses, sessions, véhicules, préférences, profil, photo et compte) ;</li>
-        <li>nous écrire à <a href="mailto:supportstriveapp@gmail.com">supportstriveapp@gmail.com</a>.</li>
+        <li>nous écrire à <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.</li>
       </ul>
       <p>
         Vous pouvez introduire une réclamation auprès de la CNIL (
@@ -133,7 +134,7 @@ export default function PrivacyPage() {
       <h2>10. Cookies (site web)</h2>
       <p>
         Le site de présentation n&apos;utilise pas de cookies publicitaires ni de traceurs de
-        profilage. <strong>[À COMPLÉTER si un outil de mesure d&apos;audience est ajouté.]</strong>
+        profilage.
       </p>
 
       <h2>11. Mineurs</h2>
@@ -145,7 +146,7 @@ export default function PrivacyPage() {
       <h2>13. Contact</h2>
       <p>
         Pour toute question relative à vos données :{' '}
-        <a href="mailto:supportstriveapp@gmail.com">supportstriveapp@gmail.com</a>.
+        <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.
       </p>
     </>
   );

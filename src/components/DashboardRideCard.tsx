@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   rideContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
   fareLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '500', marginBottom: 2 },
   fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  fareValue: { color: '#fff', fontSize: 42, fontWeight: '900', letterSpacing: -1.5 },
+  fareValue: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, flexShrink: 1, marginRight: 8 },
   tripMetrics: { flexDirection: 'row', gap: 16, alignItems: 'flex-end' },
   tripMetricCol: { alignItems: 'flex-start' },
   tripMetricLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 4 },

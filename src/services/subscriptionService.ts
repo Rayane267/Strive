@@ -48,6 +48,8 @@ export async function fetchPlanLimits(): Promise<void> {
       if (row.tier === 'free' || row.tier === 'plus' || row.tier === 'premium') {
         next[row.tier] = {
           dailyScans: row.daily_scans,
+          // analyticsRangeDays n'a pas de colonne dédiée (et n'est lu nulle part) :
+          // on garde le défaut du tier pour cohérence de l'interface PlanLimits.
           analyticsRangeDays: FALLBACK_LIMITS[row.tier].analyticsRangeDays,
         };
       }

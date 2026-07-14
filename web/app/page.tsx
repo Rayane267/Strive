@@ -7,7 +7,7 @@ import Faq from './components/Faq';
 
 const features = [
   { k: '01', title: 'Scan en 2 secondes', desc: 'Capture l\'offre, Strive la lit par OCR et rend son verdict — sans quitter ton app VTC.' },
-  { k: '02', title: '€/h réel, en direct', desc: 'Ton taux horaire calculé sur chaque course, temps d\'approche inclus. Plus d\'illusion.' },
+  { k: '02', title: 'Trafic en temps réel', desc: 'Ton €/h calculé sur le vrai temps de trajet — embouteillages et temps d\'approche inclus. Pas une estimation à vol d\'oiseau.' },
   { k: '03', title: 'Refuse les pièges', desc: 'Les courses qui te font perdre du temps sont marquées rouge avant que tu acceptes.' },
   { k: '04', title: 'Tes seuils, tes règles', desc: 'Fixe ton €/h et €/km minimum. Strive trie automatiquement selon TES critères.' },
   { k: '05', title: 'Coût carburant par modèle', desc: 'Net après essence calculé selon la conso réelle de ton véhicule.' },
@@ -16,11 +16,11 @@ const features = [
 
 const steps = [
   { n: '01', t: 'Une offre tombe', d: 'Une course s\'affiche sur Uber, Bolt ou Heetch.' },
-  { n: '02', t: 'Tu déclenches', d: 'Double-tap au dos de l\'iPhone, ou tap sur la bulle Android. Strive lit l\'écran.' },
+  { n: '02', t: 'Tu déclenches', d: 'Sur iPhone, tape le bouton AssistiveTouch ; sur Android, tape la bulle Strive. Strive lit l\'écran.' },
   { n: '03', t: 'Le verdict tombe', d: 'Vert = prends. Rouge = laisse. Avec ton €/h, €/km et le total, instantané.' },
 ];
 
-const marquee = ['Uber', '€/h en direct', 'Bolt', 'Scan 2s', 'Heetch', 'Sans engagement', 'OCR local', 'Aucune pub'];
+const marquee = ['Uber', '€/h en direct', 'Bolt', 'Trafic temps réel', 'Scan 2s', 'Heetch', 'Sans engagement', 'Aucune pub'];
 
 export default function Home() {
   return (
@@ -55,7 +55,7 @@ export default function Home() {
           >
             Strive scanne chaque offre Uber, Bolt et Heetch en
             <span className="text-fg"> 2 secondes</span> et te donne ton
-            <span className="text-fg"> €/h réel</span> avant que tu acceptes.
+            <span className="text-fg"> €/h réel</span>, <span className="text-fg">trafic en temps réel inclus</span>, avant que tu acceptes.
           </p>
 
           <div
@@ -73,7 +73,7 @@ export default function Home() {
           >
             <span>iOS &amp; Android</span>
             <span className="text-line">·</span>
-            <span>3 jours gratuits</span>
+            <span>7 jours gratuits</span>
             <span className="text-line">·</span>
             <span>sans engagement</span>
           </div>
@@ -184,7 +184,7 @@ export default function Home() {
         <div className="glass grid divide-y divide-white/[0.06] overflow-hidden rounded-3xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[
             { v: '2,0s', l: 'pour analyser une offre' },
-            { v: '∞', l: 'scans en illimité avec Plus' },
+            { v: '15', l: 'scans par jour avec Plus' },
             { v: '3', l: 'plateformes prises en charge' },
           ].map((s, i) => (
             <Reveal key={s.l} delay={i * 100}>
@@ -214,7 +214,7 @@ export default function Home() {
               </h2>
               <p className="mx-auto mt-6 max-w-md text-muted">
                 Rejoins les chauffeurs qui ne prennent plus une course non rentable. Essai gratuit
-                3 jours, sans engagement.
+                7 jours, sans engagement.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <StoreBadge store="apple" />

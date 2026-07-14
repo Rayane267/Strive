@@ -44,16 +44,24 @@ final class LiveActivityManager {
     todayEarnings: Double = 0,
     todayHourlyRate: Double = 0,
     todayKm: Double = 0,
-    onlineMinutes: Int = 0
+    onlineMinutes: Int = 0,
+    scanTs: Double = 0,
+    sessionStartEpoch: Double = 0
   ) -> Bool {
     log("start(\(platform)) fare=\(fare) hr=\(hourlyRate) km=\(kmRate)")
 
     let existingCount = Activity<StriveActivityAttributes>.activities.count
     log("existing=\(existingCount) current=\(current == nil ? "nil" : current!.id)")
 
-    if let current = current {
-      log("ending previous \(current.id)")
-      Task { await current.end(nil, dismissalPolicy: .immediate) }
+    // Termine TOUTE activité existante (pas seulement `current`) : l'AppIntent
+    // tourne dans un autre process et peut avoir laissé une activité orpheline
+    // → sinon deux cartes s'empilent sur le lock screen (résultat + session).
+    let existing = Activity<StriveActivityAttributes>.activities
+    if !existing.isEmpty {
+      log("ending \(existing.count) existing activity(ies)")
+      for activity in existing {
+        Task { await activity.end(nil, dismissalPolicy: .immediate) }
+      }
       self.current = nil
     }
 
@@ -69,7 +77,9 @@ final class LiveActivityManager {
       todayEarnings: todayEarnings,
       todayHourlyRate: todayHourlyRate,
       todayKm: todayKm,
-      onlineMinutes: onlineMinutes
+      onlineMinutes: onlineMinutes,
+      scanTs: scanTs > 0 ? scanTs : nil,
+      sessionStartEpoch: sessionStartEpoch > 0 ? sessionStartEpoch : nil
     )
 
     do {
@@ -116,7 +126,8 @@ final class LiveActivityManager {
     kmRate: Double,
     distanceKm: Double,
     durationMin: Int,
-    verdictLevel: Int
+    verdictLevel: Int,
+    scanTs: Double = 0
   ) {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
     if current == nil {
@@ -133,7 +144,8 @@ final class LiveActivityManager {
         kmRate: kmRate,
         distanceKm: distanceKm,
         durationMin: durationMin,
-        verdictLevel: verdictLevel
+        verdictLevel: verdictLevel,
+        scanTs: scanTs
       )
       if started, let newActivity = current {
         let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
@@ -144,12 +156,12 @@ final class LiveActivityManager {
             body: LocalizedStringResource(stringLiteral: alertBody),
             sound: .default
         )
-        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(10))
+        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20))
         Task { await newActivity.update(content, alertConfiguration: alert) }
         autoDismiss?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
         autoDismiss = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
       }
       return
     }
@@ -165,9 +177,11 @@ final class LiveActivityManager {
       todayEarnings: prev.todayEarnings,
       todayHourlyRate: prev.todayHourlyRate,
       todayKm: prev.todayKm,
-      onlineMinutes: prev.onlineMinutes
+      onlineMinutes: prev.onlineMinutes,
+      scanTs: scanTs > 0 ? scanTs : nil,
+      sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(20))
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
@@ -177,12 +191,12 @@ final class LiveActivityManager {
         sound: .default
     )
     Task { await activity.update(content, alertConfiguration: alert) }
-    log("updated \(activity.id), dismiss in 10s")
+    log("updated \(activity.id), dismiss in 20s")
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
     autoDismiss = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
   }
 
   func backToIdle() {
@@ -191,10 +205,19 @@ final class LiveActivityManager {
     }
     guard let activity = current else { return }
     log("backToIdle")
+    // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
+    // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base
+    // (auto-dismiss 10 s, tap bouton, commande vocale).
+    let prev = activity.content.state
     let idle = StriveActivityAttributes.State(
       platform: "IDLE",
       fare: 0, hourlyRate: 0, kmRate: 0,
-      distanceKm: 0, durationMin: 0, verdictLevel: 1
+      distanceKm: 0, durationMin: 0, verdictLevel: 1,
+      todayEarnings: prev.todayEarnings,
+      todayHourlyRate: prev.todayHourlyRate,
+      todayKm: prev.todayKm,
+      onlineMinutes: prev.onlineMinutes,
+      sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8))
     Task { await activity.update(content) }
@@ -217,7 +240,8 @@ final class LiveActivityManager {
       todayEarnings: prev.todayEarnings,
       todayHourlyRate: prev.todayHourlyRate,
       todayKm: prev.todayKm,
-      onlineMinutes: prev.onlineMinutes
+      onlineMinutes: prev.onlineMinutes,
+      sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: errorState, staleDate: Date().addingTimeInterval(7))
     let alert = AlertConfiguration(title: "Strive", body: "Analyse impossible — réessayez.", sound: .default)
@@ -235,16 +259,38 @@ final class LiveActivityManager {
     todayKm: Double,
     onlineMinutes: Int
   ) {
+    if current == nil {
+      current = Activity<StriveActivityAttributes>.activities.first
+    }
     guard let activity = current else { return }
-    log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate)")
+    let prev = activity.content.state
+    // Un résultat de scan est à l'écran (auto-dismiss en attente) : NE PAS
+    // l'écraser avec le dashboard IDLE — le JS pousse ses KPI quelques secondes
+    // après le scan et volait la place du verdict avant la fin des 20 s.
+    // On rafraîchit seulement les KPI du jour, le verdict reste affiché ;
+    // backToIdle() reprendra ces KPI à l'expiration du timer.
+    let resultShowing = autoDismiss != nil
+      && prev.platform != "IDLE" && prev.platform != "ERROR"
+    log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate) resultShowing=\(resultShowing)")
     let state = StriveActivityAttributes.State(
-      platform: "IDLE",
+      platform: resultShowing ? prev.platform : "IDLE",
+      fare: resultShowing ? prev.fare : 0,
+      hourlyRate: resultShowing ? prev.hourlyRate : 0,
+      kmRate: resultShowing ? prev.kmRate : 0,
+      distanceKm: resultShowing ? prev.distanceKm : 0,
+      durationMin: resultShowing ? prev.durationMin : 0,
+      verdictLevel: resultShowing ? prev.verdictLevel : 1,
       todayEarnings: todayEarnings,
       todayHourlyRate: todayHourlyRate,
       todayKm: todayKm,
-      onlineMinutes: onlineMinutes
+      onlineMinutes: onlineMinutes,
+      scanTs: resultShowing ? prev.scanTs : nil,
+      sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(3600 * 8))
+    let content = ActivityContent(
+      state: state,
+      staleDate: Date().addingTimeInterval(resultShowing ? 20 : 3600 * 8)
+    )
     Task { await activity.update(content) }
   }
 

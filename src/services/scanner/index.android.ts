@@ -41,6 +41,7 @@ export const scannerService: ScannerService = {
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
+  clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
@@ -59,6 +60,15 @@ export const scannerService: ScannerService = {
 
   onScanFailed: (cb: () => void) =>
     emitter.addListener('onScanFailed', cb),
+
+  // Décisions Accepter/Refuser tapées sur la notification de résultat. On
+  // s'abonne PUIS on draine le buffer natif (décisions prises pendant que le JS
+  // n'écoutait pas / process mort) → elles atteignent le listener fraîchement posé.
+  onRideDecision: (cb: (decision: { scanTs: number; status: 'ACCEPTED' | 'DECLINED' }) => void) => {
+    const sub = emitter.addListener('onRideDecision', cb);
+    ScanBridge.drainRideDecisions?.();
+    return sub;
+  },
 
   onPermissionDenied: (cb: () => void) =>
     emitter.addListener('onPermissionDenied', cb),

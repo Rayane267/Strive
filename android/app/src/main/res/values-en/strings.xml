@@ -5,4 +5,9 @@
     <string name="scanner_session_required_bubble">Go online to scan</string>
     <string name="scanner_session_required_title">Session required</string>
     <string name="scanner_session_required_body">Start your session in Strive to scan rides.</string>
+    <string name="scanner_notif_active_title">Strive Scanner active</string>
+    <string name="scanner_notif_active_body">Tap the pill to scan</string>
+    <string name="scanner_notif_online">online</string>
+    <string name="scanner_ride_accept">✅ Ride taken</string>
+    <string name="scanner_ride_decline">❌ Declined</string>
 </resources>

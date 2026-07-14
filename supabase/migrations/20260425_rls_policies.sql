@@ -16,7 +16,13 @@ alter table public.profiles         enable row level security;
 alter table public.preferences      enable row level security;
 alter table public.rides            enable row level security;
 alter table public.online_sessions  enable row level security;
-alter table public.cars             enable row level security;
+-- cars : table optionnelle (les véhicules sont en réalité stockés sur profiles).
+-- Guardée par to_regclass pour un replay propre sur une base où elle n'existe pas.
+do $$ begin
+  if to_regclass('public.cars') is not null then
+    execute 'alter table public.cars enable row level security';
+  end if;
+end $$;
 alter table public.parser_config    enable row level security;
 alter table public.vehicles_db      enable row level security;
 
@@ -122,28 +128,34 @@ create policy "online_sessions_delete_own"
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- cars — N lignes par user (un user peut avoir plusieurs véhicules)
+-- cars — N lignes par user (table optionnelle : véhicules stockés sur profiles
+-- dans le schéma actuel). Tout le bloc est guardé par to_regclass pour un replay
+-- propre sur une base où `cars` n'existe pas.
 -- ═══════════════════════════════════════════════════════════════════════════
-drop policy if exists "cars_select_own" on public.cars;
-create policy "cars_select_own"
-  on public.cars for select
-  using (auth.uid() = user_id);
+do $$ begin
+  if to_regclass('public.cars') is null then return; end if;
 
-drop policy if exists "cars_insert_own" on public.cars;
-create policy "cars_insert_own"
-  on public.cars for insert
-  with check (auth.uid() = user_id);
+  drop policy if exists "cars_select_own" on public.cars;
+  create policy "cars_select_own"
+    on public.cars for select
+    using (auth.uid() = user_id);
 
-drop policy if exists "cars_update_own" on public.cars;
-create policy "cars_update_own"
-  on public.cars for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  drop policy if exists "cars_insert_own" on public.cars;
+  create policy "cars_insert_own"
+    on public.cars for insert
+    with check (auth.uid() = user_id);
 
-drop policy if exists "cars_delete_own" on public.cars;
-create policy "cars_delete_own"
-  on public.cars for delete
-  using (auth.uid() = user_id);
+  drop policy if exists "cars_update_own" on public.cars;
+  create policy "cars_update_own"
+    on public.cars for update
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
+
+  drop policy if exists "cars_delete_own" on public.cars;
+  create policy "cars_delete_own"
+    on public.cars for delete
+    using (auth.uid() = user_id);
+end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
