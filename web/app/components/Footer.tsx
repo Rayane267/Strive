@@ -23,8 +23,8 @@ export default function Footer() {
               { label: 'FAQ', href: '#faq' },
             ]} />
             <FooterCol title="Société" links={[
-              { label: 'Support', href: 'mailto:bouboullover6@gmail.com' },
-              { label: 'Contact', href: 'mailto:bouboullover6@gmail.com' },
+              { label: 'Support', href: 'mailto:contact@striveapp.fr' },
+              { label: 'Contact', href: 'mailto:contact@striveapp.fr' },
             ]} />
             <FooterCol title="Légal" links={[
               { label: 'Confidentialité', href: '/privacy' },

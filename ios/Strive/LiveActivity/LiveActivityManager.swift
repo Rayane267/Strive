@@ -263,17 +263,34 @@ final class LiveActivityManager {
       current = Activity<StriveActivityAttributes>.activities.first
     }
     guard let activity = current else { return }
-    log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate)")
     let prev = activity.content.state
+    // Un résultat de scan est à l'écran (auto-dismiss en attente) : NE PAS
+    // l'écraser avec le dashboard IDLE — le JS pousse ses KPI quelques secondes
+    // après le scan et volait la place du verdict avant la fin des 20 s.
+    // On rafraîchit seulement les KPI du jour, le verdict reste affiché ;
+    // backToIdle() reprendra ces KPI à l'expiration du timer.
+    let resultShowing = autoDismiss != nil
+      && prev.platform != "IDLE" && prev.platform != "ERROR"
+    log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate) resultShowing=\(resultShowing)")
     let state = StriveActivityAttributes.State(
-      platform: "IDLE",
+      platform: resultShowing ? prev.platform : "IDLE",
+      fare: resultShowing ? prev.fare : 0,
+      hourlyRate: resultShowing ? prev.hourlyRate : 0,
+      kmRate: resultShowing ? prev.kmRate : 0,
+      distanceKm: resultShowing ? prev.distanceKm : 0,
+      durationMin: resultShowing ? prev.durationMin : 0,
+      verdictLevel: resultShowing ? prev.verdictLevel : 1,
       todayEarnings: todayEarnings,
       todayHourlyRate: todayHourlyRate,
       todayKm: todayKm,
       onlineMinutes: onlineMinutes,
+      scanTs: resultShowing ? prev.scanTs : nil,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(3600 * 8))
+    let content = ActivityContent(
+      state: state,
+      staleDate: Date().addingTimeInterval(resultShowing ? 20 : 3600 * 8)
+    )
     Task { await activity.update(content) }
   }
 

@@ -33,7 +33,7 @@ export default function PhoneMockup() {
     <div className="relative mx-auto w-[280px] sm:w-[320px]">
       {/* Phone frame */}
       <div className="relative rounded-[2.75rem] border border-white/10 bg-[#05140c] p-3 shadow-[0_40px_120px_-20px_rgba(0,230,118,0.35)]">
-        <div className="relative overflow-hidden rounded-[2.25rem] bg-gradient-to-b from-surface to-background">
+        <div className="relative overflow-hidden rounded-[2.25rem] bg-gradient-to-b from-[#fbfbfd] to-[#e9edf2]">
           {/* Dynamic Island — présentation compacte (voiture + €/h) */}
           <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
             <div className="flex items-center gap-2 rounded-full bg-black px-3 py-1.5">
@@ -46,7 +46,7 @@ export default function PhoneMockup() {
 
           {/* Screen content */}
           <div className="px-4 pb-7 pt-16">
-            <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-widest text-text-muted">
+            <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-widest text-gray-400">
               Verdict instantané
             </p>
 
@@ -102,10 +102,10 @@ export default function PhoneMockup() {
                 COURSE RENTABLE
               </span>
             </div>
-            <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-text-dimmed">
+            <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-gray-400">
               <span>Détecté depuis</span>
-              <span className="rounded-md bg-surface px-2 py-0.5 font-semibold text-text-muted">Uber</span>
-              <span className="rounded-md bg-surface px-2 py-0.5 font-semibold text-text-muted">Bolt</span>
+              <span className="rounded-md bg-black/5 px-2 py-0.5 font-semibold text-gray-600">Uber</span>
+              <span className="rounded-md bg-black/5 px-2 py-0.5 font-semibold text-gray-600">Bolt</span>
             </div>
           </div>
         </div>

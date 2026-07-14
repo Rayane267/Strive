@@ -76,14 +76,7 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
 
   return (
     <View style={[styles.card, isDeclined && styles.cardDeclined]}>
-      {score != null ? (
-        <View style={[styles.scoreColumn, { borderColor: scoreColor }]}>
-          <Text style={[styles.scoreValue, { color: scoreColor }]}>{score}</Text>
-          <Text style={styles.scoreMax}>/100</Text>
-        </View>
-      ) : (
-        <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
-      )}
+      <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
       <View style={styles.cardInner}>
         <View style={styles.cardTopRow}>
           <View style={styles.topLeft}>
@@ -120,6 +113,12 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
               <Text style={styles.fareEst}>{t('dashboard.estimated', 'est.')}</Text>
             )}
           </View>
+          {score != null && (
+            <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
+              <Text style={[styles.scoreValue, { color: scoreColor }]}>{score}</Text>
+              <Text style={styles.scoreMax}>/100</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.metricsStrip}>
@@ -743,8 +742,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 6,
   },
   cardAccent: { width: 4 },
-  // Course refusée : grisée pour la repérer instantanément dans la liste.
-  cardDeclined: { opacity: 0.5, backgroundColor: '#0E1613' },
+  // Course refusée : fond assombri (sans opacité) pour la repérer dans la liste.
+  cardDeclined: { backgroundColor: '#0E1613' },
   cardInner: { flex: 1, padding: 14 },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
@@ -764,10 +763,10 @@ const styles = StyleSheet.create({
   timeAgo: { color: colors.textDimmed, fontSize: 11, marginTop: 2 },
   cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
   fareText: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
-  scoreColumn: {
-    width: 60, alignItems: 'center', justifyContent: 'center',
-    borderRightWidth: 2, paddingHorizontal: 4,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+  scoreBadge: {
+    width: 60, height: 60, borderRadius: 14, borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   scoreValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, lineHeight: 24 },
   scoreMax: { color: colors.textDimmed, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: -1 },

@@ -314,17 +314,6 @@ const ProfileScreen = () => {
         <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.language')}</Text>
         <View style={styles.langRow}>
           <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
-            onPress={() => changeLanguage('en')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="English"
-            accessibilityState={{ selected: i18n.language === 'en' }}
-          >
-            <Text style={styles.langFlag}>🇬🇧</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
             onPress={() => changeLanguage('fr')}
             activeOpacity={0.7}
@@ -334,6 +323,17 @@ const ProfileScreen = () => {
           >
             <Text style={styles.langFlag}>🇫🇷</Text>
             <Text style={[styles.langBtnText, i18n.language === 'fr' && styles.langBtnTextActive]}>Français</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
+            onPress={() => changeLanguage('en')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="English"
+            accessibilityState={{ selected: i18n.language === 'en' }}
+          >
+            <Text style={styles.langFlag}>🇬🇧</Text>
+            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
           </TouchableOpacity>
         </View>
 

@@ -201,7 +201,9 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     const isMinimums = item.key === 'minimums';
     const isDone = item.key === '5';
     const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger || isMinimums || isDone;
-    const showCompactIcon = hasCustomBlock && !isDone;
+    // Slide déclencheur : la vidéo AssistiveTouch EST le visuel — pas d'icône en
+    // plus, sinon le contenu dépasse la hauteur d'écran (page rognée).
+    const showCompactIcon = hasCustomBlock && !isDone && !isIosTrigger;
 
     return (
       <View style={styles.slide}>
@@ -496,7 +498,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     ref={videoRef}
                     source={ASSISTIVE_VIDEO}
                     style={styles.videoPlayer}
-                    resizeMode="cover"
+                    resizeMode="contain"
                     repeat
                     muted
                     paused={currentIndex !== index}
@@ -1214,15 +1216,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   // Démo AssistiveTouch — cadre "téléphone" portrait autour de la vidéo.
+  // Compact (124 pt) pour que vidéo + 4 étapes + CTA tiennent sans rognage.
   videoPhoneFrame: {
-    width: 150,
+    width: 124,
     aspectRatio: 9 / 18,
-    borderRadius: 26,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#000',
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.14)',
-    marginBottom: 14,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
@@ -1255,7 +1258,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   triggerStepsList: {
     width: '100%',

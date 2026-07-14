@@ -83,8 +83,8 @@ body {
   height: 22rem;
   transform: translateX(-50%);
   pointer-events: none;
+  /* Gradient déjà diffus → pas besoin d'un filter: blur() (coûteux à rasteriser). */
   background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 230, 118, 0.28), transparent 70%);
-  filter: blur(8px);
 }
 
 /* ---- Atmosphere ---- */
@@ -257,7 +257,11 @@ body {
     radial-gradient(38rem 30rem at 18% 8%, rgba(0, 230, 118, 0.10), transparent 60%),
     radial-gradient(42rem 32rem at 88% 2%, rgba(72, 178, 255, 0.05), transparent 62%),
     radial-gradient(36rem 28rem at 70% 40%, rgba(255, 194, 75, 0.035), transparent 64%);
-  filter: blur(8px);
+  /* Pas de filter: blur() ici — les radial-gradients sont déjà diffus, et flouter
+     un calque fixed plein écran QUI EST ANIMÉ force une re-rasterisation du flou
+     à chaque frame (principal responsable des chutes de FPS).
+     will-change promeut le calque : l'animation devient purement GPU. */
+  will-change: transform;
   animation: mesh-drift 26s ease-in-out infinite alternate;
 }
 @keyframes mesh-drift {
@@ -270,8 +274,10 @@ body {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
   border: 1px solid rgba(233, 245, 238, 0.10);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Rayon réduit : backdrop-filter re-échantillonne le fond à chaque frame de
+     scroll ; le coût croît avec le rayon. 10px reste visuellement équivalent. */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 24px 60px -32px rgba(0, 0, 0, 0.8);
@@ -299,8 +305,10 @@ body {
 .nav-pill {
   background: linear-gradient(180deg, rgba(16, 19, 17, 0.72), rgba(8, 10, 9, 0.6));
   border: 1px solid rgba(233, 245, 238, 0.10);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  /* La nav est fixed → son backdrop-filter recalcule à CHAQUE frame de scroll.
+     Rayon réduit + saturate() retiré (2ᵉ passe de filtre, coût doublé). */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 18px 50px -28px rgba(0, 0, 0, 0.9);
