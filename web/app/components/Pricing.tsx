@@ -25,9 +25,9 @@ const freeFeatures = [
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
 
-  const price = yearly ? '79,99 €' : '9,99 €';
+  const price = yearly ? '89,99 €' : '9,99 €';
   const cycle = yearly ? '/an' : '/mois';
-  const equiv = yearly ? 'soit 6,66 € / mois' : 'Sans engagement';
+  const equiv = yearly ? 'soit 7,49 € / mois' : 'Sans engagement';
 
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
