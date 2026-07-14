@@ -16,6 +16,9 @@ final class LiveActivityManager {
   private var autoDismiss: DispatchWorkItem?
   private var stateObserverTask: Task<Void, Never>?
 
+  /// Durée d'affichage du résultat de course avant retour à l'état idle (s).
+  private static let resultDisplaySeconds: TimeInterval = 17
+
   static let dismissedNotification = Notification.Name("StriveLiveActivityDismissed")
 
   private static let appGroupId = "group.com.striveapp.app"
@@ -144,12 +147,12 @@ final class LiveActivityManager {
             body: LocalizedStringResource(stringLiteral: alertBody),
             sound: .default
         )
-        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(10))
+        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(Self.resultDisplaySeconds))
         Task { await newActivity.update(content, alertConfiguration: alert) }
         autoDismiss?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
         autoDismiss = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.resultDisplaySeconds, execute: work)
       }
       return
     }
@@ -167,7 +170,7 @@ final class LiveActivityManager {
       todayKm: prev.todayKm,
       onlineMinutes: prev.onlineMinutes
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(Self.resultDisplaySeconds))
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
@@ -177,12 +180,12 @@ final class LiveActivityManager {
         sound: .default
     )
     Task { await activity.update(content, alertConfiguration: alert) }
-    log("updated \(activity.id), dismiss in 10s")
+    log("updated \(activity.id), dismiss in \(Int(Self.resultDisplaySeconds))s")
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
     autoDismiss = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.resultDisplaySeconds, execute: work)
   }
 
   func backToIdle() {
