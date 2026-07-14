@@ -154,10 +154,30 @@ export async function queueOfflineRide(ride: Omit<Ride, 'id'>): Promise<void> {
 }
 
 /**
+ * Verrou module-level : `syncOfflineQueue` est déclenché par plusieurs sources
+ * indépendantes (post-scan dans DashboardScreen, retour réseau, mount et
+ * foreground dans useOfflineSync). Sans ce verrou, deux flushs concurrents
+ * lisent la MÊME queue avant que l'un réécrive, et uploadent chacun les mêmes
+ * rides → doublons en DB (2-3 lignes identiques). On coalesce : tant qu'un sync
+ * tourne, les appels concurrents attendent et réutilisent son résultat.
+ */
+let syncInFlight: Promise<number> | null = null;
+
+/**
  * Synchronise les rides en queue vers Supabase.
  * Retourne le nombre de rides synchronisées.
  */
-export async function syncOfflineQueue(
+export function syncOfflineQueue(
+  uploadFn: (ride: Omit<Ride, 'id'>) => Promise<void>,
+): Promise<number> {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = runSyncOfflineQueue(uploadFn).finally(() => {
+    syncInFlight = null;
+  });
+  return syncInFlight;
+}
+
+async function runSyncOfflineQueue(
   uploadFn: (ride: Omit<Ride, 'id'>) => Promise<void>,
 ): Promise<number> {
   const QUEUE_KEY = '@strive_offline_queue';

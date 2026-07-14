@@ -16,6 +16,24 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Strive</string>
+	<!-- Noms alternatifs pour Siri : « Strive » est souvent mal reconnu (surtout
+	     prononcé en français). Ces variantes phonétiques augmentent le taux de
+	     déclenchement des phrases AppShortcuts (« … avec Strive »). -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Straïve</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Straïv</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Strive VTC</string>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

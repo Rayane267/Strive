@@ -11,8 +11,13 @@ import java.text.Normalizer
  * adresse déjà vue. Économise ~2/3 des requêtes TomTom une fois warm.
  *
  * Stockage : SharedPreferences, 1 entrée par adresse normalisée. ~100 bytes
- * par entrée → 10 000 adresses ≈ 1 MB. Aucun cap implémenté : si jamais ça
- * devenait gênant, ajouter un purge LRU sur la taille des prefs.
+ * par entrée → 10 000 adresses ≈ 1 MB.
+ *
+ * ⚠️ Les clés contiennent des ADRESSES (données personnelles des passagers).
+ * Conformité RGPD (limitation de conservation) :
+ *   - TTL de 90 j (re-géocodage une fois après expiration — coût négligeable),
+ *   - clear() appelé au logout et à la suppression de compte (le cache vit
+ *     uniquement sur l'appareil, hors de portée de la RPC delete_account).
  *
  * Init obligatoire dans `MainApplication.onCreate()` :
  *   GeocodeCache.init(this)
@@ -24,6 +29,10 @@ object GeocodeCache {
     // v1 (sans formatted) sont ignorées et re-géocodées une fois (avec formatted).
     private const val KEY_PREFIX = "g2:"
 
+    /** Durée de vie d'une entrée (90 j). Coords stables mais on ne conserve pas
+     *  une adresse de passager indéfiniment (RGPD). */
+    private const val TTL_MS = 90L * 24 * 3600 * 1000
+
     @Volatile private var prefs: SharedPreferences? = null
 
     fun init(ctx: Context) {
@@ -34,9 +43,17 @@ object GeocodeCache {
 
     fun get(address: String): TomTomService.GeocodeHit? {
         val p = prefs ?: return null
-        val json = p.getString(KEY_PREFIX + normalize(address), null) ?: return null
+        val key = KEY_PREFIX + normalize(address)
+        val json = p.getString(key, null) ?: return null
         return try {
             val obj = JSONObject(json)
+            // TTL : entrée expirée — ou legacy sans `savedAt` — → purge + miss
+            // (re-géocodée et ré-horodatée au prochain put).
+            val savedAt = obj.optLong("savedAt", 0L)
+            if (savedAt <= 0L || System.currentTimeMillis() - savedAt > TTL_MS) {
+                p.edit().remove(key).apply()
+                return null
+            }
             TomTomService.GeocodeHit(
                 coords = TomTomService.Coords(obj.getDouble("lat"), obj.getDouble("lon")),
                 score = obj.optDouble("score", 0.0),
@@ -53,9 +70,20 @@ object GeocodeCache {
             put("lat", hit.coords.lat)
             put("lon", hit.coords.lon)
             put("score", hit.score)
+            put("savedAt", System.currentTimeMillis())
             hit.formatted?.let { put("formatted", it) }
         }.toString()
         p.edit().putString(KEY_PREFIX + normalize(address), json).apply()
+    }
+
+    /** Efface TOUTES les entrées de géocodage (adresses = PII). Appelé au logout
+     *  et après suppression de compte → l'effacement couvre aussi le cache local,
+     *  que la RPC serveur delete_account ne peut pas atteindre. */
+    fun clear() {
+        val p = prefs ?: return
+        val editor = p.edit()
+        for (k in p.all.keys) if (k.startsWith(KEY_PREFIX)) editor.remove(k)
+        editor.apply()
     }
 
     /**

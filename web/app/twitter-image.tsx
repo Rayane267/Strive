@@ -80,7 +80,7 @@ export default function TwitterImage() {
           ))}
           <div style={{ flex: 1 }} />
           <div style={{ color: '#00E676', fontSize: '26px', fontWeight: 700, display: 'flex' }}>
-            3 jours gratuits
+            7 jours gratuits
           </div>
         </div>
       </div>

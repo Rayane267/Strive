@@ -219,11 +219,11 @@ export async function checkTrialEligibility(productIds: string[]): Promise<Recor
 }
 
 // ─── Restore purchases (obligatoire pour validation App Store) ────────────────
-// Renvoie true si au moins un entitlement actif est trouvé. Le webhook RC reçoit
-// les events de restore et met à jour la DB.
+// Renvoie l'entitlement actif restauré ('premium' > 'plus'), ou null si aucun.
+// Le webhook RC reçoit les events de restore et met à jour la DB.
 const RESTORE_TIMEOUT_MS = 15_000;
 
-export async function restorePurchases(_userId?: string): Promise<boolean> {
+export async function restorePurchases(_userId?: string): Promise<'plus' | 'premium' | null> {
   const Purchases = rc();
   if (!Purchases) throw new Error('IAP_NOT_AVAILABLE');
 
@@ -235,9 +235,9 @@ export async function restorePurchases(_userId?: string): Promise<boolean> {
       ),
     ]);
     const active = customerInfo?.entitlements?.active ?? {};
-    const hasEntitlement = !!active[PLUS_ENTITLEMENT] || !!active[PREMIUM_ENTITLEMENT];
-    Sentry.addBreadcrumb({ category: 'iap', message: `Restore done (active=${hasEntitlement})`, level: 'info' });
-    return hasEntitlement;
+    const tier = active[PREMIUM_ENTITLEMENT] ? 'premium' : active[PLUS_ENTITLEMENT] ? 'plus' : null;
+    Sentry.addBreadcrumb({ category: 'iap', message: `Restore done (tier=${tier ?? 'none'})`, level: 'info' });
+    return tier;
   } catch (e: any) {
     Sentry.captureException(e, { tags: { flow: 'iap_restore' } });
     throw e;

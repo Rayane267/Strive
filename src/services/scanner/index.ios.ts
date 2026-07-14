@@ -15,7 +15,7 @@
  */
 
 import { NativeModules, NativeEventEmitter } from 'react-native';
-import { ScannerService, ScanResult } from './types';
+import { ScannerService, ScanResult, RideDecision } from './types';
 
 const { ScanBridge } = NativeModules;
 const emitter = ScanBridge ? new NativeEventEmitter(ScanBridge) : null;
@@ -108,6 +108,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setTomTomApiKey(key);
   },
 
+  clearGeocodeCache: () => {
+    ScanBridge?.clearGeocodeCache();
+  },
+
   setQuotaReached: (reached: boolean, isFree: boolean) => {
     ScanBridge?.setQuotaReached(reached, isFree);
   },
@@ -152,6 +156,11 @@ checkPermissions: async () => {
   onScanFailed: (cb: () => void) => {
     if (!emitter) return undefined;
     return emitter.addListener('onScanFailed', cb);
+  },
+
+  onRideDecision: (cb: (decision: RideDecision) => void) => {
+    if (!emitter) return undefined;
+    return emitter.addListener('onRideDecision', cb);
   },
 
   onPermissionDenied: (cb: () => void) => {

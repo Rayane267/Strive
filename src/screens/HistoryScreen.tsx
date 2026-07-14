@@ -26,6 +26,7 @@ import { formatTimeAgo, getDayStart } from '../utils/dateUtils';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { effectiveFare } from '../services/ridesService';
 import { Ride } from '../types/database';
+import { computeRideScore, rideScoreColor } from '../utils/qualityScore';
 import { withTimeout } from '../utils/withTimeout';
 import { cacheRides, getCachedRides } from '../services/offlineService';
 import BrandLoader from '../components/BrandLoader';
@@ -51,26 +52,58 @@ const PLATFORM_CONFIG: Record<string, { accent: string; label: string }> = {
   HEETCH: { accent: '#FF3B80', label: 'Heetch' },
 };
 
-const RideCard = React.memo(({ ride, t }: { ride: Ride; t: any }) => {
+const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any; minHourly: number; minKm: number }) => {
   const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
   const isDeclined = ride.status === 'DECLINED';
   const isPending = ride.status === 'PENDING';
-  const accentColor = isDeclined ? '#FF5252' : isPending ? '#FFB300' : colors.primary;
+  const statusColor = isDeclined ? '#FF5252' : isPending ? '#FFB300' : colors.primary;
   const fare = effectiveFare(ride);
   const fareIsEstimated = ride.fare_final == null;
+
+  const score = computeRideScore(
+    Number(ride.hourly_rate || 0),
+    Number(ride.km_rate || 0),
+    minHourly,
+    minKm,
+  );
+  const scoreColor = score != null ? rideScoreColor(score) : colors.textDimmed;
+  // L'accent latéral porte la qualité (score) ; le statut reste un chip dédié.
+  const accentColor = score != null ? scoreColor : statusColor;
 
   const formattedTime = new Date(ride.created_at).toLocaleTimeString([], {
     hour: '2-digit', minute: '2-digit', hour12: false,
   });
 
   return (
-    <View style={styles.card}>
-      <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
+    <View style={[styles.card, isDeclined && styles.cardDeclined]}>
+      {score != null ? (
+        <View style={[styles.scoreColumn, { borderColor: scoreColor }]}>
+          <Text style={[styles.scoreValue, { color: scoreColor }]}>{score}</Text>
+          <Text style={styles.scoreMax}>/100</Text>
+        </View>
+      ) : (
+        <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
+      )}
       <View style={styles.cardInner}>
         <View style={styles.cardTopRow}>
-          <View style={[styles.platformChip, { borderColor: accentColor + '50' }]}>
-            <View style={[styles.platformDot, { backgroundColor: accentColor }]} />
-            <Text style={styles.platformChipText}>{pc.label}</Text>
+          <View style={styles.topLeft}>
+            <View style={[styles.platformChip, { borderColor: pc.accent + '50' }]}>
+              <View style={[styles.platformDot, { backgroundColor: pc.accent }]} />
+              <Text style={styles.platformChipText}>{pc.label}</Text>
+            </View>
+            <View style={[
+              styles.statusBadge,
+              isDeclined ? styles.statusBadgeDeclined : isPending ? styles.statusBadgePending : styles.statusBadgeAccepted,
+            ]}>
+              <Feather
+                name={isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'}
+                size={11}
+                color={statusColor}
+              />
+              <Text style={[styles.statusBadgeText, { color: statusColor }]}>
+                {t(`history.status.${ride.status}`, { defaultValue: ride.status })}
+              </Text>
+            </View>
           </View>
           <View style={styles.timeBlock}>
             <Text style={styles.timeMain}>{formattedTime}</Text>
@@ -79,29 +112,13 @@ const RideCard = React.memo(({ ride, t }: { ride: Ride; t: any }) => {
         </View>
 
         <View style={styles.cardMidRow}>
-          <View>
-            <Text style={[styles.fareText, isDeclined && styles.fareDeclined]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.fareText, isDeclined && styles.fareDeclined]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {fare.toFixed(2)}€
             </Text>
             {fareIsEstimated && !isDeclined && (
               <Text style={styles.fareEst}>{t('dashboard.estimated', 'est.')}</Text>
             )}
-          </View>
-          <View style={[
-            styles.statusBadge,
-            isDeclined ? styles.statusBadgeDeclined : isPending ? styles.statusBadgePending : styles.statusBadgeAccepted,
-          ]}>
-            <Feather
-              name={isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'}
-              size={12}
-              color={isDeclined ? '#FF5252' : isPending ? '#FFB300' : '#00E676'}
-            />
-            <Text style={[
-              styles.statusBadgeText,
-              { color: isDeclined ? '#FF5252' : isPending ? '#FFB300' : '#00E676' },
-            ]}>
-              {t(`history.status.${ride.status}`, { defaultValue: ride.status })}
-            </Text>
           </View>
         </View>
 
@@ -163,22 +180,27 @@ const HistoryScreen = () => {
   const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
+  const [thresholds, setThresholds] = useState({ minHourly: 25, minKm: 1.2 });
 
   useEffect(() => {
     LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
   }, [i18n.language]);
 
-  // Re-read day_reset_hour on focus so a change in Preferences is picked up
+  // Re-read day_reset_hour + seuils on focus so a change in Preferences is picked up
   useFocusEffect(useCallback(() => {
     if (!user) return;
     supabase
       .from('preferences')
-      .select('day_reset_hour')
+      .select('day_reset_hour, min_hourly_rate, min_km_rate')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         const h = data?.day_reset_hour === 4 ? 4 : 0;
         setResetHour(h);
+        setThresholds({
+          minHourly: Number(data?.min_hourly_rate ?? 25) || 25,
+          minKm: Number(data?.min_km_rate ?? 1.2) || 1.2,
+        });
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
   }, [user]));
@@ -367,8 +389,8 @@ const HistoryScreen = () => {
   }), [rides, filter]);
 
   const renderRideCard = useCallback(({ item }: { item: Ride }) => (
-    <RideCard ride={item} t={t} />
-  ), [t]);
+    <RideCard ride={item} t={t} minHourly={thresholds.minHourly} minKm={thresholds.minKm} />
+  ), [t, thresholds]);
 
   const todayDate = new Date().toLocaleDateString(i18n.language, {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -721,8 +743,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 6,
   },
   cardAccent: { width: 4 },
+  // Course refusée : grisée pour la repérer instantanément dans la liste.
+  cardDeclined: { opacity: 0.5, backgroundColor: '#0E1613' },
   cardInner: { flex: 1, padding: 14 },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   platformChip: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9,
@@ -737,8 +762,15 @@ const styles = StyleSheet.create({
   timeBlock: { alignItems: 'flex-end' },
   timeMain: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   timeAgo: { color: colors.textDimmed, fontSize: 11, marginTop: 2 },
-  cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
   fareText: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  scoreColumn: {
+    width: 60, alignItems: 'center', justifyContent: 'center',
+    borderRightWidth: 2, paddingHorizontal: 4,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  scoreValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, lineHeight: 24 },
+  scoreMax: { color: colors.textDimmed, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: -1 },
   fareDeclined: { color: colors.textDimmed, textDecorationLine: 'line-through' },
   fareEst: { color: colors.textDimmed, fontSize: 10, fontWeight: '600', marginTop: 2 },
   statusBadge: {

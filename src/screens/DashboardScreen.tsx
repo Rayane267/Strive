@@ -77,6 +77,40 @@ function estimateDurationMin(distanceKm: number): number {
   return Math.round(distanceKm / 60 * 60);                       // péri-urbain / autoroute
 }
 
+// Somme des secondes en ligne des sessions DÉJÀ terminées aujourd'hui (minuit
+// local). Sert de base au « temps de session du jour » affiché dans la Live
+// Activity : base + session en cours. La session ouverte (end_at null) est
+// exclue — on lui ajoute son temps écoulé en direct.
+async function fetchTodayOnlineBaseSeconds(userId: string): Promise<number> {
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const { data } = await supabase
+    .from('online_sessions')
+    .select('duration_seconds')
+    .eq('user_id', userId)
+    .gte('start_at', dayStart.toISOString())
+    .not('end_at', 'is', null);
+  return (data ?? []).reduce((s: number, r: any) => s + (r.duration_seconds || 0), 0);
+}
+
+// Totaux du jour (gains + km) des courses ACCEPTÉES depuis minuit local — utilisé
+// pour réhydrater le mini-dashboard de la Live Activity à la restauration de
+// session (sinon il affiche 0 jusqu'au prochain tag).
+async function fetchTodayAcceptedTotals(userId: string): Promise<{ earnings: number; km: number }> {
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const { data } = await supabase
+    .from('rides')
+    .select('fare_estimated, fare_final, distance_km')
+    .eq('user_id', userId)
+    .eq('status', 'ACCEPTED')
+    .gte('created_at', dayStart.toISOString());
+  const rows = data ?? [];
+  const earnings = rows.reduce((s: number, r: any) => s + Number(r.fare_final ?? r.fare_estimated ?? 0), 0);
+  const km = rows.reduce((s: number, r: any) => s + Number(r.distance_km ?? 0), 0);
+  return { earnings, km };
+}
+
 // Sécurité « session oubliée » (cf. effet de restauration) : bornes appliquées
 // quand une session ouverte est retrouvée à l'ouverture de l'app (les timers JS
 // ne tournent pas app fermée). Sans activité depuis ce délai → abandonnée ;
@@ -190,12 +224,21 @@ const DashboardScreen = () => {
         setIsOnline(true);
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
+          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
+          const currentElapsed = Math.floor((Date.now() - startTs) / 1000);
+          // Réhydrate les vrais totaux du jour (sinon 0 jusqu'au prochain tag).
+          const totals = await fetchTodayAcceptedTotals(user.id);
+          const onlineHr = (todayOnlineBaseSecondsRef.current + currentElapsed) / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
             fare: 0, hourlyRate: 0, kmRate: 0,
             distanceKm: 0, durationMin: 0, verdictLevel: 1,
-            todayEarnings: 0, todayHourlyRate: 0, todayKm: 0,
-            onlineMinutes: Math.floor((Date.now() - new Date(data.start_at).getTime()) / 60000),
+            todayEarnings: totals.earnings,
+            todayHourlyRate: onlineHr > 0 ? totals.earnings / onlineHr : 0,
+            todayKm: totals.km,
+            onlineMinutes: Math.floor((todayOnlineBaseSecondsRef.current + currentElapsed) / 60),
+            // Ancre du timer auto : début session − cumul déjà fait aujourd'hui.
+            sessionStartEpoch: Math.floor(startTs / 1000) - todayOnlineBaseSecondsRef.current,
           });
         }
       }
@@ -279,16 +322,30 @@ const DashboardScreen = () => {
   // fuel_prices, repli constante). Lu via ref dans le listener de scan pour
   // figer le coût carburant de chaque course sans recalcul à la volée.
   const fuelRef = useRef({ avgCons: 0, fuelType: 'essence', fuelPrice: 0 });
+
+  // ── Réconciliation décision notif (Accepter/Refuser) ↔ course ───────────────
+  // scanTs → id de la course créée (corrélation avec la décision tapée sur la
+  // notif iOS). bufferedDecisions : décision arrivée AVANT la création de la
+  // course (drain notif avant drain scan au foreground) → appliquée à sa création.
+  const rideIdByScanTsRef = useRef<Map<number, string>>(new Map());
+  const bufferedDecisionsRef = useRef<Map<number, 'ACCEPTED' | 'DECLINED'>>(new Map());
+  const ridesRef = useRef<Ride[]>([]);
+  const applyRideDecisionRef = useRef<(scanTs: number, status: 'ACCEPTED' | 'DECLINED') => void>(() => {});
+
+  // Cumul des secondes en ligne des sessions terminées aujourd'hui (hors session
+  // en cours) → base du « temps de session du jour » poussé à la Live Activity.
+  const todayOnlineBaseSecondsRef = useRef(0);
+
   useEffect(() => {
     const avgCons = profile?.avg_cons ?? 0;
     const fuelType = profile?.fuel_type ?? 'essence';
     fuelRef.current = { ...fuelRef.current, avgCons, fuelType };
     if (avgCons > 0) {
-      fetchFuelPrice(fuelType).then(fuelPrice => {
+      fetchFuelPrice(fuelType, profile?.elec_price).then(fuelPrice => {
         fuelRef.current = { avgCons, fuelType, fuelPrice };
       });
     }
-  }, [profile?.avg_cons, profile?.fuel_type]);
+  }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -404,6 +461,21 @@ const DashboardScreen = () => {
           };
           usedGemini = true;
         }
+      }
+
+      // Règle produit : sans les 2 adresses, aucun géocodage TomTom possible →
+      // les métriques reposent sur l'OCR brut, peu fiable (durée d'approche
+      // confondue avec la course → €/h gonflé). Le fallback Gemini a déjà été
+      // tenté ci-dessus. On refuse de persister/afficher une course douteuse :
+      // scan échoué plutôt qu'une valeur trompeuse.
+      // Sans les 2 adresses on n'enregistre pas (métriques non fiables sans
+      // géocodage). Le « scan échoué » est affiché DANS la Live Activity côté
+      // natif — inutile (et indésirable) de l'afficher aussi dans l'app. Sur iOS
+      // ce cas n'arrive quasi plus : l'AppIntent tente Gemini puis montre
+      // l'erreur en LA sans rien sauvegarder. Garde silencieuse de sécurité.
+      if (!result.pickupAddress?.trim() || !result.destinationAddress?.trim()) {
+        __DEV__ && console.warn('[Scanner] adresses incomplètes — course ignorée (silencieux)');
+        return;
       }
 
       const includePickup = preferences.include_pickup
@@ -528,6 +600,17 @@ const DashboardScreen = () => {
         });
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
+        // Corrélation pour les actions de notif : on retient scanTs → id, et si
+        // une décision Accepter/Refuser est déjà arrivée (tapée avant l'ouverture
+        // de l'app), on l'applique immédiatement à la course fraîchement créée.
+        if (nativeResult.scanTs != null) {
+          rideIdByScanTsRef.current.set(nativeResult.scanTs, newRide.id);
+          const buffered = bufferedDecisionsRef.current.get(nativeResult.scanTs);
+          if (buffered) {
+            bufferedDecisionsRef.current.delete(nativeResult.scanTs);
+            applyRideDecisionRef.current(nativeResult.scanTs, buffered);
+          }
+        }
         // Trigger flush queue offline : si des rides sont coincés, on profite
         // que le réseau marche pour les vider maintenant.
         syncOfflineQueue(async (queuedRide) => {
@@ -594,7 +677,7 @@ const DashboardScreen = () => {
       subResult?.remove();
       subFailed?.remove();
     };
-  }, [user?.id, preferences]);
+  }, [user?.id, preferences, t]);
 
   const handleToggleScanner = async () => {
     if (scannerActive) {
@@ -636,19 +719,22 @@ const DashboardScreen = () => {
         const accepted = updated.filter(r => r.status === 'ACCEPTED');
         const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
         const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
-        const onlineH = sessionSeconds / 3600 || 1/3600;
+        // €/h sur le temps en ligne CUMULÉ du jour (sessions terminées + courante).
+        const onlineH = (todayOnlineBaseSecondsRef.current + sessionSeconds) / 3600 || 1/3600;
         const avgRate = totalEarnings / onlineH;
         setStats(s => ({
           ...s,
           earnings: totalEarnings.toFixed(0),
           avgRate: avgRate.toFixed(0),
         }));
-        if (Platform.OS === 'ios' && ScanBridge?.updateSessionKPI) {
+        // KPI poussés au natif : iOS → Live Activity, Android → notification
+        // persistante du foreground service (même tableau de bord du jour).
+        if (ScanBridge?.updateSessionKPI) {
           ScanBridge.updateSessionKPI({
             todayEarnings: totalEarnings,
             todayHourlyRate: avgRate,
             todayKm: totalKm,
-            onlineMinutes: Math.floor(sessionSeconds / 60),
+            onlineMinutes: Math.floor((todayOnlineBaseSecondsRef.current + sessionSeconds) / 60),
           });
         }
       }
@@ -668,6 +754,35 @@ const DashboardScreen = () => {
       fetchDataRef.current?.();
     }
   }, [sessionSeconds]);
+
+  // Décision Accepter/Refuser venue d'une action de notification (iOS) :
+  //  1. mapping en mémoire scanTs → id (cas app vivante),
+  //  2. sinon repli sur la course PENDING dont la création est la plus proche
+  //     du scan (≤ 3 min) — couvre le cold start où le mapping est vide,
+  //  3. sinon la course n'existe pas encore → on bufferise (appliquée à sa création).
+  const applyRideDecision = useCallback((scanTs: number, status: 'ACCEPTED' | 'DECLINED') => {
+    let rideId = rideIdByScanTsRef.current.get(scanTs);
+    if (!rideId) {
+      const cand = ridesRef.current
+        .filter(r => r.status === 'PENDING')
+        .map(r => ({ id: r.id, dt: Math.abs(new Date(r.created_at).getTime() / 1000 - scanTs) }))
+        .filter(x => x.dt < 180)
+        .sort((a, b) => a.dt - b.dt)[0];
+      rideId = cand?.id;
+    }
+    if (rideId) handleStatusUpdate(rideId, status);
+    else bufferedDecisionsRef.current.set(scanTs, status);
+  }, [handleStatusUpdate]);
+
+  useEffect(() => { applyRideDecisionRef.current = applyRideDecision; }, [applyRideDecision]);
+  useEffect(() => { ridesRef.current = rides; }, [rides]);
+
+  useEffect(() => {
+    const sub = scannerService.onRideDecision(({ scanTs, status }) => {
+      applyRideDecisionRef.current(scanTs, status);
+    });
+    return () => sub?.remove();
+  }, []);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
@@ -837,14 +952,19 @@ const DashboardScreen = () => {
           const accepted = rides.filter(r => r.status === 'ACCEPTED');
           const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
           const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
+          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
+          const onlineHrStart = todayOnlineBaseSecondsRef.current / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
             fare: 0, hourlyRate: 0, kmRate: 0,
             distanceKm: 0, durationMin: 0, verdictLevel: 1,
             todayEarnings: totalE,
-            todayHourlyRate: parseFloat(stats.avgRate) || 0,
+            todayHourlyRate: onlineHrStart > 0 ? totalE / onlineHrStart : 0,
             todayKm: totalKm,
-            onlineMinutes: Math.floor(sessionSeconds / 60),
+            onlineMinutes: Math.floor(todayOnlineBaseSecondsRef.current / 60),
+            // Ancre du timer auto : maintenant − cumul déjà fait aujourd'hui
+            // (la session courante démarre à 0).
+            sessionStartEpoch: Math.floor(Date.now() / 1000) - todayOnlineBaseSecondsRef.current,
           });
         }
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
@@ -1081,14 +1201,18 @@ const DashboardScreen = () => {
             style={styles.statCard}
             accessible
             accessibilityLabel={
-              dailyScans !== null
+              (dailyScans !== null
                 ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
-                : `${t('dashboard.scans')}: ${stats.scans}`
+                : `${t('dashboard.scans')}: ${stats.scans}`)
+              + (extraCredits > 0 ? ` (+${extraCredits})` : '')
             }
           >
             <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
             <Text style={styles.statValue}>
               {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
+              {extraCredits > 0 && (
+                <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
+              )}
             </Text>
             <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
           </View>
@@ -1098,7 +1222,7 @@ const DashboardScreen = () => {
         {/* ── OFFLINE HINT ── */}
         {!isOnline && (
           <View style={styles.offlineHint}>
-            <Feather name="wifi-off" size={16} color="#FFB300" />
+            <MaterialCommunityIcons name="line-scan" size={17} color="#FFB300" />
             <Text style={styles.offlineHintText}>
               {t('dashboard.offlineBanner', 'Passez en ligne pour activer le scanner')}
             </Text>
@@ -1473,6 +1597,7 @@ const styles = StyleSheet.create({
   },
   statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
   statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  statCreditBonus: { color: colors.primary, fontSize: 15, fontWeight: '800' },
   statIcon: { position: 'absolute', top: 10, right: 10 },
 
 

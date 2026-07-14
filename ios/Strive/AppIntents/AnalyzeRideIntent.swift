@@ -1,6 +1,7 @@
 import AppIntents
 import UIKit
 import UserNotifications
+import ActivityKit
 
 /// App Intent exposé à l'app Shortcuts — flow identique à Android :
 ///   1. OCR (Vision)
@@ -23,10 +24,6 @@ struct AnalyzeRideIntent: AppIntent {
 
   @Parameter(title: "Capture d'écran")
   var screenshot: IntentFile
-
-  /// Hard deadline global du Shortcut. Si Vision deadlock ou TomTom hang
-  /// au-delà de leur propre timeout interne, on libère quand même le Shortcut.
-  private static let overallTimeoutNs: UInt64 = 15_000_000_000
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     guard isScannerEnabled else {
@@ -60,71 +57,151 @@ struct AnalyzeRideIntent: AppIntent {
       return .result(value: "invalid_image")
     }
 
-    let summary: String = await withTaskGroup(of: String?.self) { group in
-      group.addTask {
-        await withCheckedContinuation { cont in
-          ScanProcessor.shared.process(image: image) { finalResult in
-            guard let result = finalResult else {
-              if self.useLiveActivity {
-                LiveActivityManager.shared.showError()
-              } else {
-                self.sendLocalNotification(
-                  title: "Strive",
-                  body: self.localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot.")
-                )
-              }
-              cont.resume(returning: nil)
-              return
-            }
-            if self.useLiveActivity {
-              LiveActivityManager.shared.update(
-                platform: result.scan.platform.rawValue,
-                fare: result.scan.fare,
-                hourlyRate: result.hourlyRate,
-                kmRate: result.kmRate,
-                distanceKm: result.totalDistanceKm,
-                durationMin: result.totalDurationMin,
-                verdictLevel: result.verdictLevel
-              )
-            } else {
-              let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
-              self.sendLocalNotification(
-                title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.scan.fare)) · \(verdict)",
-                body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
-              )
-            }
-
-            self.incrementScanCount()
-            self.saveResultForMainApp(result)
-
-            let line = String(
-              format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
-              result.scan.platform.rawValue, result.scan.fare,
-              result.hourlyRate, result.kmRate
-            )
-            cont.resume(returning: line)
-          }
-        }
-      }
-      group.addTask {
-        try? await Task.sleep(nanoseconds: Self.overallTimeoutNs)
-        return nil
-      }
-      var result: String? = nil
-      for await value in group {
-        if let v = value { result = v; group.cancelAll(); break }
-      }
-      if result == nil {
-        group.cancelAll()
-        self.sendLocalNotification(
-          title: "Strive",
-          body: self.localizedString("notif.timeout", fr: "Analyse trop longue — réessayez.", en: "Analysis took too long — try again.")
-        )
-      }
-      return result ?? "no_result"
+    // Anti double-tap (AssistiveTouch tapé 2-3 fois) : un scan déclenché < 3 s
+    // après le précédent est ignoré SILENCIEUSEMENT → pas de quota consommé, pas
+    // de course en double, pas de Live Activity parasite. Un re-scan délibéré
+    // (plus tard) passe normalement.
+    guard !ScanProcessor.shouldThrottleRapidScan() else {
+      // Feedback léger plutôt qu'un drop muet : le 1ᵉ tap est déjà en cours de
+      // traitement (sinon le testeur croit que « ça scanne mais rien ne s'affiche »).
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.tooSoon",
+          fr: "Analyse déjà en cours — patiente une seconde.",
+          en: "Analysis already running — hold on a second.")
+      )
+      return .result(value: "too_soon")
     }
 
-    return .result(value: summary)
+    // Découplage pour minimiser le carré blanc « raccourci en cours » : l'OCR +
+    // TomTom (et le fallback Gemini) tournent sous une activité de fond, et
+    // `perform()` REND LA MAIN IMMÉDIATEMENT. L'indicateur système disparaît en
+    // une fraction de seconde au lieu de rester 5-10 s (durée du pipeline). Le
+    // résultat s'affiche seul, une seule fois, quand TomTom a fini — aucune
+    // valeur provisoire n'est montrée.
+    //
+    // performExpiringActivity garde le process vivant (~qq secondes à ~30 s) le
+    // temps du pipeline ; le sémaphore maintient l'assertion jusqu'au résultat.
+    ProcessInfo.processInfo.performExpiringActivity(withReason: "StriveScanRefine") { expired in
+      if expired { return }
+      let sem = DispatchSemaphore(value: 0)
+      ScanProcessor.shared.process(image: image) { finalResult in
+        // Adresses présentes → on présente directement. Sinon (ou aucun
+        // résultat) → fallback Gemini (récupère les 2 adresses → TomTom →
+        // vraie distance/durée). Si Gemini échoue aussi → « scan échoué »
+        // affiché DANS la Live Activity, et RIEN n'est enregistré.
+        if let result = finalResult, self.hasBothAddresses(result) {
+          _ = self.presentResult(result)
+          sem.signal()
+          return
+        }
+        self.geminiFallback(image: image) { recovered in
+          if let recovered = recovered {
+            _ = self.presentResult(recovered)
+          } else {
+            self.presentFailure()
+          }
+          sem.signal()
+        }
+      }
+      // Borne l'attente (watchdog interne ScanProcessor = 20 s ; on laisse une
+      // marge). Évite de tenir l'assertion de fond indéfiniment si un callback
+      // ne revient jamais.
+      _ = sem.wait(timeout: .now() + 25)
+    }
+
+    return .result(value: "started")
+  }
+
+  // MARK: - Présentation résultat / échec / fallback Gemini
+
+  private func hasBothAddresses(_ result: ScanProcessor.FinalResult) -> Bool {
+    let p = result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let d = result.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return !p.isEmpty && !d.isEmpty
+  }
+
+  /// Affiche le résultat (Live Activity ou notif) + l'enregistre pour l'app.
+  /// scanTs : clé de corrélation course ↔ décision (lastScanTimestamp + userInfo).
+  private func presentResult(_ result: ScanProcessor.FinalResult) -> String {
+    let scanTs = Date().timeIntervalSince1970
+    // liveActivityReady (et pas useLiveActivity) : si la LA est coupée dans les
+    // réglages, on tombe sur la notification résultat (avec Accepter/Refuser)
+    // au lieu d'un affichage qui échouerait en silence.
+    if liveActivityReady {
+      LiveActivityManager.shared.update(
+        platform: result.scan.platform.rawValue, fare: result.scan.fare,
+        hourlyRate: result.hourlyRate, kmRate: result.kmRate,
+        distanceKm: result.totalDistanceKm, durationMin: result.totalDurationMin,
+        verdictLevel: result.verdictLevel, scanTs: scanTs
+      )
+    } else {
+      let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
+      sendLocalNotification(
+        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.scan.fare)) · \(verdict)",
+        body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
+        category: "STRIVE_SCAN_RESULT", scanTs: scanTs
+      )
+    }
+    incrementScanCount()
+    saveResultForMainApp(result, scanTs: scanTs)
+    return String(
+      format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
+      result.scan.platform.rawValue, result.scan.fare, result.hourlyRate, result.kmRate
+    )
+  }
+
+  /// « Scan échoué » : affiché DANS la Live Activity (ou notif si LA désactivée).
+  /// Rien n'est enregistré → l'app ne reçoit aucun résultat à rejeter.
+  private func presentFailure() {
+    if liveActivityReady {
+      LiveActivityManager.shared.showError()
+    } else {
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot.")
+      )
+    }
+  }
+
+  /// Fallback Gemini (Niveau 2) — le chemin AssistiveTouch n'a pas d'OCR-fallback
+  /// comme la Share Extension. Gemini récupère les 2 adresses → TomTom → vraie
+  /// distance/durée. completion(nil) si ce n'est pas une offre / Gemini KO /
+  /// adresses introuvables (→ scan échoué dans la Live Activity).
+  private func geminiFallback(image: UIImage, completion: @escaping (ScanProcessor.FinalResult?) -> Void) {
+    guard ScanProcessor.shared.lastScanMayBeRide else { completion(nil); return }
+    let d = UserDefaults(suiteName: appGroupId)
+    GeminiVisionService.shared.edgeFunctionUrl = d?.string(forKey: "geminiEdgeUrl")
+    GeminiVisionService.shared.supabaseAnonKey = d?.string(forKey: "geminiSupabaseKey")
+    GeminiVisionService.shared.apiKey = d?.string(forKey: "geminiApiKey")
+    GeminiVisionService.shared.supabaseUserJwt = d?.string(forKey: "supabaseUserJwt")
+    GeminiVisionService.shared.analyze(image: image) { gem in
+      guard let gem = gem,
+            let pickup = gem.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !pickup.isEmpty,
+            let dest = gem.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !dest.isEmpty
+      else { completion(nil); return }
+      let base = ScanResultModel(
+        platform: ScanPlatform(rawValue: gem.platform) ?? .UNKNOWN,
+        fare: gem.fare, distanceKm: gem.distanceKm, durationMin: gem.durationMin,
+        pickupAddress: pickup, destinationAddress: dest
+      )
+      guard TomTomService.shared.isReady else {
+        completion(ScanProcessor.shared.computeFinal(scan: base)); return
+      }
+      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
+        var refined = base
+        if let route = route, route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 {
+          let r = gem.fare / route.distanceKm
+          if r >= 0.2, r <= 12.0 {
+            refined = base.copy(
+              distanceKm: route.distanceKm, durationMin: route.durationMin,
+              pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
+            )
+          }
+        }
+        completion(ScanProcessor.shared.computeFinal(scan: refined))
+      }
+    }
   }
 
   // MARK: - Preference
@@ -148,6 +225,15 @@ struct AnalyzeRideIntent: AppIntent {
       ?? "group.com.striveapp.app"
     let defaults = UserDefaults(suiteName: appGroupId)
     return defaults?.object(forKey: "useLiveActivity") == nil ? true : defaults!.bool(forKey: "useLiveActivity")
+  }
+
+  /// Live Activity réellement AFFICHABLE : préférence activée ET autorisation
+  /// système ON (Réglages → Strive → Activités en direct). Si l'utilisateur l'a
+  /// coupée, `Activity.request()` échoue en silence → la capture est prise, la
+  /// course enregistrée, mais RIEN ne s'affiche (bug remonté par les testeurs).
+  /// Dans ce cas on bascule sur une notification (résultat + échec).
+  private var liveActivityReady: Bool {
+    useLiveActivity && ActivityAuthorizationInfo().areActivitiesEnabled
   }
 
   private var appGroupId: String {
@@ -197,18 +283,22 @@ struct AnalyzeRideIntent: AppIntent {
     return lang.hasPrefix("fr") ? fr : en
   }
 
-  private func sendLocalNotification(title: String, body: String) {
+  private func sendLocalNotification(title: String, body: String, category: String? = nil, scanTs: Double? = nil) {
     let content = UNMutableNotificationContent()
     content.title = title
     content.body = body
     content.sound = .default
+    // Boutons Accepter/Refuser : la catégorie STRIVE_SCAN_RESULT est enregistrée
+    // par l'app principale (AppDelegate). scanTs corrèle la décision à la course.
+    if let category = category { content.categoryIdentifier = category }
+    if let scanTs = scanTs { content.userInfo = ["scanTs": scanTs] }
     let request = UNNotificationRequest(identifier: "strive-scan-\(UUID().uuidString)", content: content, trigger: nil)
     UNUserNotificationCenter.current().add(request)
   }
 
   // MARK: - App Group
 
-  private func saveResultForMainApp(_ result: ScanProcessor.FinalResult) {
+  private func saveResultForMainApp(_ result: ScanProcessor.FinalResult, scanTs: Double) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
@@ -221,13 +311,14 @@ struct AnalyzeRideIntent: AppIntent {
       "hourlyRate": result.hourlyRate,
       "kmRate": result.kmRate,
       "verdictLevel": result.verdictLevel,
+      "scanTs": scanTs,
     ]
     if let pickup = result.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = result.scan.destinationAddress { body["destinationAddress"] = dest }
 
     if let data = try? JSONSerialization.data(withJSONObject: body) {
       defaults.set(data, forKey: "lastScanResult")
-      defaults.set(Date().timeIntervalSince1970, forKey: "lastScanTimestamp")
+      defaults.set(scanTs, forKey: "lastScanTimestamp")
 
       let center = CFNotificationCenterGetDarwinNotifyCenter()
       CFNotificationCenterPostNotification(
@@ -236,6 +327,71 @@ struct AnalyzeRideIntent: AppIntent {
         nil, nil, true
       )
     }
+  }
+}
+
+// MARK: - Commandes vocales « course prise / refusée » (Siri, mains libres)
+
+/// Écrit la décision pour la DERNIÈRE course scannée (`lastScanTimestamp`) dans
+/// l'App Group, prévient l'app (Darwin) pour la réconciliation JS, et fait
+/// disparaître la carte résultat de la Live Activity. Mains libres → la seule
+/// interaction réellement sûre en conduisant. Retourne false si aucune course récente.
+/// Langue de l'app (App Group), pour localiser les réponses vocales de Siri.
+private func striveIsFrench() -> Bool {
+  let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+    ?? "group.com.striveapp.app"
+  let lang = UserDefaults(suiteName: appGroupId)?.string(forKey: "appLanguage")
+    ?? Locale.current.languageCode ?? "en"
+  return lang.hasPrefix("fr")
+}
+
+@available(iOS 16.0, *)
+private func tagLastScannedRide(accepted: Bool) async -> Bool {
+  let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+    ?? "group.com.striveapp.app"
+  guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+  let scanTs = defaults.double(forKey: "lastScanTimestamp")
+  guard scanTs > 0 else { return false }
+
+  // Incrément KPI du jour + retour à l'état de base, IMMÉDIAT et sans JS
+  // (helpers partagés avec le bouton Live Activity).
+  if #available(iOS 16.2, *) {
+    let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
+    await revertLiveActivityToIdle(addFare: add.fare, addKm: add.km)
+  }
+  appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
+  return true
+}
+
+@available(iOS 16.0, *)
+struct RideTakenVoiceIntent: AppIntent {
+  static var title: LocalizedStringResource = "Course prise"
+  static var description = IntentDescription("Marque la dernière course scannée comme prise.")
+  static var openAppWhenRun: Bool = false
+
+  func perform() async throws -> some IntentResult & ProvidesDialog {
+    let ok = await tagLastScannedRide(accepted: true)
+    let fr = striveIsFrench()
+    let dialog: IntentDialog = ok
+      ? (fr ? "C'est noté, course prise." : "Got it, ride marked as taken.")
+      : (fr ? "Aucune course récente à marquer." : "No recent ride to mark.")
+    return .result(dialog: dialog)
+  }
+}
+
+@available(iOS 16.0, *)
+struct RideDeclinedVoiceIntent: AppIntent {
+  static var title: LocalizedStringResource = "Course refusée"
+  static var description = IntentDescription("Marque la dernière course scannée comme refusée.")
+  static var openAppWhenRun: Bool = false
+
+  func perform() async throws -> some IntentResult & ProvidesDialog {
+    let ok = await tagLastScannedRide(accepted: false)
+    let fr = striveIsFrench()
+    let dialog: IntentDialog = ok
+      ? (fr ? "C'est noté, course refusée." : "Got it, ride marked as declined.")
+      : (fr ? "Aucune course récente à marquer." : "No recent ride to mark.")
+    return .result(dialog: dialog)
   }
 }
 
@@ -250,6 +406,28 @@ struct StriveAppShortcuts: AppShortcutsProvider {
       ],
       shortTitle: "Analyser une course",
       systemImageName: "car.fill"
+    )
+    AppShortcut(
+      intent: RideTakenVoiceIntent(),
+      phrases: [
+        "Course prise avec \(.applicationName)",
+        "\(.applicationName) course prise",
+        "Ride taken with \(.applicationName)",
+        "\(.applicationName) ride taken",
+      ],
+      shortTitle: "Course prise",
+      systemImageName: "checkmark.circle.fill"
+    )
+    AppShortcut(
+      intent: RideDeclinedVoiceIntent(),
+      phrases: [
+        "Course refusée avec \(.applicationName)",
+        "\(.applicationName) course refusée",
+        "Ride declined with \(.applicationName)",
+        "\(.applicationName) ride declined",
+      ],
+      shortTitle: "Course refusée",
+      systemImageName: "xmark.circle.fill"
     )
   }
 }

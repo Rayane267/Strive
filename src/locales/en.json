@@ -108,6 +108,8 @@
       "placeholderMonth": "MM",
       "placeholderYear": "YYYY",
       "dialPickerTitle": "Country code",
+      "dialSearchPlaceholder": "Search a country or dial code",
+      "dialNoResult": "No country found",
       "submit": "Continue",
       "errors": {
         "firstNameRequired": "First name is required",
@@ -294,6 +296,17 @@
       "today": "Today"
     },
     "dailyEarnings": "Earnings per day",
+    "quality": {
+      "title": "Ride quality",
+      "levelGood": "Excellent",
+      "levelMid": "Decent",
+      "levelLow": "Needs work",
+      "caption_one": "Across {{count}} accepted ride",
+      "caption_other": "Across {{count}} accepted rides",
+      "discipline": "{{pct}}% good calls (accept / decline)",
+      "missed_one": "{{count}} good ride declined",
+      "missed_other": "{{count}} good rides declined"
+    },
     "alerts": {
       "premiumTitle": "Plus Access",
       "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
@@ -417,6 +430,7 @@
     "avgCons": "Average consumption",
     "unitFuel": "L/100km",
     "unitElectric": "kWh/100km",
+    "elecPrice": "Charging price",
     "proFeatures": "PRO FEATURES",
     "upgradeReq": "Subscription required",
     "feat1Title": "Accurate Consumption",
@@ -431,7 +445,8 @@
     "errors": {
       "required": "Please fill in all required fields.",
       "saveFailed": "Unable to save data. Please try again.",
-      "consInvalid": "Invalid consumption (between 0.1 and 99.9)."
+      "consInvalid": "Invalid consumption (between 0.1 and 99.9).",
+      "priceInvalid": "Invalid price (between 0.01 and 3 €/kWh)."
     },
     "success": {
       "saved": "Profile updated successfully."
@@ -444,9 +459,18 @@
     "step": "STEP",
     "openShortcuts": "Open Shortcuts",
     "openAccessibility": "Open Accessibility",
-    "step1": { "title": "Welcome to Strive", "desc": "Maximize your earnings as a VTC driver. Strive analyzes every offer so you never accept an unprofitable ride." },
-    "step2": { "title": "Set up the scanner", "desc": "Grant the accessibility and overlay permissions. A floating bubble will appear on top of your VTC app, ready to analyze offers." },
-    "step2_ios": { "title": "Install the shortcut", "desc": "One tap to add the \"Analyze a ride\" shortcut to your Shortcuts app. Pre-configured and ready to use." },
+    "step1": {
+      "title": "Welcome to Strive",
+      "desc": "Maximize your earnings as a VTC driver. Strive analyzes every offer so you never accept an unprofitable ride."
+    },
+    "step2": {
+      "title": "Set up the scanner",
+      "desc": "Grant the accessibility and overlay permissions. A floating bubble will appear on top of your VTC app, ready to analyze offers."
+    },
+    "step2_ios": {
+      "title": "Install the shortcut",
+      "desc": "One tap to add the \"Analyze a ride\" shortcut to your Shortcuts app. Pre-configured and ready to use."
+    },
     "iosPreview": {
       "title": "See It In Action",
       "subtitle": "The verdict appears in the Dynamic Island, live over your VTC app.",
@@ -460,7 +484,6 @@
       "metricTotal": "Total",
       "metricTotalSub": "Total trip earnings",
       "customizeCta": "Customize my thresholds",
-      "verdictTake": "TAKE",
       "verdictMaybe": "MAYBE",
       "verdictSkip": "SKIP",
       "hintGood": "Both metrics exceed your minimums ✓",
@@ -504,41 +527,74 @@
       "step2t": "Tap \"Add Shortcut\" in the Shortcuts app",
       "step3t": "Come back here and tap Continue",
       "cta": "Get Shortcut",
-      "warning": "You need to install the shortcut first."
+      "warning": "You need to install the shortcut first.",
+      "ctaDone": "Shortcut installed — reopen"
     },
-    "step3": { "title": "Accept or decline instantly", "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline." },
-    "step3_ios": { "title": "Choose your trigger", "desc": "How do you want to launch the shortcut from Uber / Bolt / Heetch?" },
+    "step3": {
+      "title": "Accept or decline instantly",
+      "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline."
+    },
+    "step3_ios": {
+      "title": "Choose your trigger",
+      "desc": "How do you want to launch the shortcut from Uber / Bolt / Heetch?"
+    },
     "iosTrigger": {
       "recommended": "★ Recommended — Fastest option",
       "backTap": {
         "label": "Back Tap",
         "hero": "Tap the back",
-        "step1t": "Open Settings", "step1s": "Settings → Accessibility → Touch",
-        "step2t": "Back Tap", "step2s": "Tap \"Double Tap\"",
-        "step3t": "Pick shortcut", "step3s": "Select Strive from the list"
+        "step1t": "Open Settings",
+        "step1s": "Settings → Accessibility → Touch",
+        "step2t": "Back Tap",
+        "step2s": "Tap \"Double Tap\"",
+        "step3t": "Pick shortcut",
+        "step3s": "Select Strive from the list"
       },
       "assistive": {
         "label": "Assistive",
         "hero": "Floating button",
-        "step1t": "Open Settings", "step1s": "Settings → Accessibility → Touch",
-        "step2t": "Enable AssistiveTouch", "step2s": "Toggle at the top of the page",
-        "step3t": "Custom Actions", "step3s": "Single-Tap",
-        "step4t": "Add \"Strive\"", "step4s": "Select from Shortcuts list"
+        "step1t": "Open Settings",
+        "step1s": "Settings → Accessibility → Touch",
+        "step2t": "Enable AssistiveTouch",
+        "step2s": "Toggle at the top of the page",
+        "step3t": "Custom Actions",
+        "step3s": "Single-Tap",
+        "step4t": "Add \"Strive\"",
+        "step4s": "Select from Shortcuts list"
       },
       "homeScreen": {
         "label": "Home Screen",
         "hero": "App icon",
-        "step1t": "Open Shortcuts", "step1s": "Apple's Shortcuts app",
-        "step2t": "Hold the shortcut", "step2s": "Long press → Details",
-        "step3t": "Add to Home Screen", "step3s": "\"Add to Home Screen\""
+        "step1t": "Open Shortcuts",
+        "step1s": "Apple's Shortcuts app",
+        "step2t": "Hold the shortcut",
+        "step2s": "Long press → Details",
+        "step3t": "Add to Home Screen",
+        "step3s": "\"Add to Home Screen\""
       },
       "cta": "Open Accessibility settings",
       "doneCta": "I've set it up"
     },
-    "laTip": { "title": "Don't dismiss the notification", "desc": "The scan result appears in the Dynamic Island at the top of your screen. If you dismiss the notification on the Lock Screen, the result disappears too." },
-    "step4": { "title": "Track your performance", "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms." },
-    "step5": { "title": "You're all set!", "desc": "Configure your minimum rates in Preferences, then start the scanner from the Dashboard. Happy driving!" },
-    "step5_ios": { "title": "You're all set!", "desc": "Configure your minimum rates in Preferences. Nothing to start manually — your shortcut is ready. Happy driving!" },
+    "laTip": {
+      "title": "Don't dismiss the notification",
+      "desc": "The scan result appears in the Dynamic Island at the top of your screen. If you dismiss the notification on the Lock Screen, the result disappears too."
+    },
+    "tagRides": {
+      "title": "Mark your rides",
+      "desc": "For accurate earnings and €/h, tell Strive whether you took or declined each ride — otherwise your stats stay empty.\n\n• Dynamic Island: tap ✅ Taken or ❌ Declined on the card\n• Hands-free: say \"Hey Siri, Strive ride taken\" (or \"ride declined\")\n• No Dynamic Island: pull the notification down to reveal the buttons"
+    },
+    "step4": {
+      "title": "Track your performance",
+      "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms."
+    },
+    "step5": {
+      "title": "You're all set!",
+      "desc": "Configure your minimum rates in Preferences, then start the scanner from the Dashboard. Happy driving!"
+    },
+    "step5_ios": {
+      "title": "You're all set!",
+      "desc": "Configure your minimum rates in Preferences. Nothing to start manually — your shortcut is ready. Happy driving!"
+    },
     "tips": {
       "step1": "Strive works with Uber, Bolt and Heetch. More platforms are coming soon.",
       "step2": "You'll need to grant 2 permissions: overlay and accessibility. Follow the step-by-step guide.",
@@ -546,10 +602,13 @@
       "step3": "Pro tip: tap the bubble when an offer appears on your VTC app. No need to switch apps.",
       "step3_ios": "Pro tip: Back Tap works through a thin case. No need to switch apps.",
       "laTip": "The result stays visible for 10 seconds then disappears automatically.",
+      "tagRides": "The Siri voice command is the safest while driving — no need to touch your phone.",
       "step4": "The Analytics tab shows daily earnings, platform breakdown and your real-time hourly rate.",
       "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
       "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
-    }
+    },
+    "restartVideo": "Replay video",
+    "doneReady": "You're all set — safe travels!"
   },
   "help": {
     "title": "Help & Support",
@@ -572,7 +631,37 @@
       "q5": "How do I cancel my Plus subscription?",
       "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
       "q6": "Is my data safe?",
-      "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account."
+      "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account.",
+      "q7": "How is my hourly rate (€/h) calculated?",
+      "a7": "Strive starts from the ride fare, adds the pickup time to reach the rider, and computes the real drive time using live traffic. You get your true €/h, not a straight-line guess.",
+      "q8": "How do fuel cost and net profit work?",
+      "a8": "From your vehicle's consumption (L/100km, or kWh/100km for electric) and the fuel price, Strive deducts each ride's cost to show your net profit. For electric, you can set your own €/kWh price in Profile → Vehicle.",
+      "q9": "What is the ride quality score?",
+      "a9": "A score out of 100 given to each ride by comparing its €/h and €/km to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
+      "q10": "How many scans per day?",
+      "a10": "3 scans per day on the free plan, 15 per day with Strive Plus.",
+      "q11": "How do I contact support?",
+      "a11": "From Profile → My tickets: open a ticket and we reply right inside the app (you get a notification for every reply)."
+    }
+  },
+  "support": {
+    "title": "My tickets",
+    "subtitle": "Strive support",
+    "menuSub": "Contact support, track your requests",
+    "empty": "No tickets yet",
+    "emptyHint": "A question or an issue? Open a ticket, we reply fast.",
+    "newTicket": "New ticket",
+    "subjectLabel": "Subject",
+    "subjectPlaceholder": "e.g. Scan issue",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Describe your request in detail…",
+    "send": "Send",
+    "staff": "Strive Support",
+    "replyPlaceholder": "Write your reply…",
+    "status": {
+      "open": "Pending",
+      "answered": "Answered",
+      "closed": "Closed"
     }
   },
   "iap": {
@@ -584,8 +673,10 @@
     "restoreFail": "Unable to restore purchases."
   },
   "accountInfo": {
+    "subtitle": "Personal information",
     "informations": "INFORMATION",
     "driverDefault": "Driver",
+    "emailLockedNote": "Email linked to your Google / Apple account — cannot be changed.",
     "errorSave": "Unable to save changes.",
     "privacy": "DATA & PRIVACY",
     "deleteHistory": {
@@ -593,7 +684,7 @@
       "message": "All your saved rides (addresses, fares, statistics) will be permanently deleted. This action cannot be undone.",
       "confirm": "Delete",
       "button": "Delete my history",
-      "note": "Your rides (including addresses) are kept for 12 months, then addresses are automatically erased.",
+      "note": "Your rides (including addresses) are kept until you delete your account, then permanently erased.",
       "success": "History deleted.",
       "error": "Deletion failed. Please try again."
     },
@@ -629,6 +720,8 @@
       "scanText": "analysis per ride in 2 seconds",
       "hourly": "Hourly rate €/h",
       "hourlyText": "live on every offer",
+      "traffic": "Real-time traffic",
+      "trafficText": "drive time based on live congestion, not straight-line guesses",
       "filter": "Smart filter",
       "filterText": "spots unprofitable rides",
       "threshold": "Custom thresholds",
@@ -671,7 +764,7 @@
     "monthlyTab": "Monthly",
     "yearlyTab": "Yearly",
     "monthlyFallbackPrice": "€9.99",
-    "yearlyFallbackPrice": "€79.99",
+    "yearlyFallbackPrice": "€89.99",
     "perMonthShort": "/mo",
     "perYearShort": "/yr",
     "perMonthEquiv": "just {{price}}/mo",
@@ -689,13 +782,37 @@
     "errorTitle": "Error",
     "errorMsg": "Unable to complete subscription. Please try again.",
     "rows": {
-      "scans": { "label": "Daily scans", "free": "1 / day", "plus": "Unlimited" },
-      "dashboard": { "label": "Dashboard", "free": "Basic", "plus": "Full" },
-      "fuel": { "label": "Fuel consumption", "plus": "Per model" },
-      "goal": { "label": "Daily goal", "plus": "Customizable" },
-      "history": { "label": "Ride history", "free": "Today only", "plus": "Unlimited" },
-      "hourly": { "label": "Hourly rate €/h", "plus": "Live" },
-      "support": { "label": "Support", "plus": "Priority" }
+      "scans": {
+        "label": "Daily scans",
+        "free": "1 / day",
+        "plus": "Unlimited"
+      },
+      "dashboard": {
+        "label": "Dashboard",
+        "free": "Basic",
+        "plus": "Full"
+      },
+      "fuel": {
+        "label": "Fuel consumption",
+        "plus": "Per model"
+      },
+      "goal": {
+        "label": "Daily goal",
+        "plus": "Customizable"
+      },
+      "history": {
+        "label": "Ride history",
+        "free": "Today only",
+        "plus": "Unlimited"
+      },
+      "hourly": {
+        "label": "Hourly rate €/h",
+        "plus": "Live"
+      },
+      "support": {
+        "label": "Support",
+        "plus": "Priority"
+      }
     }
   },
   "network": {

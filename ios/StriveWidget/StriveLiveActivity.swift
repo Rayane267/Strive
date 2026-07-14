@@ -1,6 +1,7 @@
 import SwiftUI
 import WidgetKit
 import ActivityKit
+import AppIntents
 
 @available(iOS 16.2, *)
 struct StriveLiveActivity: Widget {
@@ -8,7 +9,11 @@ struct StriveLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: StriveActivityAttributes.self) { context in
       LockScreenView(state: context.state)
-        .activityBackgroundTint(Color.black.opacity(0.92))
+        // Tint opaque : en présentation bannière (iPhone sans Dynamic Island)
+        // et en mode clair, un tint semi-transparent n'est pas honoré de façon
+        // fiable → fond blanc + texte blanc = rectangle blanc. LockScreenView
+        // pose AUSSI son propre fond noir plein (ceinture + bretelles).
+        .activityBackgroundTint(.black)
         .activitySystemActionForegroundColor(.white)
 
     } dynamicIsland: { context in
@@ -80,14 +85,18 @@ struct StriveLiveActivity: Widget {
               .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
           } else if !isScanning && !isIdle {
-            RouteRow(
-              distanceKm: context.state.distanceKm,
-              durationMin: context.state.durationMin,
-              level: context.state.verdictLevel
-            )
-            .padding(.horizontal, 6)
-            .padding(.top, 6)
-            .padding(.bottom, 4)
+            VStack(spacing: 4) {
+              RouteRow(
+                distanceKm: context.state.distanceKm,
+                durationMin: context.state.durationMin,
+                level: context.state.verdictLevel
+              )
+              .padding(.horizontal, 6)
+              if #available(iOS 17.0, *), let ts = context.state.scanTs, ts > 0 {
+                DecisionButtons(scanTs: ts)
+                  .padding(.horizontal, 6)
+              }
+            }
           }
         }
       } compactLeading: {
@@ -155,12 +164,20 @@ private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
   var body: some View {
     let isScanning = state.platform == "SCANNING"
-    let isIdle = state.platform == "IDLE"
     let isError = state.platform == "ERROR"
     let isLocked = state.platform == "LOCKED"
-    let hasResult = !isScanning && !isIdle && !isError && !isLocked
+    // Vraie course (UBER/BOLT/HEETCH/UNKNOWN…) — ni idle, ni scanning, ni erreur,
+    // ni teaser. C'est le seul état où l'on veut la CARTE RÉSULTAT sur le lock
+    // screen (crucial pour les iPhone sans Dynamic Island : voir la branche).
+    let isResult = !isScanning && !isError && !isLocked && state.platform != "IDLE"
 
-    if isLocked {
+    // Fond noir posé en .background (et NON en ZStack avec un Color.black, qui
+    // est greedy → force la vue à remplir toute la hauteur proposée → bannière
+    // Live Activity rognée, on ne voyait que « le bout du haut »). .background
+    // épouse la taille du contenu et garantit quand même un fond opaque (pas de
+    // rectangle blanc sur les iPhone sans Dynamic Island).
+    return Group {
+      if isLocked {
       // ── Teaser quota free : vrai layout résultat (vert) mais flouté + cadenas ──
       ZStack {
         VStack(spacing: 12) {
@@ -200,9 +217,13 @@ private struct LockScreenView: View {
             .foregroundColor(.white.opacity(0.6))
         }
       }
-    } else if hasResult {
-      // ── Résultat scan — même layout que Dynamic Island expanded ──
-      VStack(spacing: 12) {
+    } else if isResult {
+      // ── Carte RÉSULTAT sur le lock screen / bannière. Indispensable pour les
+      // iPhone SANS Dynamic Island (iPhone 11–14 non-Pro, SE…), qui n'ont QUE
+      // cette présentation : sans cette branche, ils ne verraient jamais le
+      // résultat de scan (uniquement le dashboard de session). L'auto-dismiss
+      // 15 s (LiveActivityManager) fait ensuite revenir la carte session. ──
+      VStack(spacing: 10) {
         HStack(spacing: 8) {
           Text(state.platform.capitalized)
             .font(.system(size: 15, weight: .semibold))
@@ -222,11 +243,19 @@ private struct LockScreenView: View {
           durationMin: state.durationMin,
           level: state.verdictLevel
         )
+
+        // Boutons Accepter/Refuser directement sur le lock screen (iOS 17+) —
+        // sinon les iPhone sans Dynamic Island n'ont aucun moyen de taguer sans
+        // ouvrir l'app.
+        if #available(iOS 17.0, *), let ts = state.scanTs, ts > 0 {
+          DecisionButtons(scanTs: ts)
+        }
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 14)
     } else {
-      // ── Idle / Scanning / Error — session KPIs ──
+      // ── Idle / analyse en cours / erreur : résumé de session (le compteur de
+      // durée tourne seul, rafraîchi par iOS sans réveiller l'app). ──
       let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
 
@@ -257,12 +286,23 @@ private struct LockScreenView: View {
               .font(.system(size: 11, weight: .bold))
               .foregroundColor(errorRed)
           } else {
-            Text(formatOnlineTime(state.onlineMinutes))
-              .font(.system(size: 11, weight: .bold, design: .monospaced))
-              .foregroundColor(.white.opacity(0.4))
-              .padding(.horizontal, 8)
-              .padding(.vertical, 3)
-              .background(Capsule().fill(.white.opacity(0.07)))
+            Group {
+              if let epoch = state.sessionStartEpoch {
+                // Compteur qui tourne SEUL sur le lock screen (durée de session
+                // du jour, cumulée) — iOS le rafraîchit sans réveiller l'app.
+                Text(Date(timeIntervalSince1970: epoch), style: .timer)
+                  .monospacedDigit()
+                  .multilineTextAlignment(.trailing)
+                  .frame(maxWidth: 64, alignment: .trailing)
+              } else {
+                Text(formatOnlineTime(state.onlineMinutes))
+              }
+            }
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.4))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(.white.opacity(0.07)))
           }
         }
         .padding(.bottom, 14)
@@ -314,7 +354,10 @@ private struct LockScreenView: View {
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 14)
+      }
     }
+    .frame(maxWidth: .infinity)
+    .background(Color.black)
   }
 }
 
@@ -365,10 +408,10 @@ private struct HourlyRate: View {
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
       Text("€\(Int(value))")
-        .font(.system(size: 28, weight: .heavy))
+        .font(.system(size: 19, weight: .heavy))
         .foregroundColor(.white)
       Text("/h")
-        .font(.system(size: 14, weight: .semibold))
+        .font(.system(size: 12, weight: .semibold))
         .foregroundColor(.white.opacity(0.55))
     }
   }
@@ -416,13 +459,13 @@ private struct RouteRow: View {
   let level: Int
 
   var body: some View {
-    HStack(alignment: .center, spacing: 12) {
+    HStack(alignment: .center, spacing: 10) {
       ZStack {
         Circle()
           .fill(verdictColor(level))
-          .frame(width: 28, height: 28)
+          .frame(width: 24, height: 24)
         Image(systemName: "car.fill")
-          .font(.system(size: 13, weight: .bold))
+          .font(.system(size: 11, weight: .bold))
           .foregroundColor(.black)
       }
 
@@ -433,30 +476,65 @@ private struct RouteRow: View {
         ZStack {
           Circle()
             .fill(verdictColor(level))
-            .frame(width: 24, height: 24)
+            .frame(width: 20, height: 20)
           Image(systemName: "figure.wave")
-            .font(.system(size: 12, weight: .bold))
+            .font(.system(size: 10, weight: .bold))
             .foregroundColor(.black)
         }
       }
 
-      VStack(alignment: .trailing, spacing: 2) {
+      VStack(alignment: .trailing, spacing: 1) {
         Text("\(durationMin)min")
-          .font(.system(size: 15, weight: .bold))
+          .font(.system(size: 14, weight: .bold))
           .foregroundColor(.white)
         Text(String(format: "%.1fkm", distanceKm))
-          .font(.system(size: 12, weight: .semibold))
+          .font(.system(size: 11, weight: .semibold))
           .foregroundColor(.white.opacity(0.55))
       }
 
       ZStack {
         Circle()
           .fill(verdictColor(level))
-          .frame(width: 28, height: 28)
+          .frame(width: 24, height: 24)
         Image(systemName: verdictIcon(level))
-          .font(.system(size: 13, weight: .bold))
+          .font(.system(size: 11, weight: .bold))
           .foregroundColor(.black)
       }
+    }
+  }
+}
+
+// MARK: - Boutons Accepter / Refuser (iOS 17+)
+
+/// Deux boutons interactifs qui taguent la course sans ouvrir l'app. Chaque tap
+/// exécute RideDecisionIntent → écrit la décision dans l'App Group → réconcilié
+/// côté JS (updateRideStatus). N'apparaît que si scanTs est connu.
+@available(iOS 17.0, *)
+private struct DecisionButtons: View {
+  let scanTs: Double
+  var body: some View {
+    HStack(spacing: 8) {
+      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: false)) {
+        Label("Refusée", systemImage: "xmark")
+          .font(.system(size: 13, weight: .bold))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 4)
+          .background(Color(red: 0.94, green: 0.27, blue: 0.27))
+          .foregroundColor(.white)
+          .clipShape(Capsule())
+      }
+      .buttonStyle(.plain)
+
+      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: true)) {
+        Label("Prise", systemImage: "checkmark")
+          .font(.system(size: 13, weight: .bold))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 4)
+          .background(Color(red: 0.0, green: 0.78, blue: 0.32))
+          .foregroundColor(.white)
+          .clipShape(Capsule())
+      }
+      .buttonStyle(.plain)
     }
   }
 }

@@ -58,8 +58,10 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed", "onRideDecision"]
   }
+
+  static let rideDecisionsKey = "pendingRideDecisions"
 
   private var laDismissObserver: Any?
 
@@ -69,6 +71,7 @@ class ScanBridgeModule: RCTEventEmitter {
     // était tuée a pu rater la notification Darwin. Dès que le JS s'abonne, on
     // flush ce qui est en attente dans l'App Group (garde timestamp anti-doublon).
     handleShareExtensionResult()
+    drainAndEmitRideDecisions()
     if #available(iOS 16.2, *) {
       laDismissObserver = NotificationCenter.default.addObserver(
         forName: LiveActivityManager.dismissedNotification,
@@ -109,6 +112,23 @@ class ScanBridgeModule: RCTEventEmitter {
       .deliverImmediately
     )
 
+    // Décisions Accepter/Refuser tapées sur la notif de scan (AppDelegate les
+    // empile dans l'App Group puis poste cette notification Darwin).
+    CFNotificationCenterAddObserver(
+      center,
+      observer,
+      { _, observer, _, _, _ in
+        guard let observer = observer else { return }
+        let module = Unmanaged<ScanBridgeModule>.fromOpaque(observer).takeUnretainedValue()
+        DispatchQueue.main.async {
+          module.drainAndEmitRideDecisions()
+        }
+      },
+      "com.striveapp.app.rideDecision" as CFString,
+      nil,
+      .deliverImmediately
+    )
+
     // Aussi écouter quand l'app revient au premier plan (au cas où la notification Darwin est manquée)
     NotificationCenter.default.addObserver(
       self,
@@ -129,6 +149,7 @@ class ScanBridgeModule: RCTEventEmitter {
     // résultats en attente à chaque retour au premier plan, que startScanner()
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
+    drainAndEmitRideDecisions()
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -140,7 +161,8 @@ class ScanBridgeModule: RCTEventEmitter {
           kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
           distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
           durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
-          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
+          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
         )
       }
     }
@@ -205,7 +227,8 @@ class ScanBridgeModule: RCTEventEmitter {
           kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
           distanceKm: distKm,
           durationMin: durMin,
-          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0
+          verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
+          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
         )
       }
 
@@ -214,7 +237,27 @@ class ScanBridgeModule: RCTEventEmitter {
       defaults.removeObject(forKey: "laLastStep")
     }
 
-    sendEvent(withName: "onScanResult", body: result)
+    var resultWithTs = result
+    resultWithTs["scanTs"] = timestamp   // corrélation course ↔ décision notif
+    sendEvent(withName: "onScanResult", body: resultWithTs)
+  }
+
+  /// Vide la file des décisions Accepter/Refuser (App Group) et les émet au JS,
+  /// qui les applique à la course correspondante (par scanTs). No-op si le JS
+  /// n'écoute pas encore — startObserving() rappelle ce drain à l'abonnement.
+  func drainAndEmitRideDecisions() {
+    guard hasListeners else { return }
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+          let data = defaults.data(forKey: Self.rideDecisionsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+          !arr.isEmpty else { return }
+    defaults.removeObject(forKey: Self.rideDecisionsKey)
+    for d in arr {
+      guard let ts = (d["scanTs"] as? NSNumber)?.doubleValue, ts > 0,
+            let status = d["status"] as? String,
+            status == "ACCEPTED" || status == "DECLINED" else { continue }
+      sendEvent(withName: "onRideDecision", body: ["scanTs": ts, "status": status])
+    }
   }
 
   // MARK: - Bridge Methods (appelées depuis JS)
@@ -385,6 +428,13 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Purge le cache de géocodage local (adresses = PII). Appelé par le JS au
+  /// logout et après suppression de compte — l'effacement RGPD couvre aussi le
+  /// cache sur l'appareil, hors de portée de la RPC serveur delete_account.
+  @objc func clearGeocodeCache() {
+    GeocodeCache.shared.clear()
+  }
+
   @objc func openOverlayPermissionSettings() {
     // No-op sur iOS — pas de permission overlay
   }
@@ -426,7 +476,8 @@ class ScanBridgeModule: RCTEventEmitter {
         todayEarnings: (payload["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
         todayHourlyRate: (payload["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
         todayKm: (payload["todayKm"] as? NSNumber)?.doubleValue ?? 0,
-        onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0
+        onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0,
+        sessionStartEpoch: (payload["sessionStartEpoch"] as? NSNumber)?.doubleValue ?? 0
       )
       resolve(started)
     } else {

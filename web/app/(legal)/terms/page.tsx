@@ -83,7 +83,7 @@ export default function TermsPage() {
       <h2>7. Abonnements, achats et facturation</h2>
       <ul>
         <li><strong>Offre gratuite</strong> : accès assorti d&apos;un quota limité de Scans par jour.</li>
-        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (Scans illimités + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 3 jours</strong>.</li>
+        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (15 scans/jour + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 7 jours</strong>.</li>
         <li><strong>Packs de Scans</strong> : crédits ponctuels (achats non renouvelables).</li>
         <li><strong>Facturation via les stores</strong> : tous les paiements sont traités par l&apos;App Store (Apple) ou Google Play, selon leurs conditions. L&apos;Éditeur n&apos;a accès à aucune donnée bancaire.</li>
         <li><strong>Renouvellement automatique</strong> pour une période identique, sauf résiliation au moins 24 h avant la fin de la période en cours ; en cas d&apos;essai, facturation à l&apos;issue si non annulé à temps.</li>

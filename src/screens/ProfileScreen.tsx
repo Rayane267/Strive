@@ -155,6 +155,13 @@ const ProfileScreen = () => {
       sub: t('profile.helpSub'),
       onPress: () => navigation.navigate('Help'),
     },
+    {
+      icon: 'lifebuoy',
+      iconLib: 'mc',
+      title: t('support.title', 'Mes tickets'),
+      sub: t('support.menuSub', 'Contacter le support, suivre tes demandes'),
+      onPress: () => navigation.navigate('SupportTickets'),
+    },
   ];
 
   const renderIcon = (item: MenuItem) => {
@@ -373,11 +380,11 @@ const ProfileScreen = () => {
 
         {/* ── FOOTER ── */}
         <View style={styles.legalLinksRow}>
-          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/privacy')}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/privacy')}>
             <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
           </TouchableOpacity>
           <Text style={styles.legalSep}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://strive.app/terms')}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/terms')}>
             <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
           </TouchableOpacity>
         </View>

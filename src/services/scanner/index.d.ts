@@ -4,4 +4,4 @@
 import type { ScannerService } from './types';
 
 export const scannerService: ScannerService;
-export type { ScannerService, ScanResult, ScanPlatform, TextBlock, PermissionsStatus } from './types';
+export type { ScannerService, ScanResult, ScanPlatform, TextBlock, PermissionsStatus, RideDecision } from './types';

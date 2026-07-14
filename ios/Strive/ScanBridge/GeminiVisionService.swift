@@ -22,6 +22,8 @@ final class GeminiVisionService {
     let fare: Double
     let distanceKm: Double
     let durationMin: Int?
+    let pickupAddress: String?
+    let destinationAddress: String?
   }
 
   /// Analyse une image de course VTC via Gemini 2.5 Flash
@@ -119,16 +121,20 @@ final class GeminiVisionService {
 
   private static let prompt = """
   Analyse cette capture d'écran d'une offre de course VTC (Uber, Bolt ou Heetch).
+  Règle 1 : l'adresse de DÉPART (pickup) est TOUJOURS la première affichée en haut ; la DESTINATION est TOUJOURS en dessous.
+  Règle 2 : ne confonds JAMAIS une ligne stat ("Course de 11.8 km", "à 6 min (1.2 km)") avec une adresse.
   Retourne UNIQUEMENT un objet JSON avec ces champs :
   {
     "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
     "fare": <montant en euros, ex: 12.50>,
     "distance_km": <distance de la COURSE en km, ex: 11.8>,
-    "duration_min": <durée de la course en minutes ou null si non visible>
+    "duration_min": <durée de la course en minutes ou null si non visible>,
+    "pickup_address": <adresse de départ exacte lue à l'écran, string ou null>,
+    "destination_address": <adresse de destination exacte lue à l'écran, string ou null>
   }
   IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
   Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
-  Ne retourne rien d'autre que le JSON.
+  Extrais les adresses EXACTES lues à l'écran (ne devine pas). Ne retourne rien d'autre que le JSON.
   """
 
   private static func parseResponse(_ data: Data) -> GeminiResult? {
@@ -183,11 +189,19 @@ final class GeminiVisionService {
           ratio >= 0.2, ratio <= 15
     else { return nil }
 
+    func cleanAddr(_ key: String) -> String? {
+      guard let s = (parsed[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !s.isEmpty, s.lowercased() != "null" else { return nil }
+      return s
+    }
+
     return GeminiResult(
       platform: platform,
       fare: fare,
       distanceKm: distanceKm,
-      durationMin: durationMin
+      durationMin: durationMin,
+      pickupAddress: cleanAddr("pickup_address"),
+      destinationAddress: cleanAddr("destination_address")
     )
   }
 }

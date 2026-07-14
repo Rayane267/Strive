@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Reveal from './Reveal';
 
 const plusFeatures = [
-  'Scans illimités',
+  '15 scans par jour',
   'Taux horaire €/h en direct',
+  'Trafic en temps réel (€/h ajusté aux embouteillages)',
   'Filtre intelligent des courses',
   'Seuils €/h et €/km personnalisés',
   'Historique complet des courses',
@@ -15,7 +16,7 @@ const plusFeatures = [
 ];
 
 const freeFeatures = [
-  '1 scan par jour',
+  '3 scans par jour',
   'Estimations basiques',
   'Dashboard basique',
   'Historique du jour seulement',
@@ -106,7 +107,7 @@ export default function Pricing() {
               ))}
             </ul>
             <a href="#download" className="btn btn-signal shimmer mt-8 rounded-full py-3 text-sm">
-              Commencer mes 3 jours gratuits
+              Commencer mes 7 jours gratuits
             </a>
             <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-widest text-faint">
               Puis {price}{cycle} · Annulable

@@ -29,6 +29,8 @@ export interface Profile {
   car_reg?: string | null;
   fuel_type?: string | null;
   avg_cons?: number | null;
+  /** Prix €/kWh personnalisé (véhicule électrique). null → repli DEFAULT_FUEL_PRICE.electric. */
+  elec_price?: number | null;
 }
 
 export interface Ride {

@@ -108,6 +108,8 @@
       "placeholderMonth": "MM",
       "placeholderYear": "AAAA",
       "dialPickerTitle": "Indicatif pays",
+      "dialSearchPlaceholder": "Rechercher un pays ou un indicatif",
+      "dialNoResult": "Aucun pays trouvé",
       "submit": "Continuer",
       "errors": {
         "firstNameRequired": "Le prénom est requis",
@@ -294,6 +296,17 @@
       "today": "Aujourd'hui"
     },
     "dailyEarnings": "Gains par jour",
+    "quality": {
+      "title": "Qualité des courses",
+      "levelGood": "Excellent",
+      "levelMid": "Correct",
+      "levelLow": "À améliorer",
+      "caption_one": "Sur {{count}} course acceptée",
+      "caption_other": "Sur {{count}} courses acceptées",
+      "discipline": "{{pct}} % de bonnes décisions (accepter / refuser)",
+      "missed_one": "{{count}} bonne course refusée",
+      "missed_other": "{{count}} bonnes courses refusées"
+    },
     "alerts": {
       "premiumTitle": "Accès Plus",
       "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus.",
@@ -417,6 +430,7 @@
     "avgCons": "Consommation Moyenne",
     "unitFuel": "L/100km",
     "unitElectric": "kWh/100km",
+    "elecPrice": "Prix de recharge",
     "proFeatures": "FONCTIONS PRO",
     "upgradeReq": "Abonnement requis",
     "feat1Title": "Consommation Précise",
@@ -431,7 +445,8 @@
     "errors": {
       "required": "Veuillez remplir tous les champs obligatoires.",
       "saveFailed": "Impossible d'enregistrer les données. Réessayez.",
-      "consInvalid": "Consommation invalide (entre 0.1 et 99.9)."
+      "consInvalid": "Consommation invalide (entre 0.1 et 99.9).",
+      "priceInvalid": "Prix invalide (entre 0.01 et 3 €/kWh)."
     },
     "success": {
       "saved": "Profil mis à jour avec succès."
@@ -444,9 +459,18 @@
     "step": "ÉTAPE",
     "openShortcuts": "Ouvrir Raccourcis",
     "openAccessibility": "Ouvrir Accessibilité",
-    "step1": { "title": "Bienvenue sur Strive", "desc": "Maximisez vos gains en tant que chauffeur VTC. Strive analyse chaque offre pour que vous n'acceptiez jamais une course non rentable." },
-    "step2": { "title": "Configurez le scanner", "desc": "Accordez les permissions d'accessibilité et d'overlay. Une bulle flottante apparaîtra par-dessus votre app VTC, prête à analyser les offres." },
-    "step2_ios": { "title": "Installez le raccourci", "desc": "Un tap pour ajouter le raccourci « Analyser une course » à votre app Raccourcis. Déjà pré-configuré, prêt à l'emploi." },
+    "step1": {
+      "title": "Bienvenue sur Strive",
+      "desc": "Maximisez vos gains en tant que chauffeur VTC. Strive analyse chaque offre pour que vous n'acceptiez jamais une course non rentable."
+    },
+    "step2": {
+      "title": "Configurez le scanner",
+      "desc": "Accordez les permissions d'accessibilité et d'overlay. Une bulle flottante apparaîtra par-dessus votre app VTC, prête à analyser les offres."
+    },
+    "step2_ios": {
+      "title": "Installez le raccourci",
+      "desc": "Un tap pour ajouter le raccourci « Analyser une course » à votre app Raccourcis. Déjà pré-configuré, prêt à l'emploi."
+    },
     "iosPreview": {
       "title": "Voici ce que vous verrez",
       "subtitle": "Le verdict apparaît dans la Dynamic Island, en direct par-dessus votre app VTC.",
@@ -460,7 +484,6 @@
       "metricTotal": "Total",
       "metricTotalSub": "Gains totaux de la course",
       "customizeCta": "Personnaliser mes seuils",
-      "verdictTake": "PRENDRE",
       "verdictMaybe": "PEUT-ÊTRE",
       "verdictSkip": "REFUSER",
       "hintGood": "Les deux métriques dépassent vos seuils ✓",
@@ -504,41 +527,74 @@
       "step2t": "Tapez « Ajouter le raccourci » dans l'app Raccourcis",
       "step3t": "Revenez ici et appuyez sur Continuer",
       "cta": "Obtenir le raccourci",
-      "warning": "Vous devez d'abord installer le raccourci."
+      "warning": "Vous devez d'abord installer le raccourci.",
+      "ctaDone": "Raccourci installé — rouvrir"
     },
-    "step3": { "title": "Acceptez ou refusez en un instant", "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser." },
-    "step3_ios": { "title": "Choisissez votre déclencheur", "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?" },
+    "step3": {
+      "title": "Acceptez ou refusez en un instant",
+      "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser."
+    },
+    "step3_ios": {
+      "title": "Choisissez votre déclencheur",
+      "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?"
+    },
     "iosTrigger": {
       "recommended": "★ Recommandé — Le plus rapide",
       "backTap": {
         "label": "Arrière",
         "hero": "Toucher l'arrière",
-        "step1t": "Ouvrir Réglages", "step1s": "Réglages → Accessibilité → Toucher",
-        "step2t": "Toucher l'arrière", "step2s": "Tapez « Toucher deux fois »",
-        "step3t": "Choisir le raccourci", "step3s": "Sélectionnez Strive dans la liste"
+        "step1t": "Ouvrir Réglages",
+        "step1s": "Réglages → Accessibilité → Toucher",
+        "step2t": "Toucher l'arrière",
+        "step2s": "Tapez « Toucher deux fois »",
+        "step3t": "Choisir le raccourci",
+        "step3s": "Sélectionnez Strive dans la liste"
       },
       "assistive": {
         "label": "Assistive",
         "hero": "Bouton flottant",
-        "step1t": "Ouvrir Réglages", "step1s": "Réglages → Accessibilité → Toucher",
-        "step2t": "Activer AssistiveTouch", "step2s": "Interrupteur en haut de la page",
-        "step3t": "Actions personnalisées", "step3s": "Toucher unique",
-        "step4t": "Ajouter « Strive »", "step4s": "Sélectionnez dans la liste des raccourcis"
+        "step1t": "Ouvrir Réglages",
+        "step1s": "Réglages → Accessibilité → Toucher",
+        "step2t": "Activer AssistiveTouch",
+        "step2s": "Interrupteur en haut de la page",
+        "step3t": "Actions personnalisées",
+        "step3s": "Toucher unique",
+        "step4t": "Ajouter « Strive »",
+        "step4s": "Sélectionnez dans la liste des raccourcis"
       },
       "homeScreen": {
         "label": "Accueil",
         "hero": "Icône d'app",
-        "step1t": "Ouvrir Raccourcis", "step1s": "L'app Raccourcis d'Apple",
-        "step2t": "Maintenir le raccourci", "step2s": "Appui long → Détails",
-        "step3t": "Ajouter à l'écran", "step3s": "« Ajouter à l'écran d'accueil »"
+        "step1t": "Ouvrir Raccourcis",
+        "step1s": "L'app Raccourcis d'Apple",
+        "step2t": "Maintenir le raccourci",
+        "step2s": "Appui long → Détails",
+        "step3t": "Ajouter à l'écran",
+        "step3s": "« Ajouter à l'écran d'accueil »"
       },
       "cta": "Ouvrir les réglages d'Accessibilité",
       "doneCta": "C'est configuré"
     },
-    "laTip": { "title": "Ne supprimez pas la notification", "desc": "Le résultat de l'analyse s'affiche dans la Dynamic Island en haut de l'écran. Si vous supprimez la notification sur l'écran verrouillé, le résultat disparaît aussi." },
-    "step4": { "title": "Suivez vos performances", "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables." },
-    "step5": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences, puis démarrez le scanner depuis l'Accueil. Bonne route !" },
-    "step5_ios": { "title": "Tout est prêt !", "desc": "Configurez vos seuils minimum dans Préférences. Plus besoin de démarrer quoi que ce soit — votre raccourci est prêt. Bonne route !" },
+    "laTip": {
+      "title": "Ne supprimez pas la notification",
+      "desc": "Le résultat de l'analyse s'affiche dans la Dynamic Island en haut de l'écran. Si vous supprimez la notification sur l'écran verrouillé, le résultat disparaît aussi."
+    },
+    "tagRides": {
+      "title": "Indique tes courses",
+      "desc": "Pour que Strive calcule tes vrais gains et ton €/h, indique chaque course prise ou refusée — sinon tes stats restent vides.\n\n• Dynamic Island : tape ✅ Prise ou ❌ Refusée sur la carte\n• Mains libres : « Dis Siri, Strive course prise » (ou « course refusée »)\n• Sans Dynamic Island : tire la notification vers le bas pour afficher les boutons"
+    },
+    "step4": {
+      "title": "Suivez vos performances",
+      "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables."
+    },
+    "step5": {
+      "title": "Tout est prêt !",
+      "desc": "Configurez vos seuils minimum dans Préférences, puis démarrez le scanner depuis l'Accueil. Bonne route !"
+    },
+    "step5_ios": {
+      "title": "Tout est prêt !",
+      "desc": "Configurez vos seuils minimum dans Préférences. Plus besoin de démarrer quoi que ce soit — votre raccourci est prêt. Bonne route !"
+    },
     "tips": {
       "step1": "Strive fonctionne avec Uber, Bolt et Heetch. D'autres plateformes arrivent bientôt.",
       "step2": "Vous devrez accorder 2 permissions : overlay et accessibilité. Suivez le guide étape par étape.",
@@ -546,10 +602,13 @@
       "step3": "Astuce : tapez la bulle quand l'offre apparaît sur votre écran VTC. Pas besoin de changer d'app.",
       "step3_ios": "Astuce : le double-tap au dos fonctionne même avec une coque (fine). Pas besoin de changer d'app.",
       "laTip": "Le résultat reste affiché 10 secondes puis disparaît automatiquement.",
+      "tagRides": "La commande vocale Siri est la plus sûre au volant — sans toucher le téléphone.",
       "step4": "L'onglet Stats montre vos gains par jour, par plateforme et votre taux horaire en temps réel.",
       "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
       "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
-    }
+    },
+    "restartVideo": "Revoir la vidéo",
+    "doneReady": "Tout est prêt — bonne route !"
   },
   "help": {
     "title": "Aide & Support",
@@ -572,7 +631,37 @@
       "q5": "Comment annuler mon abonnement Plus ?",
       "a5": "Sur Android : Google Play → Abonnements. Sur iOS : Réglages → Votre nom → Abonnements. Trouvez Strive et appuyez sur Annuler.",
       "q6": "Mes données sont-elles en sécurité ?",
-      "a6": "Oui. Le scan se fait sur votre appareil et aucune capture d'écran n'est conservée. Vos courses sont stockées de façon sécurisée, jamais revendues ni cédées, et Strive n'a aucun lien avec les plateformes VTC. Vous pouvez tout supprimer à tout moment depuis Profil → Compte."
+      "a6": "Oui. Le scan se fait sur votre appareil et aucune capture d'écran n'est conservée. Vos courses sont stockées de façon sécurisée, jamais revendues ni cédées, et Strive n'a aucun lien avec les plateformes VTC. Vous pouvez tout supprimer à tout moment depuis Profil → Compte.",
+      "q7": "Comment est calculé mon taux horaire (€/h) ?",
+      "a7": "Strive part du tarif de la course, ajoute le temps d'approche jusqu'au client, et calcule le temps de trajet réel avec le trafic en temps réel. Vous obtenez votre €/h réel, pas une estimation à vol d'oiseau.",
+      "q8": "Comment marchent le coût carburant et le profit net ?",
+      "a8": "À partir de la consommation de votre véhicule (L/100km, ou kWh/100km en électrique) et du prix du carburant, Strive déduit le coût de chaque course pour afficher votre profit net. En électrique, vous pouvez fixer votre propre prix au kWh dans Profil → Véhicule.",
+      "q9": "C'est quoi le score qualité des courses ?",
+      "a9": "Un score sur 100 attribué à chaque course en comparant ses €/h et €/km à vos seuils : vert au-dessus, orange proche, rouge en dessous. Dans les Stats, vous voyez aussi la qualité moyenne de vos courses acceptées.",
+      "q10": "Combien de scans par jour ?",
+      "a10": "3 scans par jour avec le plan gratuit, 15 par jour avec Strive Plus.",
+      "q11": "Comment contacter le support ?",
+      "a11": "Depuis Profil → Mes tickets : ouvrez un ticket et on vous répond directement dans l'app (vous recevez une notification à chaque réponse)."
+    }
+  },
+  "support": {
+    "title": "Mes tickets",
+    "subtitle": "Support Strive",
+    "menuSub": "Contacter le support, suivre tes demandes",
+    "empty": "Aucun ticket pour l'instant",
+    "emptyHint": "Une question, un souci ? Ouvre un ticket, on te répond vite.",
+    "newTicket": "Nouveau ticket",
+    "subjectLabel": "Sujet",
+    "subjectPlaceholder": "Ex : Problème de scan",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Décris ta demande en détail…",
+    "send": "Envoyer",
+    "staff": "Support Strive",
+    "replyPlaceholder": "Écris ta réponse…",
+    "status": {
+      "open": "En attente",
+      "answered": "Répondu",
+      "closed": "Fermé"
     }
   },
   "iap": {
@@ -584,8 +673,10 @@
     "restoreFail": "Impossible de restaurer les achats."
   },
   "accountInfo": {
+    "subtitle": "Informations personnelles",
     "informations": "INFORMATIONS",
     "driverDefault": "Chauffeur",
+    "emailLockedNote": "Email lié à votre compte Google / Apple — non modifiable.",
     "errorSave": "Impossible d'enregistrer les modifications.",
     "privacy": "DONNÉES & CONFIDENTIALITÉ",
     "deleteHistory": {
@@ -593,7 +684,7 @@
       "message": "Toutes vos courses enregistrées (adresses, tarifs, statistiques) seront définitivement supprimées. Cette action est irréversible.",
       "confirm": "Supprimer",
       "button": "Supprimer mon historique",
-      "note": "Vos courses (adresses incluses) sont conservées 12 mois, puis les adresses sont automatiquement effacées.",
+      "note": "Vos courses (adresses incluses) sont conservées jusqu'à la suppression de votre compte, puis définitivement effacées.",
       "success": "Historique supprimé.",
       "error": "Échec de la suppression. Réessayez."
     },
@@ -629,6 +720,8 @@
       "scanText": "d'analyse par course en 2 secondes",
       "hourly": "Taux horaire €/h",
       "hourlyText": "en direct sur chaque offre",
+      "traffic": "Trafic en temps réel",
+      "trafficText": "temps de trajet calculé avec les embouteillages, pas à vol d'oiseau",
       "filter": "Filtre intelligent",
       "filterText": "repère les courses non rentables",
       "threshold": "Seuils personnalisés",
@@ -671,7 +764,7 @@
     "monthlyTab": "Mensuel",
     "yearlyTab": "Annuel",
     "monthlyFallbackPrice": "9,99 €",
-    "yearlyFallbackPrice": "79,99 €",
+    "yearlyFallbackPrice": "89,99 €",
     "perMonthShort": "/mois",
     "perYearShort": "/an",
     "perMonthEquiv": "soit {{price}}/mois",
@@ -689,13 +782,37 @@
     "errorTitle": "Erreur",
     "errorMsg": "Impossible de finaliser l'abonnement. Réessayez.",
     "rows": {
-      "scans": { "label": "Scans journaliers", "free": "1 / jour", "plus": "Illimités" },
-      "dashboard": { "label": "Dashboard", "free": "Basique", "plus": "Complet" },
-      "fuel": { "label": "Conso. carburant", "plus": "Par modèle" },
-      "goal": { "label": "Objectif / jour", "plus": "Personnalisable" },
-      "history": { "label": "Historique courses", "free": "Auj. seul.", "plus": "Illimité" },
-      "hourly": { "label": "Taux horaire €/h", "plus": "En direct" },
-      "support": { "label": "Support", "plus": "Prioritaire" }
+      "scans": {
+        "label": "Scans journaliers",
+        "free": "1 / jour",
+        "plus": "Illimités"
+      },
+      "dashboard": {
+        "label": "Dashboard",
+        "free": "Basique",
+        "plus": "Complet"
+      },
+      "fuel": {
+        "label": "Conso. carburant",
+        "plus": "Par modèle"
+      },
+      "goal": {
+        "label": "Objectif / jour",
+        "plus": "Personnalisable"
+      },
+      "history": {
+        "label": "Historique courses",
+        "free": "Auj. seul.",
+        "plus": "Illimité"
+      },
+      "hourly": {
+        "label": "Taux horaire €/h",
+        "plus": "En direct"
+      },
+      "support": {
+        "label": "Support",
+        "plus": "Prioritaire"
+      }
     }
   },
   "network": {

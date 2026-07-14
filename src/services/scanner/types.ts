@@ -23,6 +23,15 @@ export interface ScanResult {
   debugBlocks?: string;
   /** Hauteur de l'image OCR (px) — nécessaire pour rejouer un cas en fixture. */
   screenHeight?: number;
+  /** Horodatage du scan (epoch s) — clé de corrélation avec la décision
+   *  Accepter/Refuser tapée sur la notification iOS. */
+  scanTs?: number;
+}
+
+/** Décision Accepter/Refuser émise par une action de notification iOS. */
+export interface RideDecision {
+  scanTs: number;
+  status: 'ACCEPTED' | 'DECLINED';
 }
 
 /** Bloc texte brut retourné par ML Kit (Android) ou Vision (iOS) */
@@ -72,6 +81,10 @@ export interface ScannerService {
   setThresholds(minHourlyRate: number, minKmRate: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   setTomTomApiKey(key: string): void;
+  /** Purge le cache de géocodage local (adresses = PII). À appeler au logout et
+   *  après suppression de compte — RGPD : le cache vit sur l'appareil, hors de
+   *  portée de la RPC serveur delete_account. */
+  clearGeocodeCache(): void;
   /** Quota journalier atteint — la bulle / Share Extension affiche "Quota atteint"
    *  et n'exécute ni OCR, ni TomTom, ni Gemini si true. `isFree` permet de
    *  réserver le teaser verrouillé (vendre Plus) aux seuls comptes free. */
@@ -101,6 +114,9 @@ export interface ScannerService {
   onScanResult(cb: (result: ScanResult) => void): { remove: () => void } | undefined;
   /** Écoute les échecs */
   onScanFailed(cb: () => void): { remove: () => void } | undefined;
+  /** Écoute les décisions Accepter/Refuser tapées sur la notification (iOS).
+   *  Android : non implémenté (no-op). */
+  onRideDecision(cb: (decision: RideDecision) => void): { remove: () => void } | undefined;
   /** Écoute le refus de permission */
   onPermissionDenied(cb: () => void): { remove: () => void } | undefined;
 }

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Image } from 'react-native';
+import Video from 'react-native-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -26,6 +27,9 @@ import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
 
+// Démo AssistiveTouch (muette, en boucle) affichée dans le slide déclencheur iOS.
+const ASSISTIVE_VIDEO = require('../assets/assistivetouch.mov');
+
 // URL iCloud du raccourci pré-construit ("Prendre une capture" + "Analyser
 // une course avec Strive"). Si renseignée, le bouton "Obtenir le raccourci"
 // l'installe en un tap.
@@ -35,24 +39,27 @@ type IosTrigger = 'backTap' | 'assistive' | 'homeScreen';
 
 // iOS = 6 slides (Welcome + Preview + Install + Trigger + Stats + Done)
 // Android = 5 slides (Welcome + Setup + Accept/decline + Stats + Done)
+// Accent unique = vert brand sur toutes les slides (palette disciplinée). Les
+// couleurs sémantiques rouge/orange/vert vivent uniquement dans le preview verdict.
+const A = colors.primary;
 const STEPS = (Platform.OS === 'ios'
   ? [
-      { key: '1',        icon: 'steering',           color: colors.primary, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
-      { key: 'preview',  icon: 'eye-outline',        color: '#A78BFA',      titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
-      { key: 'minimums', icon: 'tune-vertical',      color: '#FF8A65',      titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
-      { key: '2',        icon: 'download-circle',    color: '#4FC3F7',      titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
-      { key: '3',        icon: 'gesture-tap-button', color: colors.primary, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
-      { key: 'la_tip',   icon: 'cellphone-nfc',       color: '#F44336',      titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
-      { key: '4',        icon: 'chart-line',         color: '#FF8A65',      titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
-      { key: '5',        icon: 'rocket-launch',      color: colors.primary, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
+      { key: '1',        icon: 'steering',           color: A, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
+      { key: 'preview',  icon: 'eye-outline',        color: A, titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
+      { key: 'minimums', icon: 'tune-vertical',      color: A, titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
+      { key: '2',        icon: 'download-circle',    color: A, titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
+      { key: '3',        icon: 'gesture-tap-button', color: A, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
+      { key: 'la_tip',   icon: 'cellphone-nfc',       color: A, titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
+      { key: '4',        icon: 'chart-line',         color: A, titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
+      { key: '5',        icon: 'rocket-launch',      color: A, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
     ]
   : [
-      { key: '1',        icon: 'steering',       color: colors.primary, titleKey: 'tutorial.step1.title',      descKey: 'tutorial.step1.desc',      tip: 'tutorial.tips.step1' },
-      { key: 'preview',  icon: 'eye-outline',    color: '#A78BFA',      titleKey: 'tutorial.iosPreview.title', descKey: 'tutorial.iosPreview.subtitle', tip: '' },
-      { key: 'minimums', icon: 'tune-vertical',  color: '#FF8A65',      titleKey: 'tutorial.minimums.title',   descKey: 'tutorial.minimums.desc',   tip: '' },
-      { key: '2',        icon: 'line-scan',      color: '#4FC3F7',      titleKey: 'tutorial.step2.title',      descKey: 'tutorial.step2.desc',      tip: 'tutorial.tips.step2' },
-      { key: '4',        icon: 'chart-line',     color: '#FF8A65',      titleKey: 'tutorial.step4.title',      descKey: 'tutorial.step4.desc',      tip: 'tutorial.tips.step4' },
-      { key: '5',        icon: 'rocket-launch',  color: colors.primary, titleKey: 'tutorial.step5.title',      descKey: 'tutorial.step5.desc',      tip: 'tutorial.tips.step5' },
+      { key: '1',        icon: 'steering',       color: A, titleKey: 'tutorial.step1.title',      descKey: 'tutorial.step1.desc',      tip: 'tutorial.tips.step1' },
+      { key: 'preview',  icon: 'eye-outline',    color: A, titleKey: 'tutorial.iosPreview.title', descKey: 'tutorial.iosPreview.subtitle', tip: '' },
+      { key: 'minimums', icon: 'tune-vertical',  color: A, titleKey: 'tutorial.minimums.title',   descKey: 'tutorial.minimums.desc',   tip: '' },
+      { key: '2',        icon: 'line-scan',      color: A, titleKey: 'tutorial.step2.title',      descKey: 'tutorial.step2.desc',      tip: 'tutorial.tips.step2' },
+      { key: '4',        icon: 'chart-line',     color: A, titleKey: 'tutorial.step4.title',      descKey: 'tutorial.step4.desc',      tip: 'tutorial.tips.step4' },
+      { key: '5',        icon: 'rocket-launch',  color: A, titleKey: 'tutorial.step5.title',      descKey: 'tutorial.step5.desc',      tip: 'tutorial.tips.step5' },
     ]
 ) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
 
@@ -77,10 +84,14 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     else if (navigation.canGoBack()) navigation.goBack();
   };
   const flatListRef = useRef<FlatList>(null);
+  const videoRef = useRef<any>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
-  const [iosTrigger, setIosTrigger] = useState<IosTrigger>('assistive');
+  // iOS : un seul déclencheur supporté — AssistiveTouch. (Le choix Back Tap /
+  // Écran d'accueil a été retiré du tuto.) Type large conservé pour les
+  // branches d'aide existantes.
+  const iosTrigger = 'assistive' as IosTrigger;
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
   const [previewIdx, setPreviewIdx] = useState(0);
   const [minHourly, setMinHourly] = useState(30);
@@ -172,6 +183,11 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
       ? t('tutorial.openShortcuts', 'Ouvrir Raccourcis')
       : t('tutorial.iosTrigger.cta');
 
+  const restartVideo = () => {
+    hapticLight();
+    videoRef.current?.seek(0);
+  };
+
   const renderStep = ({ item, index }: { item: typeof STEPS[number]; index: number }) => {
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
     const scale = scrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
@@ -189,9 +205,8 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
     return (
       <View style={styles.slide}>
-        {/* Glow background */}
-        <View style={[styles.glowCircle, { backgroundColor: item.color + '08' }]} />
-        <View style={[styles.glowCircleInner, { backgroundColor: item.color + '05' }]} />
+        {/* Halo de fond unique, très discret */}
+        <View style={styles.glowCircle} />
 
         <Animated.View style={{ alignItems: 'center', opacity, transform: [{ scale }, { translateY }] }}>
           {showCompactIcon ? (
@@ -206,8 +221,6 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
           ) : isDone ? null : (
             <>
               <View style={styles.iconContainer}>
-                <View style={[styles.iconRingOuter, { borderColor: item.color + '12' }]} />
-                <View style={[styles.iconRingMiddle, { borderColor: item.color + '20' }]} />
                 {item.key === '1' ? (
                   <Image
                     source={require('../assets/strive-logo.png')}
@@ -215,12 +228,12 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                   />
                 ) : (
                   <SafeGradient
-                    colors={[item.color + '25', item.color + '08']}
+                    colors={[item.color + '22', item.color + '0A']}
                     style={styles.iconWrap}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <MaterialCommunityIcons name={item.icon as any} size={52} color={item.color} />
+                    <MaterialCommunityIcons name={item.icon as any} size={46} color={item.color} />
                   </SafeGradient>
                 )}
               </View>
@@ -267,16 +280,24 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
               </Text>
 
               <TouchableOpacity
-                style={[styles.iosBigCta, { backgroundColor: item.color }]}
+                style={[
+                  styles.iosBigCta,
+                  { backgroundColor: shortcutInstalled ? 'rgba(0,230,118,0.14)' : item.color },
+                  shortcutInstalled && { borderWidth: 1, borderColor: item.color + '80' },
+                ]}
                 onPress={installShortcut}
                 activeOpacity={0.85}
               >
                 <MaterialCommunityIcons
                   name={shortcutInstalled ? 'check-circle' : 'download'}
                   size={18}
-                  color={colors.background}
+                  color={shortcutInstalled ? item.color : colors.background}
                 />
-                <Text style={styles.iosBigCtaTxt}>{t('tutorial.iosInstall.cta')}</Text>
+                <Text style={[styles.iosBigCtaTxt, shortcutInstalled && { color: item.color }]}>
+                  {shortcutInstalled
+                    ? t('tutorial.iosInstall.ctaDone', 'Raccourci installé — rouvrir')
+                    : t('tutorial.iosInstall.cta')}
+                </Text>
               </TouchableOpacity>
             </Animated.View>
           ) : null}
@@ -426,34 +447,42 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                 </View>
               </View>
 
+              <View style={styles.doneReadyChip}>
+                <MaterialCommunityIcons name="rocket-launch" size={13} color={colors.primary} />
+                <Text style={styles.doneReadyChipTxt}>{t('tutorial.doneReady', 'Tout est prêt — bonne route !')}</Text>
+              </View>
+
               <View style={styles.qrCard}>
-                <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
-                <View style={styles.qrRow}>
-                  {(Platform.OS === 'android' ? [
-                    { icon: 'line-scan', color: '#4FC3F7', labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
-                    { icon: 'gesture-tap', color: colors.primary, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
-                    { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
-                  ] : [
-                    { icon: 'cellphone-screenshot', color: '#4FC3F7', labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
-                    { icon: 'gesture-tap-hold', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
-                    { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
-                  ]).map((step, i) => (
-                    <React.Fragment key={i}>
-                      {i > 0 && (
-                        <View style={styles.qrArrow}>
-                          <Feather name="chevron-right" size={14} color={colors.textDimmed} />
-                        </View>
-                      )}
-                      <View style={styles.qrItem}>
-                        <View style={[styles.qrIcon, { backgroundColor: step.color + '15', borderWidth: 1, borderColor: step.color + '25' }]}>
-                          <MaterialCommunityIcons name={step.icon as any} size={26} color={step.color} />
-                        </View>
-                        <Text style={styles.qrLabel}>{t(step.labelKey)}</Text>
-                        <Text style={styles.qrSub}>{t(step.subKey)}</Text>
-                      </View>
-                    </React.Fragment>
-                  ))}
+                <View style={styles.qrHeader}>
+                  <View style={styles.qrHeaderLine} />
+                  <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
+                  <View style={styles.qrHeaderLine} />
                 </View>
+                {(Platform.OS === 'android' ? [
+                  { icon: 'line-scan', color: '#4FC3F7', labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
+                  { icon: 'gesture-tap', color: colors.primary, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
+                  { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
+                ] : [
+                  { icon: 'cellphone-screenshot', color: '#4FC3F7', labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
+                  { icon: 'gesture-tap-hold', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
+                  { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
+                ]).map((step, i, arr) => (
+                  <View key={i} style={styles.qrStepRow}>
+                    <View style={styles.qrRail}>
+                      <View style={[styles.qrIcon, { backgroundColor: step.color + '18', borderColor: step.color + '40' }]}>
+                        <MaterialCommunityIcons name={step.icon as any} size={22} color={step.color} />
+                      </View>
+                      {i < arr.length - 1 && <View style={styles.qrConnector} />}
+                    </View>
+                    <View style={[styles.qrStepTexts, i === arr.length - 1 && { paddingBottom: 0 }]}>
+                      <View style={styles.qrStepTitleRow}>
+                        <Text style={[styles.qrStepNum, { color: step.color }]}>{i + 1}</Text>
+                        <Text style={styles.qrLabel}>{t(step.labelKey)}</Text>
+                      </View>
+                      <Text style={styles.qrSub}>{t(step.subKey)}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             </Animated.View>
           ) : null}
@@ -461,39 +490,31 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
           {/* Slide iOS 3 — Choose Trigger (inspired by Trip Identifier) */}
           {isIosTrigger ? (
             <Animated.View style={[styles.iosTriggerBlock, { opacity }]}>
-              <View style={styles.iosSegmented}>
-                {(['backTap', 'assistive', 'homeScreen'] as IosTrigger[]).map(tr => {
-                  const active = iosTrigger === tr;
-                  return (
-                    <TouchableOpacity
-                      key={tr}
-                      style={[styles.iosSegment, active && styles.iosSegmentActive]}
-                      onPress={() => { hapticLight(); setIosTrigger(tr); }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.iosSegmentTxt, active && styles.iosSegmentTxtActive]} numberOfLines={1}>
-                        {t(`tutorial.iosTrigger.${tr}.label`)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {iosTrigger === 'assistive' && (
-                <Text style={styles.triggerRecommended}>{t('tutorial.iosTrigger.recommended')}</Text>
-              )}
-
               <View style={styles.iosTriggerContent}>
-                <View style={styles.triggerHeroCircle}>
-                  <MaterialCommunityIcons
-                    name={
-                      iosTrigger === 'backTap' ? 'gesture-double-tap' :
-                      iosTrigger === 'assistive' ? 'gesture-tap-hold' :
-                      'apps'
-                    }
-                    size={32}
-                    color={item.color}
+                <View style={styles.videoPhoneFrame}>
+                  <Video
+                    ref={videoRef}
+                    source={ASSISTIVE_VIDEO}
+                    style={styles.videoPlayer}
+                    resizeMode="cover"
+                    repeat
+                    muted
+                    paused={currentIndex !== index}
+                    playInBackground={false}
+                    playWhenInactive={false}
+                    ignoreSilentSwitch="ignore"
                   />
+                  <TouchableOpacity
+                    style={styles.videoReplayBtn}
+                    onPress={restartVideo}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('tutorial.restartVideo', 'Revoir la vidéo')}
+                  >
+                    <Feather name="rotate-ccw" size={13} color="#fff" />
+                    <Text style={styles.videoReplayTxt}>{t('tutorial.restartVideo', 'Revoir la vidéo')}</Text>
+                  </TouchableOpacity>
                 </View>
                 <Text style={styles.triggerHeroLabel}>{t(`tutorial.iosTrigger.${iosTrigger}.hero`)}</Text>
 
@@ -672,46 +693,26 @@ const styles = StyleSheet.create({
 
   glowCircle: {
     position: 'absolute',
-    width: width * 0.9,
-    height: width * 0.9,
-    borderRadius: width * 0.45,
-    top: height * 0.06,
-  },
-  glowCircleInner: {
-    position: 'absolute',
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: width * 0.25,
-    top: height * 0.06 + width * 0.2,
+    width: width * 0.8,
+    height: width * 0.8,
+    borderRadius: width * 0.4,
+    top: height * 0.04,
+    backgroundColor: colors.primary + '07',
   },
 
   iconContainer: {
-    width: 160,
-    height: 160,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 36,
-  },
-  iconRingOuter: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1.5,
-  },
-  iconRingMiddle: {
-    position: 'absolute',
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    borderWidth: 1,
+    marginBottom: 28,
   },
   iconWrap: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
+    width: 96,
+    height: 96,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -719,9 +720,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   iconLogoImg: {
-    width: 108,
-    height: 108,
-    borderRadius: 28,
+    width: 96,
+    height: 96,
+    borderRadius: 26,
   },
 
   stepBadge: {
@@ -1212,21 +1213,43 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     letterSpacing: 0.3,
   },
-  triggerHeroCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
+  // Démo AssistiveTouch — cadre "téléphone" portrait autour de la vidéo.
+  videoPhoneFrame: {
+    width: 150,
+    aspectRatio: 9 / 18,
+    borderRadius: 26,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.14)',
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  videoPlayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  videoReplayBtn: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  videoReplayTxt: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   triggerHeroLabel: {
     color: colors.textMuted,
@@ -1290,7 +1313,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,230,118,0.06)',
     borderWidth: 2,
     borderColor: 'rgba(0,230,118,0.15)',
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  doneReadyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.25)',
+    marginBottom: 28,
+  },
+  doneReadyChipTxt: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   doneCheckInner: {
     width: 80,
@@ -1367,61 +1408,77 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 24,
+    paddingVertical: 22,
     paddingHorizontal: 20,
-    gap: 20,
+  },
+  qrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 18,
+  },
+  qrHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   qrCardTitle: {
     color: colors.textDimmed,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
-  qrRow: {
+  qrStepRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+    gap: 14,
   },
-  qrItem: {
+  qrRail: {
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
+    width: 44,
   },
   qrIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    borderWidth: 1,
   },
-  qrArrow: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+  qrConnector: {
+    flex: 1,
+    width: 2,
+    minHeight: 14,
+    marginVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 1,
+  },
+  qrStepTexts: {
+    flex: 1,
+    paddingTop: 3,
+    paddingBottom: 16,
+  },
+  qrStepTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 3,
+  },
+  qrStepNum: {
+    fontSize: 13,
+    fontWeight: '900',
   },
   qrLabel: {
     color: colors.textMain,
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '800',
   },
   qrSub: {
     color: colors.textDimmed,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
-    textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 17,
   },
 
   footer: {

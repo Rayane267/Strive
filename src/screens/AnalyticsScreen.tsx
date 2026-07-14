@@ -32,19 +32,12 @@ import { useNavigation } from '@react-navigation/native';
 import { getDayStart } from '../utils/dateUtils';
 import EarningsChart from '../components/EarningsChart';
 import KpiTrendChart from '../components/KpiTrendChart';
+import QualityScoreCard from '../components/QualityScoreCard';
+import { computeQualityScore, QualityScore } from '../utils/qualityScore';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 import BrandLoader from '../components/BrandLoader';
 import { cacheStats, getCachedStats } from '../services/offlineService';
-
-// Prix unitaires de repli (€/L, ou €/kWh pour l'électrique) quand la table
-// `fuel_prices` n'est pas alimentée. Moyennes France ~2026, volontairement
-// prudentes. L'électrique n'a pas de colonne en base → toujours ce repli.
-const DEFAULT_FUEL_PRICE: Record<string, number> = {
-  essence: 1.85,
-  diesel: 1.80,
-  e85: 0.95,
-  electric: 0.25,
-};
+import { fetchFuelPrice } from '../services/fuelService';
 
 LocaleConfig.locales['fr'] = {
   monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
@@ -151,6 +144,17 @@ const AnalyticsScreen = () => {
   const displayHourly = stats.hourlyRate * netRatio;
   const displayPerKm = stats.pricePerKm * netRatio;
 
+  // Le « bilan de la semaine » ne concerne que la semaine en cours : masqué dès
+  // qu'on consulte une période dont la fin est antérieure au lundi de cette semaine.
+  const isCurrentWeekView = (() => {
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    weekStart.setHours(0, 0, 0, 0);
+    const end = dateRange?.end ? new Date(dateRange.end) : now;
+    return end >= weekStart;
+  })();
+
   const toggleProfitView = () => {
     if (!hasFuelData) return;
     const toNet = !showNet;
@@ -162,6 +166,7 @@ const AnalyticsScreen = () => {
   const [weeklyBilan, setWeeklyBilan] = useState<{ lossWeek: number; avoided: number }>({ lossWeek: 0, avoided: 0 });
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
+  const [qualityScore, setQualityScore] = useState<QualityScore | null>(null);
 
   const fetchingRef = useRef(false);
   const fetchAnalytics = useCallback(async () => {
@@ -174,7 +179,7 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, elec_price')
         .eq('id', user.id)
         .single();
 
@@ -190,10 +195,11 @@ const AnalyticsScreen = () => {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
       rangeEnd.setHours(resetHour, 0, 0, 0);
 
-      // Parallélise rides + sessions (round-trips indépendants → -1 RTT)
+      // Parallélise rides + sessions + seuils (round-trips indépendants → -1 RTT)
       const [
         { data: rides, error: ridesError },
         { data: sessionsData, error: sessionsError },
+        { data: prefsData },
       ] = await Promise.all([
         supabase
           .from('rides')
@@ -207,6 +213,11 @@ const AnalyticsScreen = () => {
           .eq('user_id', user.id)
           .gte('start_at', rangeStart.toISOString())
           .lt('start_at', rangeEnd.toISOString()),
+        supabase
+          .from('preferences')
+          .select('min_hourly_rate, min_km_rate')
+          .eq('id', user.id)
+          .single(),
       ]);
 
       if (ridesError) throw ridesError;
@@ -218,8 +229,13 @@ const AnalyticsScreen = () => {
         setDailyEarnings([]);
         setHourlyTrend([]);
         setKmTrend([]);
+        setQualityScore(null);
         return;
       }
+
+      const minHourly = Number(prefsData?.min_hourly_rate ?? 25) || 25;
+      const minKm = Number(prefsData?.min_km_rate ?? 1.2) || 1.2;
+      setQualityScore(computeQualityScore(rides as any, minHourly, minKm));
 
       const acceptedRides = rides.filter((r: any) => r.status === 'ACCEPTED');
       let totalProfit = 0;
@@ -289,23 +305,11 @@ const AnalyticsScreen = () => {
 
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
+      // Prix unitaire résolu par le service partagé (table fuel_prices pour les
+      // carburants liquides, prix €/kWh perso pour l'électrique).
       const avgCons = profileData?.avg_cons ?? 0;
       const fuelType = profileData?.fuel_type ?? 'essence';
-      let fuelPrice = 0;
-      if (avgCons > 0) {
-        // L'électrique n'a pas de colonne en base → repli direct. Pour les
-        // carburants liquides on tente la table, puis on retombe sur le repli.
-        if (fuelType !== 'electric') {
-          const col = fuelType === 'diesel' ? 'diesel' : fuelType === 'e85' ? 'e85' : 'essence';
-          const { data: fp } = await supabase
-            .from('fuel_prices')
-            .select(col)
-            .eq('id', 'paris')
-            .single();
-          if (fp) fuelPrice = (Object.values(fp)[0] as number) ?? 0;
-        }
-        if (fuelPrice <= 0) fuelPrice = DEFAULT_FUEL_PRICE[fuelType] ?? DEFAULT_FUEL_PRICE.essence;
-      }
+      const fuelPrice = avgCons > 0 ? await fetchFuelPrice(fuelType, profileData?.elec_price) : 0;
       const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
       const newStats = {
@@ -485,22 +489,6 @@ const AnalyticsScreen = () => {
           <Feather name="chevron-down" size={18} color={colors.textDimmed} />
         </TouchableOpacity>
 
-        {isPremium && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
-          <View style={styles.bilanCard}>
-            <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
-            {weeklyBilan.lossWeek > 0 && (
-              <Text style={styles.bilanLoss}>
-                {t('analytics.weeklyBilan.loss', { eur: weeklyBilan.lossWeek.toFixed(0) })}
-              </Text>
-            )}
-            {weeklyBilan.avoided > 0 && (
-              <Text style={styles.bilanAvoided}>
-                {t('analytics.weeklyBilan.avoided', { count: weeklyBilan.avoided })}
-              </Text>
-            )}
-          </View>
-        )}
-
         {fetchError && (
           <View style={styles.errorCard}>
             <Feather name="alert-circle" size={18} color={colors.danger} />
@@ -632,6 +620,31 @@ const AnalyticsScreen = () => {
               </View>
             </View>
             </AnimatedEntrance>
+
+            {/* ── QUALITÉ DES COURSES + BILAN DE LA SEMAINE (cartes insight) ── */}
+            {qualityScore && (
+              <AnimatedEntrance delay={150} slideFrom="bottom">
+                <QualityScoreCard score={qualityScore} />
+              </AnimatedEntrance>
+            )}
+
+            {isPremium && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
+              <AnimatedEntrance delay={175} slideFrom="bottom">
+                <View style={styles.bilanCard}>
+                  <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
+                  {weeklyBilan.lossWeek > 0 && (
+                    <Text style={styles.bilanLoss}>
+                      {t('analytics.weeklyBilan.loss', { eur: weeklyBilan.lossWeek.toFixed(0) })}
+                    </Text>
+                  )}
+                  {weeklyBilan.avoided > 0 && (
+                    <Text style={styles.bilanAvoided}>
+                      {t('analytics.weeklyBilan.avoided', { count: weeklyBilan.avoided })}
+                    </Text>
+                  )}
+                </View>
+              </AnimatedEntrance>
+            )}
 
             {/* ── EARNINGS CHART ── */}
             {dailyEarnings.length > 1 && (

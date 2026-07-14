@@ -136,8 +136,17 @@ final class VisionOCRService {
     request.usesLanguageCorrection = true
 
     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-    try? handler.perform([request])
-    semaphore.wait()
+    // Si perform() throw, la closure (et son defer { semaphore.signal() }) n'est
+    // JAMAIS appelée → on doit signaler manuellement, sinon wait() bloque le
+    // thread à vie (deadlock + fuite de thread sur images répétées/corrompues).
+    do {
+      try handler.perform([request])
+    } catch {
+      semaphore.signal()
+    }
+    // Garde-fou supplémentaire : timeout dur au cas où Vision ne rendrait jamais
+    // la main (jamais observé, mais évite tout blocage définitif du contexte).
+    _ = semaphore.wait(timeout: .now() + 15)
 
     return result
   }

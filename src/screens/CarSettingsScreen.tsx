@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { getEffectivePlanTier } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 
 const YEARS = Array.from({ length: 17 }, (_, i) =>
@@ -87,8 +88,7 @@ const CarSettingsScreen = () => {
   const { t } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
 
-  const tier = profile?.subscription_tier?.toLowerCase();
-  const isPremium = tier === 'plus' || tier === 'pro' || tier === 'premium';
+  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const FUEL_LABEL: Record<FuelKey, string> = {
     essence: t('settings.fuel.essence'),
@@ -105,6 +105,7 @@ const CarSettingsScreen = () => {
   const [regNum, setRegNum] = useState('');
   const [fuelType, setFuelType] = useState<FuelKey>('essence');
   const [avgCons, setAvgCons] = useState('');
+  const [elecPrice, setElecPrice] = useState('');
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
   const [isSaving, setIsSaving] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'make' | 'model' | 'year' | 'fuel' | null>(null);
@@ -123,6 +124,7 @@ const CarSettingsScreen = () => {
         setFuelType(profile.fuel_type as FuelKey);
       }
       if (profile.avg_cons) setAvgCons(profile.avg_cons.toString());
+      if (profile.elec_price) setElecPrice(profile.elec_price.toString());
     }
   }, [profile]);
 
@@ -171,6 +173,17 @@ const CarSettingsScreen = () => {
       }
       consToSave = parsedCons;
     }
+    // Prix €/kWh (électrique uniquement). Optionnel → null si vide.
+    let elecPriceToSave: number | null = null;
+    if (fuelType === 'electric' && elecPrice.trim() !== '') {
+      const parsedPrice = parseFloat(elecPrice.replace(',', '.'));
+      if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 3) {
+        hapticError();
+        setStatusMessage({ text: t('carSettings.errors.priceInvalid', 'Prix invalide (entre 0.01 et 3 €/kWh).'), type: 'error' });
+        return;
+      }
+      elecPriceToSave = parsedPrice;
+    }
     setIsSaving(true);
     setStatusMessage({ text: '', type: null });
     try {
@@ -182,6 +195,7 @@ const CarSettingsScreen = () => {
         car_reg: regNum || null,
         fuel_type: fuelType || null,
         avg_cons: consToSave,
+        elec_price: elecPriceToSave,
       }).eq('id', user.id);
       if (error) throw error;
       hapticSuccess();
@@ -351,6 +365,39 @@ const CarSettingsScreen = () => {
                   onFocus={() => setOpenDropdown(null)}
                 />
               </View>
+
+              {fuelType === 'electric' && (
+                <>
+                  <View style={styles.cardDivider} />
+                  <View style={styles.consRow}>
+                    <View style={styles.consLeft}>
+                      <View style={styles.consIconWrap}>
+                        <MaterialCommunityIcons name="currency-eur" size={18} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.consTitle}>{t('carSettings.elecPrice', 'Prix de recharge')}</Text>
+                        <Text style={styles.consSub}>€/kWh</Text>
+                      </View>
+                    </View>
+                    <TextInput
+                      style={styles.smallInput}
+                      value={elecPrice}
+                      onChangeText={text => {
+                        let cleaned = text.replace(',', '.').replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                        if (parts[1] !== undefined && parts[1].length > 2) cleaned = parts[0] + '.' + parts[1].slice(0, 2);
+                        setElecPrice(cleaned);
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0.25"
+                      placeholderTextColor={colors.textDimmed}
+                      maxLength={4}
+                      onFocus={() => setOpenDropdown(null)}
+                    />
+                  </View>
+                </>
+              )}
             </View>
 
             {/* ── STATUS ── */}

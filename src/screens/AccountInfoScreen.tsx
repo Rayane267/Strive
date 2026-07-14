@@ -20,6 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { getEffectivePlanTier } from '../services/subscriptionService';
 import { colors } from '../theme/colors';
 
 import AvatarView from '../components/AvatarView';
@@ -37,17 +38,57 @@ interface InputFieldProps {
   editable?: boolean;
 }
 
+// Défini au niveau module : redéfinir ce composant à l'intérieur de l'écran
+// changeait son identité à chaque frappe → React démontait/remontait le TextInput
+// → le clavier se refermait à chaque caractère.
+const InputField = ({
+  label,
+  value,
+  onChangeText,
+  icon,
+  iconFamily = 'Feather',
+  placeholder,
+  keyboardType = 'default',
+  editable = true,
+  error,
+}: InputFieldProps & { error?: string }) => {
+  const IconComponent = iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons : Feather;
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={[styles.inputContainer, !editable && styles.inputDisabled, !!error && styles.inputError]}>
+        <IconComponent
+          name={icon}
+          size={18}
+          color={error ? colors.danger : editable ? colors.primary : colors.textMuted}
+          style={styles.inputIcon}
+        />
+        <TextInput
+          style={[styles.input, !editable && { color: colors.textMuted }]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textDimmed}
+          keyboardType={keyboardType}
+          editable={editable}
+        />
+      </View>
+      {!!error && <Text style={styles.fieldError}>{error}</Text>}
+    </View>
+  );
+};
+
 const AccountInfoScreen = () => {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { user, profile, refreshProfile } = useAuth();
 
-  const tier = profile?.subscription_tier?.toLowerCase();
-  const isPremium = tier === 'plus' || tier === 'pro' || tier === 'premium';
+  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingHistory, setDeletingHistory] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
   const { toast, showToast, dismissToast } = useToast();
 
   const handleDeleteHistory = () => {
@@ -156,67 +197,26 @@ const AccountInfoScreen = () => {
     if (!user?.id) return;
     if (!validateForm()) return;
     setSaving(true);
+    setStatusMessage({ text: '', type: null });
     try {
       const { error } = await supabase.from('profiles').upsert({
         id: user.id,
         first_name: formData.first_name,
         last_name: formData.last_name,
         phone: formData.phone,
-        email: formData.email,
         avatar_url: formData.avatar_url,
       });
       if (error) throw error;
-      if (refreshProfile) refreshProfile();
+      if (refreshProfile) await refreshProfile();
       hapticSuccess();
-      showToast({
-        type: 'success',
-        title: t('common.success'),
-        message: t('carSettings.success.saved'),
-      });
+      setStatusMessage({ text: t('carSettings.success.saved', 'Enregistré avec succès.'), type: 'success' });
     } catch (error) {
       hapticError();
-      showToast({ type: 'error', title: t('common.error'), message: t('accountInfo.errorSave') });
+      setStatusMessage({ text: t('accountInfo.errorSave', 'Impossible d\'enregistrer. Réessayez.'), type: 'error' });
       __DEV__ && console.error(error);
     } finally {
       setSaving(false);
     }
-  };
-
-  const InputField = ({
-    label,
-    value,
-    onChangeText,
-    icon,
-    iconFamily = 'Feather',
-    placeholder,
-    keyboardType = 'default',
-    editable = true,
-    error,
-  }: InputFieldProps & { error?: string }) => {
-    const IconComponent = iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons : Feather;
-    return (
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        <View style={[styles.inputContainer, !editable && styles.inputDisabled, !!error && styles.inputError]}>
-          <IconComponent
-            name={icon}
-            size={18}
-            color={error ? colors.danger : editable ? colors.primary : colors.textMuted}
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={[styles.input, !editable && { color: colors.textMuted }]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textDimmed}
-            keyboardType={keyboardType}
-            editable={editable}
-          />
-        </View>
-        {!!error && <Text style={styles.fieldError}>{error}</Text>}
-      </View>
-    );
   };
 
   if (loading) {
@@ -238,10 +238,14 @@ const AccountInfoScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={colors.textMain} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
-        <View style={[styles.planBadge, !isPremium && styles.planBadgeFree]}>
-          <Text style={[styles.planBadgeText, !isPremium && styles.planBadgeTextFree]}>
-            {isPremium ? t('tier.plus') : t('tier.free')}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
+          <Text style={styles.headerSub}>{t('accountInfo.subtitle', 'Informations personnelles')}</Text>
+        </View>
+        <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
+          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
+          <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
+            {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
           </Text>
         </View>
       </View>
@@ -286,11 +290,14 @@ const AccountInfoScreen = () => {
               label={t('profile.emailLabel', 'Email')}
               icon="mail"
               value={formData.email}
-              onChangeText={text => { setFormData({ ...formData, email: text.slice(0, 100) }); setFieldErrors(e => ({ ...e, email: '' })); }}
+              onChangeText={() => {}}
               placeholder="name@example.com"
               keyboardType="email-address"
-              error={fieldErrors.email}
+              editable={false}
             />
+            <Text style={styles.lockedNote}>
+              {t('accountInfo.emailLockedNote', 'Email lié à votre compte Google / Apple — non modifiable.')}
+            </Text>
             <InputField
               label={t('profile.phoneLabel', 'Téléphone')}
               icon="phone"
@@ -309,7 +316,7 @@ const AccountInfoScreen = () => {
               <Text style={styles.formHeaderText}>{t('accountInfo.privacy', 'DONNÉES & CONFIDENTIALITÉ')}</Text>
             </View>
             <Text style={styles.privacyNote}>
-              {t('accountInfo.deleteHistory.note', 'Vos courses (adresses incluses) sont conservées 12 mois, puis les adresses sont automatiquement effacées.')}
+              {t('accountInfo.deleteHistory.note', 'Vos courses (adresses incluses) sont conservées jusqu\'à la suppression de votre compte, puis définitivement effacées.')}
             </Text>
             <TouchableOpacity
               style={styles.deleteHistoryBtn}
@@ -328,21 +335,38 @@ const AccountInfoScreen = () => {
             </TouchableOpacity>
           </View>
 
-        </ScrollView>
+          {/* ── STATUS MESSAGE ── */}
+          {statusMessage.text !== '' && (
+            <View style={[styles.statusBox, statusMessage.type === 'error' ? styles.statusError : styles.statusSuccess]}>
+              <Feather
+                name={statusMessage.type === 'error' ? 'alert-circle' : 'check-circle'}
+                size={16}
+                color={statusMessage.type === 'error' ? colors.danger : colors.primary}
+              />
+              <Text style={[styles.statusText, { color: statusMessage.type === 'error' ? colors.danger : colors.primary }]}>
+                {statusMessage.text}
+              </Text>
+            </View>
+          )}
 
-        {/* ── SAVE BUTTON ── */}
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+          {/* ── SAVE BUTTON ── */}
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
             {saving ? (
               <ActivityIndicator color={colors.background} />
             ) : (
               <>
-                <Feather name="check" size={18} color={colors.background} />
+                <Feather name="check" size={20} color={colors.background} />
                 <Text style={styles.saveBtnText}>{t('preferences.save', 'Enregistrer')}</Text>
               </>
             )}
           </TouchableOpacity>
-        </View>
+
+        </ScrollView>
       </KeyboardAvoidingView>
 
     </SafeAreaView>
@@ -369,20 +393,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
+  headerCenter: { flex: 1, marginHorizontal: 14 },
   headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
+  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
   planBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-  },
-  planBadgeFree: {
-    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  planBadgeText: { color: colors.background, fontSize: 12, fontWeight: '900' },
-  planBadgeTextFree: { color: colors.textMuted },
+  planBadgePlus: { backgroundColor: colors.primary, borderColor: colors.primary },
+  planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  planBadgeTextPlus: { color: colors.background },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 20 },
 
@@ -395,7 +420,7 @@ const styles = StyleSheet.create({
   // Form card
   formCard: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
@@ -436,6 +461,7 @@ const styles = StyleSheet.create({
   inputDisabled: { opacity: 0.5 },
   inputError: { borderColor: colors.danger },
   fieldError: { color: colors.danger, fontSize: 11, fontWeight: '600', marginTop: 4 },
+  lockedNote: { color: colors.textMuted, fontSize: 11, marginTop: -8, marginBottom: 14, marginLeft: 2 },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: colors.textMain, fontSize: 15, height: '100%' },
 
@@ -449,29 +475,38 @@ const styles = StyleSheet.create({
   },
   deleteHistoryText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
 
-  // Footer
-  footer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: colors.background,
-  },
-  saveBtn: {
+  // Status message (aligné sur Préférences / Véhicule)
+  statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 10,
-    backgroundColor: colors.primary,
-    height: 54,
+    padding: 14,
     borderRadius: 14,
+    marginTop: 18,
+    borderWidth: 1,
+  },
+  statusError: { backgroundColor: 'rgba(255,77,77,0.08)', borderColor: 'rgba(255,77,77,0.25)' },
+  statusSuccess: { backgroundColor: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.2)' },
+  statusText: { fontSize: 13, fontWeight: '600', flex: 1 },
+
+  // Save button (aligné sur Préférences / Véhicule)
+  saveBtn: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 17,
+    borderRadius: 16,
+    marginTop: 18,
+    marginBottom: 20,
+    gap: 10,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 6,
   },
-  saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '900' },
+  saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 
 });
 

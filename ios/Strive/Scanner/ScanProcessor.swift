@@ -20,6 +20,22 @@ final class ScanProcessor {
 
   private var scanInProgress = false
 
+  /// Anti double-tap CROSS-PROCESS : refuse un scan déclenché moins de
+  /// `cooldownSec` après le précédent. `scanInProgress` ne suffit pas car chaque
+  /// scan (AppIntent AssistiveTouch / Share Extension) tourne dans SON process —
+  /// le flag n'est pas partagé. On sérialise via un horodatage dans l'App Group.
+  /// Renvoie true s'il faut IGNORER ce scan (quota préservé, pas de doublon).
+  static func shouldThrottleRapidScan(cooldownSec: Double = 3.0) -> Bool {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+    let now = Date().timeIntervalSince1970
+    let last = defaults.double(forKey: "lastScanAttemptAt")
+    if last > 0, now - last < cooldownSec { return true }
+    defaults.set(now, forKey: "lastScanAttemptAt")
+    return false
+  }
+
   /// Vrai si le dernier OCR justifie un appel Gemini (signaux d'offre de course
   /// détectés, OU aucun texte lu = bénéfice du doute). Faux uniquement quand
   /// l'OCR a lu du texte mais sans aucun signal VTC (pub / écran quelconque) →
@@ -157,7 +173,9 @@ final class ScanProcessor {
 
   // MARK: - Calcul rentabilité + verdict (identique Android)
 
-  private func computeFinal(scan: ScanResultModel) -> FinalResult {
+  /// Exposé (non-private) pour permettre au fallback Gemini de l'AppIntent de
+  /// construire un FinalResult à partir d'un ScanResultModel reconstitué.
+  func computeFinal(scan: ScanResultModel) -> FinalResult {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     let prefs = UserDefaults(suiteName: appGroupId)

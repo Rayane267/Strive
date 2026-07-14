@@ -20,6 +20,8 @@ import SubscriptionScreenRaw from '../screens/SubscriptionScreen.tsx';
 import ScannerPermissionScreenRaw from '../screens/ScannerPermissionScreen';
 import TutorialScreenRaw from '../screens/TutorialScreen';
 import HelpScreenRaw from '../screens/HelpScreen';
+import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
+import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
 import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
 
 const AuthScreen = withErrorBoundary(AuthScreenRaw);
@@ -31,6 +33,8 @@ const SubscriptionScreen = withErrorBoundary(SubscriptionScreenRaw);
 const ScannerPermissionScreen = withErrorBoundary(ScannerPermissionScreenRaw);
 const TutorialScreen = withErrorBoundary(TutorialScreenRaw);
 const HelpScreen = withErrorBoundary(HelpScreenRaw);
+const SupportTicketsScreen = withErrorBoundary(SupportTicketsScreenRaw);
+const SupportTicketDetailScreen = withErrorBoundary(SupportTicketDetailScreenRaw);
 const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
 
 const Stack = createNativeStackNavigator();
@@ -162,6 +166,18 @@ const RootNavigator = () => {
           <Stack.Screen
             name="Help"
             component={HelpScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+
+          <Stack.Screen
+            name="SupportTickets"
+            component={SupportTicketsScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+
+          <Stack.Screen
+            name="SupportTicketDetail"
+            component={SupportTicketDetailScreen}
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
 

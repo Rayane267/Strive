@@ -21,6 +21,11 @@
       </intent-filter>
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/>
     </service>
+    <receiver android:name=".scanner.RideDecisionReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="com.strive.app.RIDE_DECISION"/>
+      </intent-filter>
+    </receiver>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>

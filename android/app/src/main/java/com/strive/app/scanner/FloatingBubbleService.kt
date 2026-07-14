@@ -49,6 +49,8 @@ class FloatingBubbleService : Service() {
          *  du foreground service. */
         private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
         private const val SESSION_NOTIF_ID = 43
+        /** Notification de résultat de scan avec boutons Accepter / Refuser. */
+        private const val RESULT_NOTIF_ID = 44
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
         /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
@@ -97,6 +99,24 @@ class FloatingBubbleService : Service() {
         /** Compte du jour, 0 si la valeur stockée date d'un autre jour. */
         fun scanCountForToday(): Int =
             if (scanCountDay == todayKey()) scanCountToday else 0
+
+        /** KPI de session du jour poussés par le JS (updateSessionKPI) — affichés
+         *  dans la notification persistante du foreground service. Équivalent
+         *  Android du tableau de bord Live Activity iOS. */
+        var todayEarnings: Double = 0.0
+        var todayHourlyRate: Double = 0.0
+        var todayKm: Double = 0.0
+        var onlineMinutes: Int = 0
+        var hasSessionKpi: Boolean = false
+
+        fun updateSessionKpi(todayEarnings: Double, todayHourlyRate: Double, todayKm: Double, onlineMinutes: Int) {
+            this.todayEarnings = todayEarnings
+            this.todayHourlyRate = todayHourlyRate
+            this.todayKm = todayKm
+            this.onlineMinutes = onlineMinutes
+            hasSessionKpi = true
+            instance?.refreshForegroundNotification()
+        }
     }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -416,6 +436,9 @@ class FloatingBubbleService : Service() {
         val today = todayKey()
         scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
         scanCountDay = today
+        // Horodatage du scan (secondes epoch) — corrèle la course émise au JS avec
+        // la décision Accepter/Refuser tapée sur la notification. Mirror iOS.
+        val scanTs = System.currentTimeMillis() / 1000.0
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
@@ -428,8 +451,8 @@ class FloatingBubbleService : Service() {
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
-            mainHandler.post { showResultState(ocr); applyVerdict(ocr) }
-            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks, screenHeight)
+            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, scanTs) }
+            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks, screenHeight, scanTs)
             return
         }
 
@@ -451,8 +474,8 @@ class FloatingBubbleService : Service() {
             } else {
                 ocr
             }
-            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult) }
-            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks, screenHeight)
+            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, scanTs) }
+            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks, screenHeight, scanTs)
         }
     }
 
@@ -461,7 +484,17 @@ class FloatingBubbleService : Service() {
      * à partir d'un ScanResult final. Centralise le calcul utilisé par les
      * branches "skip TomTom" et "TomTom OK/KO".
      */
-    private fun applyVerdict(result: OcrParser.ScanResult) {
+    /** Métriques finales d'une course (totaux selon includePickup) + verdict. */
+    data class RideMetrics(
+        val hourlyRate: Double,
+        val kmRate: Double,
+        val totalDurationMin: Int,
+        val totalDistanceKm: Double,
+        val level: Int,
+    )
+
+    /** Calcule les métriques + verdict (mirror iOS computeFinal) sans effet de bord. */
+    private fun computeMetrics(result: OcrParser.ScanResult): RideMetrics {
         val useApproach = includePickup
             && result.pickupDurationMin != null
             && result.pickupDistanceKm != null
@@ -480,7 +513,11 @@ class FloatingBubbleService : Service() {
         val hrOk = hourlyRate >= minHourlyRate
         val kmOk = kmRate >= minKmRate
         val level = if (hrOk && kmOk) 2 else if (hrOk || kmOk) 1 else 0
-        updateVerdict(level)
+        return RideMetrics(hourlyRate, kmRate, totalDuration.toInt(), totalDistance, level)
+    }
+
+    private fun applyVerdict(result: OcrParser.ScanResult) {
+        updateVerdict(computeMetrics(result).level)
     }
 
     // ─── Verdict ─────────────────────────────────────────────────────────────────
@@ -1038,11 +1075,78 @@ class FloatingBubbleService : Service() {
         }
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("Strive Scanner actif")
-        .setContentText("Appuie sur la pill pour scanner")
-        .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setOngoing(true)
-        .build()
+    private fun buildNotification(): Notification {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+        // KPI de session (poussés par le JS) → mini tableau de bord persistant,
+        // équivalent du dashboard de la Live Activity iOS. Avant le 1ᵉ push : texte d'invite.
+        if (hasSessionKpi) {
+            builder.setContentTitle(
+                "%.0f € · %.0f €/h".format(todayEarnings, todayHourlyRate)
+            ).setContentText(
+                "%.1f km · %dh%02d %s".format(
+                    todayKm, onlineMinutes / 60, onlineMinutes % 60,
+                    getString(com.strive.R.string.scanner_notif_online)
+                )
+            )
+        } else {
+            builder.setContentTitle(getString(com.strive.R.string.scanner_notif_active_title))
+                .setContentText(getString(com.strive.R.string.scanner_notif_active_body))
+        }
+        return builder.build()
+    }
+
+    /** Re-poste la notification persistante du foreground service (mise à jour KPI). */
+    fun refreshForegroundNotification() {
+        runCatching {
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(NOTIF_ID, buildNotification())
+        }
+    }
+
+    /**
+     * Notification de résultat avec boutons Accepter / Refuser — permet de taguer
+     * la course sans ouvrir l'app (mains libres). Au tap, RideDecisionReceiver
+     * relaie la décision au JS (onRideDecision) via scanTs. Mirror iOS
+     * (AnalyzeRideIntent.sendLocalNotification + catégorie STRIVE_SCAN_RESULT).
+     */
+    private fun postRideDecisionNotification(result: OcrParser.ScanResult, scanTs: Double) {
+        val m = computeMetrics(result)
+        val verdict = when (m.level) { 2 -> "✅"; 1 -> "⚠️"; else -> "❌" }
+        val title = "%s · %.0f€ · %s".format(result.platform.name, result.fare, verdict)
+        val body = "%.0f€/h · %.2f€/km · %dmin · %.1fkm".format(
+            m.hourlyRate, m.kmRate, m.totalDurationMin, m.totalDistanceKm
+        )
+
+        fun decisionPi(status: String, requestCode: Int): android.app.PendingIntent {
+            val intent = Intent(this, RideDecisionReceiver::class.java).apply {
+                action = RideDecisionReceiver.ACTION
+                putExtra(RideDecisionReceiver.EXTRA_SCAN_TS, scanTs)
+                putExtra(RideDecisionReceiver.EXTRA_STATUS, status)
+                putExtra(RideDecisionReceiver.EXTRA_NOTIF_ID, RESULT_NOTIF_ID)
+            }
+            return android.app.PendingIntent.getBroadcast(
+                this, requestCode, intent,
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        }
+
+        // requestCodes distincts (base sur scanTs) pour ne pas écraser un PI par l'autre.
+        val base = (scanTs % 100000).toInt() * 2
+        val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .addAction(0, getString(com.strive.R.string.scanner_ride_accept), decisionPi("ACCEPTED", base))
+            .addAction(0, getString(com.strive.R.string.scanner_ride_decline), decisionPi("DECLINED", base + 1))
+            .build()
+        runCatching {
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(RESULT_NOTIF_ID, notif)
+        }
+    }
 }
