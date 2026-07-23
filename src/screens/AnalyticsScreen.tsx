@@ -35,7 +35,7 @@ import KpiTrendChart from '../components/KpiTrendChart';
 import QualityScoreCard from '../components/QualityScoreCard';
 import { computeQualityScore, QualityScore } from '../utils/qualityScore';
 import AnimatedEntrance from '../components/AnimatedEntrance';
-import BrandLoader from '../components/BrandLoader';
+import { Skeleton } from '../components/Skeleton';
 import { cacheStats, getCachedStats } from '../services/offlineService';
 import { fetchFuelPrice } from '../services/fuelService';
 
@@ -90,6 +90,7 @@ const AnalyticsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
 
   // Bilan de la semaine (Plus uniquement) : manque à gagner vs objectif + courses
@@ -230,8 +231,10 @@ const AnalyticsScreen = () => {
         setHourlyTrend([]);
         setKmTrend([]);
         setQualityScore(null);
+        setIsEmpty(true);
         return;
       }
+      setIsEmpty(false);
 
       const minHourly = Number(prefsData?.min_hourly_rate ?? 25) || 25;
       const minKm = Number(prefsData?.min_km_rate ?? 1.2) || 1.2;
@@ -500,9 +503,32 @@ const AnalyticsScreen = () => {
         )}
 
         {loading ? (
-          <View style={styles.loadingWrap}>
-            <BrandLoader size={12} />
-            <Text style={styles.loadingText}>{t('analytics.loading')}</Text>
+          <View style={styles.skeletonWrap}>
+            <Skeleton width="100%" height={180} radius={24} />
+            <View style={styles.skeletonTilesRow}>
+              <Skeleton width="48%" height={90} radius={18} />
+              <Skeleton width="48%" height={90} radius={18} />
+            </View>
+            <Skeleton width="100%" height={200} radius={20} />
+          </View>
+        ) : isEmpty ? (
+          <View style={styles.analyticsEmpty}>
+            <View style={styles.analyticsEmptyIcon}>
+              <MaterialCommunityIcons name="chart-line-variant" size={34} color={colors.primary} />
+            </View>
+            <Text style={styles.analyticsEmptyTitle}>{t('analytics.empty.title', 'Aucune donnée pour le moment')}</Text>
+            <Text style={styles.analyticsEmptyHint}>
+              {t('analytics.empty.hint', 'Scanne ta première course pour voir tes revenus, ton taux horaire et tes tendances ici.')}
+            </Text>
+            <TouchableOpacity
+              style={styles.analyticsEmptyCta}
+              onPress={() => navigation.navigate('Dashboard' as never)}
+              accessibilityRole="button"
+              accessibilityLabel={t('history.emptyCta', 'Lancer un scan')}
+            >
+              <MaterialCommunityIcons name="line-scan" size={16} color={colors.background} />
+              <Text style={styles.analyticsEmptyCtaText}>{t('history.emptyCta', 'Lancer un scan')}</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
@@ -846,14 +872,26 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
-  loadingWrap: { alignItems: 'center', paddingTop: 80, gap: 20 },
-  loadingRing: {
+  // Loading skeleton
+  skeletonWrap: { gap: 14, paddingTop: 4 },
+  skeletonTilesRow: { flexDirection: 'row', justifyContent: 'space-between' },
+
+  // Empty state (aucune course)
+  analyticsEmpty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 24, gap: 12 },
+  analyticsEmptyIcon: {
     width: 72, height: 72, borderRadius: 36,
     backgroundColor: 'rgba(0,230,118,0.08)',
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
     justifyContent: 'center', alignItems: 'center',
   },
-  loadingText: { color: colors.textDimmed, fontSize: 13, fontWeight: '500' },
+  analyticsEmptyTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  analyticsEmptyHint: { color: colors.textDimmed, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  analyticsEmptyCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, marginTop: 8,
+  },
+  analyticsEmptyCtaText: { color: colors.background, fontWeight: '800', fontSize: 14 },
 
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 20, paddingVertical: 15 },

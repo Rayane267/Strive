@@ -25,6 +25,36 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
 }
 
 /**
+ * Met à jour le profile de l'utilisateur courant.
+ *
+ * On utilise `.update().eq('id', …)` et JAMAIS `.upsert()` : la ligne profiles
+ * existe toujours (créée à l'inscription). Un upsert reconstruit un INSERT qui
+ * échoue sur les policies RLS INSERT absentes ou les colonnes NOT NULL non
+ * fournies — c'était la source d'un bug d'enregistrement côté AccountInfo.
+ *
+ * Lève l'erreur Supabase telle quelle : c'est à l'appelant d'afficher le
+ * message UI et de logguer (code/message/details/hint).
+ */
+export async function updateProfile(
+  userId: string,
+  patch: Partial<Omit<Profile, 'id'>>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId);
+
+  if (error) {
+    Sentry.addBreadcrumb({
+      category: 'profile',
+      message: `updateProfile failed: ${error.message}`,
+      level: 'error',
+    });
+    throw error;
+  }
+}
+
+/**
  * Poll le profile jusqu'à ce que `predicate` retourne true ou timeout.
  * Utile après un achat IAP : on attend que le webhook RC ait propagé l'update
  * en DB plutôt que de sleep aveuglément.

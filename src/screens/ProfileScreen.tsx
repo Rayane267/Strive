@@ -23,6 +23,8 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
+import { APP_VERSION_LABEL } from '../config/appInfo';
+import { hapticLight } from '../utils/haptics';
 
 type MenuItem = {
   icon: string;
@@ -48,6 +50,8 @@ const ProfileScreen = () => {
   const isPlus = tier === 'plus' || tier === 'pro' || tier === 'premium';
 
   const changeLanguage = (lang: string) => {
+    if (lang === i18n.language) return;
+    hapticLight();
     i18n.changeLanguage(lang);
     if (Platform.OS === 'ios') {
       const { NativeModules } = require('react-native');
@@ -106,6 +110,11 @@ const ProfileScreen = () => {
       setDeleteConfirmation('');
     }
   };
+
+  // Validation progressive : le bouton Supprimer ne s'active que si le mot exact
+  // (SUPPRIMER ou DELETE) est saisi. L'input passe au vert quand c'est bon.
+  const deleteWord = deleteConfirmation.trim().toUpperCase();
+  const isDeleteConfirmValid = deleteWord === 'SUPPRIMER' || deleteWord === 'DELETE';
 
   const accountItems: MenuItem[] = [
     {
@@ -388,7 +397,7 @@ const ProfileScreen = () => {
             <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.versionText}>v2.4.1 (Build 204)</Text>
+        <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
       </ScrollView>
 
       {/* ── LOGOUT MODAL ── */}
@@ -440,13 +449,16 @@ const ProfileScreen = () => {
               {t('profile.deleteModal.message', 'Action irréversible : compte, préférences et historique des courses seront définitivement supprimés.')}
             </Text>
             <TextInput
-              style={styles.deleteInput}
+              style={[styles.deleteInput, isDeleteConfirmValid && styles.deleteInputValid]}
               placeholder={t('profile.deleteModal.placeholder', 'Tapez SUPPRIMER')}
               placeholderTextColor={colors.textDimmed}
               value={deleteConfirmation}
               onChangeText={setDeleteConfirmation}
               autoCapitalize="characters"
               autoCorrect={false}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => { if (isDeleteConfirmValid && !deleting) confirmDeleteAccount(); }}
             />
             <View style={styles.modalBtns}>
               <TouchableOpacity
@@ -457,9 +469,10 @@ const ProfileScreen = () => {
                 <Text style={styles.modalBtnCancelText}>{t('profile.logoutModal.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnConfirm, deleting && { opacity: 0.6 }]}
+                style={[styles.modalBtn, styles.modalBtnConfirm, (deleting || !isDeleteConfirmValid) && styles.modalBtnConfirmDisabled]}
                 onPress={confirmDeleteAccount}
-                disabled={deleting}
+                disabled={deleting || !isDeleteConfirmValid}
+                accessibilityState={{ disabled: deleting || !isDeleteConfirmValid }}
               >
                 <Text style={styles.modalBtnConfirmText}>
                   {deleting ? '…' : t('profile.deleteModal.confirm', 'Supprimer')}
@@ -706,6 +719,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
   },
+  deleteInputValid: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    color: colors.primary,
+  },
 
   // Modal
   modalOverlay: {
@@ -755,6 +773,7 @@ const styles = StyleSheet.create({
   },
   modalBtnCancel: { backgroundColor: colors.surfaceLight },
   modalBtnConfirm: { backgroundColor: colors.danger },
+  modalBtnConfirmDisabled: { opacity: 0.4 },
   modalBtnCancelText: { color: colors.textMain, fontSize: 14, fontWeight: '600' },
   modalBtnConfirmText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
 });

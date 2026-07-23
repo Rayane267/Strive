@@ -7,5 +7,7 @@ export const colors = {
   danger: '#FF4D4D',
   textMain: '#FFFFFF',
   textMuted: '#8F9B96',
-  textDimmed: '#6B7280',
+  // #808892 : contraste ≥ 4.5:1 (WCAG AA texte normal) sur background ET surface.
+  // L'ancien #6B7280 tombait à ~3.9:1 (échec AA) pour tout le texte secondaire.
+  textDimmed: '#808892',
 };

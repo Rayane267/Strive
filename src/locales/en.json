@@ -14,7 +14,13 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "open": "Open",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "offlineTitle": "Offline",
+    "offlineSave": "No connection. You'll need to save your changes again once back online.",
+    "unsavedTitle": "Unsaved changes",
+    "unsavedMessage": "Do you want to leave without saving your changes?",
+    "stay": "Stay",
+    "leave": "Leave"
   },
   "errors": {
     "profileLoadFailed": "Unable to load your profile.",
@@ -288,6 +294,10 @@
     "hourlyRate": "Hourly Rate",
     "priceKm": "Price / km",
     "loading": "Loading data…",
+    "empty": {
+      "title": "No data yet",
+      "hint": "Scan your first ride to see your earnings, hourly rate and trends here."
+    },
     "calendar": {
       "selectDate": "Select a date",
       "oneDay": "1 Day",

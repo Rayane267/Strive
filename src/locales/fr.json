@@ -14,7 +14,13 @@
     "cancel": "Annuler",
     "confirm": "Confirmer",
     "open": "Ouvrir",
-    "loading": "Chargement…"
+    "loading": "Chargement…",
+    "offlineTitle": "Hors ligne",
+    "offlineSave": "Pas de connexion. Vos modifications seront à réenregistrer une fois en ligne.",
+    "unsavedTitle": "Modifications non enregistrées",
+    "unsavedMessage": "Voulez-vous quitter sans enregistrer vos changements ?",
+    "stay": "Rester",
+    "leave": "Quitter"
   },
   "errors": {
     "profileLoadFailed": "Impossible de charger votre profil.",
@@ -288,6 +294,10 @@
     "hourlyRate": "Taux horaire",
     "priceKm": "Prix / km",
     "loading": "Chargement des données…",
+    "empty": {
+      "title": "Aucune donnée pour le moment",
+      "hint": "Scanne ta première course pour voir tes revenus, ton taux horaire et tes tendances ici."
+    },
     "calendar": {
       "selectDate": "Sélectionnez une date",
       "oneDay": "1 Jour",

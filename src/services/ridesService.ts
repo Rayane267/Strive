@@ -1,16 +1,31 @@
 import { supabase } from './supabase';
 import { Ride } from '../types/database';
 
-export async function fetchRides(userId: string, since: Date): Promise<Ride[]> {
-  const { data, error } = await supabase
+// Projection explicite (même discipline que PROFILE_COLUMNS) : évite de tirer
+// d'éventuelles colonnes serveur hors-type et fige le payload réseau.
+const RIDE_COLUMNS =
+  'id, user_id, platform, status, fare_estimated, fare_final, distance_km, ' +
+  'duration_min, hourly_rate, km_rate, fuel_cost, net_profit, ' +
+  'pickup_address, destination_address, created_at';
+
+export async function fetchRides(
+  userId: string,
+  since: Date,
+  options: { limit?: number } = {},
+): Promise<Ride[]> {
+  let query = supabase
     .from('rides')
-    .select('*')
+    .select(RIDE_COLUMNS)
     .eq('user_id', userId)
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: false });
 
+  if (options.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as Ride[];
 }
 
 export async function createRide(params: {

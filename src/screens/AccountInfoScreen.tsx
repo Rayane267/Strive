@@ -18,13 +18,16 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
+import { updateProfile } from '../services/profileService';
 import { useAuth } from '../context/AuthContext';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { colors } from '../theme/colors';
 
 import AvatarView from '../components/AvatarView';
-import BrandLoader from '../components/BrandLoader';
+import { Skeleton } from '../components/Skeleton';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 
 interface InputFieldProps {
@@ -71,6 +74,8 @@ const InputField = ({
           placeholderTextColor={colors.textDimmed}
           keyboardType={keyboardType}
           editable={editable}
+          accessibilityLabel={label}
+          accessibilityState={{ disabled: !editable }}
         />
       </View>
       {!!error && <Text style={styles.fieldError}>{error}</Text>}
@@ -82,13 +87,13 @@ const AccountInfoScreen = () => {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { user, profile, refreshProfile } = useAuth();
+  const { isConnected } = useNetworkStatus();
 
   const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingHistory, setDeletingHistory] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
   const { toast, showToast, dismissToast } = useToast();
 
   const handleDeleteHistory = () => {
@@ -113,6 +118,7 @@ const AccountInfoScreen = () => {
               hapticError();
               showToast({ type: 'error', title: t('common.error'), message: t('accountInfo.deleteHistory.error', 'Échec de la suppression. Réessayez.') });
               __DEV__ && console.error(e);
+              Sentry.captureException(e, { tags: { flow: 'delete_history' } });
             } finally {
               setDeletingHistory(false);
             }
@@ -131,7 +137,7 @@ const AccountInfoScreen = () => {
 
   const filterName = (text: string) => text.replace(/[^a-zA-ZÀ-ÿ\s\-']/g, '').slice(0, 40);
 
-  const filterPhone = (text: string) => text.replace(/[^0-9\s\+]/g, '').slice(0, 20);
+  const filterPhone = (text: string) => text.replace(/[^0-9\s\+]/g, '').slice(0, 25);
 
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {};
@@ -141,14 +147,18 @@ const AccountInfoScreen = () => {
       errs.email = t('accountInfo.errors.emailInvalid', 'Email invalide');
     }
     const cleanedPhone = formData.phone.replace(/\s+/g, '');
-    if (cleanedPhone && (cleanedPhone.length < 6 || cleanedPhone.length > 15 || !/^[\d\+]+$/.test(cleanedPhone))) {
+    // E.164 : `+` optionnel + jusqu'à 15 chiffres. On valide le nombre de
+    // CHIFFRES (le `+` ne compte pas) pour ne pas rejeter les numéros
+    // internationaux longs comme +33…/+1…
+    const phoneDigits = cleanedPhone.replace(/^\+/, '');
+    if (cleanedPhone && (!/^\+?\d+$/.test(cleanedPhone) || phoneDigits.length < 6 || phoneDigits.length > 15)) {
       errs.phone = t('accountInfo.errors.phoneInvalid', 'Numéro de téléphone invalide');
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const [formData, setFormData] = useState({
+  const buildBaseForm = useCallback(() => ({
     first_name:
       user?.user_metadata?.first_name ||
       user?.user_metadata?.name?.split(' ')[0] ||
@@ -160,7 +170,18 @@ const AccountInfoScreen = () => {
     phone: formatPhoneNumber(user?.phone || user?.user_metadata?.phone || ''),
     email: user?.email || '',
     avatar_url: user?.user_metadata?.avatar_url || 'preset:m0',
-  });
+  }), [user]);
+
+  const [formData, setFormData] = useState(buildBaseForm);
+  // Snapshot de référence pour le « dirty state » : le bouton Enregistrer ne
+  // s'active que si formData diffère de ce qui a été chargé / dernier save.
+  const [initialForm, setInitialForm] = useState(buildBaseForm);
+
+  const isDirty =
+    formData.first_name !== initialForm.first_name ||
+    formData.last_name !== initialForm.last_name ||
+    formData.phone !== initialForm.phone ||
+    formData.avatar_url !== initialForm.avatar_url;
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
@@ -174,46 +195,72 @@ const AccountInfoScreen = () => {
 
       if (error && error.code !== 'PGRST116') throw error;
 
-      if (profileData) {
-        setFormData(prev => ({
-          ...prev,
-          first_name: profileData.first_name || prev.first_name,
-          last_name: profileData.last_name || prev.last_name,
-          phone: profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone,
-          email: profileData.email || prev.email,
-          avatar_url: profileData.avatar_url || prev.avatar_url,
-        }));
-      }
+      const base = buildBaseForm();
+      const merged = profileData
+        ? {
+            ...base,
+            first_name: profileData.first_name || base.first_name,
+            last_name: profileData.last_name || base.last_name,
+            phone: profileData.phone ? formatPhoneNumber(profileData.phone) : base.phone,
+            email: profileData.email || base.email,
+            avatar_url: profileData.avatar_url || base.avatar_url,
+          }
+        : base;
+      setFormData(merged);
+      setInitialForm(merged);
     } catch (error) {
       __DEV__ && console.error('Erreur chargement profil:', error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, buildBaseForm]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Garde-fou : prévient avant de quitter l'écran avec des modifs non enregistrées.
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e: any) => {
+      if (!isDirty || saving) return;
+      e.preventDefault();
+      Alert.alert(
+        t('common.unsavedTitle', 'Modifications non enregistrées'),
+        t('common.unsavedMessage', 'Voulez-vous quitter sans enregistrer vos changements ?'),
+        [
+          { text: t('common.stay', 'Rester'), style: 'cancel' },
+          { text: t('common.leave', 'Quitter'), style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        ],
+      );
+    });
+    return unsub;
+  }, [navigation, isDirty, saving, t]);
 
   const handleSave = async () => {
     if (!user?.id) return;
     if (!validateForm()) return;
+    // Hors-ligne : un update Supabase échouerait avec une erreur générique.
+    // Message clair plutôt qu'un « Impossible d'enregistrer » trompeur.
+    if (!isConnected) {
+      hapticError();
+      showToast({ type: 'warning', title: t('common.offlineTitle', 'Hors ligne'), message: t('common.offlineSave', 'Pas de connexion. Vos modifications seront à réenregistrer une fois en ligne.') });
+      return;
+    }
     setSaving(true);
-    setStatusMessage({ text: '', type: null });
     try {
-      const { error } = await supabase.from('profiles').upsert({
-        id: user.id,
+      await updateProfile(user.id, {
         first_name: formData.first_name,
         last_name: formData.last_name,
         phone: formData.phone,
         avatar_url: formData.avatar_url,
       });
-      if (error) throw error;
       if (refreshProfile) await refreshProfile();
+      setInitialForm(formData); // le form devient « propre » → bouton re-grisé
       hapticSuccess();
-      setStatusMessage({ text: t('carSettings.success.saved', 'Enregistré avec succès.'), type: 'success' });
-    } catch (error) {
+      showToast({ type: 'success', title: t('common.success', 'Succès'), message: t('carSettings.success.saved', 'Enregistré avec succès.') });
+    } catch (error: any) {
       hapticError();
-      setStatusMessage({ text: t('accountInfo.errorSave', 'Impossible d\'enregistrer. Réessayez.'), type: 'error' });
-      __DEV__ && console.error(error);
+      showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('accountInfo.errorSave', 'Impossible d\'enregistrer. Réessayez.') });
+      __DEV__ && console.error('[ACCOUNT_SAVE] error:', error?.code, error?.message, error?.details, error?.hint);
+      Sentry.captureException(error, { tags: { flow: 'profile_save' } });
     } finally {
       setSaving(false);
     }
@@ -221,8 +268,37 @@ const AccountInfoScreen = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top']}>
-        <BrandLoader size={12} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header statique — seul le contenu chargé est en skeleton. */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Feather name="arrow-left" size={22} color={colors.textMain} />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
+            <Text style={styles.headerSub}>{t('accountInfo.subtitle', 'Informations personnelles')}</Text>
+          </View>
+          <View style={styles.planBadge}>
+            <Skeleton width={40} height={12} radius={6} />
+          </View>
+        </View>
+
+        <View style={styles.scroll}>
+          <View style={styles.avatarSection}>
+            <Skeleton width={100} height={100} radius={50} />
+            <Skeleton width={160} height={22} radius={8} />
+            <Skeleton width={120} height={14} radius={7} />
+          </View>
+
+          <View style={styles.formCard}>
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={styles.inputGroup}>
+                <Skeleton width={90} height={11} radius={5} style={styles.skeletonLabel} />
+                <Skeleton width="100%" height={52} radius={12} />
+              </View>
+            ))}
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -257,10 +333,7 @@ const AccountInfoScreen = () => {
           <View style={styles.avatarSection}>
             <AvatarView avatarId="generic" size={100} borderColor={colors.primary} />
             <Text style={styles.profileName}>{fullName}</Text>
-            <View style={styles.verifiedRow}>
-              <MaterialCommunityIcons name="check-decagram" size={14} color={colors.primary} />
-              <Text style={styles.verifiedText}>{t('profile.verified', 'Chauffeur vérifié')}</Text>
-            </View>
+            {user?.email ? <Text style={styles.profileEmail} numberOfLines={1}>{user.email}</Text> : null}
           </View>
 
           {/* ── FORM ── */}
@@ -335,26 +408,15 @@ const AccountInfoScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* ── STATUS MESSAGE ── */}
-          {statusMessage.text !== '' && (
-            <View style={[styles.statusBox, statusMessage.type === 'error' ? styles.statusError : styles.statusSuccess]}>
-              <Feather
-                name={statusMessage.type === 'error' ? 'alert-circle' : 'check-circle'}
-                size={16}
-                color={statusMessage.type === 'error' ? colors.danger : colors.primary}
-              />
-              <Text style={[styles.statusText, { color: statusMessage.type === 'error' ? colors.danger : colors.primary }]}>
-                {statusMessage.text}
-              </Text>
-            </View>
-          )}
-
           {/* ── SAVE BUTTON ── */}
           <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+            style={[styles.saveBtn, (saving || !isDirty) && styles.saveBtnDisabled]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || !isDirty}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={t('preferences.save', 'Enregistrer')}
+            accessibilityState={{ disabled: saving || !isDirty }}
           >
             {saving ? (
               <ActivityIndicator color={colors.background} />
@@ -414,8 +476,7 @@ const styles = StyleSheet.create({
   // Avatar section
   avatarSection: { alignItems: 'center', marginTop: 14, marginBottom: 28, gap: 10 },
   profileName: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: 6 },
-  verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  verifiedText: { color: colors.primary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  profileEmail: { color: colors.textDimmed, fontSize: 13, fontWeight: '500' },
 
   // Form card
   formCard: {
@@ -475,20 +536,6 @@ const styles = StyleSheet.create({
   },
   deleteHistoryText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
 
-  // Status message (aligné sur Préférences / Véhicule)
-  statusBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    marginTop: 18,
-    borderWidth: 1,
-  },
-  statusError: { backgroundColor: 'rgba(255,77,77,0.08)', borderColor: 'rgba(255,77,77,0.25)' },
-  statusSuccess: { backgroundColor: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.2)' },
-  statusText: { fontSize: 13, fontWeight: '600', flex: 1 },
-
   // Save button (aligné sur Préférences / Véhicule)
   saveBtn: {
     backgroundColor: colors.primary,
@@ -507,6 +554,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  saveBtnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
+  skeletonLabel: { marginBottom: 7 },
 
 });
 

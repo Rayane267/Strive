@@ -73,6 +73,12 @@ jest.mock('@react-native-community/blur', () => ({
 
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
+// react-native-device-info : mock officiel fourni par la lib (valeurs synchrones
+// déterministes pour getVersion/getBuildNumber utilisés par src/config/appInfo).
+jest.mock('react-native-device-info', () =>
+  require('react-native-device-info/jest/react-native-device-info-mock'),
+);
+
 // react-native-fbsdk-next instancie un NativeEventEmitter au require (module natif
 // absent côté Jest) — on fournit une façade pour permettre le rendu de l'app.
 jest.mock('react-native-fbsdk-next', () => ({

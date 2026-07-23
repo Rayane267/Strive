@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Keyboard,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -15,10 +16,14 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { colors } from '../theme/colors';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
+import { updateProfile } from '../services/profileService';
 import { useAuth } from '../context/AuthContext';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
+import { Toast, useToast } from '../components/Toast';
 
 const YEARS = Array.from({ length: 17 }, (_, i) =>
   (new Date().getFullYear() - i).toString(),
@@ -87,6 +92,7 @@ const CarSettingsScreen = () => {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
+  const { isConnected } = useNetworkStatus();
 
   const isPremium = getEffectivePlanTier(profile) !== 'free';
 
@@ -106,7 +112,7 @@ const CarSettingsScreen = () => {
   const [fuelType, setFuelType] = useState<FuelKey>('essence');
   const [avgCons, setAvgCons] = useState('');
   const [elecPrice, setElecPrice] = useState('');
-  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
+  const { toast, showToast, dismissToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'make' | 'model' | 'year' | 'fuel' | null>(null);
   const [availableMakes, setAvailableMakes] = useState<string[]>([]);
@@ -114,19 +120,52 @@ const CarSettingsScreen = () => {
   const [isLoadingMakes, setIsLoadingMakes] = useState(false);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
+  // Signature des champs éditables → « dirty state ». Le bouton Enregistrer ne
+  // s'active que si la valeur courante diffère de la dernière valeur chargée/sauvée.
+  const sigOf = (f: { make: string; model: string; year: string; regNum: string; fuelType: string; avgCons: string; elecPrice: string }) =>
+    JSON.stringify([f.make, f.model, f.year, f.regNum, f.fuelType, f.avgCons.trim(), f.elecPrice.trim()]);
+  const currentSig = sigOf({ make, model, year, regNum, fuelType, avgCons, elecPrice });
+  const [savedSig, setSavedSig] = useState(() => sigOf({ make: '', model: '', year: '2022', regNum: '', fuelType: 'essence', avgCons: '', elecPrice: '' }));
+  const isDirty = currentSig !== savedSig;
+
   useEffect(() => {
     if (profile) {
-      if (profile.car_make) setMake(profile.car_make);
-      if (profile.car_model) setModel(profile.car_model);
-      if (profile.car_year) setYear(profile.car_year);
-      if (profile.car_reg) setRegNum(profile.car_reg);
-      if (profile.fuel_type && (FUEL_KEYS as readonly string[]).includes(profile.fuel_type)) {
-        setFuelType(profile.fuel_type as FuelKey);
-      }
-      if (profile.avg_cons) setAvgCons(profile.avg_cons.toString());
-      if (profile.elec_price) setElecPrice(profile.elec_price.toString());
+      const next = {
+        make: profile.car_make || '',
+        model: profile.car_model || '',
+        year: profile.car_year || '2022',
+        regNum: profile.car_reg || '',
+        fuelType: (profile.fuel_type && (FUEL_KEYS as readonly string[]).includes(profile.fuel_type)) ? (profile.fuel_type as FuelKey) : 'essence',
+        avgCons: profile.avg_cons ? profile.avg_cons.toString() : '',
+        elecPrice: profile.elec_price ? profile.elec_price.toString() : '',
+      };
+      setMake(next.make);
+      setModel(next.model);
+      setYear(next.year);
+      setRegNum(next.regNum);
+      setFuelType(next.fuelType);
+      setAvgCons(next.avgCons);
+      setElecPrice(next.elecPrice);
+      setSavedSig(sigOf(next));
     }
-  }, [profile]);
+  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Garde-fou : prévient avant de quitter avec des modifs non enregistrées.
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e: any) => {
+      if (!isDirty || isSaving) return;
+      e.preventDefault();
+      Alert.alert(
+        t('common.unsavedTitle', 'Modifications non enregistrées'),
+        t('common.unsavedMessage', 'Voulez-vous quitter sans enregistrer vos changements ?'),
+        [
+          { text: t('common.stay', 'Rester'), style: 'cancel' },
+          { text: t('common.leave', 'Quitter'), style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        ],
+      );
+    });
+    return unsub;
+  }, [navigation, isDirty, isSaving, t]);
 
   useEffect(() => {
     const fetchMakes = async () => {
@@ -151,15 +190,17 @@ const CarSettingsScreen = () => {
     fetchModels();
   }, [make, t]);
 
-  useEffect(() => {
-    setStatusMessage(prev => prev.type === 'error' ? { text: '', type: null } : prev);
-  }, [make, model, avgCons]);
-
   const handleSave = async () => {
+    // Hors-ligne : message clair plutôt qu'une erreur générique trompeuse.
+    if (!isConnected) {
+      hapticError();
+      showToast({ type: 'warning', title: t('common.offlineTitle', 'Hors ligne'), message: t('common.offlineSave', 'Pas de connexion. Vos modifications seront à réenregistrer une fois en ligne.') });
+      return;
+    }
     // Seuls make + model sont obligatoires. avgCons / year / fuelType / regNum optionnels.
     if (!make || !model) {
       hapticError();
-      setStatusMessage({ text: t('carSettings.errors.required', 'Veuillez remplir tous les champs obligatoires.'), type: 'error' });
+      showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.required', 'Veuillez remplir tous les champs obligatoires.') });
       return;
     }
     // Si l'user a saisi une conso, on la valide. Sinon → null (optionnel).
@@ -168,7 +209,7 @@ const CarSettingsScreen = () => {
       const parsedCons = parseFloat(avgCons.replace(',', '.'));
       if (isNaN(parsedCons) || parsedCons <= 0 || parsedCons > 99.9) {
         hapticError();
-        setStatusMessage({ text: t('carSettings.errors.consInvalid', 'Consommation invalide (entre 0.1 et 99.9).'), type: 'error' });
+        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.consInvalid', 'Consommation invalide (entre 0.1 et 99.9).') });
         return;
       }
       consToSave = parsedCons;
@@ -179,16 +220,15 @@ const CarSettingsScreen = () => {
       const parsedPrice = parseFloat(elecPrice.replace(',', '.'));
       if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 3) {
         hapticError();
-        setStatusMessage({ text: t('carSettings.errors.priceInvalid', 'Prix invalide (entre 0.01 et 3 €/kWh).'), type: 'error' });
+        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.priceInvalid', 'Prix invalide (entre 0.01 et 3 €/kWh).') });
         return;
       }
       elecPriceToSave = parsedPrice;
     }
     setIsSaving(true);
-    setStatusMessage({ text: '', type: null });
     try {
       if (!user) throw new Error('Non connecté');
-      const { error } = await supabase.from('profiles').update({
+      await updateProfile(user.id, {
         car_make: make,
         car_model: model,
         car_year: year || null,
@@ -196,17 +236,17 @@ const CarSettingsScreen = () => {
         fuel_type: fuelType || null,
         avg_cons: consToSave,
         elec_price: elecPriceToSave,
-      }).eq('id', user.id);
-      if (error) throw error;
+      });
       hapticSuccess();
       // Rafraîchit le profile global pour que la prochaine ouverture pré-remplisse les champs.
       if (refreshProfile) await refreshProfile();
-      setStatusMessage({ text: t('carSettings.success.saved', 'Véhicule mis à jour avec succès.'), type: 'success' });
-      setTimeout(() => navigation.goBack(), 1000);
+      setSavedSig(currentSig); // form « propre » → bouton re-grisé
+      showToast({ type: 'success', title: t('common.success', 'Succès'), message: t('carSettings.success.saved', 'Véhicule mis à jour avec succès.') });
     } catch (error: any) {
       hapticError();
       __DEV__ && console.error('[CAR_SAVE] error:', error?.code, error?.message, error?.details, error?.hint);
-      setStatusMessage({ text: t('carSettings.errors.saveFailed', 'Impossible d\'enregistrer. Réessayez.'), type: 'error' });
+      Sentry.captureException(error, { tags: { flow: 'car_save' } });
+      showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.saveFailed', 'Impossible d\'enregistrer. Réessayez.') });
     } finally {
       setIsSaving(false);
     }
@@ -218,6 +258,7 @@ const CarSettingsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       {/* ── HEADER ── */}
       <View style={styles.header}>
@@ -400,29 +441,15 @@ const CarSettingsScreen = () => {
               )}
             </View>
 
-            {/* ── STATUS ── */}
-            {statusMessage.text !== '' && (
-              <View style={[styles.statusBox, statusMessage.type === 'error' ? styles.statusError : styles.statusSuccess]}>
-                <Feather
-                  name={statusMessage.type === 'error' ? 'alert-circle' : 'check-circle'}
-                  size={16}
-                  color={statusMessage.type === 'error' ? colors.danger : colors.primary}
-                />
-                <Text style={[styles.statusText, { color: statusMessage.type === 'error' ? colors.danger : colors.primary }]}>
-                  {statusMessage.text}
-                </Text>
-              </View>
-            )}
-
             {/* ── SAVE ── */}
             <TouchableOpacity
-              style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
+              style={[styles.saveBtn, (isSaving || !isDirty) && styles.saveBtnDisabled]}
               onPress={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !isDirty}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={t('settings.save', 'Enregistrer')}
-              accessibilityState={{ disabled: isSaving }}
+              accessibilityState={{ disabled: isSaving || !isDirty }}
             >
               {isSaving ? (
                 <ActivityIndicator color={colors.background} />
@@ -576,19 +603,6 @@ const styles = StyleSheet.create({
   proTitle: { color: colors.textMuted, fontSize: 14, fontWeight: '700', marginBottom: 3 },
   proSub: { color: colors.textDimmed, fontSize: 12 },
 
-  statusBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
-  statusError: { backgroundColor: 'rgba(255,77,77,0.08)', borderColor: 'rgba(255,77,77,0.25)' },
-  statusSuccess: { backgroundColor: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.2)' },
-  statusText: { fontSize: 13, fontWeight: '600', flex: 1 },
-
   saveBtn: {
     backgroundColor: colors.primary,
     flexDirection: 'row',
@@ -606,6 +620,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  saveBtnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
 
   comboboxContainer: { marginBottom: 14 },
   comboboxInputWrapper: {

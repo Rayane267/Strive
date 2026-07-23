@@ -29,7 +29,7 @@ import { Ride } from '../types/database';
 import { computeRideScore, rideScoreColor } from '../utils/qualityScore';
 import { withTimeout } from '../utils/withTimeout';
 import { cacheRides, getCachedRides } from '../services/offlineService';
-import BrandLoader from '../components/BrandLoader';
+import { Skeleton } from '../components/Skeleton';
 
 LocaleConfig.locales['fr'] = {
   monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
@@ -529,7 +529,18 @@ const HistoryScreen = () => {
 
       {/* ── LOADING / EMPTY ── */}
       {loading && (
-        <BrandLoader style={{ marginTop: 40 }} />
+        <View style={styles.skeletonList}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={styles.skeletonRow}>
+              <Skeleton width={44} height={44} radius={12} />
+              <View style={styles.skeletonRowText}>
+                <Skeleton width="60%" height={14} />
+                <Skeleton width="38%" height={12} />
+              </View>
+              <Skeleton width={58} height={22} radius={8} />
+            </View>
+          ))}
+        </View>
       )}
       {!loading && filteredRides.length === 0 && (
         <View style={styles.emptyState}>
@@ -788,6 +799,20 @@ const styles = StyleSheet.create({
   metricText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
   metricHighlight: { color: colors.primary },
   metricSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 2 },
+
+  // Loading skeleton
+  skeletonList: { gap: 12, marginTop: 4 },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  skeletonRowText: { flex: 1, gap: 8 },
 
   // Empty state
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
