@@ -155,7 +155,7 @@ class ShareViewController: UIViewController {
     ])
 
     // Loading state
-    statusLabel.text = "Analyse en cours…"
+    statusLabel.text = localizedString(fr: "Analyse en cours…", en: "Analyzing…")
     statusLabel.font = .systemFont(ofSize: 15, weight: .semibold)
     statusLabel.textColor = textMuted
     statusLabel.textAlignment = .center
@@ -255,7 +255,7 @@ class ShareViewController: UIViewController {
 
     // Open in app button
     let openButton = UIButton(type: .system)
-    openButton.setTitle("Ouvrir dans Strive", for: .normal)
+    openButton.setTitle(localizedString(fr: "Ouvrir dans Strive", en: "Open in Strive"), for: .normal)
     openButton.setTitleColor(bgColor, for: .normal)
     openButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
     openButton.backgroundColor = primaryColor
@@ -332,6 +332,37 @@ class ShareViewController: UIViewController {
   // Gemini en parallèle pour la même image → coûts dupliqués + UI flicker.
   private var hasProcessed = false
 
+  // Filet global : garantit que l'extension atteint TOUJOURS un état terminal.
+  // Armé une fois à l'entrée de `analyzeImage`, désarmé dans les deux méthodes
+  // terminales (`showResult` / `showError`) — et non à chaque site d'appel, pour
+  // qu'un futur chemin de sortie ne puisse pas oublier de le faire.
+  //
+  // 25 s = le budget total du pipeline (OCR ≤ 20 s watchdog ScanProcessor, puis
+  // Gemini ≤ 12 s, puis TomTom ~4 s/requête). Ne se déclenche jamais en usage
+  // normal (médiane ~3 s) : c'est un filet, pas une cible.
+  private var hasShownOutcome = false
+  private var uiWatchdog: DispatchWorkItem?
+
+  private func armWatchdog(_ seconds: TimeInterval = 25) {
+    uiWatchdog?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self = self, !self.hasShownOutcome else { return }
+      self.showError(self.localizedString(
+        fr: "Analyse trop longue — vérifie ta connexion",
+        en: "Analysis timed out — check your connection"
+      ), code: .timeout)
+    }
+    uiWatchdog = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+  }
+
+  /// Marque l'état terminal atteint et désarme le filet. Idempotent.
+  private func disarmWatchdog() {
+    hasShownOutcome = true
+    uiWatchdog?.cancel()
+    uiWatchdog = nil
+  }
+
   private func processSharedImage() {
     // Court-circuit : quota journalier atteint → on n'engage ni Vision ni
     // TomTom ni Gemini (zéro coût). L'utilisateur voit un message dédié.
@@ -353,7 +384,7 @@ class ShareViewController: UIViewController {
     guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
           let attachments = extensionItem.attachments
     else {
-      showError("Aucune image reçue")
+      showError(localizedString(fr: "Aucune image reçue", en: "No image received"), code: .invalidImage)
       return
     }
 
@@ -368,7 +399,7 @@ class ShareViewController: UIViewController {
             if let error = error {
               // Pas de set hasProcessed=true : si loadItem retry et réussit,
               // on veut pouvoir traiter cette 2e tentative.
-              self.showError("Erreur : \(error.localizedDescription)")
+              self.showError(self.localizedString(fr: "Erreur : ", en: "Error: ") + error.localizedDescription, code: .invalidImage)
               return
             }
 
@@ -386,7 +417,7 @@ class ShareViewController: UIViewController {
               self.hasProcessed = true
               self.analyzeImage(image)
             } else {
-              self.showError("Format d'image non supporté")
+              self.showError(self.localizedString(fr: "Format d'image non supporté", en: "Unsupported image format"), code: .invalidImage)
             }
           }
         }
@@ -394,10 +425,11 @@ class ShareViewController: UIViewController {
       }
     }
 
-    showError("Aucune image trouvée dans le partage")
+    showError(localizedString(fr: "Aucune image trouvée dans le partage", en: "No image found in the share"), code: .invalidImage)
   }
 
   private func analyzeImage(_ image: UIImage) {
+    armWatchdog()
     ScanProcessor.shared.process(image: image) { [weak self] finalResult in
       DispatchQueue.main.async {
         guard let self = self else { return }
@@ -433,21 +465,30 @@ class ShareViewController: UIViewController {
       ))
       return
     }
-    statusLabel.text = "Analyse IA en cours…"
+    statusLabel.text = localizedString(fr: "Analyse IA en cours…", en: "AI analysis in progress…")
 
     // Charger la config Gemini depuis App Group — l'app principale a écrit ces
     // clés via `ScanBridge.setGeminiConfig` / `setSupabaseUserJwt`.
+    //
+    // Service PARTAGÉ avec l'app et l'AppIntent (target membership ajoutée) :
+    // prompt, bornes de validation, timeouts et auth sont désormais définis à un
+    // seul endroit. La copie locale `GeminiVisionServiceLight` avait divergé
+    // (tarif min 5 € vs 3 €, distance max 500 vs 1000 km, prompt différent) →
+    // une même course pouvait être acceptée par le raccourci Siri et refusée
+    // par le Share Sheet.
     let defaults = UserDefaults(suiteName: Self.appGroupId)
-    let service = GeminiVisionServiceLight()
+    let service = GeminiVisionService.shared
     service.edgeFunctionUrl = defaults?.string(forKey: "geminiEdgeUrl")
     service.supabaseAnonKey = defaults?.string(forKey: "geminiSupabaseKey")
     service.apiKey = defaults?.string(forKey: "geminiApiKey")
     service.supabaseUserJwt = defaults?.string(forKey: "supabaseUserJwt")
 
-    service.analyze(image: image) { [weak self] result in
+    service.analyze(image: image) { [weak self] geminiResult in
       guard let self = self else { return }
-      guard let result = result else {
-        DispatchQueue.main.async { self.showError("Impossible d'analyser cette image") }
+      // `analyze` rend la main sur le main thread ; les `DispatchQueue.main.async`
+      // ci-dessous restent inoffensifs (async, jamais sync → pas de deadlock).
+      guard let result = geminiResult?.asScanResult else {
+        DispatchQueue.main.async { self.showError(self.localizedString(fr: "Impossible d'analyser cette image", en: "Could not analyze this image"), code: .geminiKo) }
         return
       }
 
@@ -465,21 +506,25 @@ class ShareViewController: UIViewController {
           self.showError(self.localizedString(
             fr: "Scan échoué — adresses illisibles, réessaie",
             en: "Scan failed — addresses unreadable, try again"
-          ))
+          ), code: .noAddresses)
         }
         return
       }
 
+      // On repasse par ScanProcessor.computeFinal comme le chemin OCR : c'est lui
+      // qui applique les seuils ET la préférence `includePickup` (l'ancien calcul
+      // local ici ignorait le réglage → verdict identique ON/OFF).
       guard TomTomService.shared.isReady else {
         DispatchQueue.main.async {
+          let final = ScanProcessor.shared.computeFinal(scan: result)
           self.incrementScanCount()
-          self.showResult(result)
-          self.saveResultForMainApp(result)
+          self.showResult(from: final)
+          self.saveSharedResult(final)
         }
         return
       }
 
-      DispatchQueue.main.async { self.statusLabel.text = "Calcul de l'itinéraire…" }
+      DispatchQueue.main.async { self.statusLabel.text = self.localizedString(fr: "Calcul de l'itinéraire…", en: "Calculating the route…") }
       TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
         // calculateRoute rend la main sur le main thread.
         var refined = result
@@ -487,17 +532,16 @@ class ShareViewController: UIViewController {
            route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 {
           let ratio = result.fare / route.distanceKm
           if ratio >= 0.2, ratio <= 12.0 {
-            refined = ShareViewController.ParsedResult(
-              platform: result.platform, fare: result.fare,
+            refined = result.copy(
               distanceKm: route.distanceKm, durationMin: route.durationMin,
-              pickupAddress: route.pickupFormatted ?? result.pickupAddress,
-              destinationAddress: route.destFormatted ?? result.destinationAddress
+              pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
             )
           }
         }
+        let final = ScanProcessor.shared.computeFinal(scan: refined)
         self.incrementScanCount()
-        self.showResult(refined)
-        self.saveResultForMainApp(refined)
+        self.showResult(from: final)
+        self.saveSharedResult(final)
       }
     }
   }
@@ -521,7 +565,7 @@ class ShareViewController: UIViewController {
   private func showResult(from final: ScanProcessor.FinalResult) {
     let legacy = ParsedResult(
       platform: final.scan.platform.rawValue,
-      fare: final.scan.fare,
+      fare: final.displayFare,
       distanceKm: final.totalDistanceKm,
       durationMin: final.totalDurationMin,
       pickupAddress: final.scan.pickupAddress,
@@ -533,10 +577,30 @@ class ShareViewController: UIViewController {
     showResult(legacy, hourlyRate: final.hourlyRate, kmRate: final.kmRate, verdictLevel: final.verdictLevel)
   }
 
+  /// Empile le résultat dans la file de l'App Group, en plus de la case
+  /// historique. Sans ça, deux scans consécutifs sans passage de l'app au
+  /// premier plan écrasaient le premier — course perdue, invisible.
+  private func enqueueScanResult(_ body: [String: Any], defaults: UserDefaults) {
+    var queue: [[String: Any]] = []
+    if let data = defaults.data(forKey: "pendingScanResults"),
+       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+      queue = existing
+    }
+    queue.append(body)
+    // Plafond : au-delà, c'est que l'app n'a pas tourné depuis longtemps — on
+    // garde les plus récents plutôt que de laisser enfler indéfiniment.
+    // 100 et non 20 : la file n'est vidée qu'au passage au premier plan, et
+    // l'usage visé est un chauffeur qui n'ouvre pas l'app de la journée.
+    // Doit rester aligné avec AnalyzeRideIntent.enqueueScanResult.
+    if queue.count > 100 { queue = Array(queue.suffix(100)) }
+    if let data = try? JSONSerialization.data(withJSONObject: queue) {
+      defaults.set(data, forKey: "pendingScanResults")
+    }
+  }
+
   /// Sauve le résultat pour que l'app principale puisse le picker au foreground.
   private func saveSharedResult(_ final: ScanProcessor.FinalResult) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
-    let laStatus = defaults.string(forKey: "liveActivityDebug") ?? "not-written"
     var body: [String: Any] = [
       "platform": final.scan.platform.rawValue,
       "fare": final.scan.fare,
@@ -545,13 +609,39 @@ class ShareViewController: UIViewController {
       "hourlyRate": final.hourlyRate,
       "kmRate": final.kmRate,
       "verdictLevel": final.verdictLevel,
-      "_liveActivityDebug": laStatus,
+      // Tarif d'AFFICHAGE (net de carburant si l'option est active) ; `fare`
+      // reste brut pour l'enregistrement en base.
+      "displayFare": final.displayFare,
     ]
+    // Champ purement diagnostique : hors DEBUG il n'est plus émis (le payload
+    // est persisté dans la file `pendingScanResults` de l'App Group). Le lecteur
+    // côté ScanBridgeModule le lit déjà avec un repli `?? "unknown"`.
+    #if DEBUG
+    body["_liveActivityDebug"] = defaults.string(forKey: "liveActivityDebug") ?? "not-written"
+    #endif
     if let pickup = final.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = final.scan.destinationAddress { body["destinationAddress"] = dest }
+
+    // Diagnostic parser : blocs OCR joints UNIQUEMENT quand une adresse manque —
+    // seul cas exploitable pour corriger l'heuristique, et seul cas où le JS
+    // écrit dans `scan_debug`. Les joindre systématiquement gonflerait la file
+    // App Group (plafonnée à 20 entrées) sans usage.
+    if final.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+      || final.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+      let blocks = ScanProcessor.shared.lastBlocksJson {
+      body["debugBlocks"] = blocks
+      body["screenHeight"] = ScanProcessor.shared.lastScreenHeight
+    }
+
+    // scanTs porté par le payload lui-même : dans la file, chaque entrée doit
+    // être auto-suffisante (la clé timestamp globale ne vaut que pour la dernière).
+    let scanTs = Date().timeIntervalSince1970
+    body["scanTs"] = scanTs
+    enqueueScanResult(body, defaults: defaults)
+
     if let data = try? JSONSerialization.data(withJSONObject: body) {
       defaults.set(data, forKey: Self.scanResultKey)
-      defaults.set(Date().timeIntervalSince1970, forKey: Self.scanTimestampKey)
+      defaults.set(scanTs, forKey: Self.scanTimestampKey)
       let center = CFNotificationCenterGetDarwinNotifyCenter()
       CFNotificationCenterPostNotification(
         center,
@@ -573,6 +663,7 @@ class ShareViewController: UIViewController {
     kmRate kmRateOverride: Double? = nil,
     verdictLevel verdictOverride: Int? = nil
   ) {
+    disarmWatchdog()
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
     statusLabel.isHidden = true
@@ -767,51 +858,25 @@ class ShareViewController: UIViewController {
     ])
   }
 
-  private func showError(_ message: String) {
+  /// `code` est affiché en fin de message pour que le chauffeur puisse le citer
+  /// en support. C'est le seul canal de remontée des échecs de cette extension :
+  /// contrairement à l'AppIntent, elle n'écrit rien dans `scan_failures`.
+  private func showError(_ message: String, code: ScanErrorCode? = nil) {
+    disarmWatchdog()
     spinnerView.stopAnimating()
     spinnerView.isHidden = true
-    statusLabel.text = "✕ \(message)"
+    statusLabel.numberOfLines = 0
+    statusLabel.textAlignment = .center
+    statusLabel.text = code == nil
+      ? "✕ \(message)"
+      : "✕ \(message)\n(\(code!.rawValue))"
     statusLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
   }
 
   // MARK: - App Group Communication
 
-  private func saveResultForMainApp(_ result: ParsedResult) {
-    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
-
-    let durationMin = result.durationMin ?? Int(result.distanceKm / 25 * 60)
-    let hourlyRate = durationMin > 0 ? result.fare / (Double(durationMin) / 60.0) : 0
-    let kmRate = result.distanceKm > 0 ? result.fare / result.distanceKm : 0
-
-    let minH = defaults.double(forKey: "minHourlyRate")
-    let minK = defaults.double(forKey: "minKmRate")
-    let hrOk = hourlyRate >= (minH > 0 ? minH : 25.0)
-    let kmOk = kmRate >= (minK > 0 ? minK : 1.2)
-    let verdictLevel = (hrOk && kmOk) ? 2 : (hrOk || kmOk) ? 1 : 0
-
-    let laStatus = defaults.string(forKey: "liveActivityDebug") ?? "not-written"
-
-    var body: [String: Any] = [
-      "platform": result.platform,
-      "fare": result.fare,
-      "distanceKm": result.distanceKm,
-      "durationMin": durationMin,
-      "hourlyRate": hourlyRate,
-      "kmRate": kmRate,
-      "verdictLevel": verdictLevel,
-      "_liveActivityDebug": laStatus,
-    ]
-    if let pickup = result.pickupAddress { body["pickupAddress"] = pickup }
-    if let dest = result.destinationAddress { body["destinationAddress"] = dest }
-
-    if let data = try? JSONSerialization.data(withJSONObject: body) {
-      defaults.set(data, forKey: Self.scanResultKey)
-      defaults.set(Date().timeIntervalSince1970, forKey: Self.scanTimestampKey)
-
-      let center = CFNotificationCenterGetDarwinNotifyCenter()
-      CFNotificationCenterPostNotification(center, CFNotificationName("com.striveapp.app.scanResult" as CFString), nil, nil, true)
-    }
-  }
+  // Le chemin Gemini passe désormais par `saveSharedResult(_: FinalResult)` —
+  // seule source de vérité pour les métriques (seuils + includePickup).
 
   // MARK: - Actions
 
@@ -830,147 +895,5 @@ class ShareViewController: UIViewController {
 
   @objc private func dismissExtension() {
     extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-  }
-}
-
-// MARK: - Gemini Service Light (pour la Share Extension — version simplifiée sans dépendance)
-//
-// FIX DÉFINITIF ATTENDU : ajouter Target Membership `StriveShareExtension` sur
-// `ios/Strive/ScanBridge/GeminiVisionService.swift` (Xcode → File Inspector),
-// puis supprimer cette classe et appeler `GeminiVisionService.shared` ici.
-// Tant que la passe Xcode n'est pas faite, toute modif du prompt / parsing /
-// auth dans le service principal DOIT être répercutée ci-dessous, et inversement.
-
-private class GeminiVisionServiceLight {
-  var apiKey: String?
-  var edgeFunctionUrl: String?
-  var supabaseAnonKey: String?
-  /// JWT user — exigé par l'edge function durcie (rate-limit + audit par user_id).
-  /// Sans ça, l'edge function rejette la requête en 401/403.
-  var supabaseUserJwt: String?
-
-  func analyze(image: UIImage, completion: @escaping (ShareViewController.ParsedResult?) -> Void) {
-    let maxWidth: CGFloat = 512
-    let scaledImage: UIImage
-    if image.size.width > maxWidth {
-      let scale = maxWidth / image.size.width
-      let newSize = CGSize(width: maxWidth, height: image.size.height * scale)
-      UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-      image.draw(in: CGRect(origin: .zero, size: newSize))
-      scaledImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-      UIGraphicsEndImageContext()
-    } else {
-      scaledImage = image
-    }
-
-    guard let jpegData = scaledImage.jpegData(compressionQuality: 0.8) else {
-      completion(nil)
-      return
-    }
-    let base64 = jpegData.base64EncodedString()
-    let prompt = """
-    Tu es un extracteur de données pour un chauffeur VTC. Analyse cette capture d'écran d'une offre de course (Uber, Bolt ou Heetch).
-    Règle 1 : l'adresse de DÉPART (pickup) est TOUJOURS la première affichée en haut de l'écran ; l'adresse de DESTINATION est TOUJOURS en dessous.
-    Règle 2 : ne confonds JAMAIS une ligne stat ("Course de 11.8 km", "à 6 min (1.2 km)") avec une adresse.
-    Retourne UNIQUEMENT un objet JSON sans markdown, avec ces champs :
-    {
-      "platform": "UBER" | "BOLT" | "HEETCH" | "UNKNOWN",
-      "fare": <montant total en euros, ex: 12.50>,
-      "distance_km": <distance de la COURSE en km, ex: 11.8>,
-      "duration_min": <durée de la course en minutes ou null si non visible>,
-      "pickup_address": <adresse de départ exacte lue à l'écran, string ou null>,
-      "destination_address": <adresse de destination exacte lue à l'écran, string ou null>
-    }
-    IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
-    Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
-    Extrais les adresses EXACTES lues à l'écran (ne devine pas). Ne retourne rien d'autre que le JSON.
-    """
-
-    let request: URLRequest
-    if let edgeUrl = edgeFunctionUrl, let anonKey = supabaseAnonKey,
-       let url = URL(string: edgeUrl) {
-      var req = URLRequest(url: url)
-      req.httpMethod = "POST"
-      req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      // JWT user si dispo (edge function durcie l'exige), sinon anon key.
-      // Doit rester aligné avec GeminiVisionService.swift de l'app principale.
-      let bearer = (supabaseUserJwt?.isEmpty == false ? supabaseUserJwt! : anonKey)
-      req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-      req.setValue(anonKey, forHTTPHeaderField: "apikey")
-      // L'edge function durcie n'accepte QUE le format natif Gemini
-      // (`contents[].parts[]`) — cf. isValidGeminiPayload dans gemini-proxy.
-      // Doit rester aligné avec GeminiVisionService.swift / geminiFallback.ts.
-      req.httpBody = try? JSONSerialization.data(withJSONObject: [
-        "contents": [[
-          "parts": [
-            ["inline_data": ["mime_type": "image/jpeg", "data": base64]],
-            ["text": prompt],
-          ]
-        ]]
-      ])
-      request = req
-    } else if let key = apiKey,
-              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)") {
-      var req = URLRequest(url: url)
-      req.httpMethod = "POST"
-      req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      req.httpBody = try? JSONSerialization.data(withJSONObject: [
-        "contents": [["parts": [
-          ["text": prompt],
-          ["inline_data": ["mime_type": "image/jpeg", "data": base64]]
-        ]]]
-      ])
-      request = req
-    } else {
-      completion(nil)
-      return
-    }
-
-    URLSession.shared.dataTask(with: request) { data, _, error in
-      guard error == nil, let data = data,
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-      else {
-        completion(nil)
-        return
-      }
-
-      var text: String?
-      if let candidates = json["candidates"] as? [[String: Any]],
-         let content = candidates.first?["content"] as? [String: Any],
-         let parts = content["parts"] as? [[String: Any]],
-         let t = parts.first?["text"] as? String { text = t }
-      else if let t = json["result"] as? String { text = t }
-
-      guard let responseText = text,
-            let start = responseText.range(of: "{"),
-            let end = responseText.range(of: "}", options: .backwards)
-      else { completion(nil); return }
-
-      let jsonStr = String(responseText[start.lowerBound...end.upperBound])
-      guard let parsed = try? JSONSerialization.jsonObject(with: Data(jsonStr.utf8)) as? [String: Any],
-            let platform = parsed["platform"] as? String,
-            let fare = (parsed["fare"] as? NSNumber)?.doubleValue,
-            let distKm = (parsed["distance_km"] as? NSNumber)?.doubleValue,
-            fare >= 5, fare <= 200, distKm >= 0.3, distKm <= 500,
-            // Ratio plausible : rejette les €/km démentiels (distance hallucinée).
-            fare / distKm >= 0.2, fare / distKm <= 15
-      else { completion(nil); return }
-
-      let durMin = (parsed["duration_min"] as? NSNumber)?.intValue
-
-      // Adresses (string non vide) — alimentent TomTom pour la VRAIE distance.
-      func cleanAddr(_ key: String) -> String? {
-        guard let s = (parsed[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !s.isEmpty, s.lowercased() != "null" else { return nil }
-        return s
-      }
-
-      completion(ShareViewController.ParsedResult(
-        platform: platform, fare: fare, distanceKm: distKm,
-        durationMin: durMin,
-        pickupAddress: cleanAddr("pickup_address"),
-        destinationAddress: cleanAddr("destination_address")
-      ))
-    }.resume()
   }
 }

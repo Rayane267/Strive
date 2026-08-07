@@ -40,7 +40,7 @@ We apply the principle of minimisation: we only process data necessary for the S
 
 **2.6 — Quality measurement & diagnostics**
 - **Non-identifying telemetry**: per Scan, aggregatable indicators (platform, number of addresses detected, price bracket, verdict, whether cloud fallback was used). **Never the exact amount, addresses or coordinates.**
-- **Diagnostic capture (beta, with consent)**: when local analysis fails to read an address, the Application may store the OCR text blocks of the scanned screen (which may contain addresses) to improve reliability. These captures are **private, visible to you only, kept for 30 days maximum**, and limited to the testing phase.
+- **Diagnostic capture**: when local analysis fails to read an address, the Application stores the OCR text blocks of the scanned screen (which may contain addresses) in order to fix recognition defects. This processing relies on our **legitimate interest** in improving the tool's reliability (Art. 6.1.f). These captures are **private, visible to you only, kept for 30 days maximum**, and are never sold or used for any other purpose. **You may object at any time** by writing to **contact@striveapp.fr**: capture is then disabled for your account and existing captures deleted.
 
 ## 3. OCR technology: how it works and our safeguards
 
@@ -54,8 +54,8 @@ We apply the principle of minimisation: we only process data necessary for the S
 | Purpose | Legal basis (GDPR) |
 |---|---|
 | Provide the Service (scan, verdict, history, statistics, subscription) | Performance of the contract (Art. 6.1.b) |
-| Improve OCR reliability, prevent fraud and abuse, ensure security | Legitimate interest (Art. 6.1.f) |
-| Push notifications and diagnostic capture (beta) | Consent (Art. 6.1.a), revocable at any time |
+| Improve OCR reliability (including diagnostic capture), prevent fraud and abuse, ensure security | Legitimate interest (Art. 6.1.f), with right to object (Art. 21) |
+| Push notifications | Consent (Art. 6.1.a), revocable at any time |
 | Comply with legal obligations | Legal obligation (Art. 6.1.c) |
 
 ## 5. Recipients and processors
@@ -77,7 +77,7 @@ Your data is hosted by **Supabase** in the **`eu-west-1` (Ireland)** region, i.e
 ## 7. Retention periods
 
 - **Account, profile, rides (including addresses), sessions**: kept while your account is active, to provide your history and statistics; deleted upon account deletion;
-- **Diagnostic captures (beta)**: 30 days maximum;
+- **Diagnostic captures**: 30 days maximum;
 - **Non-identifying telemetry**: kept in aggregated form;
 - **Error reports (Sentry)**: per the service's retention (typically 90 days).
 

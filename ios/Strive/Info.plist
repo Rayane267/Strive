@@ -71,6 +71,13 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Exemption standard : l'app n'utilise que HTTPS/TLS via les APIs système
+	     (Supabase, TomTom, Gemini, Firebase) et le Keychain iOS. Aucun algorithme
+	     propriétaire embarqué. Sans cette clé, chaque build reste bloqué en
+	     « Missing Compliance » dans App Store Connect. À réévaluer si du
+	     chiffrement applicatif est ajouté un jour. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -80,8 +87,6 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

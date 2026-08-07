@@ -9,8 +9,20 @@
     "name": "no-fare-returns-null",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 100, "width": 200, "height": 20 },
-      { "text": "some random text", "x": 50, "y": 100, "width": 200, "height": 20 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 100,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "some random text",
+        "x": 50,
+        "y": 100,
+        "width": 200,
+        "height": 20
+      }
     ],
     "expected": null
   },
@@ -18,8 +30,20 @@
     "name": "no-distance-returns-null",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 100, "width": 200, "height": 20 },
-      { "text": "Total 15.50", "x": 50, "y": 100, "width": 200, "height": 20 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 100,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 15.50",
+        "x": 50,
+        "y": 100,
+        "width": 200,
+        "height": 20
+      }
     ],
     "expected": null
   },
@@ -27,54 +51,185 @@
     "name": "uber-valid-offer",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "Estimated fare", "x": 50, "y": 200, "width": 200, "height": 15 },
-      { "text": "15.50", "x": 50, "y": 250, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 },
-      { "text": "15 min", "x": 50, "y": 450, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 30
+      },
+      {
+        "text": "Estimated fare",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "15.50",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "8.2 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "15 min",
+        "x": 50,
+        "y": 450,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 15.5, "distanceKm": 8.2, "durationMin": 15 }
+    "expected": {
+      "platform": "UBER",
+      "fare": 15.5,
+      "distanceKm": 8.2,
+      "durationMin": 15
+    }
   },
   {
     "name": "bolt-valid-offer",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "bolt", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "Gain estimé", "x": 50, "y": 200, "width": 200, "height": 15 },
-      { "text": "12.00", "x": 50, "y": 250, "width": 200, "height": 40 },
-      { "text": "5.5 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "bolt",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 30
+      },
+      {
+        "text": "Gain estimé",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "12.00",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "5.5 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "BOLT", "fare": 12.0, "distanceKm": 5.5 }
+    "expected": {
+      "platform": "BOLT",
+      "fare": 12,
+      "distanceKm": 5.5
+    }
   },
   {
     "name": "heetch-valid-offer",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "heetch", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "Course", "x": 50, "y": 200, "width": 200, "height": 15 },
-      { "text": "9.75", "x": 50, "y": 250, "width": 200, "height": 40 },
-      { "text": "3.8 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "heetch",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 30
+      },
+      {
+        "text": "Course",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "9.75",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "3.8 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "HEETCH", "fare": 9.75, "distanceKm": 3.8 }
+    "expected": {
+      "platform": "HEETCH",
+      "fare": 9.75,
+      "distanceKm": 3.8
+    }
   },
   {
     "name": "unknown-platform-when-no-keyword",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "Total", "x": 50, "y": 200, "width": 200, "height": 15 },
-      { "text": "10.00", "x": 50, "y": 250, "width": 200, "height": 40 },
-      { "text": "4.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "Total",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "10.00",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "4.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UNKNOWN", "fare": 10.0, "distanceKm": 4.0 }
+    "expected": {
+      "platform": "UNKNOWN",
+      "fare": 10,
+      "distanceKm": 4
+    }
   },
   {
     "name": "insane-fare-distance-ratio-rejected",
     "description": "200€ / 0.5km = 400 €/km — bien au-dessus de RATE_MAX",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 200.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "0.5 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 200.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "0.5 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
     "expected": null
   },
@@ -82,9 +237,27 @@
     "name": "fare-below-min-rejected",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 1.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "2.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 1.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "2.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
     "expected": null
   },
@@ -92,53 +265,178 @@
     "name": "comma-decimal-format",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "bolt", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Gain 14,50", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "6,3 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "bolt",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Gain 14,50",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "6,3 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "BOLT", "fare": 14.5, "distanceKm": 6.3 }
+    "expected": {
+      "platform": "BOLT",
+      "fare": 14.5,
+      "distanceKm": 6.3
+    }
   },
   {
     "name": "duration-null-when-no-min-block",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 15.50", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 15.50",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "8.2 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 15.5, "distanceKm": 8.2, "durationMin": null }
+    "expected": {
+      "platform": "UBER",
+      "fare": 15.5,
+      "distanceKm": 8.2,
+      "durationMin": null
+    }
   },
   {
     "name": "larger-text-preferred-as-fare",
     "description": "Importance visuelle : le bloc le plus grand gagne",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "5.00", "x": 50, "y": 200, "width": 200, "height": 10 },
-      { "text": "25.00", "x": 50, "y": 300, "width": 200, "height": 50 },
-      { "text": "10.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "5.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 10
+      },
+      {
+        "text": "25.00",
+        "x": 50,
+        "y": 300,
+        "width": 200,
+        "height": 50
+      },
+      {
+        "text": "10.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 25.0, "distanceKm": 10.0 }
+    "expected": {
+      "platform": "UBER",
+      "fare": 25,
+      "distanceKm": 10
+    }
   },
   {
     "name": "anchor-keyword-in-preceding-block-scores",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Estimated fare", "x": 50, "y": 200, "width": 200, "height": 15 },
-      { "text": "18.50", "x": 50, "y": 250, "width": 200, "height": 20 },
-      { "text": "8.50", "x": 50, "y": 350, "width": 200, "height": 20 },
-      { "text": "7.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Estimated fare",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "18.50",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "8.50",
+        "x": 50,
+        "y": 350,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "7.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 18.5, "distanceKm": 7.0 }
+    "expected": {
+      "platform": "UBER",
+      "fare": 18.5,
+      "distanceKm": 7
+    }
   },
   {
     "name": "distance-above-max-rejected",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 50.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "1500.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 50.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "1500.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
     "expected": null
   },
@@ -146,9 +444,27 @@
     "name": "distance-below-min-rejected",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 5.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "0.1 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 5.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "0.1 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
     "expected": null
   },
@@ -156,42 +472,199 @@
     "name": "duration-25-min",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 20.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "10.0 km", "x": 50, "y": 300, "width": 200, "height": 15 },
-      { "text": "25 min", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 20.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "10.0 km",
+        "x": 50,
+        "y": 300,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "25 min",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 20.0, "distanceKm": 10.0, "durationMin": 25 }
+    "expected": {
+      "platform": "UBER",
+      "fare": 20,
+      "distanceKm": 10,
+      "durationMin": 25
+    }
   },
   {
     "name": "duration-above-180-min-ignored",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 20.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "10.0 km", "x": 50, "y": 300, "width": 200, "height": 15 },
-      { "text": "200 min", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 20.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "10.0 km",
+        "x": 50,
+        "y": 300,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "200 min",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 20.0, "distanceKm": 10.0, "durationMin": null }
+    "expected": {
+      "platform": "UBER",
+      "fare": 20,
+      "distanceKm": 10,
+      "durationMin": null
+    }
   },
   {
     "name": "mixed-case-platform-name",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "UBER Trip", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Total 15.50", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "UBER Trip",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Total 15.50",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "8.2 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "UBER", "fare": 15.5, "distanceKm": 8.2 }
+    "expected": {
+      "platform": "UBER",
+      "fare": 15.5,
+      "distanceKm": 8.2
+    }
   },
   {
     "name": "fare-exactly-at-min-boundary",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "bolt", "x": 50, "y": 50, "width": 200, "height": 20 },
-      { "text": "Gain 5.00", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "2.0 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      {
+        "text": "bolt",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 20
+      },
+      {
+        "text": "Gain 5.00",
+        "x": 50,
+        "y": 200,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "2.0 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      }
     ],
-    "expected": { "platform": "BOLT", "fare": 5.0, "distanceKm": 2.0 }
+    "expected": {
+      "platform": "BOLT",
+      "fare": 5,
+      "distanceKm": 2
+    }
+  },
+  {
+    "name": "ev-autonomy-not-ride-duration",
+    "description": "Uber affiche sur certaines offres une info vehicule electrique (temps de recharge, autonomie). Ces 'min' et ces 'km' ne sont PAS ceux de la course : sans filtre de contexte ils deviennent duree et distance, et le €/h comme le €/km sont faux en silence. Contrat aligne TS/Swift/Kotlin.",
+    "screenHeight": 1920,
+    "blocks": [
+      {
+        "text": "uber",
+        "x": 50,
+        "y": 50,
+        "width": 200,
+        "height": 30
+      },
+      {
+        "text": "Autonomie 250 km",
+        "x": 50,
+        "y": 120,
+        "width": 260,
+        "height": 18
+      },
+      {
+        "text": "Recharge 35 min",
+        "x": 50,
+        "y": 150,
+        "width": 260,
+        "height": 18
+      },
+      {
+        "text": "15.50",
+        "x": 50,
+        "y": 250,
+        "width": 200,
+        "height": 40
+      },
+      {
+        "text": "8.2 km",
+        "x": 50,
+        "y": 400,
+        "width": 200,
+        "height": 15
+      },
+      {
+        "text": "15 min",
+        "x": 50,
+        "y": 450,
+        "width": 200,
+        "height": 15
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 15.5,
+      "distanceKm": 8.2,
+      "durationMin": 15
+    }
   }
 ]

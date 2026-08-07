@@ -35,9 +35,13 @@ export const formatTimeAgo = (dateString: string, t: any): string => {
   }
 
   const diffInHours = Math.floor(diffInMins / 60);
-  return t('dashboard.timeLabels.hoursAgo', { count: diffInHours });
+  if (diffInHours < 24) {
+    return t('dashboard.timeLabels.hoursAgo', { count: diffInHours });
+  }
 
-
+  // Au-delà de 24 h, « Il y a 37 h » ne se lit plus : on bascule en jours.
+  const diffInDays = Math.floor(diffInHours / 24);
+  return t('dashboard.timeLabels.daysAgo', { count: diffInDays });
 };
 
 /**

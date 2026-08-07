@@ -3,8 +3,8 @@ import { AppState } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
 import { fetchProfile } from '../services/profileService';
-import { fetchPlanLimits } from '../services/subscriptionService';
-import { initPurchases, logoutPurchases } from '../services/iapService';
+import { fetchPlanLimits, getEffectivePlanTier } from '../services/subscriptionService';
+import { initPurchases, logoutPurchases, getStoreEntitlement, syncPurchasesWithStore } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import { scannerService } from '../services/scanner';
 import { clearOfflineCache } from '../services/offlineService';
@@ -33,6 +33,45 @@ const AuthContext = createContext<AuthContextType>({
   markSubscribed: () => {},
 });
 
+// Déblocage optimiste : on pousse une expiration future : sans ça, un ancien
+// subscription_expires_at dans le passé (ré-abonné) ferait redémoter
+// getEffectivePlanTier() en 'free' aussitôt → déblocage annulé. La
+// réconciliation (refreshProfile, foreground + poll post-achat) écrasera avec la
+// vraie date. Fenêtre de 24h : si le webhook RC tarde ou échoue, l'utilisateur
+// qui a payé garde l'accès au lieu de retomber free en 1h.
+const optimisticTier = (tier: 'plus' | 'premium') => (prev: Profile | null): Profile | null =>
+  prev ? {
+    ...prev,
+    subscription_tier: tier,
+    subscription_status: 'active',
+    subscription_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  } : prev;
+
+// Filet de sécurité abonnement : la DB ne connaît que ce que le webhook RC lui a
+// dit. Un RENEWAL perdu = abonné qui paie mais retombe 'free' à la date
+// d'expiration initiale — pile un mois après l'achat. RevenueCat, lui, a l'état
+// réel du reçu Apple : s'il annonce un entitlement actif alors que le profil est
+// expiré, on rouvre l'accès localement (fenêtre 24h, comme après un achat) et on
+// renvoie le reçu à RC pour qu'il rejoue l'event manquant côté serveur.
+const reconcileWithStore = (
+  dbProfile: Profile,
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>,
+) => {
+  if (getEffectivePlanTier(dbProfile) !== 'free') return;
+  getStoreEntitlement().then(store => {
+    if (!store) return;
+    const stillValid = !store.expiresAt || new Date(store.expiresAt).getTime() > Date.now();
+    if (!stillValid) return;
+    Sentry.captureMessage('Subscription desync: store active, DB expired', {
+      level: 'warning',
+      tags: { flow: 'iap_reconcile', tier: store.tier },
+      extra: { dbExpiry: dbProfile.subscription_expires_at, storeExpiry: store.expiresAt },
+    });
+    setProfile(optimisticTier(store.tier));
+    syncPurchasesWithStore();
+  }).catch(() => {});
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -46,6 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const data = await fetchProfile(userId);
     if (data) {
       setProfile(data);
+      reconcileWithStore(data, setProfile);
     } else {
       setProfileError(true);
     }
@@ -167,19 +207,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Déblocage optimiste post-achat : RevenueCat a confirmé l'entitlement, on
   // débloque l'UI tout de suite (le webhook → DB suit en quelques secondes).
   const markSubscribed = useCallback((tier: 'plus' | 'premium') => {
-    // On pousse aussi une expiration future : sans ça, un ancien
-    // subscription_expires_at dans le passé (ré-abonné) ferait redémoter
-    // getEffectivePlanTier() en 'free' aussitôt → déblocage optimiste annulé.
-    // La réconciliation (refreshProfile, foreground + poll post-achat) écrasera
-    // avec la vraie date. Fenêtre de 24h : si le webhook RC tarde ou échoue,
-    // l'utilisateur qui a payé garde l'accès au lieu de retomber free en 1h.
-    const optimisticExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    setProfile(prev => prev ? {
-      ...prev,
-      subscription_tier: tier,
-      subscription_status: 'active',
-      subscription_expires_at: optimisticExpiry,
-    } : prev);
+    setProfile(optimisticTier(tier));
   }, []);
 
   // Mémoïsé : sans ça l'objet value est recréé à chaque render du provider →

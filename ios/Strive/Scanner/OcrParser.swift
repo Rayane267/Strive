@@ -94,15 +94,26 @@ final class OcrParser {
 
   private static let priceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
-  // Min 2 chiffres : un "5€" sec n'est jamais un tarif (pourboire, pack, note).
-  // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS.
+  // Deux chiffres ou plus, OU un chiffre seul de 6 à 9 : une course à 9 € existe
+  // (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un pourboire
+  // suggéré, un pack ou une note. En dessous de 6, le plancher fareMin ne laisse
+  // de toute façon passer que 5 — c'est la seule valeur qu'on refuse ici.
+  // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS/Kotlin.
   private static let priceWholeRegex = try! NSRegularExpression(
-    pattern: #"(\d{2,6})\s*€"#)
+    pattern: #"(\d{2,6}|[6-9])\s*€"#)
   // Retire la note de l'app ("★ 5,00", "* 5,00") avant de chercher un tarif.
   private static let ratingRegex = try! NSRegularExpression(
     pattern: #"[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}"#)
   private static let distanceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#, options: .caseInsensitive)
+  // Contexte véhicule électrique. Uber affiche sur certaines offres une info de
+  // recharge ou d'autonomie ("35 min", "250 km") étrangère à la course : sans ce
+  // filtre elle devient la durée ou la distance, et le €/h comme le €/km sont
+  // faux en silence. Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration.
+  // ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup.
+  private static let evContextRegex = try! NSRegularExpression(
+    pattern: #"(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)"#,
+    options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
   private static let durationHourRegex = try! NSRegularExpression(
@@ -380,11 +391,19 @@ final class OcrParser {
 
   // MARK: - Distance extraction
 
+  /// Vrai si le bloc parle de véhicule électrique (recharge / autonomie).
+  private static func matchesEvContext(_ text: String) -> Bool {
+    let ns = text as NSString
+    return evContextRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) != nil
+  }
+
   private func extractDistance(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?) -> Double? {
     struct Cand { let value: Double; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
     for block in blocks {
+      // Autonomie annoncée en km → ce n'est pas la distance de la course.
+      if Self.matchesEvContext(block.text) { continue }
       let normalized = normalizeOcrDigits(block.text)
       let nsNorm = normalized as NSString
       guard let m = Self.distanceRegex.firstMatch(
@@ -499,6 +518,8 @@ final class OcrParser {
     var candidates: [Cand] = []
 
     for block in blocks {
+      // Bloc d'info véhicule électrique → ces minutes ne sont pas la course.
+      if Self.matchesEvContext(block.text) { continue }
       let lower = block.text.lowercased()
       let hasKm = matches(lower, pattern: "km", caseInsensitive: false)
       let hasMin = matches(lower, pattern: "min", caseInsensitive: false)
@@ -790,6 +811,31 @@ final class OcrParser {
     let rate = fare / distanceKm
     if rate < rateMin || rate > rateMax { return false }
     return true
+  }
+
+  // MARK: - Diagnostic
+
+  /// Sérialise les blocs OCR (texte + bounding box) en JSON — miroir EXACT de
+  /// `OcrParser.dumpBlocks(visionText)` côté Kotlin, même schéma de clés
+  /// (`text`, `x`, `y`, `w`, `h`) pour que les captures Android et iOS
+  /// alimentent les mêmes fixtures et soient comparables entre plateformes.
+  ///
+  /// Consommé côté JS via `debugBlocks` dans `onScanResult`, puis `logScanDebug`.
+  /// Renvoie nil si la sérialisation échoue — le diagnostic ne doit JAMAIS
+  /// interrompre un scan.
+  static func dumpBlocks(_ blocks: [OcrTextBlock]) -> String? {
+    let arr: [[String: Any]] = blocks.map { block in
+      [
+        "text": block.text,
+        "x": block.box.left,
+        "y": block.box.top,
+        "w": block.box.width,
+        "h": block.box.height,
+      ]
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: arr),
+          let json = String(data: data, encoding: .utf8) else { return nil }
+    return json
   }
 
   // MARK: - Helpers

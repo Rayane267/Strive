@@ -48,7 +48,15 @@ const STEPS = (Platform.OS === 'ios'
       { key: 'preview',  icon: 'eye-outline',        color: A, titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
       { key: 'minimums', icon: 'tune-vertical',      color: A, titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
       { key: '2',        icon: 'download-circle',    color: A, titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
-      { key: '3',        icon: 'gesture-tap-button', color: A, titleKey: 'tutorial.step3_ios.title',     descKey: 'tutorial.step3_ios.desc',     tip: '' },
+      // Pas de sous-titre : la question « Comment voulez-vous lancer le
+      // raccourci ? » n'a plus lieu d'être depuis que le déclencheur est figé
+      // sur AssistiveTouch (cf. iosTrigger ci-dessous).
+      // Ni titre ni sous-titre : « Choisissez votre déclencheur » était faux
+      // depuis que le déclencheur est figé sur AssistiveTouch, et la vidéo plus
+      // les 4 étapes numérotées se suffisent. Ça rend en plus la hauteur qui
+      // manquait en bas, où le bouton « Ouvrir les Réglages » mordait sur
+      // l'étape « Ajouter Strive ».
+      { key: '3',        icon: 'gesture-tap-button', color: A, titleKey: '',                            descKey: '',                            tip: '' },
       { key: 'la_tip',   icon: 'cellphone-nfc',       color: A, titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
       { key: '4',        icon: 'chart-line',         color: A, titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
       { key: '5',        icon: 'rocket-launch',      color: A, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
@@ -63,16 +71,20 @@ const STEPS = (Platform.OS === 'ios'
     ]
 ) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
 
+// Le preset `casual` DOIT rester égal à FREE_THRESHOLDS : c'est le réglage
+// réellement appliqué aux comptes gratuits. Avant, le tuto proposait 20 €/h et
+// 0,80 €/km pendant que l'app jugeait à 25 / 1,20 — le chauffeur choisissait un
+// réglage sans effet, sous les valeurs réellement utilisées.
+const PRESETS = [
+  { key: 'casual', hourly: 25, km: 1.10 },
+  { key: 'standard', hourly: 32, km: 1.35 },
+  { key: 'premium', hourly: 42, km: 1.70 },
+];
+
 const PREVIEW_DATA = [
   { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
   { hourly: 38, fare: 7,  km: '3.50', duration: 9,  distance: '2.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
   { hourly: 15, fare: 22, km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
-];
-
-const PRESETS = [
-  { key: 'casual', hourly: 20, km: 0.80 },
-  { key: 'standard', hourly: 30, km: 1.0 },
-  { key: 'premium', hourly: 40, km: 1.50 },
 ];
 
 const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
@@ -119,7 +131,8 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
       // On laisse l'utilisateur RÉGLER les seuils dans le tuto (il découvre qu'on
       // peut personnaliser → désir de Plus), mais on ne les ENREGISTRE pas : en
       // free les seuils sont imposés (FREE_THRESHOLDS). La personnalisation réelle
-      // est un avantage Plus. Seul `include_pickup` (non gated) est persisté.
+      // est un avantage Plus.
+      // Seul `include_pickup` (non gated) est persisté.
       await supabase.from('preferences').upsert({
         id: user.id,
         include_pickup: includePickup,
@@ -163,25 +176,27 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     setShortcutInstalled(true);
   };
 
-  // Le CTA primaire du Choose Trigger change selon la tab sélectionnée :
-  // - Back Tap / AssistiveTouch → Réglages → Accessibilité
+  // Le CTA primaire du Choose Trigger :
+  // - AssistiveTouch / Back Tap → Réglages (fiche de l'app)
   // - Écran d'accueil → app Raccourcis (pour épingler le raccourci)
+  //
+  // `App-prefs:` ouvrait autrefois directement Réglages → Accessibilité, mais
+  // c'est un schéma d'URL privé : sans effet sur les iOS récents, et motif de
+  // rejet en revue (règle 2.5.1). `openSettings()` est la seule API publique —
+  // elle ouvre la fiche Réglages de Strive, les étapes numérotées de la slide
+  // donnent le chemin à partir de là. Le libellé promet donc « les Réglages »
+  // et pas « les réglages d'accessibilité », qu'on ne sait pas atteindre.
   const triggerPrimaryAction = () => {
     if (iosTrigger === 'homeScreen') {
       Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
       return;
     }
-    const path = iosTrigger === 'backTap'
-      ? 'App-prefs:ACCESSIBILITY&path=TOUCH/BackTap'
-      : 'App-prefs:ACCESSIBILITY&path=ASSISTIVE_TOUCH';
-    Linking.openURL(path)
-      .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY'))
-      .catch(() => Linking.openSettings());
+    Linking.openSettings();
   };
   const triggerPrimaryLabel = () =>
     iosTrigger === 'homeScreen'
       ? t('tutorial.openShortcuts', 'Ouvrir Raccourcis')
-      : t('tutorial.iosTrigger.cta');
+      : t('tutorial.iosTrigger.ctaSettings', 'Ouvrir les Réglages');
 
   const restartVideo = () => {
     hapticLight();
@@ -204,6 +219,11 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     // Slide déclencheur : la vidéo AssistiveTouch EST le visuel — pas d'icône en
     // plus, sinon le contenu dépasse la hauteur d'écran (page rognée).
     const showCompactIcon = hasCustomBlock && !isDone && !isIosTrigger;
+    // Slides sans visuel d'en-tête du tout. `showCompactIcon` seul ne suffisait
+    // pas : à false, le ternaire retombait sur la branche par défaut et rendait
+    // l'icône 96 px + le badge « STEP » (~174 px), soit précisément le
+    // dépassement que le commentaire ci-dessus dit vouloir éviter.
+    const hideHeaderVisual = isDone || isIosTrigger;
 
     return (
       <View style={styles.slide}>
@@ -220,7 +240,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             >
               <MaterialCommunityIcons name={item.icon as any} size={26} color={item.color} />
             </SafeGradient>
-          ) : isDone ? null : (
+          ) : hideHeaderVisual ? null : (
             <>
               <View style={styles.iconContainer}>
                 {item.key === '1' ? (
@@ -249,8 +269,18 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             </>
           )}
 
-          <Text style={[styles.stepTitle, hasCustomBlock && styles.stepTitleCompact]}>{t(item.titleKey)}</Text>
-          <Text style={[styles.stepDesc, hasCustomBlock && styles.stepDescCompact]}>{t(item.descKey)}</Text>
+          {/* titleKey vide = slide sans titre (déclencheur AssistiveTouch) : on ne
+              rend pas un Text vide, qui laisserait sa marge basse. Même logique
+              que descKey ci-dessous. */}
+          {item.titleKey ? (
+            <Text style={[styles.stepTitle, hasCustomBlock && styles.stepTitleCompact]}>{t(item.titleKey)}</Text>
+          ) : null}
+          {/* descKey vide = slide sans sous-titre (ex. Choisir le déclencheur,
+              où la vidéo et les étapes numérotées se suffisent) : on ne rend pas
+              un Text vide, qui laisserait sa marge basse. */}
+          {item.descKey ? (
+            <Text style={[styles.stepDesc, hasCustomBlock && styles.stepDescCompact]}>{t(item.descKey)}</Text>
+          ) : null}
 
           {/* Interactive tip card — masquée sur les slides iOS custom (déjà denses) */}
           {tipText && !hasCustomBlock ? (
@@ -441,33 +471,25 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             </Animated.View>
           ) : null}
 
+          {/* Dernière slide = antisèche du premier scan, pas une célébration.
+              La coche verte, la puce « tout est prêt » et l'intertitre
+              « COMMENT ÇA MARCHE » ont été retirés : ils répétaient le titre
+              (« tout est prêt » y figurait trois fois) et repoussaient hors
+              écran la seule chose utile ici — les trois gestes. */}
           {isDone ? (
             <Animated.View style={[styles.doneBlock, { opacity }]}>
-              <View style={styles.doneCheckOuter}>
-                <View style={styles.doneCheckInner}>
-                  <Feather name="check" size={40} color={colors.background} />
-                </View>
-              </View>
-
-              <View style={styles.doneReadyChip}>
-                <MaterialCommunityIcons name="rocket-launch" size={13} color={colors.primary} />
-                <Text style={styles.doneReadyChipTxt}>{t('tutorial.doneReady', 'Tout est prêt — bonne route !')}</Text>
-              </View>
-
               <View style={styles.qrCard}>
-                <View style={styles.qrHeader}>
-                  <View style={styles.qrHeaderLine} />
-                  <Text style={styles.qrCardTitle}>{t('tutorial.quickRef.subtitle')}</Text>
-                  <View style={styles.qrHeaderLine} />
-                </View>
                 {(Platform.OS === 'android' ? [
-                  { icon: 'line-scan', color: '#4FC3F7', labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
-                  { icon: 'gesture-tap', color: colors.primary, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
-                  { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
+                  // La couleur porte le sens : les deux gestes restent neutres,
+                  // seul le verdict prend le vert brand — l'oeil tombe sur la
+                  // recompense. Conforme a la regle de palette en tete de fichier.
+                  { icon: 'line-scan', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
+                  { icon: 'gesture-tap', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
+                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
                 ] : [
-                  { icon: 'cellphone-screenshot', color: '#4FC3F7', labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
-                  { icon: 'gesture-tap-hold', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
-                  { icon: 'check-decagram', color: '#FF8A65', labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
+                  { icon: 'cellphone-screenshot', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
+                  { icon: 'gesture-tap-hold', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
+                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
                 ]).map((step, i, arr) => (
                   <View key={i} style={styles.qrStepRow}>
                     <View style={styles.qrRail}>
@@ -819,7 +841,7 @@ const styles = StyleSheet.create({
   },
   iosTriggerBlock: {
     width: '100%',
-    marginTop: 18,
+    marginTop: 10,
     alignItems: 'stretch',
   },
   iosPreviewBlock: {
@@ -1107,50 +1129,47 @@ const styles = StyleSheet.create({
   // Minimums presets
   presetRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 10,
   },
   presetCard: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    gap: 4,
+    borderColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center',
   },
   presetCardActive: {
-    borderColor: colors.primary + '80',
-    backgroundColor: colors.primary + '0A',
+    backgroundColor: colors.primary + '1A',
+    borderColor: colors.primary + '66',
   },
   presetName: {
     color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   presetNameActive: { color: colors.primary },
   presetValue: {
     color: colors.textMain,
-    fontSize: 22,
+    fontSize: 15,
     fontWeight: '900',
   },
   presetValueActive: { color: colors.primary },
   presetSub: {
     color: colors.textDimmed,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
+    marginTop: 2,
   },
   presetSubActive: { color: colors.primary + 'AA' },
-
   presetHint: {
     color: colors.textDimmed,
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
-    marginBottom: 18,
-    fontStyle: 'italic',
+    marginBottom: 16,
   },
 
   // Sliders
@@ -1205,7 +1224,6 @@ const styles = StyleSheet.create({
   // Trigger content
   iosTriggerContent: {
     alignItems: 'center',
-    minHeight: 240,
   },
   triggerRecommended: {
     color: '#FFB300',
@@ -1218,7 +1236,11 @@ const styles = StyleSheet.create({
   // Démo AssistiveTouch — cadre "téléphone" portrait autour de la vidéo.
   // Compact (124 pt) pour que vidéo + 4 étapes + CTA tiennent sans rognage.
   videoPhoneFrame: {
-    width: 124,
+    // Hauteur proportionnelle à l'écran (largeur déduite par l'aspectRatio) :
+    // en dur à 124 × 248, la vidéo + les 4 étapes + le CTA dépassaient la slide
+    // sur les petits écrans et le bouton sortait du cadre. Plafonné pour ne pas
+    // devenir énorme sur les grands modèles.
+    height: Math.min(226, height * 0.26),
     aspectRatio: 9 / 18,
     borderRadius: 22,
     overflow: 'hidden',
@@ -1258,12 +1280,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   triggerStepsList: {
     width: '100%',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   triggerStepRow: {
     flexDirection: 'row',
@@ -1298,56 +1320,10 @@ const styles = StyleSheet.create({
   },
 
   // Done step
-  doneCheckWrap: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
   doneBlock: {
     width: width - 48,
     alignItems: 'center',
     marginTop: 8,
-  },
-  doneCheckOuter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,230,118,0.06)',
-    borderWidth: 2,
-    borderColor: 'rgba(0,230,118,0.15)',
-    marginBottom: 20,
-  },
-  doneReadyChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,230,118,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.25)',
-    marginBottom: 28,
-  },
-  doneReadyChipTxt: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  doneCheckInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 28,
-    elevation: 12,
   },
   doneSubtitle: {
     color: colors.textDimmed,
@@ -1411,27 +1387,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 22,
+    // Respire un peu plus depuis la suppression de l'intertitre.
+    paddingVertical: 26,
     paddingHorizontal: 20,
-  },
-  qrHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 18,
-  },
-  qrHeaderLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  qrCardTitle: {
-    color: colors.textDimmed,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    textAlign: 'center',
   },
   qrStepRow: {
     flexDirection: 'row',
@@ -1474,14 +1432,16 @@ const styles = StyleSheet.create({
   },
   qrLabel: {
     color: colors.textMain,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
   },
   qrSub: {
-    color: colors.textDimmed,
-    fontSize: 12,
+    // textMuted plutot que textDimmed : cette antiseche se lit d'un coup d'oeil,
+    // souvent au volant. On prend le contraste le plus haut des deux gris.
+    color: colors.textMuted,
+    fontSize: 13,
     fontWeight: '500',
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
   footer: {

@@ -21,8 +21,13 @@ const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
  * Seuils de rentabilité imposés au tier free (non personnalisables).
  * La personnalisation des seuils est un avantage Plus → on force ces valeurs
  * basiques pour les comptes free, où qu'ils soient lus.
+ *
+ * ⚠️ DOIT rester égal au preset `casual` de TutorialScreen (« Débutant ») :
+ * c'est le réglage que le compte gratuit subit, et le tuto le lui présente.
+ * Les deux avaient divergé (tuto 20 / 0,80 vs appliqué 25 / 1,20), donc le
+ * chauffeur voyait des verdicts sans rapport avec ce qu'il avait choisi.
  */
-export const FREE_THRESHOLDS = { hourly: 25, km: 1.2 } as const;
+export const FREE_THRESHOLDS = { hourly: 25, km: 1.10 } as const;
 
 // Cache mémoire des limites fetched depuis la DB. Préchauffé au démarrage
 // via `fetchPlanLimits()` ; getPlanLimits() lit ce cache en priorité.
@@ -77,19 +82,38 @@ export function getPlanTier(tier?: string | null): PlanTier {
 }
 
 /**
+ * Période de grâce Apple/Google : quand un paiement échoue, le store ne coupe
+ * pas, il réessaie — jusqu'à 16 jours côté Apple. L'abonné garde son accès
+ * pendant ce temps. Le plafond sert de garde-fou : si l'event EXPIRATION se
+ * perdait, l'accès ne resterait pas ouvert indéfiniment.
+ * À garder en phase avec enforce_scan_quota (20260727_billing_grace_period.sql).
+ */
+export const GRACE_PERIOD_DAYS = 16;
+
+/**
  * Comme getPlanTier mais retourne 'free' si l'abonnement est expiré.
  * Garde-fou côté client si le webhook RC a raté l'event EXPIRATION.
+ *
+ * Exception : `in_grace_period`. La RPC conserve déjà le tier sur BILLING_ISSUE,
+ * mais sans cette lecture du statut on dégradait quand même l'utilisateur dès
+ * que la date passait — c'est-à-dire pendant qu'Apple réessaie encore sa carte.
  */
 export function getEffectivePlanTier(profile?: {
   subscription_tier?: string | null;
   subscription_expires_at?: string | null;
+  subscription_status?: string | null;
 } | null): PlanTier {
   if (!profile) return 'free';
   const tier = getPlanTier(profile.subscription_tier);
   if (tier === 'free') return 'free';
   if (profile.subscription_expires_at) {
     const exp = new Date(profile.subscription_expires_at).getTime();
-    if (!Number.isNaN(exp) && exp < Date.now()) return 'free';
+    if (!Number.isNaN(exp) && exp < Date.now()) {
+      const graceEnd = exp + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+      const inGrace = profile.subscription_status === 'in_grace_period'
+        && Date.now() < graceEnd;
+      if (!inGrace) return 'free';
+    }
   }
   return tier;
 }

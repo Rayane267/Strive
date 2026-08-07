@@ -181,8 +181,20 @@ const SubscriptionScreen = () => {
       return;
     } catch (e: any) {
       if (e?.message === 'CANCELLED') return;
+      // Cas « ré-abonnement » : le store refuse un nouvel achat parce que l'accès
+      // existe déjà côté Apple. Message actionnable (Restaurer) plutôt qu'un
+      // « impossible de finaliser » qui laisse le user bloqué.
+      if (e?.message === 'PENDING') {
+        showToast({ type: 'info', title: t('subscription.pendingTitle'), message: t('subscription.pendingMsg') });
+        return;
+      }
       hapticError();
-      showToast({ type: 'error', title: t('subscription.errorTitle'), message: t('subscription.errorMsg') });
+      const message =
+        e?.message === 'ALREADY_OWNED' ? t('subscription.alreadyOwnedMsg')
+        : e?.message === 'RECEIPT_IN_USE' ? t('subscription.receiptInUseMsg')
+        : e?.message === 'STORE_PROBLEM' ? t('subscription.storeProblemMsg')
+        : t('subscription.errorMsg');
+      showToast({ type: 'error', title: t('subscription.errorTitle'), message });
     } finally {
       setPurchasing(false);
     }

@@ -35,9 +35,16 @@ const FARE_MAX = 200;
 const DIST_MIN = 0.3;
 const DIST_MAX = 500;
 
+// Aligné sur les sessions natives (GeminiVisionService.swift, timeoutIntervalForResource).
+// Sans AbortController, `fetch` s'en remet au défaut de la plateforme — plus
+// d'une minute sur iOS — et laisse le Dashboard en attente d'un scan mort.
+const GEMINI_TIMEOUT_MS = 12_000;
+
 export async function extractWithGemini(base64Image: string): Promise<ScanResult | null> {
   if (!base64Image || !PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_KEY) return null;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   try {
     const body = {
       contents: [{
@@ -55,6 +62,7 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
     const token = sessionData.session?.access_token ?? PUBLIC_SUPABASE_KEY;
     const res = await fetch(`${PUBLIC_SUPABASE_URL}/functions/v1/gemini-proxy`, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
@@ -92,10 +100,17 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
 
     const durationMin =
       Number.isFinite(Number(data.durationMin)) ? Number(data.durationMin) : null;
-    const pickupDurationMin =
+    // Approche : bornes de OcrParser.extractPickupInfo (1–60 min, 0,1–30 km,
+    // toujours plus courte que la course). Tout ou rien — une valeur seule
+    // fausserait le total quand includePickup est ON. Aligné Swift/Kotlin.
+    const rawPickupMin =
       Number.isFinite(Number(data.pickupDurationMin)) ? Number(data.pickupDurationMin) : undefined;
-    const pickupDistanceKm =
+    const rawPickupKm =
       Number.isFinite(Number(data.pickupDistanceKm)) ? Number(data.pickupDistanceKm) : undefined;
+    const pickupOk =
+      rawPickupMin != null && rawPickupMin >= 1 && rawPickupMin <= 60 &&
+      rawPickupKm != null && rawPickupKm >= 0.1 && rawPickupKm <= 30 &&
+      rawPickupKm < distanceKm;
 
     return {
       platform,
@@ -104,13 +119,15 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
       durationMin,
       pickupAddress: typeof data.pickupAddress === 'string' ? data.pickupAddress : undefined,
       destinationAddress: typeof data.destinationAddress === 'string' ? data.destinationAddress : undefined,
-      pickupDurationMin: pickupDurationMin != null && pickupDurationMin > 0 && pickupDurationMin <= 60
-        ? pickupDurationMin : undefined,
-      pickupDistanceKm: pickupDistanceKm != null && pickupDistanceKm >= 0.1 && pickupDistanceKm <= 30
-        ? pickupDistanceKm : undefined,
+      pickupDurationMin: pickupOk ? rawPickupMin : undefined,
+      pickupDistanceKm: pickupOk ? rawPickupKm : undefined,
     };
   } catch (e) {
+    // Couvre aussi l'AbortError du timeout ci-dessus : le Dashboard traite
+    // `null` comme « fallback indisponible » et conserve le résultat natif.
     __DEV__ && console.warn('[Scanner:Gemini] parse error', e);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

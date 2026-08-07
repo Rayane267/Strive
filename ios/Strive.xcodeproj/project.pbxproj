@@ -40,6 +40,8 @@
 		EE00010000000000000000A3 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE00010000000000000000A1 /* LiveActivityManager.swift */; };
 		FE89B5BD3B09A90CC7E2F5B4 /* Pods_StriveShareExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2570F217FC1E29C4A871C5B8 /* Pods_StriveShareExtension.framework */; };
 		FF00010000000000000000A1 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF00010000000000000000A2 /* ActivityKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		BB00120000000000000000A1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB00110000000000000000A1 /* PrivacyInfo.xcprivacy */; };
+		BB00130000000000000000A1 /* GeminiVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00040000000000000000A1 /* GeminiVisionService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +113,7 @@
 		EE00010000000000000000A1 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		EE00020000000000000000A1 /* StriveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StriveActivityAttributes.swift; sourceTree = "<group>"; };
 		FF00010000000000000000A2 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		BB00110000000000000000A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -124,7 +127,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		694825BE2FC33BF500CC8F7E /* StriveWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (694825CF2FC33BF700CC8F7E /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = StriveWidget; sourceTree = "<group>"; };
+		694825BE2FC33BF500CC8F7E /* StriveWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				694825CF2FC33BF700CC8F7E /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = StriveWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -255,6 +269,7 @@
 			children = (
 				BB00010000000000000000A1 /* ShareViewController.swift */,
 				BB00020000000000000000A1 /* Info.plist */,
+				BB00110000000000000000A1 /* PrivacyInfo.xcprivacy */,
 			);
 			path = StriveShareExtension;
 			sourceTree = "<group>";
@@ -424,6 +439,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB00120000000000000000A1 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -590,6 +606,7 @@
 				DD00040000000000000000A3 /* TomTomService.swift in Sources */,
 				DD00050000000000000000A3 /* GeocodeCache.swift in Sources */,
 				EE00010000000000000000A3 /* LiveActivityManager.swift in Sources */,
+				BB00130000000000000000A1 /* GeminiVisionService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

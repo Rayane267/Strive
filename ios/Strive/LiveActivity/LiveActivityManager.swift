@@ -20,8 +20,24 @@ final class LiveActivityManager {
 
   private static let appGroupId = "group.com.striveapp.app"
 
+  /// Résout la langue UI (fr/en) : préférence poussée par l'app via l'App Group
+  /// (`appLanguage`), sinon locale système. Même logique que la Share Extension
+  /// et l'AppIntent — le texte des alertes s'affichait jusqu'ici en français
+  /// quelle que soit la langue de l'utilisateur.
+  private func localizedString(fr: String, en: String) -> String {
+    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
+    let lang = appLang ?? Locale.current.languageCode ?? "en"
+    return lang.hasPrefix("fr") ? fr : en
+  }
+
+  /// `NSLog` est conservé en toutes configurations (diagnostic via Console.app,
+  /// sans I/O disque). La trace persistée dans l'App Group, elle, est réservée
+  /// au DEBUG : en production elle faisait une lecture + deux écritures dans un
+  /// conteneur partagé entre trois process, à CHAQUE appel — sur le chemin chaud
+  /// du scan — et laissait des données de diagnostic sur l'appareil sans finalité.
   private func log(_ msg: String) {
     NSLog("[Strive:LA] %@", msg)
+    #if DEBUG
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
     var trace = defaults.string(forKey: "laSteps") ?? ""
     let fmt = DateFormatter()
@@ -30,6 +46,7 @@ final class LiveActivityManager {
     if trace.count > 2000 { trace = String(trace.suffix(2000)) }
     defaults.set(trace, forKey: "laSteps")
     defaults.set(msg, forKey: "laLastStep")
+    #endif
   }
 
   @discardableResult
@@ -119,6 +136,12 @@ final class LiveActivityManager {
     }
   }
 
+  /// - Returns: `false` quand rien n'a pu être affiché — typiquement un appel
+  ///   depuis l'AppIntent alors qu'aucune activité ne tourne : `Activity.request()`
+  ///   exige que l'app soit au premier plan (hors push-to-start), et le raccourci
+  ///   s'exécute en arrière-plan. L'appelant DOIT alors se rabattre sur une
+  ///   notification, sinon le scan aboutit sans que rien ne s'affiche.
+  @discardableResult
   func update(
     platform: String,
     fare: Double,
@@ -128,7 +151,7 @@ final class LiveActivityManager {
     durationMin: Int,
     verdictLevel: Int,
     scanTs: Double = 0
-  ) {
+  ) -> Bool {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
     if current == nil {
       current = Activity<StriveActivityAttributes>.activities.first
@@ -159,11 +182,11 @@ final class LiveActivityManager {
         let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20))
         Task { await newActivity.update(content, alertConfiguration: alert) }
         autoDismiss?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
+        let work = DispatchWorkItem { [weak self] in self?.showRecap() }
         autoDismiss = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
       }
-      return
+      return started
     }
     let prev = activity.content.state
     let state = StriveActivityAttributes.State(
@@ -192,6 +215,42 @@ final class LiveActivityManager {
     )
     Task { await activity.update(content, alertConfiguration: alert) }
     log("updated \(activity.id), dismiss in 20s")
+
+    autoDismiss?.cancel()
+    let work = DispatchWorkItem { [weak self] in self?.showRecap() }
+    autoDismiss = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+    return true
+  }
+
+  /// Étape intermédiaire entre la carte résultat et le dashboard de session :
+  /// pendant 20 s on ne garde que le prix de la course et le €/km, pour laisser
+  /// le temps de les relire une fois la carte complète disparue. Sans montant à
+  /// rappeler (erreur, état vide), on saute directement à l'idle.
+  func showRecap() {
+    if current == nil {
+      current = Activity<StriveActivityAttributes>.activities.first
+    }
+    guard let activity = current else { return }
+    let prev = activity.content.state
+    guard prev.fare > 0 else { backToIdle(); return }
+    log("showRecap fare=\(prev.fare) km=\(prev.kmRate)")
+
+    let recap = StriveActivityAttributes.State(
+      platform: "RECAP",
+      fare: prev.fare,
+      hourlyRate: prev.hourlyRate,
+      kmRate: prev.kmRate,
+      distanceKm: 0, durationMin: 0,
+      verdictLevel: prev.verdictLevel,
+      todayEarnings: prev.todayEarnings,
+      todayHourlyRate: prev.todayHourlyRate,
+      todayKm: prev.todayKm,
+      onlineMinutes: prev.onlineMinutes,
+      sessionStartEpoch: prev.sessionStartEpoch
+    )
+    let content = ActivityContent(state: recap, staleDate: Date().addingTimeInterval(20))
+    Task { await activity.update(content) }
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
@@ -223,13 +282,16 @@ final class LiveActivityManager {
     Task { await activity.update(content) }
   }
 
-  func showError() {
+  /// - Returns: `false` si aucune activité n'est en cours — l'erreur n'a donc été
+  ///   montrée nulle part et l'appelant doit notifier à la place.
+  @discardableResult
+  func showError() -> Bool {
     if current == nil {
       current = Activity<StriveActivityAttributes>.activities.first
     }
     guard let activity = current else {
       log("showError() — no activity, skip")
-      return
+      return false
     }
     log("showError() on \(activity.id)")
     let prev = activity.content.state
@@ -244,13 +306,21 @@ final class LiveActivityManager {
       sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: errorState, staleDate: Date().addingTimeInterval(7))
-    let alert = AlertConfiguration(title: "Strive", body: "Analyse impossible — réessayez.", sound: .default)
+    let alert = AlertConfiguration(
+      title: "Strive",
+      body: LocalizedStringResource(stringLiteral: localizedString(
+        fr: "Analyse impossible — réessayez.",
+        en: "Analysis failed — please try again."
+      )),
+      sound: .default
+    )
     Task { await activity.update(content, alertConfiguration: alert) }
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
     autoDismiss = work
     DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+    return true
   }
 
   func updateSessionKPI(

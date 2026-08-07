@@ -24,6 +24,11 @@ const WEBHOOK_AUTH = Deno.env.get('REVENUECAT_WEBHOOK_AUTH') ?? '';
 // gratuits → sinon premium réel offert). Mettre REVENUECAT_ALLOW_SANDBOX=true
 // sur un projet Supabase de test pour les accepter.
 const ALLOW_SANDBOX = Deno.env.get('REVENUECAT_ALLOW_SANDBOX') === 'true';
+// Clé secrète REST RevenueCat (v1). Optionnelle : elle sert uniquement aux
+// events qui ne portent pas assez d'information pour décider seuls — aujourd'hui
+// TRANSFER, qui n'a ni product_id ni expiration. Sans elle, le nouveau porteur
+// est servi au prochain RENEWAL au lieu de l'être immédiatement.
+const RC_SECRET_KEY = Deno.env.get('REVENUECAT_SECRET_API_KEY') ?? '';
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -40,6 +45,10 @@ interface RevenueCatEvent {
   environment?: 'SANDBOX' | 'PRODUCTION';
   store?: string;
   cancel_reason?: string;
+  // TRANSFER uniquement : l'event ne porte pas d'app_user_id, mais les listes des
+  // comptes concernés.
+  transferred_from?: string[];
+  transferred_to?: string[];
 }
 
 interface RevenueCatPayload {
@@ -59,12 +68,108 @@ function statusForEvent(eventType: string, _cancelReason?: string): string | nul
       return 'cancelled';
     case 'EXPIRATION':
       return 'expired';
+    // Remboursement : la transaction est annulée, l'accès est coupé tout de
+    // suite (la RPC ramène aussi subscription_expires_at à now()). À ne pas
+    // confondre avec CANCELLATION, où la période déjà payée reste due.
+    case 'REFUND':
+      return 'refunded';
     case 'BILLING_ISSUE':
       return 'in_grace_period';
     case 'SUBSCRIPTION_PAUSED':
       return 'paused';
     default:
       return null;
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * TRANSFER : un même reçu Apple passe d'un App User ID à un autre (restauration
+ * depuis un second compte, ou achat hors de l'app rattaché à l'ouverture).
+ *
+ * L'event ne porte ni product_id ni expiration, donc en deux temps :
+ *  1. Révoquer les `transferred_from` — sinon deux comptes gardent l'accès pour
+ *     un seul paiement, l'ancien jusqu'à sa date d'expiration.
+ *  2. Accorder aux `transferred_to` en interrogeant l'API RevenueCat pour
+ *     connaître le produit et l'expiration réels. Sans clé API configurée, on
+ *     saute cette étape : le compte sera servi au prochain RENEWAL, ou par la
+ *     réconciliation client au prochain lancement de l'app.
+ */
+async function handleTransfer(event: RevenueCatEvent) {
+  const from = (event.transferred_from ?? []).filter(id => UUID_RE.test(id));
+  const to = (event.transferred_to ?? []).filter(id => UUID_RE.test(id));
+  console.info(`TRANSFER from=${JSON.stringify(event.transferred_from)} to=${JSON.stringify(event.transferred_to)}`);
+
+  let revoked = 0;
+  if (from.length > 0) {
+    const { data, error } = await supabase.rpc('revoke_transferred_subscription', {
+      p_user_ids: from,
+      p_event_id: event.id ?? null,
+    });
+    if (error) console.error('revoke_transferred_subscription failed', error);
+    else revoked = data ?? 0;
+  }
+
+  let granted = 0;
+  for (const userId of to) {
+    if (await grantFromRevenueCat(userId, event.id ?? null)) granted++;
+  }
+  return { transfer: { revoked, granted, skipped: to.length - granted } };
+}
+
+/**
+ * Lit l'état réel de l'abonné chez RevenueCat (source de vérité) et l'applique.
+ * Utilisé quand l'event lui-même ne porte pas assez d'information — cas TRANSFER.
+ */
+async function grantFromRevenueCat(userId: string, eventId: string | null): Promise<boolean> {
+  if (!RC_SECRET_KEY) {
+    console.warn(`TRANSFER to ${userId}: REVENUECAT_SECRET_API_KEY absente, octroi différé au prochain RENEWAL`);
+    return false;
+  }
+  try {
+    const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${RC_SECRET_KEY}` },
+    });
+    if (!res.ok) {
+      console.error(`RC subscribers ${userId} → HTTP ${res.status}`);
+      return false;
+    }
+    const body = await res.json();
+    const entitlements = body?.subscriber?.entitlements ?? {};
+    // On prend l'entitlement actif dont l'expiration est la plus lointaine.
+    let best: { productId: string; expires: string } | null = null;
+    for (const ent of Object.values<any>(entitlements)) {
+      const expires = ent?.expires_date;
+      const productId = ent?.product_identifier;
+      if (!expires || !productId) continue;
+      if (new Date(expires).getTime() <= Date.now()) continue;
+      if (!best || new Date(expires) > new Date(best.expires)) {
+        best = { productId, expires };
+      }
+    }
+    if (!best) {
+      console.info(`TRANSFER to ${userId}: aucun entitlement actif chez RC`);
+      return false;
+    }
+    const { error } = await supabase.rpc('apply_revenuecat_event', {
+      p_user_id: userId,
+      p_event_type: 'INITIAL_PURCHASE',
+      p_product_id: best.productId,
+      p_expires_at: new Date(best.expires).toISOString(),
+      p_status: 'active',
+      // event_id dérivé : un TRANSFER peut viser plusieurs comptes, et la table
+      // d'idempotence a l'event_id en clé primaire.
+      p_event_id: eventId ? `transfer-grant-${eventId}-${userId}` : null,
+    });
+    if (error) {
+      console.error('apply_revenuecat_event (transfer grant) failed', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`grantFromRevenueCat(${userId}) threw`, e);
+    return false;
   }
 }
 
@@ -88,8 +193,28 @@ serve(async (req: Request) => {
   }
 
   const event = payload.event;
-  if (!event || !event.type || !event.app_user_id || !event.product_id) {
+  if (!event || !event.type) {
     return new Response('Missing event fields', { status: 400 });
+  }
+
+  // Events ignorés — testé AVANT la validation des champs : TRANSFER ne porte ni
+  // app_user_id ni product_id (il expose transferred_from / transferred_to), donc
+  // le garde ci-dessous le rejetait en 400 sans jamais atteindre cette liste. RC
+  // retentait alors en backoff jusqu'à abandon (6 échecs observés le 26/07).
+  if (event.type === 'TRANSFER') {
+    const result = await handleTransfer(event);
+    return new Response(JSON.stringify({ ok: true, ...result }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const ignored = new Set(['TEST', 'INVOICE_ISSUANCE', 'SUBSCRIBER_ALIAS']);
+  if (ignored.has(event.type)) {
+    return new Response(JSON.stringify({ ok: true, ignored: event.type }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // Events SANDBOX : jamais appliqués en prod (un achat sandbox est gratuit —
@@ -101,13 +226,10 @@ serve(async (req: Request) => {
     });
   }
 
-  // Events ignorés (transferts entre comptes, tests sandbox côté RC, etc.)
-  const ignored = new Set(['TRANSFER', 'TEST', 'INVOICE_ISSUANCE']);
-  if (ignored.has(event.type)) {
-    return new Response(JSON.stringify({ ok: true, ignored: event.type }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  // Champs requis par la RPC — après la liste d'ignorés, qui contient les events
+  // légitimement dépourvus d'app_user_id / product_id.
+  if (!event.app_user_id || !event.product_id) {
+    return new Response('Missing event fields', { status: 400 });
   }
 
   // app_user_id doit être l'UUID Supabase. Si l'app n'a pas appelé

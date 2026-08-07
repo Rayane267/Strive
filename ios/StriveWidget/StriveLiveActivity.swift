@@ -18,7 +18,12 @@ struct StriveLiveActivity: Widget {
 
     } dynamicIsland: { context in
       let isScanning = context.state.platform == "SCANNING"
-      let isIdle = context.state.platform == "IDLE"
+      // Rappel post-résultat : 20 s pendant lesquelles il ne reste que le prix
+      // de la course et le €/km, le temps de les relire. Compté comme idle par
+      // toutes les branches « résultat » — la carte complète a disparu — mais
+      // traité explicitement là où il doit s'afficher.
+      let isRecap = context.state.platform == "RECAP"
+      let isIdle = context.state.platform == "IDLE" || isRecap
       let isError = context.state.platform == "ERROR"
       // Teaser quota free : on réutilise le visuel résultat mais flouté + cadenas.
       let isLocked = context.state.platform == "LOCKED"
@@ -66,6 +71,11 @@ struct StriveLiveActivity: Widget {
             Text("Passe Plus pour voir")
               .font(.system(size: 14, weight: .bold))
               .foregroundColor(.white)
+          } else if isRecap {
+            HStack(spacing: 10) {
+              FarePill(fare: context.state.fare, level: context.state.verdictLevel)
+              KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
+            }
           } else if !isIdle {
             HStack(spacing: 10) {
               HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
@@ -109,6 +119,12 @@ struct StriveLiveActivity: Widget {
         } else if isLocked {
           Image(systemName: "lock.fill")
             .foregroundColor(lockGreen)
+        } else if isRecap {
+          Text(String(format: "%.0f€", context.state.fare))
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         } else if isIdle {
           EmptyView()
         } else {
@@ -128,17 +144,28 @@ struct StriveLiveActivity: Widget {
           Text("Plus")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(lockGreen)
+        } else if isRecap {
+          Text(String(format: "%.2f/km", context.state.kmRate))
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         } else if isIdle {
           EmptyView()
         } else {
           Text("€\(Int(context.state.hourlyRate))/h")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         }
       } minimal: {
         if isError {
           Image(systemName: "xmark.circle.fill")
             .foregroundColor(errorRed)
+        } else if isRecap {
+          Image(systemName: verdictIcon(context.state.verdictLevel))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
         } else if isIdle {
           EmptyView()
         } else if isScanning {
@@ -152,7 +179,7 @@ struct StriveLiveActivity: Widget {
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       }
-      .keylineTint(isError ? errorRed : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
+      .keylineTint(isError ? errorRed : isRecap ? verdictColor(context.state.verdictLevel) : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
     }
   }
 }
@@ -169,7 +196,11 @@ private struct LockScreenView: View {
     // Vraie course (UBER/BOLT/HEETCH/UNKNOWN…) — ni idle, ni scanning, ni erreur,
     // ni teaser. C'est le seul état où l'on veut la CARTE RÉSULTAT sur le lock
     // screen (crucial pour les iPhone sans Dynamic Island : voir la branche).
-    let isResult = !isScanning && !isError && !isLocked && state.platform != "IDLE"
+    // "RECAP" exclu : c'est l'état d'après-résultat (prix + €/km pendant 20 s,
+    // visible dans la Dynamic Island). Sur le lock screen la carte complète a
+    // disparu, on retombe donc sur le résumé de session comme pour l'idle.
+    let isResult = !isScanning && !isError && !isLocked
+      && state.platform != "IDLE" && state.platform != "RECAP"
 
     // Fond noir posé en .background (et NON en ZStack avec un Color.black, qui
     // est greedy → force la vue à remplir toute la hauteur proposée → bannière
@@ -313,6 +344,8 @@ private struct LockScreenView: View {
               Text(String(format: "%.0f€", state.todayEarnings))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
               Text("GAINS")
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
@@ -328,6 +361,8 @@ private struct LockScreenView: View {
               Text(String(format: "%.0f€", state.todayHourlyRate))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
               Text("/HEURE")
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
@@ -410,6 +445,8 @@ private struct HourlyRate: View {
       Text("€\(Int(value))")
         .font(.system(size: 19, weight: .heavy))
         .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
       Text("/h")
         .font(.system(size: 12, weight: .semibold))
         .foregroundColor(.white.opacity(0.55))
@@ -425,6 +462,8 @@ private struct FarePill: View {
     Text(String(format: "€%.0f", fare))
       .font(.system(size: 14, weight: .bold))
       .foregroundColor(.white)
+      .lineLimit(1)
+      .minimumScaleFactor(0.6)
       .padding(.horizontal, 12)
       .padding(.vertical, 5)
       .background(
@@ -448,6 +487,8 @@ private struct KmRateText: View {
       Text(String(format: "€%.2f/km", value))
         .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
     }
   }
 }

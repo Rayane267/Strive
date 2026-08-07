@@ -49,18 +49,23 @@ export async function enforceSignupQuota(): Promise<void> {
 }
 
 /**
- * Quota OAuth (Apple / Google) : max 5 créations de compte par device
- * par fenêtre rolling de 30 jours. Stocké dans le Keychain — persiste
+ * Quota OAuth (Apple / Google) : max 3 créations de compte par device
+ * par fenêtre rolling de 60 jours. Stocké dans le Keychain — persiste
  * après désinstallation.
+ *
+ * Barrière locale, doublée côté serveur par enforceSignupQuota (table
+ * device_signups). Mêmes seuil et fenêtre des deux côtés : un écart ferait
+ * qu'une des deux barrières bloquerait seule, et le diagnostic deviendrait
+ * illisible.
  *
  * Appelée APRÈS `signInWithIdToken` uniquement si le user vient d'être
  * créé (created_at < 60s). Les logins existants ne sont jamais bloqués.
  */
 export async function enforceOAuthSignupQuota(): Promise<void> {
   const signups = await readOAuthSignups();
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const recent = signups.filter(ts => ts > thirtyDaysAgo);
-  if (recent.length >= 5) {
+  const windowStart = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const recent = signups.filter(ts => ts > windowStart);
+  if (recent.length >= 3) {
     throw new Error('device_signup_limit_reached');
   }
 }
@@ -68,8 +73,8 @@ export async function enforceOAuthSignupQuota(): Promise<void> {
 export async function registerOAuthSignup(): Promise<void> {
   const signups = await readOAuthSignups();
   signups.push(Date.now());
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const cleaned = signups.filter(ts => ts > thirtyDaysAgo);
+  const windowStart = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const cleaned = signups.filter(ts => ts > windowStart);
   await Keychain.setGenericPassword('oauthSignups', JSON.stringify(cleaned), {
     service: KEYCHAIN_OAUTH_SERVICE,
   });

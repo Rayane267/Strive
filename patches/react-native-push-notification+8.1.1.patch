@@ -1,0 +1,82 @@
+diff --git a/node_modules/react-native-push-notification/android/build.gradle b/node_modules/react-native-push-notification/android/build.gradle
+index d6019f6..77e5760 100644
+--- a/node_modules/react-native-push-notification/android/build.gradle
++++ b/node_modules/react-native-push-notification/android/build.gradle
+@@ -1,8 +1,10 @@
++// jcenter() supprimé : le dépôt est mort et Gradle 9 ne fournit plus la méthode.
++// Le bloc buildscript/classpath AGP 3.2.0 est inerte ici (le plugin vient du
++// projet racine), on le laisse pour minimiser le patch.
+ buildscript {
+     repositories {
+         mavenCentral()
+         google()
+-        jcenter()
+     }
+     dependencies {
+         classpath 'com.android.tools.build:gradle:3.2.0'
+@@ -13,7 +15,6 @@ allprojects {
+     repositories {
+         mavenCentral()
+         google()
+-        jcenter()
+     }
+ }
+ 
+@@ -24,8 +25,10 @@ def safeExtGet(prop, fallback) {
+ }
+ 
+ android {
+-    compileSdkVersion safeExtGet('compileSdkVersion', 28)
+-    buildToolsVersion safeExtGet('buildToolsVersion', '28.0.3')
++    // AGP 9 a supprimé la méthode compileSdkVersion(int) — c'est `compileSdk`.
++    namespace "com.dieam.reactnativepushnotification"
++    compileSdk safeExtGet('compileSdkVersion', 36)
++    buildToolsVersion safeExtGet('buildToolsVersion', '36.0.0')
+ 
+     compileOptions {
+         sourceCompatibility JavaVersion.VERSION_1_8
+@@ -37,9 +40,8 @@ android {
+         targetSdkVersion safeExtGet('targetSdkVersion', 28)
+         versionCode 1
+         versionName "1.0"
+-        ndk {
+-            abiFilters "armeabi-v7a", "x86"
+-        }
++        // abiFilters "armeabi-v7a", "x86" retiré : excluait arm64-v8a, soit la
++        // quasi-totalité des téléphones actuels.
+     }
+     buildTypes {
+         release {
+@@ -50,15 +52,15 @@ android {
+ }
+ 
+ dependencies {
+-    // Use either AndroidX library names or old/support library names based on major version of support lib
+-    def supportLibVersion = safeExtGet('supportLibVersion', '27.1.1')
+-    def supportLibMajorVersion = supportLibVersion.split('\\.')[0] as int
+-    def appCompatLibName =  (supportLibMajorVersion < 20) ? "androidx.appcompat:appcompat" : "com.android.support:appcompat-v7"
+-
++    // AndroidX en dur : le ternaire d'origine retombait sur
++    // com.android.support:appcompat-v7 (fallback 27.1.1), incompatible avec
++    // AndroidX — et jetifier n'existe plus.
+     implementation fileTree(dir: 'libs', include: ['*.jar'])
+     testImplementation 'junit:junit:4.12'
+-    implementation "$appCompatLibName:$supportLibVersion"
+-    implementation 'com.facebook.react:react-native:+'
++    implementation "androidx.appcompat:appcompat:1.7.0"
++    // 'com.facebook.react:react-native:+' ne résout plus depuis RN 0.71
++    // (artefact renommé react-android) ; l'app fournit déjà la dépendance.
++    compileOnly 'com.facebook.react:react-android'
+     implementation 'me.leolin:ShortcutBadger:1.1.22@aar'
+     implementation "com.google.firebase:firebase-messaging:${safeExtGet('firebaseMessagingVersion', '21.1.0')}"
+ }
+diff --git a/node_modules/react-native-push-notification/android/src/main/AndroidManifest.xml b/node_modules/react-native-push-notification/android/src/main/AndroidManifest.xml
+index 85ef0b3..0a0938a 100644
+--- a/node_modules/react-native-push-notification/android/src/main/AndroidManifest.xml
++++ b/node_modules/react-native-push-notification/android/src/main/AndroidManifest.xml
+@@ -1,4 +1,3 @@
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-    package="com.dieam.reactnativepushnotification">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ 
+ </manifest>

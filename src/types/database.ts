@@ -3,7 +3,8 @@ export type SubscriptionStatus =
   | 'in_grace_period'
   | 'expired'
   | 'cancelled'
-  | 'paused';
+  | 'paused'
+  | 'refunded';
 
 export interface Profile {
   id: string;
@@ -20,6 +21,9 @@ export interface Profile {
   subscription_expires_at?: string | null;   // ISO timestamptz
   subscription_product_id?: string | null;
   extra_scan_credits: number;
+  /** Fuseau IANA du téléphone (ex. "Europe/Paris") — sert au reset du quota à
+   *  minuit local. Synchronisé depuis le Dashboard, uniquement s'il a changé. */
+  timezone?: string | null;
   // Admin
   is_admin?: boolean;
   // Véhicule (CarSettingsScreen)

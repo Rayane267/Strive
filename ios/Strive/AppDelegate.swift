@@ -13,6 +13,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
+  /// Le pont React Native n'est démarré qu'une fois, éventuellement en différé.
+  private var reactNativeStarted = false
+  /// Conservées quand le démarrage est différé, pour les passer au vrai départ.
+  private var pendingLaunchOptions: [UIApplication.LaunchOptionsKey: Any]?
+
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -38,6 +43,53 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             Activity<StriveActivityAttributes>.activities.count)
     }
 
+    window = UIWindow(frame: UIScreen.main.bounds)
+
+    // ── Lancement en ARRIÈRE-PLAN : on ne démarre pas React Native ───────────
+    //
+    // AssistiveTouch → raccourci → AnalyzeRideIntent lance l'app en arrière-plan.
+    // Or `AnalyzeRideIntent` est compilé dans CE target (pas dans une extension),
+    // donc iOS démarrait l'application ENTIÈRE — pont React Native compris — pour
+    // un pipeline de scan qui est 100 % Swift (ScanProcessor, OcrParser,
+    // TomTomService, GeminiVisionService) et n'utilise pas une ligne de JS.
+    // Mesuré : ~2 s à froid, immédiat à chaud. En usage réel le chauffeur n'ouvre
+    // jamais l'app, elle est donc évincée en permanence : le coût était payé à
+    // presque chaque scan.
+    //
+    // Les autres lancements en arrière-plan sont dans le même cas : les actions
+    // « Accepter / Refuser » d'une notification écrivent dans l'App Group en Swift,
+    // et `ScanBridge.drainAndEmitRideDecisions()` relève la file au prochain
+    // passage au premier plan. Aucun `setBackgroundMessageHandler` n'existe côté
+    // JS, donc aucune notification silencieuse n'a besoin du pont.
+    //
+    // Le pont démarre au premier passage au premier plan.
+    if application.applicationState == .background {
+      pendingLaunchOptions = launchOptions
+      NSLog("[Strive] lancement en arrière-plan — démarrage de React Native différé")
+      return true
+    }
+
+    startReactNativeIfNeeded(launchOptions: launchOptions)
+    return true
+  }
+
+  /// Démarre le pont React Native. Idempotent : les appels suivants ne font rien.
+  ///
+  /// Quand le démarrage a été différé, la fenêtre n'a encore aucun contenu — iOS
+  /// afficherait un écran noir pendant le boot, puisqu'il restaure la capture de
+  /// la dernière UI et qu'il n'y en a jamais eu. On y pose donc d'abord le
+  /// `LaunchScreen`, exactement ce que l'utilisateur voit sur un lancement à
+  /// froid normal ; `startReactNative` le remplace en montant sa rootView.
+  private func startReactNativeIfNeeded(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+    guard !reactNativeStarted, let window = window else { return }
+    reactNativeStarted = true
+
+    if window.rootViewController == nil {
+      window.rootViewController = UIStoryboard(name: "LaunchScreen", bundle: nil)
+        .instantiateInitialViewController()
+      window.makeKeyAndVisible()
+    }
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -45,15 +97,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    window = UIWindow(frame: UIScreen.main.bounds)
-
     factory.startReactNative(
       withModuleName: "Strive",
       in: window,
       launchOptions: launchOptions
     )
+  }
 
-    return true
+  func applicationWillEnterForeground(_ application: UIApplication) {
+    // Cas nominal du démarrage différé : l'app passe au premier plan après avoir
+    // été lancée en arrière-plan pour un scan.
+    startReactNativeIfNeeded(launchOptions: pendingLaunchOptions)
+    pendingLaunchOptions = nil
+  }
+
+  func applicationDidBecomeActive(_ application: UIApplication) {
+    // Filet : certaines transitions (retour depuis un raccourci, reprise après
+    // interruption) n'émettent pas `willEnterForeground`. `startReactNativeIfNeeded`
+    // étant idempotent, ce second appel est sans effet dans le cas nominal.
+    startReactNativeIfNeeded(launchOptions: pendingLaunchOptions)
+    pendingLaunchOptions = nil
   }
 
   // MARK: - URL Scheme (strive://)

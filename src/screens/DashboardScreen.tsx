@@ -43,6 +43,7 @@ import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../ut
 import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
 import { logScanDebug } from '../services/scanDebugService';
+import { logScanFailure, rememberLastFailure } from '../services/scanFailureService';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
@@ -77,13 +78,14 @@ function estimateDurationMin(distanceKm: number): number {
   return Math.round(distanceKm / 60 * 60);                       // péri-urbain / autoroute
 }
 
-// Somme des secondes en ligne des sessions DÉJÀ terminées aujourd'hui (minuit
-// local). Sert de base au « temps de session du jour » affiché dans la Live
-// Activity : base + session en cours. La session ouverte (end_at null) est
-// exclue — on lui ajoute son temps écoulé en direct.
-async function fetchTodayOnlineBaseSeconds(userId: string): Promise<number> {
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
+// Somme des secondes en ligne des sessions DÉJÀ terminées aujourd'hui. Sert de
+// base au « temps de session du jour », affiché dans la Live Activity ET dans le
+// compteur du Dashboard : base + session en cours. La session ouverte (end_at
+// null) est exclue — on lui ajoute son temps écoulé en direct.
+// La journée démarre à `resetHour` (préférence utilisateur : minuit ou 4 h),
+// comme le quota et les stats — pas au minuit local en dur.
+async function fetchTodayOnlineBaseSeconds(userId: string, resetHour: number): Promise<number> {
+  const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('online_sessions')
     .select('duration_seconds')
@@ -127,7 +129,10 @@ const DashboardScreen = () => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true });
+  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true, deduct_fuel: false });
+  // Coût carburant au km (conso × prix du jour) : pré-calculé ici car le natif
+  // n'a ni le type de carburant ni le tarif à la pompe. 0 = rien à déduire.
+  const [fuelPerKm, setFuelPerKm] = useState(0);
 
   const tier = getEffectivePlanTier(profile);
   const { dailyScans } = getPlanLimits(tier);
@@ -223,8 +228,12 @@ const DashboardScreen = () => {
         setSessionStartTs(startTs);
         setIsOnline(true);
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
+        // Hors du bloc Live Activity : le compteur du Dashboard en a besoin sur
+        // les deux plateformes, y compris quand la LA est indisponible.
+        const restoredBase = await fetchTodayOnlineBaseSeconds(user.id, dayResetHourRef.current);
+        todayOnlineBaseSecondsRef.current = restoredBase;
+        setTodayOnlineBaseSeconds(restoredBase);
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
-          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
           const currentElapsed = Math.floor((Date.now() - startTs) / 1000);
           // Réhydrate les vrais totaux du jour (sinon 0 jusqu'au prochain tag).
           const totals = await fetchTodayAcceptedTotals(user.id);
@@ -282,18 +291,24 @@ const DashboardScreen = () => {
         const enabled = v !== '0';
         NativeModules.ScanBridge?.setUseLiveActivity(enabled);
       });
-      NativeModules.ScanBridge?.setAppLanguage(i18n.language);
     }
-// Sync timezone du téléphone vers profile (reset quota au midnight local)
+    // Les deux plateformes : les strings natives (bulle Android, Live Activity et
+    // notifications iOS) doivent suivre la langue choisie dans l'app, pas celle
+    // du téléphone.
+    NativeModules.ScanBridge?.setAppLanguage?.(i18n.language);
+    // Sync timezone du téléphone vers profile (reset quota au midnight local).
+    // Écriture UNIQUEMENT si la valeur a changé : l'appel était inconditionnel et
+    // repartait à chaque montage du Dashboard, pour un fuseau qui ne bouge
+    // pratiquement jamais (954 updates observés pour 14 profils en base).
     if (user?.id) {
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (tz) {
+        if (tz && tz !== profile?.timezone) {
           supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
         }
       } catch {}
     }
-  }, [user?.id, i18n.language]);
+  }, [user?.id, i18n.language, profile?.timezone]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -303,6 +318,9 @@ const DashboardScreen = () => {
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
   const lastScanTsRef = useRef(0);
+  // scanTs déjà traités : la file native peut livrer plusieurs courses d'un
+  // coup, il faut les distinguer sans les confondre avec un doublon d'event.
+  const processedScanTsRef = useRef<number[]>([]);
   const canScanRef = useRef(canScan);
   const scanCountRef = useRef(stats.scans);
   const isOnlineRef = useRef(isOnline);
@@ -334,7 +352,25 @@ const DashboardScreen = () => {
 
   // Cumul des secondes en ligne des sessions terminées aujourd'hui (hors session
   // en cours) → base du « temps de session du jour » poussé à la Live Activity.
+  // Doublé en state : le compteur du Dashboard l'affiche, il lui faut un rendu.
   const todayOnlineBaseSecondsRef = useRef(0);
+  const [todayOnlineBaseSeconds, setTodayOnlineBaseSeconds] = useState(0);
+
+  // La préférence dayResetHour arrive après coup (fetch des préférences) : une
+  // base calculée avec la borne de minuit alors que l'utilisateur est en 4 h
+  // serait sous-évaluée. On la recalcule dès que la borne est connue.
+  useEffect(() => {
+    if (!isOnline || !user?.id) return;
+    let cancelled = false;
+    fetchTodayOnlineBaseSeconds(user.id, dayResetHour)
+      .then(seconds => {
+        if (cancelled) return;
+        todayOnlineBaseSecondsRef.current = seconds;
+        setTodayOnlineBaseSeconds(seconds);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [dayResetHour, isOnline, user?.id]);
 
   useEffect(() => {
     const avgCons = profile?.avg_cons ?? 0;
@@ -343,9 +379,19 @@ const DashboardScreen = () => {
     if (avgCons > 0) {
       fetchFuelPrice(fuelType, profile?.elec_price).then(fuelPrice => {
         fuelRef.current = { avgCons, fuelType, fuelPrice };
+        // Même formule que computeFuelCost, ramenée au km.
+        setFuelPerKm(fuelPrice > 0 ? (avgCons / 100) * fuelPrice : 0);
       });
+    } else {
+      setFuelPerKm(0);
     }
   }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price]);
+
+  // Prix net de carburant dans la Live Activity — affichage seul, le verdict et
+  // les tarifs enregistrés restent bruts.
+  useEffect(() => {
+    try { scannerService.setFuelDeduction(preferences.deduct_fuel, fuelPerKm); } catch {}
+  }, [preferences.deduct_fuel, fuelPerKm]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -398,15 +444,27 @@ const DashboardScreen = () => {
         hapticError();
         return;
       }
-      // Rate limit côté JS : ignore les events dupliqués <1s (défense en plus
-      // du `scanInProgress` natif). Évite les double-inserts DB sur event RN
-      // flaky.
-      const now = Date.now();
-      if (now - lastScanTsRef.current < 1000) {
-        __DEV__ && console.warn('[Scanner] event dupliqué ignoré (<1s)');
-        return;
+      // Anti-doublon : on déduplique sur l'identité du scan (`scanTs`), pas sur
+      // son heure d'arrivée. Le natif vide sa file d'attente d'un seul coup —
+      // plusieurs courses légitimes arrivent donc dans la même milliseconde, et
+      // une fenêtre temporelle les aurait toutes jetées sauf la première.
+      const scanTs = Number((nativeResult as any).scanTs) || 0;
+      if (scanTs > 0) {
+        if (processedScanTsRef.current.includes(scanTs)) {
+          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (même scanTs)');
+          return;
+        }
+        processedScanTsRef.current = [...processedScanTsRef.current.slice(-19), scanTs];
+      } else {
+        // Payload sans scanTs (ancien build encore en attente dans l'App Group) :
+        // on retombe sur la fenêtre d'une seconde.
+        const now = Date.now();
+        if (now - lastScanTsRef.current < 1000) {
+          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (<1s)');
+          return;
+        }
+        lastScanTsRef.current = now;
       }
-      lastScanTsRef.current = now;
 
       __DEV__ && console.info(
         '[Scanner:Start] résultat natif reçu —',
@@ -458,6 +516,10 @@ const DashboardScreen = () => {
             ...result,
             pickupAddress: result.pickupAddress ?? gemini.pickupAddress,
             destinationAddress: result.destinationAddress ?? gemini.destinationAddress,
+            // Sans ça l'approche lue par Gemini était jetée → includePickup
+            // restait sans effet sur tout scan passé par le fallback.
+            pickupDurationMin: result.pickupDurationMin ?? gemini.pickupDurationMin,
+            pickupDistanceKm: result.pickupDistanceKm ?? gemini.pickupDistanceKm,
           };
           usedGemini = true;
         }
@@ -673,9 +735,30 @@ const DashboardScreen = () => {
       hapticError();
     });
 
+    // Trace de diagnostic des scans qui n'aboutissent pas. Le natif remonte ici
+    // aussi les échecs survenus pendant que le JS ne tournait pas (raccourci iOS
+    // dans un autre process, bulle Android avec l'app tuée) — sans ça, une panne
+    // pouvait toucher tout le parc sans laisser la moindre donnée.
+    const subFailure = scannerService.onScanFailure?.(f => {
+      __DEV__ && console.log('[SCAN] failure', f.reason, f.detail ?? '');
+      const failure = {
+        reason: f.reason,
+        surface: f.surface,
+        platform: f.platform ?? null,
+        detail: f.detail ?? null,
+        appVersion: APP_VERSION_LABEL,
+        occurredAt: f.occurredAt ?? null,
+      };
+      logScanFailure(failure);
+      // Mémorisé localement pour être joint au prochain ticket de support :
+      // un chauffeur qui écrit vient presque toujours de vivre cet échec.
+      rememberLastFailure(failure);
+    });
+
     return () => {
       subResult?.remove();
       subFailed?.remove();
+      subFailure?.remove();
     };
   }, [user?.id, preferences, t]);
 
@@ -813,9 +896,26 @@ const DashboardScreen = () => {
     if (!cleaned || isNaN(fare) || fare <= 0 || fare > 9999) return;
     {
       try {
-        await updateRideFare(priceModal.rideId, fare);
+        // Nouveau montant → les métriques figées au scan (€/h, €/km, net) sont
+        // recalculées dessus, sinon l'Historique garderait celles de l'estimation.
+        const ride = ridesRef.current.find(r => r.id === priceModal.rideId);
+        const distanceKm = Number(ride?.distance_km ?? 0);
+        const durationMin = Number(ride?.duration_min ?? 0);
+        await updateRideFare(priceModal.rideId, fare, {
+          distanceKm,
+          durationMin,
+          fuelCost: ride?.fuel_cost ?? null,
+        });
         setRides(prev =>
-          prev.map(r => r.id === priceModal.rideId ? { ...r, fare_final: fare } : r),
+          prev.map(r => r.id === priceModal.rideId ? {
+            ...r,
+            fare_final: fare,
+            hourly_rate: durationMin > 0 ? fare / (durationMin / 60) : r.hourly_rate,
+            km_rate: distanceKm > 0 ? fare / distanceKm : r.km_rate,
+            net_profit: r.fuel_cost != null
+              ? Math.round((fare - r.fuel_cost) * 100) / 100
+              : r.net_profit,
+          } : r),
         );
       } catch (e) {
         __DEV__ && console.error('[PRICE] updateRideFare error', e);
@@ -878,6 +978,9 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(resetBoundary.getTime());
         setSessionSeconds(Math.floor((Date.now() - resetBoundary.getTime()) / 1000));
+        // Nouvelle journée : le cumul précédent appartient à la veille.
+        todayOnlineBaseSecondsRef.current = 0;
+        setTodayOnlineBaseSeconds(0);
       }
       fetchDataRef.current?.();
     })();
@@ -910,6 +1013,8 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(nextReset.getTime());
         setSessionSeconds(0);
+        todayOnlineBaseSecondsRef.current = 0;
+        setTodayOnlineBaseSeconds(0);
       }
       fetchDataRef.current?.();
     }, msUntilReset);
@@ -935,6 +1040,12 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(Date.now());
         setSessionSeconds(0);
+        // Le compteur repart du cumul déjà en ligne aujourd'hui, pas de zéro :
+        // une reprise après pause doit continuer le temps du jour. Hors du bloc
+        // iOS ci-dessous — Android affiche le même compteur.
+        const base = await fetchTodayOnlineBaseSeconds(user.id, dayResetHour);
+        todayOnlineBaseSecondsRef.current = base;
+        setTodayOnlineBaseSeconds(base);
         if (Platform.OS === 'ios' && ScanBridge) {
           if (ScanBridge.checkLiveActivityPermission) {
             const enabled = await ScanBridge.checkLiveActivityPermission();
@@ -952,7 +1063,6 @@ const DashboardScreen = () => {
           const accepted = rides.filter(r => r.status === 'ACCEPTED');
           const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
           const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
-          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
           const onlineHrStart = todayOnlineBaseSecondsRef.current / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
@@ -1005,7 +1115,7 @@ const DashboardScreen = () => {
       setFetchError(false);
       const { data: prefsData } = await supabase
         .from('preferences')
-        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup')
+        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup, deduct_fuel')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -1026,6 +1136,7 @@ const DashboardScreen = () => {
           min_km_rate: isFreeTier ? FREE_THRESHOLDS.km : (Number.isFinite(minKm) ? minKm : 1.2),
           // Approche incluse par défaut : seul un choix explicite `false` la désactive.
           include_pickup: prefsData.include_pickup ?? true,
+          deduct_fuel: prefsData.deduct_fuel ?? false,
         });
       }
 
@@ -1153,7 +1264,7 @@ const DashboardScreen = () => {
             <Animated.View style={[styles.onlineDot, !isOnline && styles.onlineDotOff, isOnline && { transform: [{ scale: pulseAnim }] }]} />
             <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}>
               {isOnline
-                ? `${t('dashboard.online')}  ·  ${formatDuration(sessionSeconds)}`
+                ? `${t('dashboard.online')}  ·  ${formatDuration(todayOnlineBaseSeconds + sessionSeconds)}`
                 : t('dashboard.offline')}
             </Text>
           </View>
@@ -1412,7 +1523,7 @@ const DashboardScreen = () => {
               {t('dashboard.priceModal.title', 'Prix réel de la course')}
             </Text>
             <Text style={styles.modalSubtitle}>
-              {t('dashboard.priceModal.subtitle', 'Entrez le montant final affiché sur l\'application VTC')}
+              {t('dashboard.priceModal.subtitle', 'Entrez le montant final affiché')}
             </Text>
             <TextInput
               style={styles.modalInput}

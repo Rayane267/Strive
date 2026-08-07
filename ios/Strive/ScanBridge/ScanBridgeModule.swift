@@ -23,6 +23,10 @@ class ScanBridgeModule: RCTEventEmitter {
       ?? "group.com.striveapp.app"
   }()
   static let scanResultKey = "lastScanResult"
+  // File d'attente des scans non encore relevés. `lastScanResult` ne garde
+  // qu'un seul résultat : deux partages de capture app fermée écrasaient le
+  // premier. La file les empile, l'app les vide tous au premier plan.
+  static let pendingResultsKey = "pendingScanResults"
   static let scanTimestampKey = "lastScanTimestamp"
 
   /// Jour de quota courant (yyyymmdd) en tenant compte du `day_reset_hour`
@@ -58,10 +62,13 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed", "onRideDecision"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed", "onRideDecision", "onScanFailure"]
   }
 
   static let rideDecisionsKey = "pendingRideDecisions"
+  /// Échecs empilés par l'AppIntent / la Share Extension — ces process n'ont pas
+  /// de session Supabase et ne peuvent pas écrire la trace eux-mêmes.
+  static let pendingFailuresKey = "pendingScanFailures"
 
   private var laDismissObserver: Any?
 
@@ -72,6 +79,7 @@ class ScanBridgeModule: RCTEventEmitter {
     // flush ce qui est en attente dans l'App Group (garde timestamp anti-doublon).
     handleShareExtensionResult()
     drainAndEmitRideDecisions()
+    drainAndEmitScanFailures()
     if #available(iOS 16.2, *) {
       laDismissObserver = NotificationCenter.default.addObserver(
         forName: LiveActivityManager.dismissedNotification,
@@ -150,6 +158,7 @@ class ScanBridgeModule: RCTEventEmitter {
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
     drainAndEmitRideDecisions()
+    drainAndEmitScanFailures()
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -176,6 +185,27 @@ class ScanBridgeModule: RCTEventEmitter {
     guard hasListeners else { return }
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
 
+    // File d'attente d'abord : elle contient tous les scans empilés depuis la
+    // dernière relève. On la vide en entier, un événement par course.
+    if let data = defaults.data(forKey: Self.pendingResultsKey),
+       let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+       !queued.isEmpty {
+      defaults.removeObject(forKey: Self.pendingResultsKey)
+      // Les clés historiques portent le dernier élément de la file : on les
+      // purge ici pour ne pas ré-émettre le même scan par le chemin ci-dessous.
+      defaults.removeObject(forKey: Self.scanResultKey)
+      let queuedMax = queued.compactMap { ($0["scanTs"] as? NSNumber)?.doubleValue }.max()
+      lastProcessedTimestamp = max(lastProcessedTimestamp,
+                                   queuedMax ?? defaults.double(forKey: Self.scanTimestampKey))
+      defaults.removeObject(forKey: Self.scanTimestampKey)
+
+      for (idx, result) in queued.enumerated() {
+        // Seul le dernier scan a vocation à s'afficher en Live Activity.
+        emitScanResult(result, refreshLiveActivity: idx == queued.count - 1)
+      }
+      return
+    }
+
     let timestamp = defaults.double(forKey: Self.scanTimestampKey)
     guard timestamp > lastProcessedTimestamp else { return }
     lastProcessedTimestamp = timestamp
@@ -191,9 +221,20 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.removeObject(forKey: Self.scanResultKey)
     defaults.removeObject(forKey: Self.scanTimestampKey)
 
+    var withTs = result
+    if withTs["scanTs"] == nil { withTs["scanTs"] = timestamp }
+    emitScanResult(withTs, refreshLiveActivity: true)
+  }
+
+  /// Émet un résultat vers le JS et, si demandé, rafraîchit la Live Activity.
+  /// Extrait pour être appelé aussi bien sur un résultat isolé que sur chaque
+  /// élément de la file d'attente.
+  private func emitScanResult(_ result: [String: Any], refreshLiveActivity: Bool) {
+    let defaults = UserDefaults(suiteName: Self.appGroupId)
+
     // Tente de démarrer le Live Activity depuis l'app principale si la
     // Share Extension n'a pas réussi (pas d'activité en cours).
-    if #available(iOS 16.2, *) {
+    if refreshLiveActivity, #available(iOS 16.2, *) {
       let existing = Activity<StriveActivityAttributes>.activities
       let shareExtStatus = (result["_liveActivityDebug"] as? String) ?? "unknown"
       NSLog("[Strive:Bridge] ShareExt LA status=%@, existing activities=%d, appState=%d",
@@ -222,7 +263,9 @@ class ScanBridgeModule: RCTEventEmitter {
 
         LiveActivityManager.shared.update(
           platform: (payload["platform"] as? String) ?? "UNKNOWN",
-          fare: fare,
+          // Net de carburant si la préférence est active — la Share Extension a
+          // déjà fait le calcul. Repli sur le brut pour les payloads antérieurs.
+          fare: (payload["displayFare"] as? NSNumber)?.doubleValue ?? fare,
           hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
           kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
           distanceKm: distKm,
@@ -233,13 +276,11 @@ class ScanBridgeModule: RCTEventEmitter {
       }
 
       // Nettoyage de la trace debug Live Activity (écrite par LiveActivityManager).
-      defaults.removeObject(forKey: "laSteps")
-      defaults.removeObject(forKey: "laLastStep")
+      defaults?.removeObject(forKey: "laSteps")
+      defaults?.removeObject(forKey: "laLastStep")
     }
 
-    var resultWithTs = result
-    resultWithTs["scanTs"] = timestamp   // corrélation course ↔ décision notif
-    sendEvent(withName: "onScanResult", body: resultWithTs)
+    sendEvent(withName: "onScanResult", body: result)
   }
 
   /// Vide la file des décisions Accepter/Refuser (App Group) et les émet au JS,
@@ -257,6 +298,31 @@ class ScanBridgeModule: RCTEventEmitter {
             let status = d["status"] as? String,
             status == "ACCEPTED" || status == "DECLINED" else { continue }
       sendEvent(withName: "onRideDecision", body: ["scanTs": ts, "status": status])
+    }
+  }
+
+  /// Vide la file des échecs empilés par l'AppIntent (autre process, pas de
+  /// session Supabase) et les remonte au JS, qui écrit la trace. `occurredAt`
+  /// porte l'heure réelle : la relève peut arriver longtemps après.
+  func drainAndEmitScanFailures() {
+    guard hasListeners else { return }
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+          let data = defaults.data(forKey: Self.pendingFailuresKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+          !arr.isEmpty else { return }
+    // Purge d'abord : si l'émission déclenche un crash, on ne rejoue pas la
+    // même série au prochain démarrage.
+    defaults.removeObject(forKey: Self.pendingFailuresKey)
+    for f in arr {
+      guard let reason = f["reason"] as? String, !reason.isEmpty else { continue }
+      var body: [String: Any] = [
+        "reason": reason,
+        "surface": (f["surface"] as? String) ?? "shortcut",
+      ]
+      if let detail = f["detail"] as? String { body["detail"] = detail }
+      if let platform = f["platform"] as? String { body["platform"] = platform }
+      if let ts = (f["occurredAt"] as? NSNumber)?.doubleValue, ts > 0 { body["occurredAt"] = ts }
+      sendEvent(withName: "onScanFailure", body: body)
     }
   }
 
@@ -425,6 +491,17 @@ class ScanBridgeModule: RCTEventEmitter {
       defaults.set(minHourlyRate.doubleValue, forKey: "minHourlyRate")
       defaults.set(minKmRate.doubleValue, forKey: "minKmRate")
       defaults.set(includePickup, forKey: "includePickup")
+    }
+  }
+
+  /// Affichage du prix net de carburant (Live Activity). `fuelCostPerKm` arrive
+  /// pré-calculé du JS (conso × prix du jour) : le natif n'a ni le type de
+  /// carburant ni le tarif à la pompe. Affichage seul — verdict et tarif
+  /// enregistré restent bruts (cf. ScanProcessor.computeFinal).
+  @objc func setFuelDeduction(_ enabled: Bool, fuelCostPerKm: NSNumber) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(enabled, forKey: "deductFuel")
+      defaults.set(fuelCostPerKm.doubleValue, forKey: "fuelCostPerKm")
     }
   }
 

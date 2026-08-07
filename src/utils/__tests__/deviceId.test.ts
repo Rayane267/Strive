@@ -88,25 +88,25 @@ describe('enforceSignupQuota', () => {
 });
 
 describe('OAuth signup quota', () => {
-  it('allows signup when fewer than 5 recent signups are recorded', async () => {
+  it('allows signup when fewer than 3 recent signups are recorded', async () => {
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([Date.now(), Date.now()]),
     } as any);
     await expect(enforceOAuthSignupQuota()).resolves.toBeUndefined();
   });
 
-  it('blocks signup at 5 recent signups within the 30-day window', async () => {
+  it('blocks signup at 3 recent signups within the 60-day window', async () => {
     const now = Date.now();
     mockKeychain.getGenericPassword.mockResolvedValue({
-      password: JSON.stringify([now, now, now, now, now]),
+      password: JSON.stringify([now, now, now]),
     } as any);
     await expect(enforceOAuthSignupQuota()).rejects.toThrow('device_signup_limit_reached');
   });
 
-  it('ignores signups older than 30 days', async () => {
-    const old = Date.now() - 31 * 24 * 60 * 60 * 1000;
+  it('ignores signups older than 60 days', async () => {
+    const old = Date.now() - 61 * 24 * 60 * 60 * 1000;
     mockKeychain.getGenericPassword.mockResolvedValue({
-      password: JSON.stringify([old, old, old, old, old]),
+      password: JSON.stringify([old, old, old]),
     } as any);
     await expect(enforceOAuthSignupQuota()).resolves.toBeUndefined();
   });
@@ -117,7 +117,7 @@ describe('OAuth signup quota', () => {
   });
 
   it('registerOAuthSignup appends a timestamp and prunes the old ones', async () => {
-    const old = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    const old = Date.now() - 61 * 24 * 60 * 60 * 1000;
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([old]),
     } as any);

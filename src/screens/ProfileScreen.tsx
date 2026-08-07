@@ -18,6 +18,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import PlusBadge from '../components/PlusBadge';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +35,8 @@ type MenuItem = {
   onPress: () => void;
   badge?: string;
   accent?: boolean;
+  /** Réservé à Strive Plus : affiche la pastille avant l'entrée dans l'écran. */
+  plusLocked?: boolean;
 };
 
 const ProfileScreen = () => {
@@ -53,10 +56,9 @@ const ProfileScreen = () => {
     if (lang === i18n.language) return;
     hapticLight();
     i18n.changeLanguage(lang);
-    if (Platform.OS === 'ios') {
-      const { NativeModules } = require('react-native');
-      NativeModules.ScanBridge?.setAppLanguage(lang);
-    }
+    // iOS ET Android : les strings natives suivent le choix in-app.
+    const { NativeModules } = require('react-native');
+    NativeModules.ScanBridge?.setAppLanguage?.(lang);
   };
 
   const confirmLogout = async () => {
@@ -130,6 +132,10 @@ const ProfileScreen = () => {
       title: t('profile.car'),
       sub: t('profile.carSub'),
       onPress: () => navigation.navigate('CarSettings'),
+      // CarSettingsScreen couvre tout l'écran d'un calque qui renvoie au paywall
+      // pour un compte free : sans cette pastille, le tap se solde par un
+      // renvoi brutal, sans que rien n'ait annoncé la restriction.
+      plusLocked: !isPlus,
     },
     {
       icon: 'tune-vertical',
@@ -205,6 +211,7 @@ const ProfileScreen = () => {
               </Text>
             ) : null}
           </View>
+          {item.plusLocked && <PlusBadge style={styles.menuPlusBadge} />}
           {item.badge ? (
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>{item.badge}</Text>
@@ -662,6 +669,7 @@ const styles = StyleSheet.create({
   menuText: { flex: 1 },
   menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
+  menuPlusBadge: { marginRight: 8 },
   newBadge: {
     backgroundColor: colors.primary,
     paddingHorizontal: 8,

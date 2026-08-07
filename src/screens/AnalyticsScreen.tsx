@@ -823,12 +823,6 @@ const AnalyticsScreen = () => {
                 </View>
               ) : (
                 <>
-                  {modalAlert ? (
-                    <View style={styles.modalAlertRow}>
-                      <Feather name="alert-circle" size={14} color="#FFCA28" />
-                      <Text style={styles.modalAlertText}>{modalAlert}</Text>
-                    </View>
-                  ) : null}
                 <Calendar
                   key={currentMonth}
                   current={currentMonth}
@@ -852,6 +846,15 @@ const AnalyticsScreen = () => {
                     textDayHeaderFontSize: 13,
                   }}
                 />
+                  {/* Alerte conditionnelle, placee APRES le calendrier : au-dessus,
+                      son apparition poussait toute la grille vers le bas, en pleine
+                      selection et sous le doigt. Ici la grille ne bouge pas. */}
+                  {modalAlert ? (
+                    <View style={styles.modalAlertRow}>
+                      <Feather name="alert-circle" size={14} color={colors.danger} />
+                      <Text style={styles.modalAlertText}>{modalAlert}</Text>
+                    </View>
+                  ) : null}
                 </>
               )}
             </Pressable>
@@ -1172,19 +1175,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
 
+  // Rouge `danger` de la palette, et non un orange pose a la main hors systeme.
+  // Place sous le calendrier : voir le commentaire au point de rendu.
   modalAlertRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,202,40,0.1)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,202,40,0.2)',
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,77,77,0.10)', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9, marginTop: 12,
+    borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)',
   },
-  modalAlertText: { color: '#FFCA28', fontSize: 12, flex: 1, lineHeight: 17 },
+  modalAlertText: { color: colors.danger, fontSize: 12, flex: 1, lineHeight: 17 },
 
   monthGrid: {
     flexDirection: 'row',

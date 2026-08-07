@@ -95,6 +95,22 @@ function isPurchaseCancelledError(e: any): boolean {
   return e?.code === '1' || e?.userCancelled === true;
 }
 
+// PURCHASES_ERROR_CODE (react-native-purchases 9.x — valeurs vérifiées dans
+// @revenuecat/purchases-typescript-internal/dist/errors.js). Le SDK expose le
+// code en string ; on normalise en number avant comparaison.
+const RC_ERROR = {
+  STORE_PROBLEM: 2,
+  PRODUCT_ALREADY_PURCHASED: 6,  // l'abonnement est encore actif sur l'Apple ID
+  RECEIPT_ALREADY_IN_USE: 7,     // reçu déjà rattaché à un autre compte Strive
+  RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER: 13,
+  PAYMENT_PENDING: 20,           // Ask to Buy / SCA : en attente, PAS une erreur
+} as const;
+
+function rcErrorCode(e: any): number | null {
+  const n = Number(e?.code);
+  return Number.isFinite(n) ? n : null;
+}
+
 // ─── Purchase consumable pack (scans) ─────────────────────────────────────────
 // Le webhook RC reçoit NON_RENEWING_PURCHASE → apply_revenuecat_event
 // → incrémente profiles.extra_scan_credits selon scan_credits du SKU en DB.
@@ -133,6 +149,32 @@ export async function buySubscription(productId: string): Promise<{ entitlement:
     ({ customerInfo } = await Purchases.purchasePackage(pkg));
   } catch (e: any) {
     if (isPurchaseCancelledError(e)) throw new Error('CANCELLED');
+
+    const code = rcErrorCode(e);
+    Sentry.captureException(e, {
+      tags: { flow: 'iap_purchase', productId, rcCode: String(code ?? 'unknown') },
+      extra: { underlying: e?.underlyingErrorMessage, readable: e?.userInfo?.readableErrorCode },
+    });
+
+    // Ré-achat après expiration : Apple refuse un nouvel achat tant que
+    // l'abonnement précédent est encore actif sur l'Apple ID (résilié mais non
+    // expiré), ou quand le reçu est rattaché à un autre compte Strive. Ce n'est
+    // pas un échec de paiement → on tente la restauration, qui suffit à rendre
+    // l'accès dans la quasi-totalité des cas.
+    const receiptInUse = code === RC_ERROR.RECEIPT_ALREADY_IN_USE
+      || code === RC_ERROR.RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER;
+    if (code === RC_ERROR.PRODUCT_ALREADY_PURCHASED || receiptInUse) {
+      try {
+        const restored = await Purchases.restorePurchases();
+        const activeRestored = restored?.entitlements?.active ?? {};
+        if (activeRestored[PREMIUM_ENTITLEMENT]) return { entitlement: PREMIUM_ENTITLEMENT };
+        if (activeRestored[PLUS_ENTITLEMENT]) return { entitlement: PLUS_ENTITLEMENT };
+      } catch {}
+      throw new Error(receiptInUse ? 'RECEIPT_IN_USE' : 'ALREADY_OWNED');
+    }
+
+    if (code === RC_ERROR.PAYMENT_PENDING) throw new Error('PENDING');
+    if (code === RC_ERROR.STORE_PROBLEM) throw new Error('STORE_PROBLEM');
     throw e;
   }
 
@@ -241,6 +283,41 @@ export async function restorePurchases(_userId?: string): Promise<'plus' | 'prem
   } catch (e: any) {
     Sentry.captureException(e, { tags: { flow: 'iap_restore' } });
     throw e;
+  }
+}
+
+// ─── État réel côté store (filet anti-webhook manqué) ────────────────────────
+// La DB n'avance `subscription_expires_at` que sur webhook RENEWAL. Si un seul
+// event est perdu (produit absent de subscription_products, edge function KO,
+// events SANDBOX filtrés…), un abonné qui paie retombe 'free' à la date
+// d'expiration initiale — exactement un mois après l'achat. On interroge donc
+// RevenueCat au démarrage : il connaît l'état réel du reçu Apple.
+export async function getStoreEntitlement(): Promise<{ tier: 'plus' | 'premium'; expiresAt: string | null } | null> {
+  const Purchases = rc();
+  if (!Purchases) return null;
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    const active = customerInfo?.entitlements?.active ?? {};
+    const ent = active[PREMIUM_ENTITLEMENT] ?? active[PLUS_ENTITLEMENT];
+    if (!ent) return null;
+    return {
+      tier: active[PREMIUM_ENTITLEMENT] ? 'premium' : 'plus',
+      expiresAt: ent.expirationDate ?? null,
+    };
+  } catch (e: any) {
+    Sentry.addBreadcrumb({ category: 'iap', message: `getCustomerInfo failed: ${e?.message ?? e}`, level: 'warning' });
+    return null;
+  }
+}
+
+/** Renvoie le reçu à RevenueCat : relance le calcul serveur et donc le webhook. */
+export async function syncPurchasesWithStore(): Promise<void> {
+  const Purchases = rc();
+  if (!Purchases?.syncPurchases) return;
+  try {
+    await Purchases.syncPurchases();
+  } catch (e: any) {
+    Sentry.addBreadcrumb({ category: 'iap', message: `syncPurchases failed: ${e?.message ?? e}`, level: 'warning' });
   }
 }
 

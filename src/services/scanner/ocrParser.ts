@@ -32,6 +32,15 @@ const BOLT_ONLY_MODES = ['bolt xl', 'bolt comfort', 'bolt premium', 'bolt plus']
 const PRICE_REGEX    = /(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)/;
 const DISTANCE_REGEX = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km/i;
 const DURATION_REGEX = /(\d{1,3})\s*min/i;
+// Contexte véhicule électrique. Uber affiche sur certaines offres une info de
+// recharge ou d'autonomie ("35 min", "250 km") qui n'a rien à voir avec la
+// course : sans ce filtre elle devient la durée ou la distance, et le €/h comme
+// le €/km sont faux — sans que rien ne signale l'erreur.
+//
+// ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup et
+// apparaît sur presque toutes les offres. On ne matche que « recharge ».
+const EV_CONTEXT_REGEX =
+  /(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)/i;
 // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min" avec séparateurs variés (•·-–—:, espaces)
 const PICKUP_COMBO_MIN_FIRST = /(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km/i;
 const PICKUP_COMBO_KM_FIRST  = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min/i;
@@ -232,7 +241,10 @@ function extractFare(
       // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" → "1743€").
       // Les apps VTC affichent toujours 2 décimales : si l'entier dépasse le
       // plafond plausible, on réinterprète les 2 derniers chiffres en centimes.
-      const glued = /(\d{2,6})\s*€/.exec(deRated);
+      // Deux chiffres ou plus, OU un chiffre seul de 6 à 9 : une course à 9 €
+      // existe (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un
+      // pourboire suggéré, un pack ou une note — cf. fixture canonique.
+      const glued = /(\d{2,6}|[6-9])\s*€/.exec(deRated);
       if (glued) {
         const raw = parseInt(glued[1], 10);
         value = raw > FARE_MAX ? raw / 100 : raw;
@@ -356,6 +368,8 @@ function extractDistance(
   const candidates: { value: number; isPickupCombo: boolean; y: number }[] = [];
 
   for (const block of blocks) {
+    // Autonomie annoncée en km ("Autonomie 250 km") → ce n'est pas la course.
+    if (EV_CONTEXT_REGEX.test(block.text)) continue;
     // Normalise les confusions OCR chiffre↔lettre (ex: "1l.8 km" → "11.8 km")
     // avant d'appliquer le regex de distance.
     const normalizedText = normalizeOcrDigits(block.text);
@@ -422,6 +436,8 @@ function extractDuration(
 
   for (const block of blocks) {
     if (/km/i.test(block.text)) continue;
+    // Bloc d'info véhicule électrique → ces minutes ne sont pas la course.
+    if (EV_CONTEXT_REGEX.test(block.text)) continue;
     const normalizedText = normalizeOcrDigits(block.text);
     const match = DURATION_REGEX.exec(normalizedText);
     if (!match) continue;

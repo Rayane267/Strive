@@ -239,6 +239,24 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.minKmRate = minKmRate
     }
 
+    /** Affichage du prix net de carburant dans la bulle. `fuelCostPerKm` arrive
+     *  pré-calculé du JS (conso × prix du jour) : le natif n'a ni le type de
+     *  carburant ni le tarif à la pompe. Affichage seul — verdict, €/h, €/km et
+     *  tarif enregistré restent bruts (cf. computeMetrics). Mirror iOS. */
+    @ReactMethod
+    fun setFuelDeduction(enabled: Boolean, fuelCostPerKm: Double) {
+        FloatingBubbleService.deductFuel = enabled
+        FloatingBubbleService.fuelCostPerKm = fuelCostPerKm
+    }
+
+    /** Langue de l'app (fr/en) pour les strings natives : la bulle et les
+     *  notifications doivent suivre le choix fait DANS Strive et pas la locale du
+     *  téléphone. Mirror iOS (clé `appLanguage` de l'App Group). */
+    @ReactMethod
+    fun setAppLanguage(lang: String) {
+        FloatingBubbleService.setAppLanguage(reactContext, lang)
+    }
+
     /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
     @ReactMethod
     fun setTomTomApiKey(key: String) {
@@ -283,6 +301,59 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             })
         }
         prefs.edit().remove(DECISIONS_KEY).apply()
+    }
+
+    /** Vidange du buffer de scans vers le JS — appelée à l'abonnement
+     *  onScanResult. Couvre le scan réalisé par la bulle pendant que le process
+     *  RN était mort : sans ça la course était perdue, sans trace. Mirror iOS
+     *  (ScanBridgeModule.checkPendingScanResult / pendingScanResults). */
+    @ReactMethod
+    fun drainPendingScans() {
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        // Purge d'abord : si l'émission relance un crash, on ne rejoue pas la
+        // même course en boucle au prochain démarrage.
+        prefs.edit().remove(SCANS_KEY).apply()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            emit("onScanResult", Arguments.createMap().apply {
+                putString("platform", o.optString("platform", "UNKNOWN"))
+                putDouble("fare", o.optDouble("fare", 0.0))
+                putDouble("distanceKm", o.optDouble("distanceKm", 0.0))
+                if (o.isNull("durationMin")) putNull("durationMin") else putInt("durationMin", o.optInt("durationMin"))
+                if (o.isNull("pickupAddress")) putNull("pickupAddress") else putString("pickupAddress", o.optString("pickupAddress"))
+                if (o.isNull("destinationAddress")) putNull("destinationAddress") else putString("destinationAddress", o.optString("destinationAddress"))
+                if (o.isNull("pickupDurationMin")) putNull("pickupDurationMin") else putInt("pickupDurationMin", o.optInt("pickupDurationMin"))
+                if (o.isNull("pickupDistanceKm")) putNull("pickupDistanceKm") else putDouble("pickupDistanceKm", o.optDouble("pickupDistanceKm"))
+                // Absents du buffer par conception (PII + poids) — cf. bufferScanResult.
+                putNull("imageBase64")
+                putNull("debugBlocks")
+                putInt("screenHeight", o.optInt("screenHeight", 0))
+                if (o.isNull("scanTs")) putNull("scanTs") else putDouble("scanTs", o.optDouble("scanTs"))
+            })
+        }
+    }
+
+    /** Vidange du buffer d'échecs vers le JS — appelée à l'abonnement
+     *  onScanFailure. Couvre les scans cassés pendant que le process RN était
+     *  mort, qui ne laissaient sinon aucune trace. */
+    @ReactMethod
+    fun drainScanFailures() {
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(FAILS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(FAILS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        prefs.edit().remove(FAILS_KEY).apply()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            emit("onScanFailure", Arguments.createMap().apply {
+                putString("reason", o.optString("reason", "other"))
+                putString("surface", o.optString("surface", "bubble"))
+                if (o.isNull("platform")) putNull("platform") else putString("platform", o.optString("platform"))
+                if (o.isNull("detail")) putNull("detail") else putString("detail", o.optString("detail"))
+                putDouble("occurredAt", o.optDouble("occurredAt", 0.0))
+            })
+        }
     }
 
     /** Quota journalier atteint — si true, la bulle affiche "Quota atteint"
@@ -348,7 +419,15 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             })
         }
 
+        /** Buffer des scans non remis au JS (survit à un process RN mort). */
+        const val SCANS_PREFS = "strive_pending_scans"
+        const val SCANS_KEY = "pending"
+        /** Au-delà, c'est que l'app n'a pas tourné depuis longtemps — on garde les
+         *  plus récents plutôt que de laisser enfler indéfiniment. Mirror iOS. */
+        private const val SCANS_MAX = 20
+
         fun emitScanResult(
+            ctx: Context,
             result: OcrParser.ScanResult,
             imageBase64: String? = null,
             debugBlocks: String? = null,
@@ -382,17 +461,108 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // Accepter/Refuser (DashboardScreen mappe scanTs → ride id). Mirror iOS.
                 if (scanTs > 0) putDouble("scanTs", scanTs) else putNull("scanTs")
             }
-            emit("onScanResult", map)
+            // Bufferisation UNIQUEMENT si le JS n'a pas pu recevoir l'événement
+            // (process RN mort alors que le foreground service tourne encore).
+            // Contrairement aux décisions Accepter/Refuser, rejouer un scan n'est
+            // pas idempotent : bufferiser systématiquement créerait une course en
+            // double à chaque ré-abonnement. Mirror iOS (pendingScanResults).
+            if (!emit("onScanResult", map)) bufferScanResult(ctx, result, screenHeight, scanTs)
+        }
+
+        /** Empile un scan que le JS n'a pas reçu. `imageBase64` et `debugBlocks`
+         *  sont volontairement omis : le screenshot est de la PII et pèse des Mo,
+         *  hors de propos dans SharedPreferences. À la relève le résultat est déjà
+         *  final (OCR + TomTom faits), le fallback Gemini côté JS est inutile. */
+        private fun bufferScanResult(
+            ctx: Context,
+            result: OcrParser.ScanResult,
+            screenHeight: Int,
+            scanTs: Double,
+        ) {
+            val prefs = ctx.applicationContext
+                .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+            val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+            arr.put(JSONObject().apply {
+                put("platform", result.platform.name)
+                put("fare", result.fare)
+                put("distanceKm", result.distanceKm)
+                put("durationMin", result.durationMin ?: JSONObject.NULL)
+                put("pickupAddress", result.pickupAddress ?: JSONObject.NULL)
+                put("destinationAddress", result.destinationAddress ?: JSONObject.NULL)
+                put("pickupDurationMin", result.pickupDurationMin ?: JSONObject.NULL)
+                put("pickupDistanceKm", result.pickupDistanceKm ?: JSONObject.NULL)
+                put("screenHeight", screenHeight)
+                put("scanTs", if (scanTs > 0) scanTs else JSONObject.NULL)
+            })
+            val trimmed = if (arr.length() > SCANS_MAX) {
+                JSONArray().also { out ->
+                    for (i in arr.length() - SCANS_MAX until arr.length()) out.put(arr.get(i))
+                }
+            } else arr
+            prefs.edit().putString(SCANS_KEY, trimmed.toString()).apply()
+        }
+
+        // ─── Trace des échecs ────────────────────────────────────────────────
+        // `onScanFailed` ne fait qu'informer l'UI ; il ne laisse aucune trace
+        // exploitable. `onScanFailure` porte le MOTIF, et survit à un process RN
+        // mort — sinon un scan qui casse quand l'app est fermée est invisible.
+        const val FAILS_PREFS = "strive_pending_failures"
+        const val FAILS_KEY = "pending"
+        private const val FAILS_MAX = 50
+
+        fun emitScanFailure(
+            ctx: Context,
+            reason: String,
+            detail: String? = null,
+            platform: String? = null,
+            surface: String = "bubble",
+        ) {
+            val occurredAt = System.currentTimeMillis() / 1000.0
+            val map = Arguments.createMap().apply {
+                putString("reason", reason)
+                putString("surface", surface)
+                if (platform != null) putString("platform", platform) else putNull("platform")
+                if (detail != null) putString("detail", detail) else putNull("detail")
+                putDouble("occurredAt", occurredAt)
+            }
+            // Même règle que les résultats : on ne bufferise QUE si le JS n'a pas
+            // pu recevoir l'événement, sinon la vidange le rejouerait en double.
+            if (!emit("onScanFailure", map)) {
+                val prefs = ctx.applicationContext
+                    .getSharedPreferences(FAILS_PREFS, Context.MODE_PRIVATE)
+                val arr = try { JSONArray(prefs.getString(FAILS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+                arr.put(JSONObject().apply {
+                    put("reason", reason)
+                    put("surface", surface)
+                    put("platform", platform ?: JSONObject.NULL)
+                    put("detail", detail ?: JSONObject.NULL)
+                    put("occurredAt", occurredAt)
+                })
+                val trimmed = if (arr.length() > FAILS_MAX) {
+                    JSONArray().also { out ->
+                        for (i in arr.length() - FAILS_MAX until arr.length()) out.put(arr.get(i))
+                    }
+                } else arr
+                prefs.edit().putString(FAILS_KEY, trimmed.toString()).apply()
+            }
         }
 
         fun emitScanFailed() = emit("onScanFailed", null)
         fun emitPermissionDenied() = emit("onPermissionDenied", null)
 
-        private fun emit(event: String, params: WritableMap?) {
-            moduleInstance?.reactContext
+        /** @return true si l'événement a bien été remis au JS. False = pas de
+         *  contexte RN vivant (app tuée, bulle toujours active) → à l'appelant de
+         *  bufferiser s'il ne veut pas perdre l'information. */
+        private fun emit(event: String, params: WritableMap?): Boolean = runCatching {
+            val js = moduleInstance?.reactContext
+                // Vrai check en pont comme en bridgeless (RN 0.84) : côté
+                // bridgeless c'est reactHost.isInstanceInitialized.
+                ?.takeIf { it.hasActiveReactInstance() }
                 ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                ?.emit(event, params)
-        }
+                ?: return@runCatching false
+            js.emit(event, params)
+            true
+        }.getOrDefault(false)
     }
 
     init {

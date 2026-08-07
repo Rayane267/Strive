@@ -58,7 +58,6 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
   const isPending = ride.status === 'PENDING';
   const statusColor = isDeclined ? '#FF5252' : isPending ? '#FFB300' : colors.primary;
   const fare = effectiveFare(ride);
-  const fareIsEstimated = ride.fare_final == null;
 
   const score = computeRideScore(
     Number(ride.hourly_rate || 0),
@@ -67,40 +66,49 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
     minKm,
   );
   const scoreColor = score != null ? rideScoreColor(score) : colors.textDimmed;
-  // L'accent latéral porte la qualité (score) ; le statut reste un chip dédié.
+  // La qualité (score) colore la bordure de la carte et les taux ; le statut
+  // garde son chip dédié, c'est la seule information non déductible du reste.
   const accentColor = score != null ? scoreColor : statusColor;
 
   const formattedTime = new Date(ride.created_at).toLocaleTimeString([], {
     hour: '2-digit', minute: '2-digit', hour12: false,
   });
 
+  // Les taux portent la couleur du score : une seule histoire de couleur par
+  // carte. Avant, un score orange cohabitait avec des taux verts — deux verdicts
+  // contradictoires sur la même course.
+  const rateColor = isDeclined ? colors.textDimmed : accentColor;
+  const hasRoute = !!ride.pickup_address || !!ride.destination_address;
+
   return (
-    <View style={[styles.card, isDeclined && styles.cardDeclined]}>
-      <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
+    <View style={[
+      styles.card,
+      isDeclined && styles.cardDeclined,
+      // La bordure murmure le verdict (le carré de score, lui, l'énonce) : ça
+      // remplace la barre latérale de 4 px, qui répétait la même information
+      // sous sa forme la plus convenue.
+      score != null && { borderColor: accentColor + '33' },
+    ]}>
       <View style={styles.cardInner}>
         <View style={styles.cardTopRow}>
           <View style={styles.topLeft}>
-            <View style={[styles.platformChip, { borderColor: pc.accent + '50' }]}>
-              <View style={[styles.platformDot, { backgroundColor: pc.accent }]} />
-              <Text style={styles.platformChipText}>{pc.label}</Text>
-            </View>
-            <View style={[
-              styles.statusBadge,
-              isDeclined ? styles.statusBadgeDeclined : isPending ? styles.statusBadgePending : styles.statusBadgeAccepted,
-            ]}>
-              <Feather
-                name={isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'}
-                size={11}
-                color={statusColor}
-              />
-              <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                {t(`history.status.${ride.status}`, { defaultValue: ride.status })}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.timeBlock}>
+            <View style={[styles.platformDot, { backgroundColor: pc.accent }]} />
+            <Text style={styles.platformName}>{pc.label}</Text>
+            <Text style={styles.topSep}>·</Text>
             <Text style={styles.timeMain}>{formattedTime}</Text>
-            <Text style={styles.timeAgo}>{formatTimeAgo(ride.created_at, t)}</Text>
+          </View>
+          <View style={[
+            styles.statusBadge,
+            isDeclined ? styles.statusBadgeDeclined : isPending ? styles.statusBadgePending : styles.statusBadgeAccepted,
+          ]}>
+            <Feather
+              name={isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'}
+              size={11}
+              color={statusColor}
+            />
+            <Text style={[styles.statusBadgeText, { color: statusColor }]}>
+              {t(`history.status.${ride.status}`, { defaultValue: ride.status })}
+            </Text>
           </View>
         </View>
 
@@ -109,9 +117,10 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
             <Text style={[styles.fareText, isDeclined && styles.fareDeclined]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {fare.toFixed(2)}€
             </Text>
-            {fareIsEstimated && !isDeclined && (
-              <Text style={styles.fareEst}>{t('dashboard.estimated', 'est.')}</Text>
-            )}
+            <Text style={styles.fareMeta} numberOfLines={1}>
+              {ride.duration_min || 0} {t('history.min')} · {ride.distance_km || 0} {t('history.km')}
+              {' · '}{formatTimeAgo(ride.created_at, t)}
+            </Text>
           </View>
           {score != null && (
             <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
@@ -121,46 +130,39 @@ const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any
           )}
         </View>
 
-        <View style={styles.metricsStrip}>
-          <View style={styles.metricPair}>
-            <Feather name="clock" size={11} color={colors.textDimmed} />
-            <Text style={styles.metricText}>{ride.duration_min || 0} {t('history.min')}</Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <Feather name="map-pin" size={11} color={colors.textDimmed} />
-            <Text style={styles.metricText}>{ride.distance_km || 0} {t('history.km')}</Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <Feather name="trending-up" size={11} color={isDeclined ? colors.textDimmed : colors.primary} />
-            <Text style={[styles.metricText, !isDeclined && styles.metricHighlight]}>
-              {Number(ride.hourly_rate || 0).toFixed(0)}€/h
-            </Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <MaterialCommunityIcons name="map-marker-distance" size={11} color={isDeclined ? colors.textDimmed : colors.primary} />
-            <Text style={[styles.metricText, !isDeclined && styles.metricHighlight]}>
-              {Number(ride.km_rate || 0).toFixed(2)}€/km
-            </Text>
-          </View>
+        {/* Le « pourquoi » du score, au niveau qu'il mérite : ce sont les deux
+            chiffres sur lesquels le chauffeur décide. */}
+        <View style={styles.rateRow}>
+          <Text style={[styles.rateValue, { color: rateColor }]}>
+            {Number(ride.hourly_rate || 0).toFixed(0)}
+            <Text style={styles.rateUnit}>€/h</Text>
+          </Text>
+          <View style={styles.rateDivider} />
+          <Text style={[styles.rateValue, { color: rateColor }]}>
+            {Number(ride.km_rate || 0).toFixed(2)}
+            <Text style={styles.rateUnit}>€/km</Text>
+          </Text>
         </View>
 
-        {(ride.pickup_address || ride.destination_address) && (
+        {hasRoute && (
           <View style={styles.routeStrip}>
-            {!!ride.pickup_address && (
-              <View style={styles.routeRow}>
-                <View style={styles.routeDot} />
+            {/* Trait vertical entre les deux points : la paire se lit comme un
+                trajet, plus comme deux lignes de texte muet superposées. */}
+            <View style={styles.routeRail}>
+              {!!ride.pickup_address && (
+                <View style={[styles.routeDot, { backgroundColor: isDeclined ? colors.textDimmed : colors.primary }]} />
+              )}
+              {!!ride.pickup_address && !!ride.destination_address && <View style={styles.routeLine} />}
+              {!!ride.destination_address && <View style={styles.routeEnd} />}
+            </View>
+            <View style={styles.routeTexts}>
+              {!!ride.pickup_address && (
                 <Text style={styles.routeText} numberOfLines={1}>{ride.pickup_address}</Text>
-              </View>
-            )}
-            {!!ride.destination_address && (
-              <View style={styles.routeRow}>
-                <Feather name="map-pin" size={10} color={colors.textDimmed} />
-                <Text style={styles.routeText} numberOfLines={1}>{ride.destination_address}</Text>
-              </View>
-            )}
+              )}
+              {!!ride.destination_address && (
+                <Text style={[styles.routeText, styles.routeTextDest]} numberOfLines={1}>{ride.destination_address}</Text>
+              )}
+            </View>
           </View>
         )}
       </View>
@@ -618,12 +620,6 @@ const HistoryScreen = () => {
               </View>
             ) : (
               <>
-                {modalAlert ? (
-                  <View style={styles.modalAlertRow}>
-                    <Feather name="alert-circle" size={14} color="#FFCA28" />
-                    <Text style={styles.modalAlertText}>{modalAlert}</Text>
-                  </View>
-                ) : null}
                 <Calendar
                   key={currentMonth}
                   current={currentMonth}
@@ -647,6 +643,15 @@ const HistoryScreen = () => {
                     textDayHeaderFontSize: 13,
                   }}
                 />
+                {/* Alerte conditionnelle, placee APRES le calendrier : au-dessus,
+                    son apparition poussait toute la grille vers le bas, en pleine
+                    selection et sous le doigt. Ici la grille ne bouge pas. */}
+                {modalAlert ? (
+                  <View style={styles.modalAlertRow}>
+                    <Feather name="alert-circle" size={14} color={colors.danger} />
+                    <Text style={styles.modalAlertText}>{modalAlert}</Text>
+                  </View>
+                ) : null}
               </>
             )}
           </Pressable>
@@ -746,34 +751,47 @@ const styles = StyleSheet.create({
 
   // Ride card
   card: {
-    flexDirection: 'row', backgroundColor: colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16, marginBottom: 10, overflow: 'hidden',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 6,
   },
-  cardAccent: { width: 4 },
   // Course refusée : fond assombri (sans opacité) pour la repérer dans la liste.
   cardDeclined: { backgroundColor: '#0E1613' },
-  cardInner: { flex: 1, padding: 14 },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  platformChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9,
-    borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.04)',
-  },
+  cardInner: { padding: 14 },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   platformDot: { width: 7, height: 7, borderRadius: 4 },
-  platformChipText: { color: colors.textMain, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  routeStrip: { marginTop: 10, gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 10 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  routeDot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 1, backgroundColor: colors.primary },
-  routeText: { color: colors.textMuted, fontSize: 12, flex: 1 },
-  timeBlock: { alignItems: 'flex-end' },
-  timeMain: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  timeAgo: { color: colors.textDimmed, fontSize: 11, marginTop: 2 },
-  cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
-  fareText: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  platformName: { color: colors.textMain, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  topSep: { color: colors.textDimmed, fontSize: 12, fontWeight: '700' },
+
+  // Taux : le deuxième niveau de lecture, coloré par le score.
+  rateRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 12, paddingTop: 11,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  rateValue: { flex: 1, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  rateUnit: { fontSize: 12, fontWeight: '700', letterSpacing: 0 },
+  rateDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.06)', marginRight: 14 },
+
+  // Trajet : rail à gauche, adresses à droite.
+  routeStrip: {
+    flexDirection: 'row', gap: 9, marginTop: 11, paddingTop: 11,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  routeRail: { alignItems: 'center', paddingTop: 5, paddingLeft: 1 },
+  routeDot: { width: 7, height: 7, borderRadius: 4 },
+  routeLine: { width: 1, flex: 1, minHeight: 11, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 2 },
+  routeEnd: { width: 5, height: 5, borderRadius: 3, borderWidth: 1, borderColor: colors.textDimmed },
+  routeTexts: { flex: 1, gap: 4, minWidth: 0 },
+  routeText: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
+  routeTextDest: { color: colors.textDimmed },
+  timeMain: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  fareText: { color: '#FFFFFF', fontSize: 36, fontWeight: '900', letterSpacing: -0.8 },
+  fareMeta: { color: colors.textDimmed, fontSize: 11, fontWeight: '600', marginTop: 3 },
   scoreBadge: {
     width: 60, height: 60, borderRadius: 14, borderWidth: 2,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -782,7 +800,6 @@ const styles = StyleSheet.create({
   scoreValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, lineHeight: 24 },
   scoreMax: { color: colors.textDimmed, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: -1 },
   fareDeclined: { color: colors.textDimmed, textDecorationLine: 'line-through' },
-  fareEst: { color: colors.textDimmed, fontSize: 10, fontWeight: '600', marginTop: 2 },
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
@@ -791,14 +808,6 @@ const styles = StyleSheet.create({
   statusBadgeDeclined: { backgroundColor: 'rgba(255,82,82,0.07)', borderColor: 'rgba(255,82,82,0.18)' },
   statusBadgePending:  { backgroundColor: 'rgba(255,179,0,0.08)', borderColor: 'rgba(255,179,0,0.22)' },
   statusBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
-  metricsStrip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingTop: 11, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
-  },
-  metricPair: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  metricText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
-  metricHighlight: { color: colors.primary },
-  metricSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 2 },
 
   // Loading skeleton
   skeletonList: { gap: 12, marginTop: 4 },
@@ -872,13 +881,15 @@ const styles = StyleSheet.create({
     color: colors.textMain, fontSize: 11, fontWeight: '700',
     textAlign: 'center',
   },
+  // Rouge `danger` de la palette, et non un orange pose a la main hors systeme.
+  // Place sous le calendrier : voir le commentaire au point de rendu.
   modalAlertRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,202,40,0.1)', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10,
-    borderWidth: 1, borderColor: 'rgba(255,202,40,0.2)',
+    backgroundColor: 'rgba(255,77,77,0.10)', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9, marginTop: 12,
+    borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)',
   },
-  modalAlertText: { color: '#FFCA28', fontSize: 12, flex: 1, lineHeight: 17 },
+  modalAlertText: { color: colors.danger, fontSize: 12, flex: 1, lineHeight: 17 },
 
   calHeaderRow: {
     flexDirection: 'row',

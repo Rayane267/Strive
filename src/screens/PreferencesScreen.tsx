@@ -21,7 +21,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { FREE_THRESHOLDS, getEffectivePlanTier } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
+import { scannerService } from '../services/scanner';
+import { fetchFuelPrice } from '../services/fuelService';
 import BrandLoader from '../components/BrandLoader';
+import PlusBadge from '../components/PlusBadge';
 
 const PreferencesScreen = () => {
   const { t } = useTranslation();
@@ -36,6 +39,14 @@ const PreferencesScreen = () => {
   const [minHr, setMinHr] = useState(25);
   const [minKm, setMinKm] = useState(1.2);
   const [includePickup, setIncludePickup] = useState(true);
+  const [deductFuel, setDeductFuel] = useState(false);
+  // computeFuelCost renvoie 0 sans consommation : l'option n'aurait aucun effet.
+  const hasFuelData = (profile?.avg_cons ?? 0) > 0;
+  /// État AFFICHÉ du toggle carburant. Forcé à off en free — même logique que les
+  /// curseurs de seuils, qui montrent FREE_THRESHOLDS plutôt que la valeur stockée.
+  /// Un compte free ayant activé l'option avant ce verrou ne la voit donc plus
+  /// active, ce qui est honnête : sans données véhicule, elle n'avait aucun effet.
+  const fuelToggleOn = isPremium && deductFuel;
   const [useLiveActivity, setUseLiveActivityRaw] = useState(true);
   const setUseLiveActivity = (v: boolean) => {
     setUseLiveActivityRaw(v);
@@ -87,6 +98,7 @@ const PreferencesScreen = () => {
         setMinHr(Number(data.min_hourly_rate));
         setMinKm(Number(data.min_km_rate));
         setIncludePickup(data.include_pickup ?? true); // ON par défaut sauf choix explicite
+        setDeductFuel(data.deduct_fuel ?? false);
         setIsActive(data.is_active !== false); // null/undefined → activé par défaut
         if (data.day_reset_hour === 4) setDayResetHour(4);
         else setDayResetHour(0);
@@ -105,7 +117,7 @@ const PreferencesScreen = () => {
     // statusMessage.type est exclu volontairement : l'ajouter effacerait le
     // message immédiatement après son affichage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minHr, minKm, includePickup, isActive, dayResetHour]);
+  }, [minHr, minKm, includePickup, deductFuel, isActive, dayResetHour]);
 
   // --- SAUVEGARDE ---
   const handleSave = async () => {
@@ -121,12 +133,32 @@ const PreferencesScreen = () => {
         min_hourly_rate: minHr,
         min_km_rate: minKm,
         include_pickup: includePickup,
+        deduct_fuel: deductFuel,
         is_active: isActive,
         day_reset_hour: dayResetHour,
         updated_at: new Date().toISOString(),
       });
 
       if (error) throw error;
+
+      // Propagation immédiate au natif (App Group / bulle) : sans ça le scanner
+      // garde l'ancienne valeur jusqu'au prochain focus du Dashboard — un scan
+      // lancé juste après l'enregistrement appliquait encore l'ancien réglage
+      // (verdict identique includePickup ON/OFF).
+      try {
+        scannerService.setPreferences(includePickup);
+        scannerService.setThresholds(minHr, minKm);
+        // Le natif ne connaît ni le type de carburant ni le prix à la pompe :
+        // on lui pousse un coût au km déjà calculé (0 = rien à déduire).
+        const avgCons = profile?.avg_cons ?? 0;
+        const fuelPrice = avgCons > 0
+          ? await fetchFuelPrice(profile?.fuel_type ?? 'essence', profile?.elec_price)
+          : 0;
+        scannerService.setFuelDeduction(
+          deductFuel,
+          fuelPrice > 0 ? (avgCons / 100) * fuelPrice : 0,
+        );
+      } catch {}
 
       hapticSuccess();
       setStatusMessage({ text: t('preferences.saveSuccess', 'Préférences enregistrées avec succès.'), type: 'success' });
@@ -204,9 +236,14 @@ const PreferencesScreen = () => {
 
 
         {/* ── MINIMUMS ── */}
+        {/* Badge dans l'en-tête, et pas seulement le cadenas en bas de carte :
+            les curseurs sont rendus normalement pour un compte free (juste
+            `disabled`), la restriction ne se découvrait donc qu'en essayant
+            de les bouger. */}
         <View style={styles.sectionLabel}>
           <View style={styles.sectionAccent} />
           <Text style={styles.sectionLabelText}>{t('preferences.minimums', 'SEUILS MINIMUM').toUpperCase()}</Text>
+          {!isPremium && <PlusBadge />}
         </View>
 
         <View style={styles.card}>
@@ -214,8 +251,8 @@ const PreferencesScreen = () => {
           <View style={styles.sliderSection}>
             <View style={styles.sliderHeader}>
               <View style={styles.sliderLabelRow}>
-                <View style={[styles.sliderIconWrap, { backgroundColor: 'rgba(0,230,118,0.1)' }]}>
-                  <Feather name="clock" size={14} color={colors.primary} />
+                <View style={styles.sliderIconWrap}>
+                  <Feather name="clock" size={14} color={colors.textMuted} />
                 </View>
                 <Text style={styles.sliderLabel}>{t('preferences.minHr', 'Tarif/heure min.')}</Text>
               </View>
@@ -247,8 +284,8 @@ const PreferencesScreen = () => {
           <View style={styles.sliderSection}>
             <View style={styles.sliderHeader}>
               <View style={styles.sliderLabelRow}>
-                <View style={[styles.sliderIconWrap, { backgroundColor: 'rgba(0,230,118,0.1)' }]}>
-                  <MaterialCommunityIcons name="map-marker-distance" size={14} color={colors.primary} />
+                <View style={styles.sliderIconWrap}>
+                  <MaterialCommunityIcons name="map-marker-distance" size={14} color={colors.textMuted} />
                 </View>
                 <Text style={styles.sliderLabel}>{t('preferences.minKm', 'Tarif/km min.')}</Text>
               </View>
@@ -297,8 +334,8 @@ const PreferencesScreen = () => {
 
         <View style={styles.card}>
           <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(255,183,77,0.12)' }]}>
-              <MaterialCommunityIcons name="weather-sunset-up" size={18} color="#FFB74D" />
+            <View style={[styles.toggleIconWrap, { backgroundColor: dayResetHour === 4 ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
+              <MaterialCommunityIcons name="weather-sunset-up" size={18} color={dayResetHour === 4 ? colors.primary : colors.textDimmed} />
             </View>
             <View style={styles.toggleTextBlock}>
               <Text style={styles.toggleTitle}>{t('preferences.dayReset4am', 'Reset à 4h du matin')}</Text>
@@ -307,8 +344,8 @@ const PreferencesScreen = () => {
             <Switch
               value={dayResetHour === 4}
               onValueChange={(v) => setDayResetHour(v ? 4 : 0)}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(255,183,77,0.35)' }}
-              thumbColor={dayResetHour === 4 ? '#FFB74D' : colors.textDimmed}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+              thumbColor={dayResetHour === 4 ? colors.primary : colors.textDimmed}
               ios_backgroundColor="rgba(255,255,255,0.08)"
             />
           </View>
@@ -316,8 +353,8 @@ const PreferencesScreen = () => {
           <View style={styles.cardDivider} />
 
           <View style={styles.toggleRow}>
-            <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(79,195,247,0.1)' }]}>
-              <Feather name="map-pin" size={18} color="#4FC3F7" />
+            <View style={[styles.toggleIconWrap, { backgroundColor: includePickup ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
+              <Feather name="map-pin" size={18} color={includePickup ? colors.primary : colors.textDimmed} />
             </View>
             <View style={styles.toggleTextBlock}>
               <Text style={styles.toggleTitle}>{t('preferences.includePickup', 'Inclure la prise en charge')}</Text>
@@ -326,18 +363,71 @@ const PreferencesScreen = () => {
             <Switch
               value={includePickup}
               onValueChange={setIncludePickup}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(79,195,247,0.35)' }}
-              thumbColor={includePickup ? '#4FC3F7' : colors.textDimmed}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+              thumbColor={includePickup ? colors.primary : colors.textDimmed}
               ios_backgroundColor="rgba(255,255,255,0.08)"
             />
           </View>
+
+          <View style={styles.cardDivider} />
+
+          {/* Réservé à Plus, et pas seulement signalé : l'option dépend de la
+              consommation du véhicule, saisie dans CarSettings — écran verrouillé.
+              Un compte free qui l'activait ne voyait rien changer, puis se faisait
+              renvoyer vers un écran fermé. On l'affiche donc désactivée, comme les
+              curseurs de seuils, et un tap sur la ligne mène au paywall. */}
+          <TouchableOpacity
+            style={styles.toggleRow}
+            activeOpacity={isPremium ? 1 : 0.7}
+            disabled={isPremium}
+            onPress={() => navigation.navigate('SubscriptionScreen')}
+            accessibilityRole={isPremium ? undefined : 'button'}
+          >
+            <View style={[styles.toggleIconWrap, { backgroundColor: fuelToggleOn ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
+              <Feather name="droplet" size={18} color={fuelToggleOn ? colors.primary : colors.textDimmed} />
+            </View>
+            <View style={styles.toggleTextBlock}>
+              <View style={styles.toggleTitleRow}>
+                <Text style={styles.toggleTitle}>{t('preferences.deductFuel', 'Retirer le carburant du prix')}</Text>
+                {!isPremium && <PlusBadge />}
+              </View>
+              <Text style={styles.toggleSub}>{t('preferences.deductFuelSub', 'Le prix affiché devient net du carburant estimé')}</Text>
+            </View>
+            <Switch
+              value={fuelToggleOn}
+              onValueChange={isPremium ? setDeductFuel : undefined}
+              disabled={!isPremium}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+              thumbColor={fuelToggleOn ? colors.primary : colors.textDimmed}
+              ios_backgroundColor="rgba(255,255,255,0.08)"
+            />
+          </TouchableOpacity>
+
+          {/* Sans consommation renseignée, computeFuelCost renvoie 0 : l'option
+              serait active mais sans effet visible. On le dit, avec le raccourci
+              vers l'écran qui manque. */}
+          {fuelToggleOn && !hasFuelData && (
+            <TouchableOpacity
+              style={styles.fuelWarning}
+              onPress={() => navigation.navigate('CarSettings' as never)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('preferences.deductFuelMissing', 'Renseignez la consommation de votre véhicule pour que cette option ait un effet.')}
+            >
+              <Feather name="alert-triangle" size={15} color="#FFB74D" />
+              <Text style={styles.fuelWarningTxt}>
+                {t('preferences.deductFuelMissing', 'Renseignez la consommation de votre véhicule pour que cette option ait un effet.')}
+              </Text>
+              <Feather name="chevron-right" size={16} color="#FFB74D" />
+            </TouchableOpacity>
+          )}
 
           {Platform.OS === 'ios' && (
             <>
               <View style={styles.cardDivider} />
               <View style={styles.toggleRow}>
-                <View style={[styles.toggleIconWrap, { backgroundColor: 'rgba(171,71,188,0.12)' }]}>
-                  <MaterialCommunityIcons name="island" size={18} color="#AB47BC" />
+                <View style={[styles.toggleIconWrap, { backgroundColor: useLiveActivity ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
+                  <MaterialCommunityIcons name="island" size={18} color={useLiveActivity ? colors.primary : colors.textDimmed} />
                 </View>
                 <View style={styles.toggleTextBlock}>
                   <Text style={styles.toggleTitle}>{t('preferences.resultMode', 'Dynamic Island')}</Text>
@@ -346,8 +436,8 @@ const PreferencesScreen = () => {
                 <Switch
                   value={useLiveActivity}
                   onValueChange={setUseLiveActivity}
-                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(171,71,188,0.35)' }}
-                  thumbColor={useLiveActivity ? '#AB47BC' : colors.textDimmed}
+                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+                  thumbColor={useLiveActivity ? colors.primary : colors.textDimmed}
                   ios_backgroundColor="rgba(255,255,255,0.08)"
                 />
               </View>
@@ -490,9 +580,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 14,
   },
+  toggleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   toggleTextBlock: { flex: 1, paddingRight: 12 },
   toggleTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: 3 },
   toggleSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+
+  // Avertissement « conso manquante » sous le toggle carburant.
+  fuelWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    marginLeft: 54,
+    marginRight: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,183,77,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,183,77,0.25)',
+  },
+  fuelWarningTxt: {
+    flex: 1,
+    color: '#FFB74D',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
 
   // Reset toggle
   resetToggleRow: {
@@ -538,6 +652,8 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
+    // Neutre : un slider n'a pas d'état on/off, le vert ne signalerait rien ici.
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   sliderLabel: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
   sliderValueBadge: {

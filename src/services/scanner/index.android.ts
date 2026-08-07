@@ -40,6 +40,8 @@ export const scannerService: ScannerService = {
   setPreferences: (includePickup: boolean) => ScanBridge.setPreferences(includePickup),
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
+  setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) =>
+    ScanBridge.setFuelDeduction?.(enabled, fuelCostPerKm),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
@@ -55,8 +57,22 @@ export const scannerService: ScannerService = {
 
   requestMediaProjectionPermission: () => ScanBridge.requestMediaProjectionPermission(),
 
-  onScanResult: (cb: (result: ScanResult) => void) =>
-    emitter.addListener('onScanResult', cb),
+  // Même schéma que onRideDecision : on s'abonne PUIS on draine le buffer natif
+  // (scans effectués par la bulle pendant que le process RN était mort) → ils
+  // atteignent le listener fraîchement posé au lieu d'être perdus.
+  onScanResult: (cb: (result: ScanResult) => void) => {
+    const sub = emitter.addListener('onScanResult', cb);
+    ScanBridge.drainPendingScans?.();
+    return sub;
+  },
+
+  // On s'abonne PUIS on draine : les échecs survenus process RN mort sont
+  // bufferisés côté natif et n'atteindraient sinon jamais la trace.
+  onScanFailure: (cb: (f: any) => void) => {
+    const sub = emitter.addListener('onScanFailure', cb);
+    ScanBridge.drainScanFailures?.();
+    return sub;
+  },
 
   onScanFailed: (cb: () => void) =>
     emitter.addListener('onScanFailed', cb),

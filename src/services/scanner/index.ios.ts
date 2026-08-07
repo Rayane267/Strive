@@ -94,6 +94,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setScannerPreferences(minHr, minKm, includePickup);
   },
 
+  setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) => {
+    ScanBridge?.setFuelDeduction?.(enabled, fuelCostPerKm);
+  },
+
   setThresholds: (minHourlyRate: number, minKmRate: number) => {
     lastMinHourly = minHourlyRate;
     lastMinKm = minKmRate;
@@ -121,7 +125,9 @@ export const scannerService: ScannerService = {
   },
 
   setScannerEnabled: (enabled: boolean) => {
-    ScanBridge?.setScannerEnabled(enabled);
+    // `?.` : un bundle JS peut tourner sur un binaire natif antérieur à l'export
+    // de cette méthode (canaux EAS) — sans ça l'appel jetterait un TypeError.
+    ScanBridge?.setScannerEnabled?.(enabled);
   },
 
 checkPermissions: async () => {
@@ -151,6 +157,14 @@ checkPermissions: async () => {
   onScanResult: (cb: (result: ScanResult) => void) => {
     if (!emitter) return undefined;
     return emitter.addListener('onScanResult', cb);
+  },
+
+  // La vidange est faite côté natif à `startObserving` et à chaque retour au
+  // premier plan (l'AppIntent tourne dans un autre process et empile ses échecs
+  // dans l'App Group) — il suffit donc de s'abonner.
+  onScanFailure: (cb: (f: any) => void) => {
+    if (!emitter) return undefined;
+    return emitter.addListener('onScanFailure', cb);
   },
 
   onScanFailed: (cb: () => void) => {

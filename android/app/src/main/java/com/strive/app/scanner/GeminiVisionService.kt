@@ -195,10 +195,16 @@ object GeminiVisionService {
             val distanceKm = data.getDouble("distance_km")
             val durationMin = if (data.isNull("duration_min")) null
                               else data.optInt("duration_min").takeIf { it > 0 }
-            val pickupDurationMin = if (data.isNull("pickup_duration_min")) null
-                                    else data.optInt("pickup_duration_min").takeIf { it in 1..60 }
-            val pickupDistanceKm = if (data.isNull("pickup_distance_km")) null
-                                   else data.optDouble("pickup_distance_km").takeIf { it in 0.1..30.0 }
+            // Approche : mêmes bornes que OcrParser.extractPickupInfo (1–60 min,
+            // 0,1–30 km, toujours plus courte que la course). Tout ou rien — une
+            // valeur seule fausserait le total appliqué quand includePickup est ON.
+            val rawPickupMin = if (data.isNull("pickup_duration_min")) null
+                               else data.optInt("pickup_duration_min").takeIf { it in 1..60 }
+            val rawPickupKm = if (data.isNull("pickup_distance_km")) null
+                              else data.optDouble("pickup_distance_km").takeIf { it in 0.1..30.0 }
+            val pickupOk = rawPickupMin != null && rawPickupKm != null && rawPickupKm < distanceKm
+            val pickupDurationMin = if (pickupOk) rawPickupMin else null
+            val pickupDistanceKm = if (pickupOk) rawPickupKm else null
             // Adresses → alimentent TomTom pour la VRAIE distance (cœur du produit).
             val pickupAddress = data.optString("pickup_address")
                 .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }

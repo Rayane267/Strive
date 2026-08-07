@@ -30,10 +30,32 @@ final class ScanProcessor {
       ?? "group.com.striveapp.app"
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
     let now = Date().timeIntervalSince1970
+
+    // 1. Un scan est-il déjà en cours ? Le simple délai ci-dessous ne suffisait
+    //    pas : le pipeline dure 5 à 20 s (OCR + TomTom + Gemini), donc un appui
+    //    5 s après le premier lançait un second pipeline complet en parallèle —
+    //    deux appels payants, deux courses, pour une seule offre à l'écran.
+    //    Le plafond de 30 s libère le verrou si un scan s'est interrompu
+    //    (process tué, crash) : le watchdog de l'AppIntent est à 25 s.
+    let startedAt = defaults.double(forKey: "scanInProgressSince")
+    if startedAt > 0, now - startedAt < 30 { return true }
+
+    // 2. Anti double-tap : deux appuis rapprochés sur le même bouton.
     let last = defaults.double(forKey: "lastScanAttemptAt")
     if last > 0, now - last < cooldownSec { return true }
+
     defaults.set(now, forKey: "lastScanAttemptAt")
+    defaults.set(now, forKey: "scanInProgressSince")
     return false
+  }
+
+  /// Libère le verrou posé par `shouldThrottleRapidScan`. À appeler sur TOUS les
+  /// chemins de sortie du pipeline — succès comme échec — sinon le prochain scan
+  /// attend l'expiration des 30 s.
+  static func markScanFinished() {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    UserDefaults(suiteName: appGroupId)?.removeObject(forKey: "scanInProgressSince")
   }
 
   /// Vrai si le dernier OCR justifie un appel Gemini (signaux d'offre de course
@@ -42,6 +64,18 @@ final class ScanProcessor {
   /// les callers évitent alors un appel Gemini payant inutile.
   private(set) var lastScanMayBeRide = true
 
+  /// Blocs OCR du dernier scan, sérialisés (cf. `OcrParser.dumpBlocks`) — matière
+  /// de diagnostic pour reproduire en fixture les captures où le parser rate une
+  /// adresse. Miroir du `debugBlocks` Android, jusqu'ici absent côté iOS : la
+  /// table `scan_debug` ne recevait donc jamais rien depuis un iPhone.
+  ///
+  /// Remis à nil au début de chaque scan pour ne jamais associer les blocs d'une
+  /// capture au résultat d'une autre (les 3 process partagent ce singleton).
+  private(set) var lastBlocksJson: String?
+  /// Hauteur en pixels de l'image analysée — les positions Y des blocs n'ont de
+  /// sens qu'avec elle (écrans de tailles différentes).
+  private(set) var lastScreenHeight: Int = 0
+
   struct FinalResult {
     let scan: ScanResultModel
     let hourlyRate: Double
@@ -49,6 +83,11 @@ final class ScanProcessor {
     let totalDurationMin: Int
     let totalDistanceKm: Double
     let verdictLevel: Int
+    /// Tarif À AFFICHER : net du carburant estimé si la préférence
+    /// « retirer le carburant du prix » est active, sinon égal à `scan.fare`.
+    /// Volontairement séparé — `scan.fare` reste le tarif brut, celui qui part en
+    /// base et qui sert au calcul des €/h, €/km et du verdict.
+    let displayFare: Double
   }
 
   /// Lance le pipeline complet sur l'image. Le callback `onFinal` n'est appelé
@@ -65,6 +104,10 @@ final class ScanProcessor {
       return
     }
     scanInProgress = true
+    // Purge : sans ça, un scan dont l'OCR ne rend rien conserverait les blocs du
+    // scan précédent et les enverrait avec le mauvais résultat.
+    lastBlocksJson = nil
+    lastScreenHeight = 0
 
     // Garde-fou anti-deadlock : `gate` garantit (1) un seul appel à onFinal,
     // (2) le reset systématique de scanInProgress, (3) un watchdog qui libère
@@ -90,6 +133,11 @@ final class ScanProcessor {
       self.lastScanMayBeRide = Self.looksLikeRideOffer(
         blocks.map { $0.text }.joined(separator: "\n")
       )
+
+      // Matière de diagnostic (cf. lastBlocksJson) — capturée AVANT le parse pour
+      // être disponible même si celui-ci échoue.
+      self.lastBlocksJson = OcrParser.dumpBlocks(blocks)
+      self.lastScreenHeight = screenH
 
       // Parsing identique à Android
       guard let result = OcrParser.shared.parse(
@@ -207,13 +255,25 @@ final class ScanProcessor {
     let kmOk = kmRate >= minKm
     let level = (hrOk && kmOk) ? 2 : ((hrOk || kmOk) ? 1 : 0)
 
+    // Affichage seul : le verdict ci-dessus est calculé sur le tarif brut, les
+    // seuils de l'utilisateur gardent donc le sens qu'ils ont toujours eu.
+    // `fuelCostPerKm` est poussé pré-calculé par le JS (conso × prix du jour) —
+    // le natif n'a ni le type de carburant ni le tarif à la pompe. 0 = pas de
+    // consommation renseignée, donc rien à déduire.
+    let deductFuel = prefs?.bool(forKey: "deductFuel") ?? false
+    let fuelCostPerKm = prefs?.double(forKey: "fuelCostPerKm") ?? 0
+    let displayFare = (deductFuel && fuelCostPerKm > 0)
+      ? max(0, scan.fare - fuelCostPerKm * totalDistance)
+      : scan.fare
+
     return FinalResult(
       scan: scan,
       hourlyRate: hourlyRate,
       kmRate: kmRate,
       totalDurationMin: Int(totalDuration.rounded()),
       totalDistanceKm: totalDistance,
-      verdictLevel: level
+      verdictLevel: level,
+      displayFare: displayFare
     )
   }
 

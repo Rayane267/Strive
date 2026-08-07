@@ -31,6 +31,7 @@ struct AnalyzeRideIntent: AppIntent {
         title: "Strive",
         body: localizedString("notif.scannerOff", fr: "Scanner désactivé — activez-le dans Strive › Préférences.", en: "Scanner disabled — enable it in Strive › Preferences.")
       )
+      logFailure("scanner_off")
       return .result(value: "scanner_off")
     }
     guard isSessionOnline else {
@@ -38,6 +39,7 @@ struct AnalyzeRideIntent: AppIntent {
         title: localizedString("notif.session.title", fr: "Session requise", en: "Session required"),
         body: localizedString("notif.session.body", fr: "Veuillez démarrer votre session dans Strive pour commencer à scanner.", en: "Please start your session in Strive to begin scanning.")
       )
+      logFailure("session_off")
       return .result(value: "session_off")
     }
 
@@ -46,14 +48,17 @@ struct AnalyzeRideIntent: AppIntent {
         title: "Strive",
         body: localizedString("notif.quota", fr: "Quota journalier atteint — revenez demain ou achetez des crédits.", en: "Daily quota reached — come back tomorrow or buy credits.")
       )
+      logFailure("quota_reached")
       return .result(value: "quota_reached")
     }
 
     guard let image = UIImage(data: screenshot.data) else {
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.invalidImage", fr: "Image invalide — réessayez avec une capture d'écran.", en: "Invalid image — try again with a screenshot.")
+        body: localizedString("notif.invalidImage", fr: "Image invalide — réessayez avec une capture d'écran.", en: "Invalid image — try again with a screenshot."),
+        code: .invalidImage
       )
+      logFailure("invalid_image")
       return .result(value: "invalid_image")
     }
 
@@ -70,6 +75,7 @@ struct AnalyzeRideIntent: AppIntent {
           fr: "Analyse déjà en cours — patiente une seconde.",
           en: "Analysis already running — hold on a second.")
       )
+      logFailure("throttled")
       return .result(value: "too_soon")
     }
 
@@ -83,7 +89,10 @@ struct AnalyzeRideIntent: AppIntent {
     // performExpiringActivity garde le process vivant (~qq secondes à ~30 s) le
     // temps du pipeline ; le sémaphore maintient l'assertion jusqu'au résultat.
     ProcessInfo.processInfo.performExpiringActivity(withReason: "StriveScanRefine") { expired in
-      if expired { return }
+      // Le système reprend la main : le pipeline ne rendra pas de résultat. Sans
+      // libérer le verrou ici, les 30 s suivantes répondent « analyse déjà en
+      // cours » à chaque tap — le scan paraît mort alors qu'il n'a jamais tourné.
+      if expired { self.logFailure("expired"); ScanProcessor.markScanFinished(); return }
       let sem = DispatchSemaphore(value: 0)
       ScanProcessor.shared.process(image: image) { finalResult in
         // Adresses présentes → on présente directement. Sinon (ou aucun
@@ -107,7 +116,12 @@ struct AnalyzeRideIntent: AppIntent {
       // Borne l'attente (watchdog interne ScanProcessor = 20 s ; on laisse une
       // marge). Évite de tenir l'assertion de fond indéfiniment si un callback
       // ne revient jamais.
-      _ = sem.wait(timeout: .now() + 25)
+      // Filet de sécurité : si aucun callback n'est revenu dans les temps, le
+      // verrou n'a été libéré par personne. `markScanFinished` est idempotent.
+      if sem.wait(timeout: .now() + 25) == .timedOut {
+        self.logFailure("timeout")
+        ScanProcessor.markScanFinished()
+      }
     }
 
     return .result(value: "started")
@@ -124,21 +138,34 @@ struct AnalyzeRideIntent: AppIntent {
   /// Affiche le résultat (Live Activity ou notif) + l'enregistre pour l'app.
   /// scanTs : clé de corrélation course ↔ décision (lastScanTimestamp + userInfo).
   private func presentResult(_ result: ScanProcessor.FinalResult) -> String {
+    // Verrou anti double-appui libéré dès qu'on a un résultat à montrer.
+    ScanProcessor.markScanFinished()
     let scanTs = Date().timeIntervalSince1970
     // liveActivityReady (et pas useLiveActivity) : si la LA est coupée dans les
     // réglages, on tombe sur la notification résultat (avec Accepter/Refuser)
     // au lieu d'un affichage qui échouerait en silence.
+    // `liveActivityReady` ne dit que si la fonctionnalité est autorisée, PAS si
+    // l'affichage a réussi : depuis le raccourci l'app est en arrière-plan, et
+    // `Activity.request()` y échoue quand aucune activité ne tourne déjà. On se
+    // fie donc au retour réel, sinon le scan aboutit sans que rien ne s'affiche.
+    var shown = false
     if liveActivityReady {
-      LiveActivityManager.shared.update(
-        platform: result.scan.platform.rawValue, fare: result.scan.fare,
+      // displayFare = net du carburant si la préférence est active, sinon brut.
+      shown = LiveActivityManager.shared.update(
+        platform: result.scan.platform.rawValue, fare: result.displayFare,
         hourlyRate: result.hourlyRate, kmRate: result.kmRate,
         distanceKm: result.totalDistanceKm, durationMin: result.totalDurationMin,
         verdictLevel: result.verdictLevel, scanTs: scanTs
       )
-    } else {
+    }
+    if !shown {
+      // Le scan a réussi mais la Live Activity n'a rien pu afficher : on retombe
+      // sur la notification ET on trace, sinon la panne reste invisible côté
+      // données alors qu'elle se voit chez tous les chauffeurs sans session.
+      if liveActivityReady { logFailure("la_start_failed") }
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
       sendLocalNotification(
-        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.scan.fare)) · \(verdict)",
+        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
         body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
         category: "STRIVE_SCAN_RESULT", scanTs: scanTs
       )
@@ -154,12 +181,23 @@ struct AnalyzeRideIntent: AppIntent {
   /// « Scan échoué » : affiché DANS la Live Activity (ou notif si LA désactivée).
   /// Rien n'est enregistré → l'app ne reçoit aucun résultat à rejeter.
   private func presentFailure() {
+    ScanProcessor.markScanFinished()
+    // `lastScanMayBeRide` distingue les deux causes : écran sans signal VTC
+    // (on n'a même pas appelé Gemini) vs Gemini appelé mais sans réponse
+    // exploitable. Sans ça les deux se confondent dans les agrégats.
+    logFailure(ScanProcessor.shared.lastScanMayBeRide ? "gemini_ko" : "not_a_ride")
+    // Même règle que presentResult : sans activité en cours, showError() ne
+    // montre rien du tout — on notifie alors, plutôt que d'échouer en silence.
+    var shown = false
     if liveActivityReady {
-      LiveActivityManager.shared.showError()
-    } else {
+      shown = LiveActivityManager.shared.showError()
+    }
+    if !shown {
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot.")
+        body: localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot."),
+        // « pas une course » est un résultat légitime, pas une panne : pas de code.
+        code: ScanProcessor.shared.lastScanMayBeRide ? .geminiKo : nil
       )
     }
   }
@@ -183,7 +221,8 @@ struct AnalyzeRideIntent: AppIntent {
       let base = ScanResultModel(
         platform: ScanPlatform(rawValue: gem.platform) ?? .UNKNOWN,
         fare: gem.fare, distanceKm: gem.distanceKm, durationMin: gem.durationMin,
-        pickupAddress: pickup, destinationAddress: dest
+        pickupAddress: pickup, destinationAddress: dest,
+        pickupDurationMin: gem.pickupDurationMin, pickupDistanceKm: gem.pickupDistanceKm
       )
       guard TomTomService.shared.isReady else {
         completion(ScanProcessor.shared.computeFinal(scan: base)); return
@@ -283,10 +322,19 @@ struct AnalyzeRideIntent: AppIntent {
     return lang.hasPrefix("fr") ? fr : en
   }
 
-  private func sendLocalNotification(title: String, body: String, category: String? = nil, scanTs: Double? = nil) {
+  /// `code` est ajouté en fin de corps pour que le chauffeur puisse le citer en
+  /// support. Même contrat que la Share Extension (cf. `ScanErrorCode`) : ce que
+  /// l'utilisateur rapporte est directement croisable avec `scan_failures.reason`.
+  private func sendLocalNotification(
+    title: String,
+    body: String,
+    category: String? = nil,
+    scanTs: Double? = nil,
+    code: ScanErrorCode? = nil
+  ) {
     let content = UNMutableNotificationContent()
     content.title = title
-    content.body = body
+    content.body = code == nil ? body : "\(body) (\(code!.rawValue))"
     content.sound = .default
     // Boutons Accepter/Refuser : la catégorie STRIVE_SCAN_RESULT est enregistrée
     // par l'app principale (AppDelegate). scanTs corrèle la décision à la course.
@@ -297,6 +345,54 @@ struct AnalyzeRideIntent: AppIntent {
   }
 
   // MARK: - App Group
+
+  /// Empile un ÉCHEC dans l'App Group. L'AppIntent tourne dans un autre process,
+  /// sans session Supabase : il ne peut pas écrire la trace lui-même. L'app la
+  /// relève au prochain passage au premier plan (`occurredAt` conserve l'heure
+  /// réelle). Sans ça, un scan qui casse ici ne laisse aucune trace nulle part —
+  /// c'est ce qui a rendu invisible le bug « ça scanne mais rien ne s'affiche ».
+  private func logFailure(_ reason: String, detail: String? = nil) {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    var queue: [[String: Any]] = []
+    if let data = defaults.data(forKey: "pendingScanFailures"),
+       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+      queue = existing
+    }
+    var entry: [String: Any] = [
+      "reason": reason,
+      "surface": "shortcut",
+      "occurredAt": Date().timeIntervalSince1970,
+    ]
+    if let detail = detail { entry["detail"] = detail }
+    queue.append(entry)
+    if queue.count > 50 { queue = Array(queue.suffix(50)) }
+    if let data = try? JSONSerialization.data(withJSONObject: queue) {
+      defaults.set(data, forKey: "pendingScanFailures")
+    }
+  }
+
+  /// Empile le résultat dans la file de l'App Group, en plus de la case
+  /// historique. Sans ça, deux scans consécutifs sans passage de l'app au
+  /// premier plan écrasaient le premier — course perdue, invisible.
+  private func enqueueScanResult(_ body: [String: Any], defaults: UserDefaults) {
+    var queue: [[String: Any]] = []
+    if let data = defaults.data(forKey: "pendingScanResults"),
+       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+      queue = existing
+    }
+    queue.append(body)
+    // Plafond relevé de 20 à 100 : depuis que React Native ne démarre plus sur
+    // un lancement en arrière-plan (cf. AppDelegate), la file n'est plus vidée à
+    // chaque scan mais seulement quand l'app passe au premier plan. Or l'usage
+    // visé est justement celui d'un chauffeur qui ne l'ouvre jamais de la journée.
+    // À 20, une journée chargée perdait ses courses les plus anciennes en silence.
+    if queue.count > 100 { queue = Array(queue.suffix(100)) }
+    if let data = try? JSONSerialization.data(withJSONObject: queue) {
+      defaults.set(data, forKey: "pendingScanResults")
+    }
+  }
 
   private func saveResultForMainApp(_ result: ScanProcessor.FinalResult, scanTs: Double) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
@@ -312,9 +408,23 @@ struct AnalyzeRideIntent: AppIntent {
       "kmRate": result.kmRate,
       "verdictLevel": result.verdictLevel,
       "scanTs": scanTs,
+      // Tarif d'AFFICHAGE (net de carburant si l'option est active). `fare`
+      // reste brut : c'est lui qui est enregistré en base.
+      "displayFare": result.displayFare,
     ]
     if let pickup = result.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = result.scan.destinationAddress { body["destinationAddress"] = dest }
+
+    // Diagnostic parser — même règle que la Share Extension : blocs OCR joints
+    // seulement si une adresse manque (cf. saveSharedResult).
+    if result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+      || result.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+      let blocks = ScanProcessor.shared.lastBlocksJson {
+      body["debugBlocks"] = blocks
+      body["screenHeight"] = ScanProcessor.shared.lastScreenHeight
+    }
+
+    enqueueScanResult(body, defaults: defaults)
 
     if let data = try? JSONSerialization.data(withJSONObject: body) {
       defaults.set(data, forKey: "lastScanResult")

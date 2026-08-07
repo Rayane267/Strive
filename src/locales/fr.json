@@ -20,7 +20,8 @@
     "unsavedTitle": "Modifications non enregistrées",
     "unsavedMessage": "Voulez-vous quitter sans enregistrer vos changements ?",
     "stay": "Rester",
-    "leave": "Quitter"
+    "leave": "Quitter",
+    "back": "Retour"
   },
   "errors": {
     "profileLoadFailed": "Impossible de charger votre profil.",
@@ -51,8 +52,23 @@
       "appleTitle": "Erreur Apple",
       "facebookTitle": "Erreur Facebook",
       "rateLimit": "Trop de tentatives. Réessayez dans quelques minutes.",
-      "deviceSignupLimit": "Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement."
-    }
+      "deviceSignupLimit": "Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement.",
+      "accountExistsOtherProvider": "Un compte Strive existe déjà avec cette adresse email. Reconnecte-toi avec la méthode utilisée la première fois — Google ou Apple.",
+      "signupFailed": "Impossible de créer le compte. Réessaie dans un instant.",
+      "passwordMismatch": "Les mots de passe ne correspondent pas",
+      "resetTitle": "Réinitialisation",
+      "weakPassword": "Mot de passe trop faible (minimum 8 caractères)"
+    },
+    "backToLogin": "Retour à la connexion",
+    "confirmPasswordPlaceholder": "Confirmer le mot de passe",
+    "passwordPlaceholder": "Mot de passe",
+    "resetCtaConfirm": "Mettre à jour",
+    "resetExpired": "Le lien de réinitialisation est invalide ou a expiré. Demandez-en un nouveau.",
+    "resetExpiredTitle": "Lien expiré",
+    "resetSubtitle": "Choisissez un nouveau mot de passe (minimum 8 caractères).",
+    "resetSuccess": "Vous pouvez maintenant vous connecter avec votre nouveau mot de passe",
+    "resetSuccessTitle": "Mot de passe mis à jour",
+    "resetTitle": "Réinitialiser le mot de passe"
   },
   "profile": {
     "title": "Mon Profil",
@@ -132,7 +148,8 @@
         "dobMinAge": "Vous devez avoir au moins 18 ans",
         "saveFailed": "Erreur lors de l'enregistrement"
       }
-    }
+    },
+    "deleteAccountSub": "Action irréversible"
   },
   "scanner": {
     "title": "Configurer le scanner",
@@ -210,7 +227,8 @@
     "timeLabels": {
       "justNow": "À l'instant",
       "minutesAgo": "Il y a {{count}} min",
-      "hoursAgo": "Il y a {{count}} h"
+      "hoursAgo": "Il y a {{count}} h",
+      "daysAgo": "Il y a {{count}} j"
     },
     "priceCheck": {
       "title": "Prix de la course",
@@ -220,7 +238,7 @@
     },
     "priceModal": {
       "title": "Prix réel de la course",
-      "subtitle": "Entrez le montant final affiché sur l'application VTC",
+      "subtitle": "Entrez le montant final affiché",
       "placeholder": "Ex : 14,50",
       "skip": "Passer",
       "confirm": "Confirmer"
@@ -252,6 +270,10 @@
       "perk1": "15 scans/jour",
       "perk2": "€/h en direct",
       "perk3": "Historique"
+    },
+    "liveActivityPermission": {
+      "title": "Activités en direct",
+      "message": "Pour afficher le résultat des scans en temps réel, activez les Activités en direct dans Réglages → Strive."
     }
   },
   "shop": {
@@ -320,7 +342,7 @@
     "alerts": {
       "premiumTitle": "Accès Plus",
       "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus.",
-      "limitText": "Max 7 jours."
+      "limitText": "7 jours maximum — sélection redémarrée à cette date"
     }
   },
   "history": {
@@ -345,7 +367,8 @@
     "status": {
       "ACCEPTED": "ACCEPTÉE",
       "DECLINED": "REFUSÉE"
-    }
+    },
+    "changeMonth": "Changer le mois"
   },
   "settings": {
     "title": "Paramètres Véhicule",
@@ -383,7 +406,7 @@
     "tripId": "Identificateur de Course",
     "active": "Actif",
     "enableTripId": "Activer l'identificateur",
-    "enableTripIdSub": "Analyser via Raccourci ou Tap arrière",
+    "enableTripIdSub": "Analyser les offres via le raccourci AssistiveTouch",
     "minimums": "VOS MINIMUMS",
     "minHr": "Minimum $/h",
     "minKm": "Minimum $/km",
@@ -394,6 +417,9 @@
     "dayReset4amSub": "Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit",
     "includePickup": "Inclure l'approche aux calculs",
     "includePickupSub": "Prend en compte le temps et la distance d'approche pour une estimation plus réaliste.",
+    "deductFuel": "Retirer le carburant du prix",
+    "deductFuelSub": "Le prix affiché devient net du carburant estimé",
+    "deductFuelMissing": "Renseignez la consommation de votre véhicule pour que cette option ait un effet.",
     "resultMode": "Dynamic Island",
     "resultModeSub": "Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.",
     "advanced": "Paramètres Avancés",
@@ -465,7 +491,7 @@
   "tutorial": {
     "skip": "Passer",
     "next": "Suivant",
-    "start": "C'est parti",
+    "start": "Faire mon premier scan",
     "step": "ÉTAPE",
     "openShortcuts": "Ouvrir Raccourcis",
     "openAccessibility": "Ouvrir Accessibilité",
@@ -503,33 +529,32 @@
     "minimums": {
       "title": "Configurez vos seuils",
       "desc": "Les courses en dessous seront marquées à refuser.",
+      "hourly": "Minimum €/h",
+      "kmRate": "Minimum €/km",
+      "includePickup": "Inclure le trajet d'approche",
       "casual": "Débutant",
       "standard": "Standard",
-      "premium": "Premium",
+      "premium": "Exigeant",
       "presetHint": "Choisissez un preset ou personnalisez ci-dessous",
-      "hourly": "Minimum €/h",
-      "hourlyHint": "Gains horaires nets. La plupart des chauffeurs VTC visent 20-30€/h.",
-      "kmRate": "Minimum €/km",
-      "kmRateHint": "Couvre l'essence + l'usure. Le barème fiscal est ~0.60€/km, visez 0.80-1.50€/km.",
-      "includePickup": "Inclure le trajet d'approche"
+      "hourlyHint": "Gains horaires nets. La plupart des chauffeurs VTC visent 25-35 €/h.",
+      "kmRateHint": "Couvre le carburant + l'usure. Le barème fiscal est ~0,60 €/km ; visez 1,10-1,70 €/km."
     },
     "quickRef": {
-      "subtitle": "COMMENT ÇA MARCHE",
       "ios": {
-        "step1": "Capture",
-        "step1Sub": "Capturez l'offre",
-        "step2": "AssistiveTouch",
-        "step2Sub": "Appuyez sur le bouton",
-        "step3": "Verdict",
-        "step3Sub": "Résultat instantané"
+        "step1": "Capturez l'offre",
+        "step1Sub": "Sur Uber, Bolt ou Heetch",
+        "step2": "Appuyez sur AssistiveTouch",
+        "step2Sub": "Sans quitter l'application",
+        "step3": "Lisez le verdict",
+        "step3Sub": "€/h et €/km réels, trafic inclus"
       },
       "android": {
-        "step1": "Scanner",
-        "step1Sub": "Activez le scanner",
-        "step2": "Tap",
-        "step2Sub": "Tapez sur la bulle",
-        "step3": "Verdict",
-        "step3Sub": "Résultat instantané"
+        "step1": "Activez le scanner",
+        "step1Sub": "Depuis l'accueil de Strive",
+        "step2": "Tapez sur la bulle",
+        "step2Sub": "Quand l'offre s'affiche",
+        "step3": "Lisez le verdict",
+        "step3Sub": "€/h et €/km réels, trafic inclus"
       }
     },
     "iosInstall": {
@@ -543,10 +568,6 @@
     "step3": {
       "title": "Acceptez ou refusez en un instant",
       "desc": "Appuyez sur la bulle quand une offre apparaît. Strive vous montre le taux horaire et le taux au km en temps réel. Vert = go, Rouge = refuser."
-    },
-    "step3_ios": {
-      "title": "Choisissez votre déclencheur",
-      "desc": "Comment voulez-vous lancer le raccourci depuis Uber / Bolt / Heetch ?"
     },
     "iosTrigger": {
       "recommended": "★ Recommandé — Le plus rapide",
@@ -583,6 +604,7 @@
         "step3s": "« Ajouter à l'écran d'accueil »"
       },
       "cta": "Ouvrir les réglages d'accessibilité",
+      "ctaSettings": "Ouvrir les Réglages",
       "doneCta": "C'est configuré"
     },
     "laTip": {
@@ -598,12 +620,12 @@
       "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables."
     },
     "step5": {
-      "title": "Tout est prêt !",
-      "desc": "Configurez vos seuils minimum dans Préférences, puis démarrez le scanner depuis l'Accueil. Bonne route !"
+      "title": "Votre premier scan",
+      "desc": "Trois gestes, deux secondes — et vous saurez si la course vaut le coup avant d'accepter."
     },
     "step5_ios": {
-      "title": "Tout est prêt !",
-      "desc": "Configurez vos seuils minimum dans Préférences. Plus besoin de démarrer quoi que ce soit — votre raccourci est prêt. Bonne route !"
+      "title": "Votre premier scan",
+      "desc": "Trois gestes, deux secondes — et vous saurez si la course vaut le coup avant d'accepter."
     },
     "tips": {
       "step1": "Strive fonctionne avec Uber, Bolt et Heetch. D'autres plateformes arrivent bientôt.",
@@ -617,8 +639,7 @@
       "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
       "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
     },
-    "restartVideo": "Revoir la vidéo",
-    "doneReady": "Tout est prêt — bonne route !"
+    "restartVideo": "Revoir la vidéo"
   },
   "help": {
     "title": "Aide & Support",
@@ -672,6 +693,49 @@
       "open": "En attente",
       "answered": "Répondu",
       "closed": "Fermé"
+    },
+    "categoryLabel": "Catégorie",
+    "subcategoryLabel": "Précisez",
+    "errorLabel": "Une erreur récente est-elle concernée ?",
+    "filterAll": "Tous",
+    "cat": {
+      "scan": "Scan",
+      "subscription": "Abonnement",
+      "account": "Compte",
+      "data": "Historique",
+      "suggestion": "Suggestion",
+      "other": "Autre"
+    },
+    "sub": {
+      "scan.no_detect": "Aucune course détectée",
+      "scan.wrong_values": "Chiffres incorrects",
+      "scan.addresses": "Adresses mal lues",
+      "scan.trigger": "Le raccourci ne se lance pas",
+      "scan.display": "Le résultat ne s'affiche pas",
+      "subscription.purchase": "Achat impossible",
+      "subscription.restore": "Restaurer mon abonnement",
+      "subscription.billing": "Facturation",
+      "subscription.cancel": "Résiliation",
+      "account.login": "Connexion impossible",
+      "account.profile": "Modifier mes informations",
+      "account.delete": "Supprimer mon compte",
+      "data.missing_ride": "Course manquante",
+      "data.wrong_stats": "Statistiques incorrectes",
+      "data.export": "Récupérer mes données"
+    },
+    "reason": {
+      "scanner_off": "Scanner désactivé",
+      "session_off": "Session non démarrée",
+      "quota_reached": "Quota journalier atteint",
+      "invalid_image": "Image illisible",
+      "throttled": "Analyse déjà en cours",
+      "ocr_empty": "Aucun texte lu à l'écran",
+      "no_addresses": "Adresses illisibles",
+      "not_a_ride": "Aucune offre détectée",
+      "gemini_ko": "L'analyse IA a échoué",
+      "la_start_failed": "Affichage impossible",
+      "expired": "Analyse interrompue",
+      "timeout": "Analyse trop longue"
     }
   },
   "iap": {
@@ -791,6 +855,11 @@
     "privacy": "Confidentialité",
     "errorTitle": "Erreur",
     "errorMsg": "Impossible de finaliser l'abonnement. Réessayez.",
+    "alreadyOwnedMsg": "Cet abonnement est encore actif sur ton compte Apple. Touche « Restaurer les achats » pour retrouver ton accès.",
+    "receiptInUseMsg": "Cet achat Apple est déjà lié à un autre compte Strive. Connecte-toi avec ce compte, ou touche « Restaurer les achats ».",
+    "storeProblemMsg": "L'App Store n'a pas répondu. Vérifie ta connexion et réessaie.",
+    "pendingTitle": "Achat en attente",
+    "pendingMsg": "L'App Store doit encore valider le paiement. Ton accès s'ouvrira dès la confirmation.",
     "rows": {
       "scans": {
         "label": "Scans journaliers",
@@ -866,7 +935,8 @@
     "freeBadge": "GRATUIT",
     "plus": "★ Plus",
     "plusBadge": "PLUS",
-    "premiumBadge": "PREMIUM"
+    "premiumBadge": "PREMIUM",
+    "plusOnly": "Réservé à Strive Plus"
   },
   "countries": {
     "fr": "France",
@@ -889,5 +959,44 @@
     "ro": "Roumanie",
     "pl": "Pologne",
     "us": "États-Unis / Canada"
+  },
+  "onboarding": {
+    "skip": "Passer",
+    "next": "Continuer",
+    "start": "Commencer",
+    "other": "Autre",
+    "counter": "Étape {{current}} sur {{total}}",
+    "platforms": {
+      "title": "Sur quelles apps roulez-vous ?",
+      "desc": "Strive apprendra à reconnaître leurs écrans. Vous pouvez en choisir plusieurs."
+    },
+    "hours": {
+      "title": "Combien d'heures par semaine ?",
+      "desc": "Le temps réellement passé au volant, pas le temps connecté."
+    },
+    "goal": {
+      "title": "Ce que vous voulez qu'il vous reste",
+      "desc": "Par mois, après charges. C'est votre objectif, pas votre chiffre d'affaires."
+    },
+    "costs": {
+      "title": "Vos charges fixes mensuelles",
+      "desc": "Location ou crédit du véhicule, assurance, abonnements. Ce qui part chaque mois quoi qu'il arrive.",
+      "none": "Aucune"
+    },
+    "status": {
+      "title": "Votre statut",
+      "desc": "Il détermine la part de votre chiffre d'affaires qui part en charges sociales.",
+      "auto": "Auto-entrepreneur",
+      "company": "Société",
+      "employee": "Salarié"
+    },
+    "result": {
+      "title": "Votre seuil de rentabilité",
+      "desc": "",
+      "label": "Une course doit rapporter",
+      "orKm": "ou {{km}} €/km",
+      "fromGoal": "Calculé depuis votre objectif, vos heures et vos charges. Strive marquera à refuser toute course en dessous.",
+      "floored": "Votre objectif est atteignable en dessous — nous gardons ce seuil, car une course moins payée vous coûte de l'argent une fois l'usure et les charges comptées."
+    }
   }
 }

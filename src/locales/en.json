@@ -20,7 +20,8 @@
     "unsavedTitle": "Unsaved changes",
     "unsavedMessage": "Do you want to leave without saving your changes?",
     "stay": "Stay",
-    "leave": "Leave"
+    "leave": "Leave",
+    "back": "Back"
   },
   "errors": {
     "profileLoadFailed": "Unable to load your profile.",
@@ -51,8 +52,23 @@
       "appleTitle": "Apple Error",
       "facebookTitle": "Facebook Error",
       "rateLimit": "Too many attempts. Try again in a few minutes.",
-      "deviceSignupLimit": "Too many accounts created with this phone. Please try again later."
-    }
+      "deviceSignupLimit": "Too many accounts created with this phone. Please try again later.",
+      "accountExistsOtherProvider": "A Strive account already exists with this email address. Sign back in with the method you used the first time — Google or Apple.",
+      "signupFailed": "Couldn't create the account. Please try again in a moment.",
+      "passwordMismatch": "Passwords do not match",
+      "resetTitle": "Reset",
+      "weakPassword": "Password too weak (8 characters minimum)"
+    },
+    "backToLogin": "Back to sign in",
+    "confirmPasswordPlaceholder": "Confirm password",
+    "passwordPlaceholder": "Password",
+    "resetCtaConfirm": "Update",
+    "resetExpired": "This reset link is invalid or has expired. Request a new one.",
+    "resetExpiredTitle": "Link expired",
+    "resetSubtitle": "Choose a new password (8 characters minimum).",
+    "resetSuccess": "You can now sign in with your new password",
+    "resetSuccessTitle": "Password updated",
+    "resetTitle": "Reset password"
   },
   "profile": {
     "title": "My Profile",
@@ -132,7 +148,8 @@
         "dobMinAge": "You must be at least 18 years old",
         "saveFailed": "Error while saving"
       }
-    }
+    },
+    "deleteAccountSub": "This cannot be undone"
   },
   "scanner": {
     "title": "Set up scanner",
@@ -210,7 +227,8 @@
     "timeLabels": {
       "justNow": "Just now",
       "minutesAgo": "{{count}}m ago",
-      "hoursAgo": "{{count}}h ago"
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
     },
     "priceCheck": {
       "title": "Ride price",
@@ -220,7 +238,7 @@
     },
     "priceModal": {
       "title": "Actual ride price",
-      "subtitle": "Enter the final amount shown on the VTC app",
+      "subtitle": "Enter the final amount shown",
       "placeholder": "e.g. 14.50",
       "skip": "Skip",
       "confirm": "Confirm"
@@ -252,6 +270,10 @@
       "perk1": "15 scans/day",
       "perk2": "Live €/h",
       "perk3": "History"
+    },
+    "liveActivityPermission": {
+      "title": "Live Activities",
+      "message": "To see scan results in real time, turn on Live Activities in Settings → Strive."
     }
   },
   "shop": {
@@ -320,7 +342,7 @@
     "alerts": {
       "premiumTitle": "Plus Access",
       "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
-      "limitText": "Max 7 days."
+      "limitText": "7 days maximum — selection restarted from this date"
     }
   },
   "history": {
@@ -345,7 +367,8 @@
     "status": {
       "ACCEPTED": "ACCEPTED",
       "DECLINED": "DECLINED"
-    }
+    },
+    "changeMonth": "Change month"
   },
   "settings": {
     "title": "Car Settings",
@@ -383,7 +406,7 @@
     "tripId": "Trip Identifier",
     "active": "Active",
     "enableTripId": "Enable Trip Identifier",
-    "enableTripIdSub": "Analyze offers via Back Tap or Shortcut",
+    "enableTripIdSub": "Analyze offers via the AssistiveTouch shortcut",
     "minimums": "YOUR MINIMUMS",
     "minHr": "Minimum $/hr",
     "minKm": "Minimum $/km",
@@ -394,6 +417,9 @@
     "dayReset4amSub": "For night drivers: your day starts at 4 AM local instead of midnight",
     "includePickup": "Include pickup in calculations",
     "includePickupSub": "Counts pickup time & distance in rates for a more accurate real earnings estimate.",
+    "deductFuel": "Deduct fuel from the price",
+    "deductFuelSub": "The displayed price becomes net of estimated fuel",
+    "deductFuelMissing": "Enter your vehicle's fuel consumption for this option to have any effect.",
     "resultMode": "Dynamic Island",
     "resultModeSub": "Show scan result in the Dynamic Island. Off = classic notification.",
     "advanced": "Advanced Settings",
@@ -465,7 +491,7 @@
   "tutorial": {
     "skip": "Skip",
     "next": "Next",
-    "start": "Let's go",
+    "start": "Start my first scan",
     "step": "STEP",
     "openShortcuts": "Open Shortcuts",
     "openAccessibility": "Open Accessibility",
@@ -503,33 +529,32 @@
     "minimums": {
       "title": "Set Your Minimums",
       "desc": "Rides below these rates will be marked SKIP.",
-      "casual": "Casual",
-      "standard": "Standard",
-      "premium": "Premium",
-      "presetHint": "Tap a preset or customize below",
       "hourly": "Minimum €/hr",
-      "hourlyHint": "Net hourly earnings. Most VTC drivers aim for €20-30/hr.",
       "kmRate": "Minimum €/km",
-      "kmRateHint": "Covers gas + wear. Tax rate is ~€0.60/km, aim for €0.80-1.50/km.",
-      "includePickup": "Include pickup in calculations"
+      "includePickup": "Include pickup in calculations",
+      "casual": "Beginner",
+      "standard": "Standard",
+      "premium": "Demanding",
+      "presetHint": "Tap a preset or customize below",
+      "hourlyHint": "Net hourly earnings. Most VTC drivers aim for €25-35/hr.",
+      "kmRateHint": "Covers fuel + wear. The tax rate is ~€0.60/km; aim for €1.10-1.70/km."
     },
     "quickRef": {
-      "subtitle": "HOW IT WORKS",
       "ios": {
-        "step1": "Screenshot",
-        "step1Sub": "Capture the offer",
-        "step2": "AssistiveTouch",
-        "step2Sub": "Tap the button",
-        "step3": "Verdict",
-        "step3Sub": "Instant result"
+        "step1": "Capture the offer",
+        "step1Sub": "On Uber, Bolt or Heetch",
+        "step2": "Press AssistiveTouch",
+        "step2Sub": "Without leaving the app",
+        "step3": "Read the verdict",
+        "step3Sub": "Real €/h and €/km, traffic included"
       },
       "android": {
-        "step1": "Scanner",
-        "step1Sub": "Enable the scanner",
-        "step2": "Tap",
-        "step2Sub": "Tap the bubble",
-        "step3": "Verdict",
-        "step3Sub": "Instant result"
+        "step1": "Turn on the scanner",
+        "step1Sub": "From the Strive dashboard",
+        "step2": "Tap the bubble",
+        "step2Sub": "When the offer appears",
+        "step3": "Read the verdict",
+        "step3Sub": "Real €/h and €/km, traffic included"
       }
     },
     "iosInstall": {
@@ -543,10 +568,6 @@
     "step3": {
       "title": "Accept or decline instantly",
       "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline."
-    },
-    "step3_ios": {
-      "title": "Choose your trigger",
-      "desc": "How do you want to launch the shortcut from Uber / Bolt / Heetch?"
     },
     "iosTrigger": {
       "recommended": "★ Recommended — Fastest option",
@@ -583,6 +604,7 @@
         "step3s": "\"Add to Home Screen\""
       },
       "cta": "Open Accessibility settings",
+      "ctaSettings": "Open Settings",
       "doneCta": "I've set it up"
     },
     "laTip": {
@@ -598,12 +620,12 @@
       "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms."
     },
     "step5": {
-      "title": "You're all set!",
-      "desc": "Configure your minimum rates in Preferences, then start the scanner from the Dashboard. Happy driving!"
+      "title": "Your first scan",
+      "desc": "Three gestures, two seconds — and you'll know if the ride is worth it before accepting."
     },
     "step5_ios": {
-      "title": "You're all set!",
-      "desc": "Configure your minimum rates in Preferences. Nothing to start manually — your shortcut is ready. Happy driving!"
+      "title": "Your first scan",
+      "desc": "Three gestures, two seconds — and you'll know if the ride is worth it before accepting."
     },
     "tips": {
       "step1": "Strive works with Uber, Bolt and Heetch. More platforms are coming soon.",
@@ -617,8 +639,7 @@
       "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
       "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
     },
-    "restartVideo": "Replay video",
-    "doneReady": "You're all set — safe travels!"
+    "restartVideo": "Replay video"
   },
   "help": {
     "title": "Help & Support",
@@ -672,6 +693,49 @@
       "open": "Pending",
       "answered": "Answered",
       "closed": "Closed"
+    },
+    "categoryLabel": "Category",
+    "subcategoryLabel": "Be more specific",
+    "errorLabel": "Is a recent error involved?",
+    "filterAll": "All",
+    "cat": {
+      "scan": "Scanning",
+      "subscription": "Subscription",
+      "account": "Account",
+      "data": "History",
+      "suggestion": "Suggestion",
+      "other": "Other"
+    },
+    "sub": {
+      "scan.no_detect": "No ride detected",
+      "scan.wrong_values": "Wrong numbers",
+      "scan.addresses": "Addresses misread",
+      "scan.trigger": "The shortcut won't run",
+      "scan.display": "The result doesn't show",
+      "subscription.purchase": "Purchase fails",
+      "subscription.restore": "Restore my subscription",
+      "subscription.billing": "Billing",
+      "subscription.cancel": "Cancellation",
+      "account.login": "Cannot sign in",
+      "account.profile": "Edit my details",
+      "account.delete": "Delete my account",
+      "data.missing_ride": "Missing ride",
+      "data.wrong_stats": "Wrong statistics",
+      "data.export": "Get my data"
+    },
+    "reason": {
+      "scanner_off": "Scanner turned off",
+      "session_off": "Session not started",
+      "quota_reached": "Daily quota reached",
+      "invalid_image": "Unreadable image",
+      "throttled": "Analysis already running",
+      "ocr_empty": "No text read on screen",
+      "no_addresses": "Addresses unreadable",
+      "not_a_ride": "No ride offer detected",
+      "gemini_ko": "AI analysis failed",
+      "la_start_failed": "Could not display",
+      "expired": "Analysis interrupted",
+      "timeout": "Analysis timed out"
     }
   },
   "iap": {
@@ -791,6 +855,11 @@
     "privacy": "Privacy",
     "errorTitle": "Error",
     "errorMsg": "Unable to complete subscription. Please try again.",
+    "alreadyOwnedMsg": "This subscription is still active on your Apple account. Tap “Restore purchases” to get your access back.",
+    "receiptInUseMsg": "This Apple purchase is already linked to another Strive account. Sign in with that account, or tap “Restore purchases”.",
+    "storeProblemMsg": "The App Store didn't respond. Check your connection and try again.",
+    "pendingTitle": "Purchase pending",
+    "pendingMsg": "The App Store still has to confirm the payment. Your access opens as soon as it does.",
     "rows": {
       "scans": {
         "label": "Daily scans",
@@ -866,7 +935,8 @@
     "freeBadge": "FREE",
     "plus": "★ Plus",
     "plusBadge": "PLUS",
-    "premiumBadge": "PREMIUM"
+    "premiumBadge": "PREMIUM",
+    "plusOnly": "Strive Plus only"
   },
   "countries": {
     "fr": "France",
@@ -889,5 +959,44 @@
     "ro": "Romania",
     "pl": "Poland",
     "us": "United States / Canada"
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Continue",
+    "start": "Get started",
+    "other": "Other",
+    "counter": "Step {{current}} of {{total}}",
+    "platforms": {
+      "title": "Which apps do you drive for?",
+      "desc": "Strive will learn to read their screens. You can pick more than one."
+    },
+    "hours": {
+      "title": "How many hours per week?",
+      "desc": "Time actually behind the wheel, not time online."
+    },
+    "goal": {
+      "title": "What you want to keep",
+      "desc": "Per month, after costs. This is your target, not your revenue."
+    },
+    "costs": {
+      "title": "Your fixed monthly costs",
+      "desc": "Vehicle lease or loan, insurance, subscriptions. What goes out every month no matter what.",
+      "none": "None"
+    },
+    "status": {
+      "title": "Your status",
+      "desc": "It sets the share of your revenue that goes to social contributions.",
+      "auto": "Sole trader",
+      "company": "Company",
+      "employee": "Employee"
+    },
+    "result": {
+      "title": "Your break-even rate",
+      "desc": "",
+      "label": "A ride has to pay",
+      "orKm": "or €{{km}}/km",
+      "fromGoal": "Computed from your target, your hours and your costs. Strive will mark any ride below it as SKIP.",
+      "floored": "Your target is reachable below this — we keep this rate, because a ride paying less costs you money once wear and contributions are counted."
+    }
   }
 }

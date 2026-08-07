@@ -79,6 +79,11 @@ export interface ScannerService {
   setPreferences(includePickup: boolean): void;
   /** Seuils verdict (€/h et €/km) synchronisés au natif pour calcul TomTom en background */
   setThresholds(minHourlyRate: number, minKmRate: number): void;
+  /** Affichage du prix net de carburant dans la Live Activity. `fuelCostPerKm`
+   *  est pré-calculé côté JS (conso × prix du jour) : le natif n'a ni le type de
+   *  carburant ni le tarif à la pompe. Affichage seul — le verdict, les €/h,
+   *  les €/km et le tarif enregistré restent bruts. */
+  setFuelDeduction(enabled: boolean, fuelCostPerKm: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   setTomTomApiKey(key: string): void;
   /** Purge le cache de géocodage local (adresses = PII). À appeler au logout et
@@ -112,8 +117,14 @@ export interface ScannerService {
   requestMediaProjectionPermission(): Promise<void>;
   /** Écoute les résultats de scan */
   onScanResult(cb: (result: ScanResult) => void): { remove: () => void } | undefined;
-  /** Écoute les échecs */
+  /** Écoute les échecs (signal UI, sans motif) */
   onScanFailed(cb: () => void): { remove: () => void } | undefined;
+  /** Écoute les échecs AVEC leur motif, pour la trace de diagnostic. Émis aussi
+   *  pour les scans cassés pendant que le JS ne tournait pas : le natif les
+   *  empile (App Group / SharedPreferences) et les vide à l'abonnement. */
+  onScanFailure(
+    cb: (f: { reason: string; surface: string; platform?: string | null; detail?: string | null; occurredAt?: number | null }) => void,
+  ): { remove: () => void } | undefined;
   /** Écoute les décisions Accepter/Refuser tapées sur la notification (iOS).
    *  Android : non implémenté (no-op). */
   onRideDecision(cb: (decision: RideDecision) => void): { remove: () => void } | undefined;

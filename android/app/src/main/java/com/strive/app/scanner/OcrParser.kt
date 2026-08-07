@@ -147,12 +147,24 @@ object OcrParser {
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
     private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)""")
-    // Tarif sans séparateur ("1743€" ou "17 €"). Min 2 chiffres : un "5€" sec
-    // n'est jamais un tarif — contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
-    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6})\s*€""")
+    // Tarif sans séparateur ("1743€" ou "17 €"). Deux chiffres ou plus, OU un
+    // chiffre seul de 6 à 9 : une course à 9 € existe (tarif minimum VTC), alors
+    // qu'un "5€" sec est presque toujours un pourboire, un pack ou une note —
+    // contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
+    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6}|[6-9])\s*€""")
     // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
     private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")
     private val DISTANCE_REGEX = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
+    // Contexte vehicule electrique. Uber affiche sur certaines offres une info
+    // de recharge ou d'autonomie ("35 min", "250 km") etrangere a la course :
+    // sans ce filtre elle devient la duree ou la distance, et le EUR/h comme le
+    // EUR/km sont faux en silence.
+    // Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration (aligne TS/Swift).
+    // ATTENTION : « charge » seul est PROSCRIT — « prise en charge » designe le pickup.
+    private val EV_CONTEXT_REGEX = Regex(
+        """(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)""",
+        RegexOption.IGNORE_CASE,
+    )
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
     private val PICKUP_COMBO_MIN_FIRST = Regex("""(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
@@ -581,6 +593,8 @@ object OcrParser {
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
+            // Autonomie annoncee en km -> ce n'est pas la distance de la course.
+            if (EV_CONTEXT_REGEX.containsMatchIn(block.text)) continue
             // Normalise les confusions OCR chiffre↔lettre dans les seules zones
             // numériques (ex: "1l.8 km" → "11.8 km"). Safe pour les adresses.
             val normalizedText = normalizeOcrDigits(block.text)
@@ -650,6 +664,8 @@ object OcrParser {
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
+            // Bloc d'info vehicule electrique -> ces minutes ne sont pas la course.
+            if (EV_CONTEXT_REGEX.containsMatchIn(block.text)) continue
             val lower = block.text.lowercase()
             val hasKm = lower.contains("km")
             val hasMin = lower.contains("min")

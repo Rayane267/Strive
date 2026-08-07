@@ -76,10 +76,32 @@ export async function updateRideStatus(
   if (error) throw error;
 }
 
-export async function updateRideFare(id: string, fare: number): Promise<void> {
+/**
+ * Enregistre le tarif réellement encaissé et recalcule les métriques dérivées.
+ *
+ * `hourly_rate`, `km_rate` et `net_profit` sont figés au scan à partir du tarif
+ * ESTIMÉ. Sans ce recalcul, corriger le montant ne changeait que les gains
+ * cumulés (qui passent par effectiveFare) : l'Historique continuait d'afficher
+ * les €/h et €/km de l'estimation. `fuel_cost` n'est pas touché — il dépend de
+ * la distance et du prix du carburant du jour, pas du tarif.
+ */
+export async function updateRideFare(
+  id: string,
+  fare: number,
+  metrics?: { distanceKm: number; durationMin: number; fuelCost?: number | null },
+): Promise<void> {
+  const patch: Record<string, number> = { fare_final: fare };
+  if (metrics) {
+    if (metrics.durationMin > 0) patch.hourly_rate = fare / (metrics.durationMin / 60);
+    if (metrics.distanceKm > 0) patch.km_rate = fare / metrics.distanceKm;
+    if (metrics.fuelCost != null) {
+      patch.net_profit = Math.round((fare - metrics.fuelCost) * 100) / 100;
+    }
+  }
+
   const { error } = await supabase
     .from('rides')
-    .update({ fare_final: fare })
+    .update(patch)
     .eq('id', id);
 
   if (error) throw error;

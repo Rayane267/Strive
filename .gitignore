@@ -41,6 +41,8 @@ local.properties
 .env.production
 .env.production.example
 .env.*.local
+# Chaîne de connexion du rôle de diagnostic en lecture seule (jamais commitée).
+.env.diag
 
 # Firebase / Google services credentials
 # Note : ces fichiers (GoogleService-Info.plist iOS et google-services.json Android)

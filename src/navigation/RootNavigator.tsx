@@ -19,6 +19,7 @@ import ProfileSetupScreenRaw from '../screens/ProfileSetupScreen.tsx';
 import SubscriptionScreenRaw from '../screens/SubscriptionScreen.tsx';
 import ScannerPermissionScreenRaw from '../screens/ScannerPermissionScreen';
 import TutorialScreenRaw from '../screens/TutorialScreen';
+import OnboardingScreenRaw from '../screens/OnboardingScreen';
 import HelpScreenRaw from '../screens/HelpScreen';
 import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
 import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
@@ -40,20 +41,30 @@ const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
 const Stack = createNativeStackNavigator();
 
 const TUTORIAL_SEEN_KEY = '@strive_has_seen_tutorial';
+const ONBOARDING_SEEN_KEY = '@strive_has_seen_onboarding';
 
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
   const { t } = useTranslation();
   const [tutorialChecked, setTutorialChecked] = useState(false);
   const [showTutorialFirst, setShowTutorialFirst] = useState(false);
+  // L'onboarding (objectif, heures, charges, statut) précède le tutoriel : il
+  // produit le seuil de rentabilité, le tutoriel apprend ensuite le geste et fait
+  // installer le raccourci. Deux clés distinctes — le tutoriel reste rejouable
+  // depuis le Profil sans redemander les chiffres.
+  const [showOnboardingFirst, setShowOnboardingFirst] = useState(false);
 
   useEffect(() => {
     if (!user || !profile?.first_name) {
       setTutorialChecked(true);
       return;
     }
-    AsyncStorage.getItem(TUTORIAL_SEEN_KEY).then(v => {
-      if (v !== '1') setShowTutorialFirst(true);
+    Promise.all([
+      AsyncStorage.getItem(ONBOARDING_SEEN_KEY),
+      AsyncStorage.getItem(TUTORIAL_SEEN_KEY),
+    ]).then(([onb, tuto]) => {
+      if (onb !== '1') setShowOnboardingFirst(true);
+      if (tuto !== '1') setShowTutorialFirst(true);
       setTutorialChecked(true);
     });
   }, [user, profile?.first_name]);
@@ -116,6 +127,26 @@ const RootNavigator = () => {
         />
       ) : (
         <>
+          {showOnboardingFirst && (
+            <Stack.Screen
+              name="Onboarding"
+              options={{ headerShown: false, animation: 'fade' }}
+            >
+              {(props: any) => (
+                <OnboardingScreenRaw
+                  {...props}
+                  onFinish={() => {
+                    AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+                    setShowOnboardingFirst(false);
+                    // Les seuils viennent d'être écrits en base : on rafraîchit le
+                    // profil pour que le Dashboard et le natif les voient tout de suite.
+                    refreshProfile?.();
+                  }}
+                />
+              )}
+            </Stack.Screen>
+          )}
+
           {showTutorialFirst && (
             <Stack.Screen
               name="TutorialOnboarding"

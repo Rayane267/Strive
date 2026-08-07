@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
@@ -17,7 +18,7 @@ import { sha256 } from 'js-sha256';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
-import { enforceOAuthSignupQuota, registerOAuthSignup } from '../utils/deviceId';
+import { enforceOAuthSignupQuota, registerOAuthSignup, enforceSignupQuota } from '../utils/deviceId';
 import BrandLoader from '../components/BrandLoader';
 
 let appleAuth: any = null;
@@ -45,20 +46,51 @@ const AuthScreen = () => {
     const m = (msg ?? '').toLowerCase();
     if (m.includes('rate limit')) return t('auth.errors.rateLimit', 'Trop de tentatives. Réessayez dans quelques minutes.');
     if (m.includes('device_signup_limit_reached')) return t('auth.errors.deviceSignupLimit', 'Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement.');
+    // Double compte via un autre provider : le trigger handle_new_user viole
+    // idx_profiles_email_normalized_unique (Google john.doe@gmail.com et Apple
+    // johndoe@gmail.com donnent le même email normalisé), donc Supabase renvoie
+    // une erreur DB opaque du genre « Database error saving new user ». On
+    // oriente vers la méthode de connexion d'origine au lieu d'afficher ça.
+    if (m.includes('email_normalized') || m.includes('duplicate key')
+      || m.includes('database error saving new user')) {
+      return t('auth.errors.accountExistsOtherProvider');
+    }
+    // Autres erreurs serveur : jamais le message brut Postgres/GoTrue à l'écran.
+    if (m.includes('database error') || m.includes('unexpected_failure')) {
+      return t('auth.errors.signupFailed');
+    }
     return msg;
   };
 
   const checkNewUserQuota = async (createdAt: string) => {
     const isNewUser = (Date.now() - new Date(createdAt).getTime()) < 60_000;
-    if (isNewUser) {
-      try {
-        await enforceOAuthSignupQuota();
-        await registerOAuthSignup();
-      } catch {
+    if (!isNewUser) return;
+
+    // Barrière 1 — locale (Keychain, survit à la désinstallation). Gratuite et
+    // disponible hors ligne, mais contournable : elle dissuade, elle n'arrête pas.
+    // Google et Apple partagent ce compteur, c'est bien un cumul par appareil.
+    try {
+      await enforceOAuthSignupQuota();
+    } catch {
+      await supabase.auth.signOut();
+      throw new Error('device_signup_limit_reached');
+    }
+
+    // Barrière 2 — serveur (table device_signups). C'est elle qui fait autorité :
+    // le compte vit en base, pas dans le téléphone. Elle vérifie ET enregistre.
+    try {
+      await enforceSignupQuota();
+    } catch (e: any) {
+      if (e?.message === 'device_signup_limit_reached') {
         await supabase.auth.signOut();
         throw new Error('device_signup_limit_reached');
       }
+      // Réseau coupé ou RPC indisponible : on ne bloque pas une inscription
+      // légitime pour autant. La barrière locale a déjà fait son office.
+      __DEV__ && console.warn('[AUTH] quota serveur indisponible', e?.message);
     }
+
+    await registerOAuthSignup();
   };
 
   const handleGoogleLogin = async () => {
@@ -176,11 +208,27 @@ const AuthScreen = () => {
           </>
         )}
 
+        {/* Ces deux libellés étaient stylés en lien mais sans `onPress` : verts,
+            en gras, et inertes. Les mêmes URL sont déjà ouvertes depuis
+            ProfileScreen — c'est aussi ce qu'attend la revue App Store sur un
+            écran de création de compte. */}
         <Text style={styles.footer}>
           {t('auth.termsText')}{' '}
-          <Text style={styles.footerLink}>{t('auth.termsLink')}</Text>
+          <Text
+            style={styles.footerLink}
+            onPress={() => Linking.openURL('https://striveapp.fr/terms')}
+            accessibilityRole="link"
+          >
+            {t('auth.termsLink')}
+          </Text>
           {' '}{t('auth.andText')}{' '}
-          <Text style={styles.footerLink}>{t('auth.privacyLink')}</Text>
+          <Text
+            style={styles.footerLink}
+            onPress={() => Linking.openURL('https://striveapp.fr/privacy')}
+            accessibilityRole="link"
+          >
+            {t('auth.privacyLink')}
+          </Text>
         </Text>
       </View>
     </SafeAreaView>
@@ -262,7 +310,10 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    // #000 sur un fond #0A120E : sans bordure lisible, le bouton se fond dans la
+    // page et on ne voit plus que son texte. Le blanc étant déjà pris par Google,
+    // on garde le noir (autorisé par les règles Apple) et on dessine le contour.
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   btnAppleText: {
     color: '#FFFFFF',
@@ -285,10 +336,13 @@ const styles = StyleSheet.create({
   },
   footer: {
     color: colors.textDimmed,
-    fontSize: 11,
+    // 11px était sous le seuil de confort pour un texte que l'utilisateur doit
+    // pouvoir lire ET toucher ; l'interligne élargit aussi la zone tactile des
+    // deux liens, qui sont imbriqués dans la phrase.
+    fontSize: 12.5,
     textAlign: 'center',
-    lineHeight: 17,
-    marginTop: 4,
+    lineHeight: 20,
+    marginTop: 16,
   },
   footerLink: {
     color: colors.primary,

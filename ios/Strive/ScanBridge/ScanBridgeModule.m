@@ -48,6 +48,14 @@ RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
                   minKmRate:(nonnull NSNumber *)minKmRate
                   includePickup:(BOOL)includePickup)
 
+RCT_EXTERN_METHOD(setFuelDeduction:(BOOL)enabled
+                  fuelCostPerKm:(nonnull NSNumber *)fuelCostPerKm)
+
+// Sans cet export, l'implémentation Swift n'est pas visible du JS : la clé
+// `scannerEnabled` de l'App Group n'était jamais écrite, donc le toggle
+// « scanner actif » restait sans effet sur la Share Extension et l'AppIntent.
+RCT_EXTERN_METHOD(setScannerEnabled:(BOOL)enabled)
+
 RCT_EXTERN_METHOD(openOverlayPermissionSettings)
 
 RCT_EXTERN_METHOD(openAccessibilitySettings)
