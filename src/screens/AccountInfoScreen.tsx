@@ -29,6 +29,14 @@ import { colors } from '../theme/colors';
 import AvatarView from '../components/AvatarView';
 import { Skeleton } from '../components/Skeleton';
 import { hapticSuccess, hapticError } from '../utils/haptics';
+import {
+  dialForValue,
+  expectedLengths,
+  formatAsTyped,
+  formatFullNumber,
+  toCompactE164,
+  validateFullNumberKey,
+} from '../utils/phoneUtils';
 
 interface InputFieldProps {
   label: string;
@@ -128,10 +136,10 @@ const AccountInfoScreen = () => {
     );
   };
 
-  const formatPhoneNumber = (text: string) => {
-    const cleaned = text.replace(/\s+/g, '');
-    return cleaned.replace(/(.{2})(?!$)/g, '$1 ');
-  };
+  // Le découpage suit l'indicatif détecté dans la saisie (ou celui de l'appareil).
+  // L'ancien `replace(/(.{2})(?!$)/g)` coupait en paires de 2 sans rien savoir du
+  // pays : un numéro stocké en E.164 s'affichait « +3 36 12 34 56 78 ».
+  const formatPhoneNumber = (text: string) => formatFullNumber(text);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -146,13 +154,12 @@ const AccountInfoScreen = () => {
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errs.email = t('accountInfo.errors.emailInvalid', 'Email invalide');
     }
-    const cleanedPhone = formData.phone.replace(/\s+/g, '');
-    // E.164 : `+` optionnel + jusqu'à 15 chiffres. On valide le nombre de
-    // CHIFFRES (le `+` ne compte pas) pour ne pas rejeter les numéros
-    // internationaux longs comme +33…/+1…
-    const phoneDigits = cleanedPhone.replace(/^\+/, '');
-    if (cleanedPhone && (!/^\+?\d+$/.test(cleanedPhone) || phoneDigits.length < 6 || phoneDigits.length > 15)) {
-      errs.phone = t('accountInfo.errors.phoneInvalid', 'Numéro de téléphone invalide');
+    // Longueur validée selon l'indicatif reconnu (9 chiffres pour +33, 10 pour
+    // +1…), et non plus une fourchette 6–15 qui laissait passer n'importe quoi.
+    const phoneKey = validateFullNumberKey(formData.phone);
+    if (phoneKey) {
+      const dial = dialForValue(formData.phone);
+      errs.phone = t(phoneKey, { expected: expectedLengths(dial), code: dial.code });
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -249,7 +256,9 @@ const AccountInfoScreen = () => {
       await updateProfile(user.id, {
         first_name: formData.first_name,
         last_name: formData.last_name,
-        phone: formData.phone,
+        // Stocké en E.164 compact, comme à la création du profil — le champ
+        // enregistrait jusqu'ici la chaîne d'affichage, espaces compris.
+        phone: toCompactE164(formData.phone),
         avatar_url: formData.avatar_url,
       });
       if (refreshProfile) await refreshProfile();
@@ -375,7 +384,7 @@ const AccountInfoScreen = () => {
               label={t('profile.phoneLabel', 'Téléphone')}
               icon="phone"
               value={formData.phone}
-              onChangeText={text => { setFormData({ ...formData, phone: formatPhoneNumber(filterPhone(text)) }); setFieldErrors(e => ({ ...e, phone: '' })); }}
+              onChangeText={text => { setFormData({ ...formData, phone: formatAsTyped(filterPhone(text)) }); setFieldErrors(e => ({ ...e, phone: '' })); }}
               placeholder={t('profile.phonePlaceholder', '06 XX XX XX XX')}
               keyboardType="phone-pad"
               error={fieldErrors.phone}

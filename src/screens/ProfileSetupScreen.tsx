@@ -22,70 +22,20 @@ import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
-
-// ─── Indicatifs pays ──────────────────────────────────────────────────────────
-
-const DIAL_CODES = [
-  { code: '+33',  iso: 'FR', flag: '🇫🇷', nameKey: 'countries.fr',  digits: [9] },
-  { code: '+32',  iso: 'BE', flag: '🇧🇪', nameKey: 'countries.be',  digits: [8, 9] },
-  { code: '+41',  iso: 'CH', flag: '🇨🇭', nameKey: 'countries.ch',  digits: [9] },
-  { code: '+352', iso: 'LU', flag: '🇱🇺', nameKey: 'countries.lu',  digits: [6, 7, 8, 9] },
-  { code: '+213', iso: 'DZ', flag: '🇩🇿', nameKey: 'countries.dz',  digits: [9] },
-  { code: '+212', iso: 'MA', flag: '🇲🇦', nameKey: 'countries.ma',  digits: [9] },
-  { code: '+216', iso: 'TN', flag: '🇹🇳', nameKey: 'countries.tn',  digits: [8] },
-  { code: '+221', iso: 'SN', flag: '🇸🇳', nameKey: 'countries.sn',  digits: [9] },
-  { code: '+225', iso: 'CI', flag: '🇨🇮', nameKey: 'countries.ci',  digits: [10] },
-  { code: '+237', iso: 'CM', flag: '🇨🇲', nameKey: 'countries.cm',  digits: [9] },
-  { code: '+223', iso: 'ML', flag: '🇲🇱', nameKey: 'countries.ml',  digits: [8] },
-  { code: '+224', iso: 'GN', flag: '🇬🇳', nameKey: 'countries.gn',  digits: [9] },
-  { code: '+351', iso: 'PT', flag: '🇵🇹', nameKey: 'countries.pt',  digits: [9] },
-  { code: '+34',  iso: 'ES', flag: '🇪🇸', nameKey: 'countries.es',  digits: [9] },
-  { code: '+39',  iso: 'IT', flag: '🇮🇹', nameKey: 'countries.it',  digits: [9, 10] },
-  { code: '+44',  iso: 'GB', flag: '🇬🇧', nameKey: 'countries.gb',  digits: [10] },
-  { code: '+49',  iso: 'DE', flag: '🇩🇪', nameKey: 'countries.de',  digits: [10, 11] },
-  { code: '+40',  iso: 'RO', flag: '🇷🇴', nameKey: 'countries.ro',  digits: [9] },
-  { code: '+48',  iso: 'PL', flag: '🇵🇱', nameKey: 'countries.pl',  digits: [9] },
-  { code: '+1',   iso: 'US', flag: '🇺🇸', nameKey: 'countries.us',  digits: [10] },
-];
-
-// Région (pays) de l'appareil → indicatif par défaut. On lit le code pays ISO
-// depuis la locale Intl (ex. "fr-FR" → "FR"), avec fallback NativeModules.
-function getDeviceRegion(): string | null {
-  const pickRegion = (raw?: string | null): string | null => {
-    if (typeof raw !== 'string') return null;
-    // On saute le 1er sous-tag (langue) et on cherche un token pays à 2 lettres.
-    const region = raw.split(/[-_]/).slice(1).find(p => /^[A-Za-z]{2}$/.test(p));
-    return region ? region.toUpperCase() : null;
-  };
-  try {
-    const fromIntl = pickRegion(Intl.DateTimeFormat().resolvedOptions().locale);
-    if (fromIntl) return fromIntl;
-    const raw = Platform.OS === 'ios'
-      ? NativeModules.SettingsManager?.settings?.AppleLocale ||
-        NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
-      : NativeModules.I18nManager?.localeIdentifier;
-    return pickRegion(raw);
-  } catch {
-    return null;
-  }
-}
-
-const DEFAULT_DIAL =
-  DIAL_CODES.find(d => d.iso === getDeviceRegion()) ?? DIAL_CODES[0];
+import {
+  DIAL_CODES,
+  DEFAULT_DIAL,
+  expectedLengths,
+  formatNational,
+  toE164,
+  validateNationalKey,
+} from '../utils/phoneUtils';
 
 // Normalise pour la recherche : minuscules + suppression des accents.
 const normalizeSearch = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // ─── Validation — retourne des clés i18n ─────────────────────────────────────
-
-function validatePhoneKey(number: string, dial: typeof DIAL_CODES[number]): string | null {
-  const cleaned = number.replace(/[\s\-\.\(\)]/g, '').replace(/^0+/, '');
-  if (!cleaned) return 'profile.setup.errors.phoneRequired';
-  if (!/^\d+$/.test(cleaned)) return 'profile.setup.errors.phoneInvalid';
-  if (!dial.digits.includes(cleaned.length)) return 'profile.setup.errors.phoneLength';
-  return null;
-}
 
 function validateDobKey(day: string, month: string, year: string): string | null {
   if (!day || !month || !year) return 'profile.setup.errors.dobRequired';
@@ -161,12 +111,16 @@ export default function ProfileSetupScreen() {
     setErrors(prev => ({ ...prev, [field]: '' }));
 
   const validate = (): boolean => {
-    const phoneKey = validatePhoneKey(phoneNumber, dialCode);
+    const phoneKey = validateNationalKey(phoneNumber, dialCode);
     const dobKey   = validateDobKey(dobDay, dobMonth, dobYear);
     const next = {
       firstName: firstName.trim() ? '' : t('profile.setup.errors.firstNameRequired'),
       lastName:  lastName.trim()  ? '' : t('profile.setup.errors.lastNameRequired'),
-      phone:     phoneKey ? t(phoneKey) : '',
+      // Le message de longueur annonce le nombre de chiffres attendu pour
+      // l'indicatif choisi — « invalide » seul ne dit pas quoi corriger.
+      phone:     phoneKey
+        ? t(phoneKey, { count: dialCode.digits[0], expected: expectedLengths(dialCode), code: dialCode.code })
+        : '',
       dob:       dobKey   ? t(dobKey)   : '',
     };
     setErrors(next);
@@ -180,7 +134,9 @@ export default function ProfileSetupScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t('errors.profileLoadFailed'));
 
-      const fullPhone = `${dialCode.code}${phoneNumber.replace(/[\s\-\.\(\)]/g, '')}`;
+      // `toE164` retire le préfixe national : la concaténation brute stockait
+      // « +330612345678 » (0 en trop) alors que la validation, elle, l'enlevait.
+      const fullPhone = toE164(phoneNumber, dialCode);
       const birthDate = `${dobYear}-${dobMonth.padStart(2, '0')}-${dobDay.padStart(2, '0')}`;
 
       const { error } = await supabase.from('profiles').upsert({
@@ -283,7 +239,7 @@ export default function ProfileSetupScreen() {
               placeholder={t('profile.setup.placeholderPhone')}
               placeholderTextColor={colors.textDimmed}
               value={phoneNumber}
-              onChangeText={v => { setPhoneNumber(v.replace(/[^0-9\s\-\.]/g, '').slice(0, 15)); clearError('phone'); }}
+              onChangeText={v => { setPhoneNumber(formatNational(v, dialCode)); clearError('phone'); }}
               keyboardType="phone-pad"
               returnKeyType="next"
             />
@@ -405,7 +361,14 @@ export default function ProfileSetupScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.dialItem, item.code === dialCode.code && styles.dialItemActive]}
-                  onPress={() => { setDialCode(item); setDialPickerOpen(false); setDialQuery(''); }}
+                  // Le découpage dépend du pays : on re-formate le numéro déjà
+                  // saisi, sinon il garde les espaces de l'indicatif précédent.
+                  onPress={() => {
+                    setDialCode(item);
+                    setPhoneNumber(prev => formatNational(prev, item));
+                    setDialPickerOpen(false);
+                    setDialQuery('');
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.dialItemFlag}>{item.flag}</Text>

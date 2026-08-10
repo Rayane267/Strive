@@ -138,7 +138,7 @@
         "lastNameRequired": "Le nom est requis",
         "phoneRequired": "Le numéro de téléphone est requis",
         "phoneInvalid": "Le numéro ne doit contenir que des chiffres",
-        "phoneLength": "Nombre de chiffres incorrect pour cet indicatif",
+        "phoneLength": "{{code}} attend {{expected}} chiffres",
         "dobRequired": "La date de naissance est requise",
         "dobInvalid": "Date invalide",
         "dobMonthInvalid": "Mois invalide (01–12)",

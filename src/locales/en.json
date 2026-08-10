@@ -138,7 +138,7 @@
         "lastNameRequired": "Last name is required",
         "phoneRequired": "Phone number is required",
         "phoneInvalid": "Phone number must contain only digits",
-        "phoneLength": "Wrong number of digits for this country code",
+        "phoneLength": "{{code}} expects {{expected}} digits",
         "dobRequired": "Date of birth is required",
         "dobInvalid": "Invalid date",
         "dobMonthInvalid": "Invalid month (01–12)",
