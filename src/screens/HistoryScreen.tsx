@@ -22,7 +22,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { formatTimeAgo, getDayStart } from '../utils/dateUtils';
+import { formatTimeAgo, getDayStart, toLocalDateKey, parseLocalDateKey } from '../utils/dateUtils';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { effectiveFare } from '../services/ridesService';
 import { Ride } from '../types/database';
@@ -217,7 +217,7 @@ const HistoryScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
   const [tempStart, setTempStart] = useState<string | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(toLocalDateKey(new Date()));
   const [modalAlert, setModalAlert] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
@@ -295,8 +295,8 @@ const HistoryScreen = () => {
       setTempStart(day.dateString);
       setSelectionStep(1);
     } else {
-      const start = new Date(tempStart!);
-      const end = new Date(day.dateString);
+      const start = parseLocalDateKey(tempStart!);
+      const end = parseLocalDateKey(day.dateString);
       if (end < start) { setTempStart(day.dateString); return; }
       const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000);
       if (diffDays > 6) {
@@ -304,7 +304,7 @@ const HistoryScreen = () => {
         setTempStart(day.dateString);
         return;
       }
-      setDateRange({ start: new Date(tempStart!), end: new Date(day.dateString) });
+      setDateRange({ start, end });
       setSelectionStep(0);
       setModalVisible(false);
     }
@@ -319,14 +319,15 @@ const HistoryScreen = () => {
     if (selectionStep === 1 && tempStart) {
       marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
     } else if (dateRange.start && dateRange.end) {
-      const startStr = dateRange.start.toISOString().split('T')[0];
-      const endStr = dateRange.end.toISOString().split('T')[0];
+      const startStr = toLocalDateKey(dateRange.start);
+      const endStr = toLocalDateKey(dateRange.end);
       if (startStr === endStr) {
         marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
       } else {
-        let curr = new Date(startStr);
-        while (curr <= new Date(endStr)) {
-          const ds = curr.toISOString().split('T')[0];
+        let curr = parseLocalDateKey(startStr);
+        const last = parseLocalDateKey(endStr);
+        while (curr <= last) {
+          const ds = toLocalDateKey(curr);
           if (ds === startStr)     marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
           else if (ds === endStr)  marks[ds] = { endingDay: true, color: edge, textColor: edgeText };
           else                     marks[ds] = { color: mid, textColor: midText };
@@ -338,9 +339,9 @@ const HistoryScreen = () => {
   };
 
   const changeMonth = (offset: number) => {
-    const d = new Date(currentMonth);
+    const d = parseLocalDateKey(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    setCurrentMonth(d.toISOString().split('T')[0]);
+    setCurrentMonth(toLocalDateKey(d));
   };
 
   const renderCustomHeader = (date: any) => {
@@ -410,7 +411,7 @@ const HistoryScreen = () => {
         <TouchableOpacity style={styles.dateBtn} onPress={() => {
           setSelectionStep(0);
           setTempStart(null);
-          setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
+          setCurrentMonth(toLocalDateKey(dateRange.start));
           setModalVisible(true);
         }} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel={t('history.selectDates', 'Select date range')}>
           <View style={styles.dateBtnLeft}>

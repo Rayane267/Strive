@@ -29,7 +29,7 @@ import { fetchRides } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
 import { useNavigation } from '@react-navigation/native';
-import { getDayStart } from '../utils/dateUtils';
+import { getDayStart, toLocalDateKey, getBusinessDayKey, parseLocalDateKey } from '../utils/dateUtils';
 import EarningsChart from '../components/EarningsChart';
 import KpiTrendChart from '../components/KpiTrendChart';
 import QualityScoreCard from '../components/QualityScoreCard';
@@ -116,7 +116,7 @@ const AnalyticsScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
   const [tempStart, setTempStart] = useState<string | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(toLocalDateKey(new Date()));
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   const [modalAlert, setModalAlert] = useState('');
@@ -266,11 +266,13 @@ const AnalyticsScreen = () => {
       const dayLabels = i18n.language === 'fr'
         ? ['Di','Lu','Ma','Me','Je','Ve','Sa']
         : ['Su','Mo','Tu','We','Th','Fr','Sa'];
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getBusinessDayKey(new Date(), resetHour);
 
       const dailyMap = new Map<string, { earnings: number; distance: number; hours: number }>();
       acceptedRides.forEach((ride: any) => {
-        const dateKey = new Date(ride.created_at).toISOString().split('T')[0];
+        // Jour de travail local (cf. day_reset_hour), pas le jour UTC : sinon une
+        // course de nuit atterrit dans la mauvaise barre du graphe.
+        const dateKey = getBusinessDayKey(ride.created_at, resetHour);
         const existing = dailyMap.get(dateKey) || { earnings: 0, distance: 0, hours: 0 };
         const fare = effectiveFare(ride);
         existing.earnings += fare;
@@ -285,7 +287,8 @@ const AnalyticsScreen = () => {
       const kmTrendData: { label: string; value: number }[] = [];
       const cursor = new Date(rangeStart);
       while (cursor < rangeEnd) {
-        const key = cursor.toISOString().split('T')[0];
+        // cursor est déjà positionné à resetHour → sa date locale EST la clé du jour
+        const key = toLocalDateKey(cursor);
         const dayData = dailyMap.get(key);
         const dayOfWeek = cursor.getDay();
         const label = dayLabels[dayOfWeek];
@@ -368,7 +371,7 @@ const AnalyticsScreen = () => {
   }, [resetHour]);
 
   const handleDayPress = (day: any) => {
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayString = getBusinessDayKey(new Date(), resetHour);
     if (!isPremium && day.dateString !== todayString) {
       setModalAlert(t('analytics.alerts.premiumRequired'));
       return;
@@ -378,8 +381,8 @@ const AnalyticsScreen = () => {
       setTempStart(day.dateString);
       setSelectionStep(1);
     } else {
-      const start = new Date(tempStart!);
-      const end = new Date(day.dateString);
+      const start = parseLocalDateKey(tempStart!);
+      const end = parseLocalDateKey(day.dateString);
       if (end < start) { setTempStart(day.dateString); return; }
       const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000);
       if (diffDays > 6) {
@@ -387,7 +390,7 @@ const AnalyticsScreen = () => {
         setTempStart(day.dateString);
         return;
       }
-      setDateRange({ start: new Date(tempStart!), end: new Date(day.dateString) });
+      setDateRange({ start, end });
       setSelectionStep(0);
       setModalVisible(false);
     }
@@ -402,14 +405,15 @@ const AnalyticsScreen = () => {
     if (selectionStep === 1 && tempStart) {
       marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
     } else if (dateRange.start && dateRange.end) {
-      const startStr = dateRange.start.toISOString().split('T')[0];
-      const endStr = dateRange.end.toISOString().split('T')[0];
+      const startStr = toLocalDateKey(dateRange.start);
+      const endStr = toLocalDateKey(dateRange.end);
       if (startStr === endStr) {
         marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
       } else {
-        let curr = new Date(startStr);
-        while (curr <= new Date(endStr)) {
-          const ds = curr.toISOString().split('T')[0];
+        let curr = parseLocalDateKey(startStr);
+        const last = parseLocalDateKey(endStr);
+        while (curr <= last) {
+          const ds = toLocalDateKey(curr);
           if (ds === startStr)      marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
           else if (ds === endStr)   marks[ds] = { endingDay: true,   color: edge, textColor: edgeText };
           else                      marks[ds] = { color: mid, textColor: midText };
@@ -421,9 +425,9 @@ const AnalyticsScreen = () => {
   };
 
   const changeMonth = (offset: number) => {
-    const d = new Date(currentMonth);
+    const d = parseLocalDateKey(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    setCurrentMonth(d.toISOString().split('T')[0]);
+    setCurrentMonth(toLocalDateKey(d));
   };
 
   const renderCustomHeader = (date: any) => {
@@ -479,7 +483,7 @@ const AnalyticsScreen = () => {
         <TouchableOpacity style={styles.dateBtn} accessibilityRole="button" accessibilityLabel={t('analytics.calendar.selectDate')} onPress={() => {
           setSelectionStep(0);
           setTempStart(null);
-          setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
+          setCurrentMonth(toLocalDateKey(dateRange.start));
           setShowMonthPicker(false);
           setModalVisible(true);
         }} activeOpacity={0.75}>

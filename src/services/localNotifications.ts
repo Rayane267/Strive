@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n';
+import { getBusinessDayKey } from '../utils/dateUtils';
 
 const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
@@ -89,7 +90,9 @@ export function resetInactivityReminder() {
  */
 export async function scheduleQuotaResetNotification(resetHour: number) {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // Clé sur la journée de quota (locale + resetHour), pas le jour UTC : sinon
+    // la dédup saute d'un jour dès 22h locale en UTC+2.
+    const today = getBusinessDayKey(new Date(), resetHour);
     const key = `${QUOTA_RESET_KEY}_${today}`;
     const already = await AsyncStorage.getItem(key);
     if (already) return;

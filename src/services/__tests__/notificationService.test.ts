@@ -15,6 +15,7 @@ jest.mock('../supabase', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shouldAlertLowCredits, scheduleSessionReminder } from '../notificationService';
+import { toLocalDateKey } from '../../utils/dateUtils';
 
 describe('shouldAlertLowCredits', () => {
   it('returns false for unlimited (null)', () => {
@@ -50,7 +51,7 @@ describe('scheduleSessionReminder', () => {
   it('sets reminder key for today', async () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     await scheduleSessionReminder();
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateKey(new Date());
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       '@strive_last_reminder',
       today,
@@ -58,7 +59,7 @@ describe('scheduleSessionReminder', () => {
   });
 
   it('skips if already reminded today', async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateKey(new Date());
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(today);
     await scheduleSessionReminder();
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();

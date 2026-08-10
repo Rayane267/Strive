@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { navigateFromNotification } from '../navigation/navigationRef';
+import { toLocalDateKey } from '../utils/dateUtils';
 
 const FCM_TOKEN_KEY = '@strive_fcm_token';
 const LAST_REMINDER_KEY = '@strive_last_reminder';
@@ -135,7 +136,7 @@ export function setupNotificationListeners(
 export async function scheduleSessionReminder(): Promise<void> {
   try {
     const lastReminder = await AsyncStorage.getItem(LAST_REMINDER_KEY);
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateKey(new Date());
 
     if (lastReminder === today) return; // Already reminded today
 
