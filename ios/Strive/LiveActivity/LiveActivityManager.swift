@@ -119,6 +119,54 @@ final class LiveActivityManager {
     }
   }
 
+  /// Retourne une activité RÉELLEMENT vivante. `activities.first` peut rendre une
+  /// carte orpheline ou déjà `.dismissed` (l'AppIntent tourne dans un autre
+  /// process, `current` peut être périmé) : on la met alors à jour, iOS ignore, et
+  /// l'appelant croit avoir affiché le résultat.
+  private func liveActivity() -> Activity<StriveActivityAttributes>? {
+    if let c = current, c.activityState == .active { return c }
+    let live = Activity<StriveActivityAttributes>.activities.first { $0.activityState == .active }
+    current = live
+    if live != nil {
+      observeState()
+      log("recovered live activity: \(live!.id)")
+    }
+    return live
+  }
+
+  /// Applique une mise à jour et CONFIRME qu'elle a bien été appliquée sur une
+  /// activité encore vivante. Le `Task { await … }` d'origine rendait la main
+  /// avant même que l'update soit tentée : `update()` renvoyait `true` et le
+  /// fallback notification était sauté alors que le chauffeur n'avait rien vu.
+  /// Sur le main thread on ne bloque pas (le bridge JS appelle depuis là) — le
+  /// contrôle d'état préalable fait foi.
+  private func applyUpdate(
+    _ activity: Activity<StriveActivityAttributes>,
+    content: ActivityContent<StriveActivityAttributes.ContentState>,
+    alert: AlertConfiguration?
+  ) -> Bool {
+    guard activity.activityState == .active else {
+      log("update skipped — \(activity.id) is \(activity.activityState)")
+      return false
+    }
+    if Thread.isMainThread {
+      Task { await activity.update(content, alertConfiguration: alert) }
+      return true
+    }
+    let sem = DispatchSemaphore(value: 0)
+    Task {
+      await activity.update(content, alertConfiguration: alert)
+      sem.signal()
+    }
+    guard sem.wait(timeout: .now() + 3) == .success else {
+      log("update TIMEOUT on \(activity.id)")
+      return false
+    }
+    let ok = activity.activityState == .active
+    if !ok { log("\(activity.id) died during update: \(activity.activityState)") }
+    return ok
+  }
+
   private func observeState() {
     stateObserverTask?.cancel()
     guard let activity = current else { return }
@@ -153,12 +201,7 @@ final class LiveActivityManager {
     scanTs: Double = 0
   ) -> Bool {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
-    if current == nil {
-      current = Activity<StriveActivityAttributes>.activities.first
-      if current != nil { observeState() }
-      log("recovered existing activity: \(current?.id ?? "none")")
-    }
-    guard let activity = current else {
+    guard let activity = liveActivity() else {
       log("no activity — auto-starting then updating for banner")
       let started = start(
         platform: platform,
@@ -170,23 +213,24 @@ final class LiveActivityManager {
         verdictLevel: verdictLevel,
         scanTs: scanTs
       )
-      if started, let newActivity = current {
-        let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
-        let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
-        let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
-        let alert = AlertConfiguration(
-            title: LocalizedStringResource(stringLiteral: alertTitle),
-            body: LocalizedStringResource(stringLiteral: alertBody),
-            sound: .default
-        )
-        let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20))
-        Task { await newActivity.update(content, alertConfiguration: alert) }
-        autoDismiss?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.showRecap() }
-        autoDismiss = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
-      }
-      return started
+      guard started, let newActivity = current else { return false }
+      let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
+      let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
+      let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
+      let alert = AlertConfiguration(
+          title: LocalizedStringResource(stringLiteral: alertTitle),
+          body: LocalizedStringResource(stringLiteral: alertBody),
+          sound: .default
+      )
+      let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20))
+      // La carte vient d'être créée : si l'alerte ne passe pas, le résultat est
+      // perdu → on rend `false` pour que l'appelant notifie.
+      guard applyUpdate(newActivity, content: content, alert: alert) else { return false }
+      autoDismiss?.cancel()
+      let work = DispatchWorkItem { [weak self] in self?.showRecap() }
+      autoDismiss = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+      return true
     }
     let prev = activity.content.state
     let state = StriveActivityAttributes.State(
@@ -213,7 +257,10 @@ final class LiveActivityManager {
         body: LocalizedStringResource(stringLiteral: alertBody),
         sound: .default
     )
-    Task { await activity.update(content, alertConfiguration: alert) }
+    guard applyUpdate(activity, content: content, alert: alert) else {
+      log("update NOT delivered on \(activity.id) — caller must notify")
+      return false
+    }
     log("updated \(activity.id), dismiss in 20s")
 
     autoDismiss?.cancel()
@@ -228,10 +275,7 @@ final class LiveActivityManager {
   /// le temps de les relire une fois la carte complète disparue. Sans montant à
   /// rappeler (erreur, état vide), on saute directement à l'idle.
   func showRecap() {
-    if current == nil {
-      current = Activity<StriveActivityAttributes>.activities.first
-    }
-    guard let activity = current else { return }
+    guard let activity = liveActivity() else { return }
     let prev = activity.content.state
     guard prev.fare > 0 else { backToIdle(); return }
     log("showRecap fare=\(prev.fare) km=\(prev.kmRate)")
@@ -259,10 +303,7 @@ final class LiveActivityManager {
   }
 
   func backToIdle() {
-    if current == nil {
-      current = Activity<StriveActivityAttributes>.activities.first
-    }
-    guard let activity = current else { return }
+    guard let activity = liveActivity() else { return }
     log("backToIdle")
     // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
     // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base
@@ -286,11 +327,8 @@ final class LiveActivityManager {
   ///   montrée nulle part et l'appelant doit notifier à la place.
   @discardableResult
   func showError() -> Bool {
-    if current == nil {
-      current = Activity<StriveActivityAttributes>.activities.first
-    }
-    guard let activity = current else {
-      log("showError() — no activity, skip")
+    guard let activity = liveActivity() else {
+      log("showError() — no live activity, skip")
       return false
     }
     log("showError() on \(activity.id)")
@@ -314,7 +352,10 @@ final class LiveActivityManager {
       )),
       sound: .default
     )
-    Task { await activity.update(content, alertConfiguration: alert) }
+    guard applyUpdate(activity, content: content, alert: alert) else {
+      log("showError NOT delivered on \(activity.id) — caller must notify")
+      return false
+    }
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
@@ -329,10 +370,7 @@ final class LiveActivityManager {
     todayKm: Double,
     onlineMinutes: Int
   ) {
-    if current == nil {
-      current = Activity<StriveActivityAttributes>.activities.first
-    }
-    guard let activity = current else { return }
+    guard let activity = liveActivity() else { return }
     let prev = activity.content.state
     // Un résultat de scan est à l'écran (auto-dismiss en attente) : NE PAS
     // l'écraser avec le dashboard IDLE — le JS pousse ses KPI quelques secondes

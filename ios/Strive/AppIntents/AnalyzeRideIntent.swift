@@ -25,6 +25,26 @@ struct AnalyzeRideIntent: AppIntent {
   @Parameter(title: "Capture d'écran")
   var screenshot: IntentFile
 
+  /// Identifie cette exécution pour ne pas notifier « analyse interrompue » alors
+  /// qu'un résultat vient d'être présenté : `performExpiringActivity` rappelle son
+  /// bloc avec `expired = true` pendant que le pipeline peut encore aboutir.
+  /// Les scans sont sérialisés par `ScanProcessor` → un seul run vivant à la fois.
+  private let runId = UUID()
+  private static let presentedLock = NSLock()
+  private static var lastPresentedRun: UUID?
+
+  private func markPresented() {
+    Self.presentedLock.lock()
+    Self.lastPresentedRun = runId
+    Self.presentedLock.unlock()
+  }
+
+  private var hasPresented: Bool {
+    Self.presentedLock.lock()
+    defer { Self.presentedLock.unlock() }
+    return Self.lastPresentedRun == runId
+  }
+
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     guard isScannerEnabled else {
       sendLocalNotification(
@@ -92,7 +112,15 @@ struct AnalyzeRideIntent: AppIntent {
       // Le système reprend la main : le pipeline ne rendra pas de résultat. Sans
       // libérer le verrou ici, les 30 s suivantes répondent « analyse déjà en
       // cours » à chaque tap — le scan paraît mort alors qu'il n'a jamais tourné.
-      if expired { self.logFailure("expired"); ScanProcessor.markScanFinished(); return }
+      // iOS reprend la main avant la fin du pipeline (pression mémoire/CPU —
+      // typiquement Waze + appel + CarPlay). On PRÉVIENT : jusqu'ici la trace
+      // partait en base et le chauffeur ne voyait strictement rien.
+      if expired {
+        self.logFailure("expired")
+        ScanProcessor.markScanFinished()
+        self.notifyScanAborted(code: .expired)
+        return
+      }
       let sem = DispatchSemaphore(value: 0)
       ScanProcessor.shared.process(image: image) { finalResult in
         // Adresses présentes → on présente directement. Sinon (ou aucun
@@ -121,6 +149,7 @@ struct AnalyzeRideIntent: AppIntent {
       if sem.wait(timeout: .now() + 25) == .timedOut {
         self.logFailure("timeout")
         ScanProcessor.markScanFinished()
+        self.notifyScanAborted(code: .timeout)
       }
     }
 
@@ -170,6 +199,7 @@ struct AnalyzeRideIntent: AppIntent {
         category: "STRIVE_SCAN_RESULT", scanTs: scanTs
       )
     }
+    markPresented()
     incrementScanCount()
     saveResultForMainApp(result, scanTs: scanTs)
     return String(
@@ -200,6 +230,27 @@ struct AnalyzeRideIntent: AppIntent {
         code: ScanProcessor.shared.lastScanMayBeRide ? .geminiKo : nil
       )
     }
+    markPresented()
+  }
+
+  /// Scan abandonné avant tout affichage : assertion de fond expirée (`.expired`)
+  /// ou pipeline sans réponse (`.timeout`). Ces deux sorties se contentaient de
+  /// tracer l'échec — le chauffeur déclenchait son scan et RIEN n'arrivait jamais,
+  /// sans moyen de savoir s'il devait réessayer. On passe par une notification
+  /// et pas par la Live Activity : à ce stade le process peut être suspendu d'une
+  /// seconde à l'autre, et `Activity.update` est asynchrone (donc perdable).
+  private func notifyScanAborted(code: ScanErrorCode) {
+    guard !hasPresented else { return }
+    markPresented()
+    sendLocalNotification(
+      title: "Strive",
+      body: localizedString(
+        "notif.scanAborted",
+        fr: "Analyse interrompue — relancez le scan.",
+        en: "Analysis interrupted — run the scan again."
+      ),
+      code: code
+    )
   }
 
   /// Fallback Gemini (Niveau 2) — le chemin AssistiveTouch n'a pas d'OCR-fallback
