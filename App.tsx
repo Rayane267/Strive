@@ -1,6 +1,10 @@
 import React from 'react';
 import { StatusBar } from 'react-native';
-import { NavigationContainer, DefaultTheme, LinkingOptions } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  LinkingOptions,
+} from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RNBootSplash from 'react-native-bootsplash';
 import * as Sentry from '@sentry/react-native';
@@ -23,6 +27,17 @@ import OfflineBanner from './src/components/OfflineBanner';
 import { useOfflineSync } from './src/hooks/useOfflineSync';
 import './src/i18n';
 
+// Sans cette intégration, un crash remonte sa pile mais pas l'écran sur lequel
+// il s'est produit : on sait QUE ça a cassé, pas OÙ. Elle ajoute le nom de la
+// route courante à chaque événement, et le fil des navigations en breadcrumbs.
+// Elle rend aussi utile le `tracesSampleRate` ci-dessous, qui collectait
+// jusqu'ici des transactions sans contexte.
+const navigationIntegration = Sentry.reactNavigationIntegration({
+  // Les écrans imbriqués (MainTabs → Dashboard) apparaissent sous leur chemin
+  // complet, sinon quatre onglets remontent tous comme « MainTabs ».
+  useFullPathsForNavigationRoutes: true,
+});
+
 Sentry.init({
   dsn: SENTRY_DSN || '',
   enabled: !__DEV__ && !!SENTRY_DSN,
@@ -33,6 +48,7 @@ Sentry.init({
   tracesSampleRate: 0.2,
   enableAutoSessionTracking: true,
   attachStacktrace: true,
+  integrations: [navigationIntegration],
 });
 
 // MainTabs est un BottomTabNavigator imbriqué → `screens` nested.
@@ -62,16 +78,17 @@ const AppContent = () => {
 
   return (
     <>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={colors.background}
-      />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       <OfflineBanner />
       <NavigationContainer
         ref={navigationRef}
         linking={linking}
         theme={AppTheme}
         onReady={() => {
+          // Doit venir AVANT le masquage du splash : l'intégration doit tenir la
+          // référence du conteneur dès la première route, sinon l'écran d'entrée
+          // n'est pas rattaché aux événements qui s'y produisent.
+          navigationIntegration.registerNavigationContainer(navigationRef);
           RNBootSplash.hide({ fade: true });
         }}
       >
@@ -93,4 +110,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default Sentry.wrap(App);
