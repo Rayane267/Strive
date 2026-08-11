@@ -24,7 +24,7 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
-import { APP_VERSION_LABEL } from '../config/appInfo';
+import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticLight } from '../utils/haptics';
 
 type MenuItem = {
