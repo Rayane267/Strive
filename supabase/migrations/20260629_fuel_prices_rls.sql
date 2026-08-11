@@ -14,6 +14,20 @@
 -- Idempotent.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- La table avait été créée à la main (SQL Editor) et n'existait dans AUCUNE
+-- migration : rejouer l'historique sur un projet neuf s'arrêtait ici. On la
+-- crée donc avant d'y poser la RLS. `if not exists` → sans effet en production,
+-- où elle est déjà là, ce qui préserve l'idempotence annoncée plus haut.
+-- Colonnes conformes à ce qu'écrit l'edge function `fuel-prices` (upsert sur
+-- `id`) et à ce que lit `fuelService.fetchFuelPrice` (ligne 'paris').
+create table if not exists public.fuel_prices (
+  id         text primary key,
+  essence    numeric(6, 3),
+  diesel     numeric(6, 3),
+  e85        numeric(6, 3),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.fuel_prices enable row level security;
 
 drop policy if exists "fuel_prices_select_authenticated" on public.fuel_prices;
