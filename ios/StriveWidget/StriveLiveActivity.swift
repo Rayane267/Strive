@@ -110,7 +110,11 @@ struct StriveLiveActivity: Widget {
           Image(systemName: "lock.fill")
             .foregroundColor(lockGreen)
         } else if isIdle {
-          EmptyView()
+          Image("StriveLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 20, height: 20)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
         } else {
           Image(systemName: "car.fill")
             .foregroundColor(verdictColor(context.state.verdictLevel))
@@ -140,7 +144,11 @@ struct StriveLiveActivity: Widget {
           Image(systemName: "xmark.circle.fill")
             .foregroundColor(errorRed)
         } else if isIdle {
-          EmptyView()
+          Image("StriveLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 18, height: 18)
+            .clipShape(Circle())
         } else if isScanning {
           ProgressView()
             .tint(.white)
