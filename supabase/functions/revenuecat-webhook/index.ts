@@ -197,18 +197,6 @@ serve(async (req: Request) => {
     return new Response('Missing event fields', { status: 400 });
   }
 
-  // Events ignorés — testé AVANT la validation des champs : TRANSFER ne porte ni
-  // app_user_id ni product_id (il expose transferred_from / transferred_to), donc
-  // le garde ci-dessous le rejetait en 400 sans jamais atteindre cette liste. RC
-  // retentait alors en backoff jusqu'à abandon (6 échecs observés le 26/07).
-  if (event.type === 'TRANSFER') {
-    const result = await handleTransfer(event);
-    return new Response(JSON.stringify({ ok: true, ...result }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   const ignored = new Set(['TEST', 'INVOICE_ISSUANCE', 'SUBSCRIBER_ALIAS']);
   if (ignored.has(event.type)) {
     return new Response(JSON.stringify({ ok: true, ignored: event.type }), {
@@ -219,8 +207,25 @@ serve(async (req: Request) => {
 
   // Events SANDBOX : jamais appliqués en prod (un achat sandbox est gratuit —
   // l'appliquer offrirait un vrai premium). 200 pour que RC ne retry pas.
+  //
+  // DOIT rester AVANT le TRANSFER ci-dessous. Un TRANSFER sandbox atteignait
+  // `revoke_transferred_subscription`, qui passe les comptes listés dans
+  // `transferred_from` en `free` / `expired` : un achat TestFlight suffisait à
+  // couper l'accès d'un client payant réel.
   if (event.environment === 'SANDBOX' && !ALLOW_SANDBOX) {
     return new Response(JSON.stringify({ ok: true, ignored: 'sandbox' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // TRANSFER est traité avant la validation des champs : il ne porte ni
+  // app_user_id ni product_id (il expose transferred_from / transferred_to),
+  // donc le garde plus bas le rejetait en 400 sans jamais l'atteindre. RC
+  // retentait alors en backoff jusqu'à abandon (6 échecs observés le 26/07).
+  if (event.type === 'TRANSFER') {
+    const result = await handleTransfer(event);
+    return new Response(JSON.stringify({ ok: true, ...result }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
