@@ -182,7 +182,7 @@ func revertLiveActivityToIdle(addFare: Double, addKm: Double) async {
       sessionStartEpoch: prev.sessionStartEpoch
     )
     await activity.update(
-      ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8))
+      ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
     )
   }
 }

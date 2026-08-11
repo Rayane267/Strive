@@ -102,7 +102,8 @@ final class LiveActivityManager {
     do {
       let content = ActivityContent(
         state: state,
-        staleDate: Date().addingTimeInterval(3600 * 8)
+        staleDate: Date().addingTimeInterval(3600 * 8),
+        relevanceScore: 100
       )
       log("calling Activity.request()...")
       current = try Activity.request(
@@ -222,7 +223,7 @@ final class LiveActivityManager {
           body: LocalizedStringResource(stringLiteral: alertBody),
           sound: .default
       )
-      let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20))
+      let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20), relevanceScore: 100)
       // La carte vient d'être créée : si l'alerte ne passe pas, le résultat est
       // perdu → on rend `false` pour que l'appelant notifie.
       guard applyUpdate(newActivity, content: content, alert: alert) else { return false }
@@ -248,7 +249,7 @@ final class LiveActivityManager {
       scanTs: scanTs > 0 ? scanTs : nil,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(20))
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(20), relevanceScore: 100)
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
@@ -319,7 +320,7 @@ final class LiveActivityManager {
       onlineMinutes: prev.onlineMinutes,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8))
+    let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
     Task { await activity.update(content) }
   }
 
@@ -343,7 +344,7 @@ final class LiveActivityManager {
       onlineMinutes: prev.onlineMinutes,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: errorState, staleDate: Date().addingTimeInterval(7))
+    let content = ActivityContent(state: errorState, staleDate: Date().addingTimeInterval(7), relevanceScore: 90)
     let alert = AlertConfiguration(
       title: "Strive",
       body: LocalizedStringResource(stringLiteral: localizedString(
@@ -397,7 +398,8 @@ final class LiveActivityManager {
     )
     let content = ActivityContent(
       state: state,
-      staleDate: Date().addingTimeInterval(resultShowing ? 20 : 3600 * 8)
+      staleDate: Date().addingTimeInterval(resultShowing ? 20 : 3600 * 8),
+      relevanceScore: resultShowing ? 100 : 50
     )
     Task { await activity.update(content) }
   }
