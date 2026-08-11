@@ -1,4 +1,11 @@
-export const metadata = { title: 'Conditions Générales d\'Utilisation — Strive' };
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Conditions Générales d\'Utilisation — Strive',
+  description:
+    "Conditions d'utilisation et d'abonnement de Strive : nature du service d'aide à la décision, indépendance vis-à-vis des plateformes VTC, facturation via l'App Store et Google Play, résiliation.",
+  alternates: { canonical: '/terms' },
+};
 
 export default function TermsPage() {
   return (

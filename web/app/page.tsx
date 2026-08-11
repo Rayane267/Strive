@@ -4,6 +4,7 @@ import Reveal from './components/Reveal';
 import ScanShowcase from './components/ScanShowcase';
 import Pricing from './components/Pricing';
 import Faq from './components/Faq';
+import { appSchema, faqSchema, jsonLdGraph } from './lib/schema';
 
 const features = [
   { k: '01', title: 'Scan en 2 secondes', desc: 'Capture l\'offre, Strive la lit par OCR et rend son verdict — sans quitter ton app VTC.' },
@@ -25,6 +26,12 @@ const marquee = ['Uber', '€/h en direct', 'Bolt', 'Trafic temps réel', 'Scan 
 export default function Home() {
   return (
     <main id="top" className="relative">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLdGraph(appSchema, faqSchema)),
+        }}
+      />
       <div className="aurora-mesh" />
       <Header />
 
