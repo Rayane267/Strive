@@ -133,7 +133,12 @@ const PreferencesScreen = () => {
         min_hourly_rate: minHr,
         min_km_rate: minKm,
         include_pickup: includePickup,
-        deduct_fuel: deductFuel,
+        // `fuelToggleOn` et non `deductFuel` : on persiste ce que l'écran
+        // MONTRE. En enregistrant la valeur brute, un compte free (ou qui vient
+        // de repasser free) voyait le toggle éteint mais gardait
+        // `deduct_fuel = true` en base — et le Dashboard, qui lit la colonne
+        // sans contrôle de tier, laissait la déduction carburant active.
+        deduct_fuel: fuelToggleOn,
         is_active: isActive,
         day_reset_hour: dayResetHour,
         updated_at: new Date().toISOString(),

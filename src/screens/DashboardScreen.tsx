@@ -1146,7 +1146,11 @@ const DashboardScreen = () => {
           min_km_rate: isFreeTier ? FREE_THRESHOLDS.km : (Number.isFinite(minKm) ? minKm : 1.2),
           // Approche incluse par défaut : seul un choix explicite `false` la désactive.
           include_pickup: prefsData.include_pickup ?? true,
-          deduct_fuel: prefsData.deduct_fuel ?? false,
+          // Même verrou que les seuils : la déduction carburant est une fonction
+          // Plus. Sans ce contrôle, un compte redevenu free gardait la valeur
+          // `true` écrite du temps de son abonnement et la déduction restait
+          // appliquée au scan, alors que Préférences affiche le toggle éteint.
+          deduct_fuel: isFreeTier ? false : (prefsData.deduct_fuel ?? false),
         });
       }
 
