@@ -40,7 +40,12 @@ export async function createRide(params: {
   netProfit?: number | null;
   pickupAddress?: string | null;
   destinationAddress?: string | null;
-}): Promise<Ride> {
+  /**
+   * `null` quand le trigger `aa_skip_duplicate_ride` a écarté l'insertion : la
+   * course identique a déjà été enregistrée dans les 90 s. Ce n'est PAS une
+   * erreur — l'appelant doit traiter ce cas comme un succès sans rien créer.
+   */
+}): Promise<Ride | null> {
   const { data, error } = await supabase
     .from('rides')
     .insert({
@@ -58,10 +63,14 @@ export async function createRide(params: {
       destination_address: params.destinationAddress ?? null,
     })
     .select()
-    .single();
+    // `maybeSingle` et pas `single` : le trigger anti-doublon annule l'insert
+    // en rendant NULL, donc zéro ligne revient. `single` répondait PGRST116,
+    // que l'appelant prenait pour une panne réseau et remettait la course en
+    // file offline — d'où le doublon recréé plus tard, hors fenêtre de 90 s.
+    .maybeSingle();
 
   if (error) throw error;
-  return data as Ride;
+  return (data ?? null) as Ride | null;
 }
 
 export async function updateRideStatus(

@@ -95,12 +95,14 @@ async function fetchTodayOnlineBaseSeconds(userId: string, resetHour: number): P
   return (data ?? []).reduce((s: number, r: any) => s + (r.duration_seconds || 0), 0);
 }
 
-// Totaux du jour (gains + km) des courses ACCEPTÉES depuis minuit local — utilisé
-// pour réhydrater le mini-dashboard de la Live Activity à la restauration de
-// session (sinon il affiche 0 jusqu'au prochain tag).
-async function fetchTodayAcceptedTotals(userId: string): Promise<{ earnings: number; km: number }> {
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
+// Totaux du jour (gains + km) des courses ACCEPTÉES — utilisé pour réhydrater le
+// mini-dashboard de la Live Activity à la restauration de session (sinon il
+// affiche 0 jusqu'au prochain tag).
+// Même frontière que `fetchTodayOnlineBaseSeconds` : le minuit local en dur
+// donnait un €/h faux avec day_reset_hour = 4, en divisant des gains comptés
+// depuis minuit par des heures comptées depuis 4h la veille.
+async function fetchTodayAcceptedTotals(userId: string, resetHour: number): Promise<{ earnings: number; km: number }> {
+  const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('rides')
     .select('fare_estimated, fare_final, distance_km')
@@ -236,7 +238,7 @@ const DashboardScreen = () => {
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
           const currentElapsed = Math.floor((Date.now() - startTs) / 1000);
           // Réhydrate les vrais totaux du jour (sinon 0 jusqu'au prochain tag).
-          const totals = await fetchTodayAcceptedTotals(user.id);
+          const totals = await fetchTodayAcceptedTotals(user.id, dayResetHourRef.current);
           const onlineHr = (todayOnlineBaseSecondsRef.current + currentElapsed) / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
@@ -660,6 +662,14 @@ const DashboardScreen = () => {
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
         });
+        // `null` = doublon écarté par le trigger : la course identique est déjà
+        // dans la liste et déjà comptée. On ne recrée pas de carte, on ne
+        // ré-incrémente pas le compteur, et surtout on ne met RIEN en file
+        // offline — c'est ce qui recréait le doublon plus tard.
+        if (!newRide) {
+          __DEV__ && console.warn('[SCAN] doublon écarté côté DB — rien à créer');
+          return;
+        }
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
         // Corrélation pour les actions de notif : on retient scanTs → id, et si

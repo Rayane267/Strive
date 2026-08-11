@@ -3,7 +3,9 @@ const mockSingle: jest.Mock = jest.fn();
 const mockOrder: jest.Mock = jest.fn(() => ({ data: [], error: null }));
 const mockGte: jest.Mock = jest.fn(() => ({ order: mockOrder }));
 const mockEq: jest.Mock = jest.fn(() => ({ gte: mockGte, data: null, error: null }));
-const mockSelect: jest.Mock = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
+// `maybeSingle` : createRide ne peut plus utiliser `single`, le trigger
+// anti-doublon annulant l'insert renvoie zéro ligne (cf. ridesService).
+const mockSelect: jest.Mock = jest.fn(() => ({ eq: mockEq, single: mockSingle, maybeSingle: mockSingle }));
 const mockInsert: jest.Mock = jest.fn(() => ({ select: mockSelect }));
 const mockUpdate: jest.Mock = jest.fn(() => ({ eq: mockEq }));
 
@@ -17,6 +19,7 @@ jest.mock('../supabase', () => ({
       gte: mockGte,
       order: mockOrder,
       single: mockSingle,
+      maybeSingle: mockSingle,
     })),
   },
 }));
