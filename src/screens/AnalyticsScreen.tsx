@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { getEffectivePlanTier, getPlanLimits } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, FREE_THRESHOLDS } from '../services/subscriptionService';
 import { fetchRides } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
@@ -236,8 +236,17 @@ const AnalyticsScreen = () => {
       }
       setIsEmpty(false);
 
-      const minHourly = Number(prefsData?.min_hourly_rate ?? 25) || 25;
-      const minKm = Number(prefsData?.min_km_rate ?? 1.2) || 1.2;
+      // Seuils IMPOSÉS en free, comme au scan (DashboardScreen) : sinon un
+      // compte qui a personnalisé ses seuils avant de repasser free voit ici un
+      // score qualité calculé sur des seuils que le scanner n'a jamais
+      // appliqués — la carte et le verdict de la même course se contredisent.
+      const isFree = planTier === 'free';
+      const minHourly = isFree
+        ? FREE_THRESHOLDS.hourly
+        : Number(prefsData?.min_hourly_rate ?? 25) || 25;
+      const minKm = isFree
+        ? FREE_THRESHOLDS.km
+        : Number(prefsData?.min_km_rate ?? FREE_THRESHOLDS.km) || FREE_THRESHOLDS.km;
       setQualityScore(computeQualityScore(rides as any, minHourly, minKm));
 
       const acceptedRides = rides.filter((r: any) => r.status === 'ACCEPTED');

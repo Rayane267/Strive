@@ -23,7 +23,7 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 import { formatTimeAgo, getDayStart, toLocalDateKey, parseLocalDateKey } from '../utils/dateUtils';
-import { getEffectivePlanTier } from '../services/subscriptionService';
+import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionService';
 import { effectiveFare } from '../services/ridesService';
 import { Ride } from '../types/database';
 import { computeRideScore, rideScoreColor } from '../utils/qualityScore';
@@ -181,7 +181,13 @@ const HistoryScreen = () => {
   const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
-  const [thresholds, setThresholds] = useState({ minHourly: 25, minKm: 1.2 });
+  // Défaut aligné sur FREE_THRESHOLDS (1.10 et non 1.2) : le tutoriel et le
+  // scanner utilisent cette valeur, un défaut divergent produisait un score
+  // différent le temps que les préférences arrivent.
+  const [thresholds, setThresholds] = useState<{ minHourly: number; minKm: number }>({
+    minHourly: FREE_THRESHOLDS.hourly,
+    minKm: FREE_THRESHOLDS.km,
+  });
 
   useEffect(() => {
     LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
@@ -198,13 +204,20 @@ const HistoryScreen = () => {
       .then(({ data }) => {
         const h = data?.day_reset_hour === 4 ? 4 : 0;
         setResetHour(h);
+        // Seuils IMPOSÉS en free, comme au scan (DashboardScreen) : sinon le
+        // score affiché sur la carte d'une course est calculé sur d'autres
+        // seuils que le verdict rendu au moment du scan.
         setThresholds({
-          minHourly: Number(data?.min_hourly_rate ?? 25) || 25,
-          minKm: Number(data?.min_km_rate ?? 1.2) || 1.2,
+          minHourly: isPremium
+            ? Number(data?.min_hourly_rate ?? 25) || 25
+            : FREE_THRESHOLDS.hourly,
+          minKm: isPremium
+            ? Number(data?.min_km_rate ?? FREE_THRESHOLDS.km) || FREE_THRESHOLDS.km
+            : FREE_THRESHOLDS.km,
         });
         setDateRange({ start: getDayStart(h), end: getDayStart(h) });
       });
-  }, [user]));
+  }, [user, isPremium]));
 
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
