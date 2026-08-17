@@ -21,7 +21,8 @@
     "unsavedMessage": "Voulez-vous quitter sans enregistrer vos changements ?",
     "stay": "Rester",
     "leave": "Quitter",
-    "back": "Retour"
+    "back": "Retour",
+    "close": "Fermer"
   },
   "errors": {
     "profileLoadFailed": "Impossible de charger votre profil.",
@@ -437,7 +438,9 @@
     "saveError": "Impossible d'enregistrer. Réessayez.",
     "language": "Langue",
     "push": "Notifications push",
-    "pushSub": "Alertes de scan, rappels et récapitulatifs"
+    "pushSub": "Alertes de scan, rappels et récapitulatifs",
+    "languageSub": "Choisir la langue de l'app",
+    "languageDevice": "Langue de l'appareil"
   },
   "upgrade": {
     "title": "Passer en Pro",

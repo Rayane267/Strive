@@ -21,7 +21,8 @@
     "unsavedMessage": "Do you want to leave without saving your changes?",
     "stay": "Stay",
     "leave": "Leave",
-    "back": "Back"
+    "back": "Back",
+    "close": "Close"
   },
   "errors": {
     "profileLoadFailed": "Unable to load your profile.",
@@ -437,7 +438,9 @@
     "saveError": "Failed to save. Please try again.",
     "language": "Language",
     "push": "Push notifications",
-    "pushSub": "Scan alerts, reminders and recaps"
+    "pushSub": "Scan alerts, reminders and recaps",
+    "languageSub": "Choose the app language",
+    "languageDevice": "Device language"
   },
   "upgrade": {
     "title": "Upgrade to Pro",

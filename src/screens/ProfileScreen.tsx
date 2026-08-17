@@ -21,6 +21,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
 import Toggle from '../components/Toggle';
+import LanguageSheet from '../components/LanguageSheet';
 import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
@@ -114,6 +115,8 @@ const ProfileScreen = () => {
     }
   };
 
+  const [langSheetVisible, setLangSheetVisible] = useState(false);
+
   // Restauration : obligatoire côté App Store, et seul recours d'un abonné que
   // l'app croit gratuit — après une réinstallation ou un changement d'appareil.
   const [restoring, setRestoring] = useState(false);
@@ -141,14 +144,9 @@ const ProfileScreen = () => {
     }
   };
 
-  const changeLanguage = (lang: string) => {
-    if (lang === i18n.language) return;
-    hapticLight();
-    i18n.changeLanguage(lang);
-    // iOS ET Android : les strings natives suivent le choix in-app.
-    const { NativeModules } = require('react-native');
-    NativeModules.ScanBridge?.setAppLanguage?.(lang);
-  };
+  // Le changement de langue est passé dans LanguageSheet, qui porte aussi le
+  // choix « suivre l'appareil » — lequel efface la clé stockée plutôt que d'en
+  // écrire une.
 
   const confirmLogout = async () => {
     setIsLogoutModalVisible(false);
@@ -452,7 +450,7 @@ const ProfileScreen = () => {
             iconLib: 'mc',
             title: t('preferences.language', 'Langue'),
             value: i18n.language === 'fr' ? 'Français' : 'English',
-            onPress: () => changeLanguage(i18n.language === 'fr' ? 'en' : 'fr'),
+            onPress: () => setLangSheetVisible(true),
           },
           {
             icon: 'bell',
@@ -560,6 +558,8 @@ const ProfileScreen = () => {
             atteindre depuis l'app. Ne reste que la version. */}
         <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
       </ScrollView>
+
+      <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
 
       {/* ── LOGOUT MODAL ── */}
       <Modal
