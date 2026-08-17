@@ -196,7 +196,12 @@ const AuthScreen = () => {
               accessibilityLabel={t('auth.continueGoogle')}
             >
               <Image
-                source={require('../assets/icons/google-icon-120.png')}
+                // Recadrée sur le glyphe : la tuile d'origine entourait le « G »
+                // d'une marge qui occupait la moitié de l'image, si bien qu'à
+                // 22 pt le logo n'en faisait plus qu'une dizaine et se voyait à
+                // peine. Le fond #F2F2F2 est conservé — il est identique à celui
+                // de la pilule, donc invisible.
+                source={require('../assets/icons/google-logo.png')}
                 style={styles.brandIcon}
                 resizeMode="contain"
               />
