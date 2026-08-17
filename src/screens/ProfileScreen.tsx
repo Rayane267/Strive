@@ -24,6 +24,7 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
+import ScreenGradient from '../components/ScreenGradient';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
@@ -253,6 +254,7 @@ const ProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenGradient />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('profile.title')}</Text>
       </View>

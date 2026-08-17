@@ -50,6 +50,7 @@ import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offl
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
+import ScreenGradient from '../components/ScreenGradient';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 import {
@@ -1374,6 +1375,7 @@ const DashboardScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenGradient />
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
@@ -1538,15 +1540,11 @@ const DashboardScreen = () => {
         </View>
 
 
-        {/* ── OFFLINE HINT ── */}
-        {!isOnline && (
-          <View style={styles.offlineHint}>
-            <MaterialCommunityIcons name="line-scan" size={17} color="#FFB300" />
-            <Text style={styles.offlineHintText}>
-              {t('dashboard.offlineBanner', 'Passez en ligne pour activer le scanner')}
-            </Text>
-          </View>
-        )}
+        {/* Le bandeau orange « Passez en ligne pour activer le scanner » a été
+            retiré : la barre juste au-dessus dit déjà qu'on est hors ligne, et
+            l'état vide plus bas le redit une troisième fois. Trois avertissements
+            pour un même fait, dont un en orange, faisaient passer un état normal
+            pour une anomalie. */}
 
         {/* ── ERROR STATE ── */}
         {fetchError && (
@@ -1995,24 +1993,6 @@ const styles = StyleSheet.create({
 
 
   // OFFLINE HINT
-  offlineHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,179,0,0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,179,0,0.2)',
-    padding: 14,
-    marginBottom: 12,
-  },
-  offlineHintText: {
-    flex: 1,
-    color: '#FFB300',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
   // ERROR STATE
   errorCard: {
     flexDirection: 'row',
