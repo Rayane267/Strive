@@ -820,7 +820,7 @@
     "heroTitleActive": "Strive Plus active",
     "heroSubActive": "You're enjoying all the benefits. Manage your subscription below.",
     "activeTitle": "Active subscription",
-    "activeSub": "You have 15 scans/day, live hourly rate and all Plus features.",
+    "activeSub": "{{plan}} plan",
     "manage": "Manage my subscription",
     "manageVia": "Manage via {{store}}",
     "cancelHint": "To cancel, go to your {{store}} settings.",
@@ -906,7 +906,13 @@
         "label": "Support",
         "plus": "Priority"
       }
-    }
+    },
+    "noneFound": "No subscription found",
+    "noneFoundSub": "We can check your previous purchases",
+    "restorePrevious": "Restore previous purchases",
+    "restoreSuccessSub": "Your subscription is active again.",
+    "restoreFailSub": "Check your connection and try again.",
+    "manageStore": "Manage on the App Store"
   },
   "network": {
     "offline": "No internet connection"

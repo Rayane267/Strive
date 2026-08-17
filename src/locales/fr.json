@@ -820,7 +820,7 @@
     "heroTitleActive": "Strive Plus actif",
     "heroSubActive": "Tu profites de tous les avantages. Gère ton abonnement ci-dessous.",
     "activeTitle": "Abonnement actif",
-    "activeSub": "Tu profites de 15 scans/jour, du taux horaire en direct et de toutes les fonctionnalités Plus.",
+    "activeSub": "Formule {{plan}}",
     "manage": "Gérer mon abonnement",
     "manageVia": "Gérer via {{store}}",
     "cancelHint": "Pour annuler, rendez-vous dans les réglages {{store}}.",
@@ -906,7 +906,13 @@
         "label": "Support",
         "plus": "Prioritaire"
       }
-    }
+    },
+    "noneFound": "Aucun abonnement trouvé",
+    "noneFoundSub": "Nous pouvons vérifier vos achats précédents",
+    "restorePrevious": "Restaurer les achats précédents",
+    "restoreSuccessSub": "Votre abonnement est de nouveau actif.",
+    "restoreFailSub": "Vérifiez votre connexion et réessayez.",
+    "manageStore": "Gérer sur l'App Store"
   },
   "network": {
     "offline": "Pas de connexion internet"

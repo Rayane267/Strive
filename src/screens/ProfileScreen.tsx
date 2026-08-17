@@ -22,11 +22,11 @@ import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
 import Toggle from '../components/Toggle';
 import LanguageSheet from '../components/LanguageSheet';
+import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { registerPushToken, unregisterPushToken } from '../services/notificationService';
-import { restorePurchases } from '../services/iapService';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
@@ -116,33 +116,11 @@ const ProfileScreen = () => {
   };
 
   const [langSheetVisible, setLangSheetVisible] = useState(false);
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
 
-  // Restauration : obligatoire côté App Store, et seul recours d'un abonné que
-  // l'app croit gratuit — après une réinstallation ou un changement d'appareil.
-  const [restoring, setRestoring] = useState(false);
-
-  const handleRestore = async () => {
-    if (restoring) return;
-    setRestoring(true);
-    hapticLight();
-    try {
-      const tierFound = await restorePurchases(user?.id);
-      if (tierFound) await refreshProfile?.();
-      Alert.alert(
-        t('common.success', 'Succès'),
-        tierFound
-          ? t('subscription.restoreSuccess', 'Achats restaurés !')
-          : t('subscription.restoreNone', 'Aucun achat à restaurer.'),
-      );
-    } catch {
-      Alert.alert(
-        t('common.error', 'Erreur'),
-        t('subscription.restoreFail', 'Impossible de restaurer les achats.'),
-      );
-    } finally {
-      setRestoring(false);
-    }
-  };
+  // La restauration est passée dans ManageSubscriptionSheet, qui en affiche le
+  // résultat dans la feuille elle-même. Une alerte système chassait la feuille
+  // au lieu de s'y inscrire, et imposait son style et ses boutons.
 
   // Le changement de langue est passé dans LanguageSheet, qui porte aussi le
   // choix « suivre l'appareil » — lequel efface la clé stockée plutôt que d'en
@@ -471,7 +449,7 @@ const ProfileScreen = () => {
             icon: 'crown-outline',
             iconLib: 'mc' as const,
             title: t('subscription.manage', 'Gérer mon abonnement'),
-            onPress: () => navigation.navigate('SubscriptionScreen'),
+            onPress: () => setSubSheetVisible(true),
           }] : [{
             icon: 'crown-outline',
             iconLib: 'mc' as const,
@@ -483,7 +461,7 @@ const ProfileScreen = () => {
             icon: 'refresh-ccw',
             iconLib: 'feather' as const,
             title: t('subscription.restore', 'Restaurer les achats'),
-            onPress: handleRestore,
+            onPress: () => setSubSheetVisible(true),
           },
         ])}
 
@@ -560,6 +538,15 @@ const ProfileScreen = () => {
       </ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
+
+      <ManageSubscriptionSheet
+        visible={subSheetVisible}
+        onClose={() => setSubSheetVisible(false)}
+        isSubscribed={isPlus}
+        planLabel={isPlus ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+        userId={user?.id}
+        onRestored={() => refreshProfile?.()}
+      />
 
       {/* ── LOGOUT MODAL ── */}
       <Modal
