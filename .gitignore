@@ -100,3 +100,6 @@ supabase/.temp/
 
 # Harnais local de capture d écran (non versionné)
 preview.tsx
+
+# Captures d ecran locales
+screenshots/
