@@ -1,6 +1,7 @@
 import Foundation
 import ActivityKit
 import UIKit
+import UserNotifications
 
 #if canImport(Sentry)
 import Sentry
@@ -12,22 +13,79 @@ final class LiveActivityManager {
   static let shared = LiveActivityManager()
   private init() {}
 
-  private var current: Activity<StriveActivityAttributes>?
-  private var autoDismiss: DispatchWorkItem?
-  private var stateObserverTask: Task<Void, Never>?
+  // ── État partagé ──────────────────────────────────────────────────────────
+  //
+  // Ce singleton est touché depuis QUATRE contextes d'exécution concurrents :
+  //   • la queue de module React Native (bridge JS : start/update/stop/KPI),
+  //   • le main thread (`autoDismiss` → showRecap/backToIdle, didBecomeActive),
+  //   • un thread de fond arbitraire (AnalyzeRideIntent appelle update() depuis
+  //     le callback de ScanProcessor),
+  //   • les `Task` de `observeState`.
+  // Sans synchronisation, un scan par raccourci pendant que le JS pousse ses KPI
+  // écrivait `current` depuis deux threads à la fois : l'app pilotait alors une
+  // carte qui n'était plus celle affichée — verdict qui ne s'affiche pas, carte
+  // figée sur un état ancien, sans crash ni erreur, donc introuvable en test.
+  //
+  // Verrou RÉCURSIF : un accesseur peut être appelé depuis une section déjà
+  // verrouillée (ex. `liveActivity()` qui lit puis écrit `current`).
+  // ⚠️ Ne JAMAIS tenir ce verrou pendant une attente (`sem.wait`, `await`) ni
+  // pendant `Activity.request()` : il ne protège que les accès individuels aux
+  // trois propriétés ci-dessous. Les séquences lire-puis-agir restent possibles,
+  // mais elles sont sans danger — `applyUpdate` revalide `activityState` avant
+  // d'écrire, et une update sur une carte morte est ignorée par iOS.
+  private let stateLock = NSRecursiveLock()
 
-  static let dismissedNotification = Notification.Name("StriveLiveActivityDismissed")
+  private var _current: Activity<StriveActivityAttributes>?
+  private var current: Activity<StriveActivityAttributes>? {
+    get { stateLock.lock(); defer { stateLock.unlock() }; return _current }
+    set { stateLock.lock(); _current = newValue; stateLock.unlock() }
+  }
+
+  private var _autoDismiss: DispatchWorkItem?
+  private var autoDismiss: DispatchWorkItem? {
+    get { stateLock.lock(); defer { stateLock.unlock() }; return _autoDismiss }
+    set { stateLock.lock(); _autoDismiss = newValue; stateLock.unlock() }
+  }
+
+  private var _stateObserverTask: Task<Void, Never>?
+  private var stateObserverTask: Task<Void, Never>? {
+    get { stateLock.lock(); defer { stateLock.unlock() }; return _stateObserverTask }
+    set { stateLock.lock(); _stateObserverTask = newValue; stateLock.unlock() }
+  }
+
+  /// App hôte au premier plan ? Renseigné par `ScanBridgeModule` (cible app), et
+  /// NON lu depuis `UIApplication.shared` : ce fichier est aussi compilé dans la
+  /// cible StriveShareExtension, où cette API est interdite par Apple — l'archive
+  /// échouait avec « 'shared' is unavailable in application extensions ».
+  /// Reste `false` dans l'extension, ce qui est la bonne réponse : une extension
+  /// n'est jamais l'app au premier plan et ne peut pas créer d'activité.
+  private var _hostAppIsActive = false
+  var hostAppIsActive: Bool {
+    stateLock.lock(); defer { stateLock.unlock() }
+    return _hostAppIsActive
+  }
+
+  func setHostAppActive(_ active: Bool) {
+    stateLock.lock()
+    _hostAppIsActive = active
+    stateLock.unlock()
+  }
 
   private static let appGroupId = "group.com.striveapp.app"
+  /// Dernier état de session connu (KPI du jour + ancre du timer), rejoué par
+  /// `ensureRunning()` quand la carte doit être recréée.
+  private static let sessionSnapshotKey = "laSessionSnapshot"
 
   /// Résout la langue UI (fr/en) : préférence poussée par l'app via l'App Group
   /// (`appLanguage`), sinon locale système. Même logique que la Share Extension
   /// et l'AppIntent — le texte des alertes s'affichait jusqu'ici en français
   /// quelle que soit la langue de l'utilisateur.
   private func localizedString(fr: String, en: String) -> String {
-    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-    let lang = appLang ?? Locale.current.languageCode ?? "en"
-    return lang.hasPrefix("fr") ? fr : en
+    // Anglais uniquement si l'app est réglée en anglais, français sinon — la
+    // locale système ne fait PAS foi (cf. laString côté widget).
+    guard let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
+    else { return fr }
+    return appLang.hasPrefix("en") ? en : fr
   }
 
   /// `NSLog` est conservé en toutes configurations (diagnostic via Console.app,
@@ -68,7 +126,10 @@ final class LiveActivityManager {
     log("start(\(platform)) fare=\(fare) hr=\(hourlyRate) km=\(kmRate)")
 
     let existingCount = Activity<StriveActivityAttributes>.activities.count
-    log("existing=\(existingCount) current=\(current == nil ? "nil" : current!.id)")
+    // Une SEULE lecture de `current` : le `x == nil ? … : x!.id` d'origine en
+    // faisait deux, et un autre thread qui remettait la carte à nil entre les
+    // deux faisait planter le force-unwrap — sur une simple ligne de log.
+    log("existing=\(existingCount) current=\(current?.id ?? "nil")")
 
     // Termine TOUTE activité existante (pas seulement `current`) : l'AppIntent
     // tourne dans un autre process et peut avoir laissé une activité orpheline
@@ -76,6 +137,11 @@ final class LiveActivityManager {
     let existing = Activity<StriveActivityAttributes>.activities
     if !existing.isEmpty {
       log("ending \(existing.count) existing activity(ies)")
+      // Couper l'observer AVANT de terminer : sinon la fin de l'activité qu'on
+      // remplace nous-mêmes rappelle `ensureRunning()` en pleine création et
+      // deux `Activity.request()` se marchent dessus.
+      stateObserverTask?.cancel()
+      stateObserverTask = nil
       for activity in existing {
         Task { await activity.end(nil, dismissalPolicy: .immediate) }
       }
@@ -112,12 +178,64 @@ final class LiveActivityManager {
         pushType: nil
       )
       log("OK id=\(current?.id ?? "nil")")
+      // `Activity.request()` n'aboutit QUE si l'app est au premier plan : sa
+      // réussite est donc une preuve d'état, qui rattrape le cas où la
+      // notification `didBecomeActive` a précédé la création du module natif.
+      setHostAppActive(true)
+      // Une carte tourne de nouveau : le message « carte fermée » est caduc.
+      UNUserNotificationCenter.current()
+        .removeDeliveredNotifications(withIdentifiers: ["strive-la-closed"])
       observeState()
+      saveSessionSnapshot(state)
       return true
     } catch {
       log("FAILED: \(error.localizedDescription) domain=\((error as NSError).domain) code=\((error as NSError).code)")
       return false
     }
+  }
+
+  /// Mémorise l'état de session (KPI du jour + ancre du timer) dans l'App Group.
+  /// C'est la seule copie qui survit à la mort de la carte : sans elle, une carte
+  /// recréée repartirait à 0 € / 0 km / timer remis à zéro.
+  private func saveSessionSnapshot(_ s: StriveActivityAttributes.ContentState) {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    var snap: [String: Any] = [
+      "todayEarnings": s.todayEarnings,
+      "todayHourlyRate": s.todayHourlyRate,
+      "todayKm": s.todayKm,
+      "onlineMinutes": s.onlineMinutes,
+    ]
+    if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
+    d.set(snap, forKey: Self.sessionSnapshotKey)
+  }
+
+  /// Ré-arme la carte de session si elle a disparu alors que le chauffeur est
+  /// toujours en ligne. Le chauffeur n'a rien balayé : iOS termine une Live
+  /// Activity de lui-même (limite de durée ~8 h, pression mémoire, remplacement),
+  /// et jusqu'ici PLUS RIEN ne la relançait avant un passage hors ligne/en ligne
+  /// ou un démarrage à froid de l'app. Or sans carte vivante, un scan lancé
+  /// depuis le raccourci ne peut rien afficher — `Activity.request()` échoue en
+  /// arrière-plan — et le verdict retombait sur une simple notification.
+  ///
+  /// À n'appeler qu'avec l'app au premier plan : c'est le seul moment où
+  /// `Activity.request()` est autorisé.
+  @discardableResult
+  func ensureRunning() -> Bool {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return false }
+    guard d.bool(forKey: "sessionOnline") else { return false }
+    let prefOn = d.object(forKey: "useLiveActivity") == nil ? true : d.bool(forKey: "useLiveActivity")
+    guard prefOn, ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
+    guard liveActivity() == nil else { return false }
+    let snap = d.dictionary(forKey: Self.sessionSnapshotKey) ?? [:]
+    log("ensureRunning — session en ligne sans carte vivante, ré-armement")
+    return start(
+      platform: "IDLE",
+      todayEarnings: (snap["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
+      todayHourlyRate: (snap["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+      todayKm: (snap["todayKm"] as? NSNumber)?.doubleValue ?? 0,
+      onlineMinutes: (snap["onlineMinutes"] as? NSNumber)?.intValue ?? 0,
+      sessionStartEpoch: (snap["sessionStartEpoch"] as? NSNumber)?.doubleValue ?? 0
+    )
   }
 
   /// Retourne une activité RÉELLEMENT vivante. `activities.first` peut rendre une
@@ -173,16 +291,59 @@ final class LiveActivityManager {
     guard let activity = current else { return }
     stateObserverTask = Task {
       for await state in activity.activityStateUpdates {
-        if state == .dismissed || state == .ended {
-          log("LA dismissed/ended by user")
-          await MainActor.run {
-            NotificationCenter.default.post(name: Self.dismissedNotification, object: nil)
+        guard state != .active else { continue }
+        // Fin de carte, quelle qu'en soit l'origine : balayage du chauffeur,
+        // « Tout effacer » du centre de notifications, limite système de durée,
+        // pression mémoire, fin déclenchée par un autre process (AppIntent).
+        // Ces cas sont INDISCERNABLES ici : app suspendue, le flux ne livre au
+        // réveil que l'état courant (`.dismissed`) et le `.ended` intermédiaire
+        // est perdu. On ne ferme donc JAMAIS la session sur ce signal — la carte
+        // n'est qu'un affichage, le toggle du Dashboard reste la seule façon de
+        // passer hors ligne. Fermer ici coupait le service en plein travail.
+        log("LA \(state) — session laissée en ligne")
+        current = nil
+        // Si l'app est au premier plan à cet instant, on recrée la carte tout
+        // de suite : c'est la seule fenêtre où `Activity.request()` passe, et
+        // sans carte le prochain scan par raccourci retombe sur une notif.
+        await MainActor.run {
+          if self.hostAppIsActive {
+            self.ensureRunning()
+          } else {
+            // App pas au premier plan : impossible de ré-armer maintenant. On
+            // prévient, sinon le chauffeur voit sa carte disparaître sans savoir
+            // ni si sa session tient, ni que ses prochains scans vont retomber
+            // en notification tant qu'il n'aura pas rouvert l'app.
+            self.notifyCardClosed()
           }
-          current = nil
-          break
         }
+        break
       }
     }
+  }
+
+  /// Notifie la disparition de la carte pendant une session en cours. Deux gardes
+  /// contre le faux positif : appelée uniquement app hors premier plan (sinon la
+  /// carte est ré-armée dans la seconde, rien à signaler), et seulement si la
+  /// session est en ligne — hors session, plus rien ne dépend de la carte.
+  /// Sans son : c'est un message d'état, pas un verdict de course, et iOS peut
+  /// terminer la carte en pleine nuit (limite de durée ~8 h).
+  private func notifyCardClosed() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId), d.bool(forKey: "sessionOnline") else { return }
+    let content = UNMutableNotificationContent()
+    content.title = "Strive"
+    content.body = localizedString(
+      fr: "Carte fermée — votre session reste active. Vos prochains scans arriveront en notification jusqu'à la réouverture de l'app.",
+      en: "Card closed — your session is still active. Your next scans will arrive as notifications until you reopen the app."
+    )
+    content.sound = nil
+    // `.passive` : message d'état, pas un verdict. Il ne doit ni sonner, ni
+    // allumer l'écran, ni traverser une Concentration — il attend sagement dans
+    // le centre de notifications.
+    content.interruptionLevel = .passive
+    // Identifiant fixe : une carte qui meurt plusieurs fois ne doit pas empiler
+    // plusieurs fois le même message.
+    let request = UNNotificationRequest(identifier: "strive-la-closed", content: content, trigger: nil)
+    UNUserNotificationCenter.current().add(request)
   }
 
   /// - Returns: `false` quand rien n'a pu être affiché — typiquement un appel
@@ -294,7 +455,7 @@ final class LiveActivityManager {
       onlineMinutes: prev.onlineMinutes,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: recap, staleDate: Date().addingTimeInterval(20))
+    let content = ActivityContent(state: recap, staleDate: Date().addingTimeInterval(20), relevanceScore: 50)
     Task { await activity.update(content) }
 
     autoDismiss?.cancel()
@@ -308,7 +469,7 @@ final class LiveActivityManager {
     log("backToIdle")
     // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
     // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base
-    // (auto-dismiss 10 s, tap bouton, commande vocale).
+    // (auto-dismiss 20 s, tap bouton, commande vocale).
     let prev = activity.content.state
     let idle = StriveActivityAttributes.State(
       platform: "IDLE",
@@ -402,10 +563,13 @@ final class LiveActivityManager {
       relevanceScore: resultShowing ? 100 : 50
     )
     Task { await activity.update(content) }
+    saveSessionSnapshot(state)
   }
 
   func stop() {
-    log("stop() current=\(current == nil ? "nil" : current!.id)")
+    // Lecture unique (cf. start()) : deux lectures + force-unwrap = crash
+    // possible si un autre thread libère la carte entre les deux.
+    log("stop() current=\(current?.id ?? "nil")")
     autoDismiss?.cancel()
     autoDismiss = nil
     stateObserverTask?.cancel()

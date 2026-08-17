@@ -981,7 +981,12 @@
     "costs": {
       "title": "Vos charges fixes mensuelles",
       "desc": "Location ou crédit du véhicule, assurance, abonnements. Ce qui part chaque mois quoi qu'il arrive.",
-      "none": "Aucune"
+      "none": "Aucune",
+      "subOwned": "Véhicule payé",
+      "subCredit": "Crédit véhicule",
+      "subLease": "LOA + assurance",
+      "subWeekly": "Location semaine",
+      "subRental": "Location tout compris"
     },
     "status": {
       "title": "Votre statut",
@@ -995,6 +1000,9 @@
       "desc": "",
       "label": "Une course doit rapporter",
       "orKm": "ou {{km}} €/km",
+      "statRevenue": "CA à faire",
+      "statHours": "Par mois",
+      "statNet": "Net visé",
       "fromGoal": "Calculé depuis votre objectif, vos heures et vos charges. Strive marquera à refuser toute course en dessous.",
       "floored": "Votre objectif est atteignable en dessous — nous gardons ce seuil, car une course moins payée vous coûte de l'argent une fois l'usure et les charges comptées."
     }

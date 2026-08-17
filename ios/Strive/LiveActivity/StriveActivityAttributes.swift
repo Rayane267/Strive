@@ -125,14 +125,32 @@ struct RideDecisionIntent: LiveActivityIntent {
 
 // MARK: - Helpers partagés (boutons Live Activity + commandes vocales)
 
-/// Tarif/distance de la DERNIÈRE course scannée (App Group `lastScanResult`),
-/// pour incrémenter les KPI de la Live Activity côté natif sans attendre le JS.
+/// Tarif/distance de la DERNIÈRE course scannée, pour incrémenter les KPI de la
+/// Live Activity côté natif sans attendre le JS.
+///
+/// Source = `lastTaggableRide`, une clé minuscule (montant + km) écrite à chaque
+/// résultat et JAMAIS purgée. `lastScanResult`, elle, est supprimée par
+/// `handleShareExtensionResult` quand l'app vide sa file : lire cette clé-là
+/// rendait (0, 0) dès que l'app avait été ouverte une fois — donc le bouton ✅
+/// n'ajoutait plus rien aux gains du jour, précisément dans le cas (app
+/// suspendue) que cet incrément natif existe pour couvrir.
+///
+/// Le montant porté est le tarif AFFICHÉ (net de carburant si l'option est
+/// active), cohérent avec ce que la carte montre — `lastScanResult.fare` est
+/// brut et faisait monter les gains en brut sous un affichage net.
 func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {
-  guard let defaults = UserDefaults(suiteName: appGroupId),
-        let data = defaults.data(forKey: "lastScanResult"),
+  guard let defaults = UserDefaults(suiteName: appGroupId) else { return (0, 0) }
+  if let entry = defaults.dictionary(forKey: "lastTaggableRide") {
+    let fare = (entry["fare"] as? NSNumber)?.doubleValue ?? 0
+    let km = (entry["km"] as? NSNumber)?.doubleValue ?? 0
+    return (fare, km)
+  }
+  // Repli : résultat écrit par un build antérieur, encore en attente de relève.
+  guard let data = defaults.data(forKey: "lastScanResult"),
         let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
   else { return (0, 0) }
-  let fare = (body["fare"] as? NSNumber)?.doubleValue ?? 0
+  let fare = (body["displayFare"] as? NSNumber)?.doubleValue
+    ?? (body["fare"] as? NSNumber)?.doubleValue ?? 0
   let km = (body["distanceKm"] as? NSNumber)?.doubleValue ?? 0
   return (fare, km)
 }

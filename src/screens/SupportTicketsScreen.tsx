@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Pressable,
-  TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -13,16 +23,42 @@ import { colors } from '../theme/colors';
 import { formatTimeAgo } from '../utils/dateUtils';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import {
-  fetchTickets, createTicket, subcategoriesFor,
-  SupportTicket, TicketStatus, TicketCategory, TICKET_CATEGORIES,
+  fetchTickets,
+  createTicket,
+  subcategoriesFor,
+  SupportTicket,
+  TicketStatus,
+  TicketCategory,
+  TICKET_CATEGORIES,
 } from '../services/supportService';
-import { getRecentFailures, SCAN_ERROR_CODES, ScanFailureReason, LastFailure } from '../services/scanFailureService';
+import {
+  getRecentFailures,
+  SCAN_ERROR_CODES,
+  ScanFailureReason,
+  LastFailure,
+} from '../services/scanFailureService';
 import BrandLoader from '../components/BrandLoader';
+import ListItemEntrance from '../components/ListItemEntrance';
 
-const STATUS_META: Record<TicketStatus, { color: string; key: string; fallback: string }> = {
-  open:     { color: '#FFB300', key: 'support.status.open',     fallback: 'En attente' },
-  answered: { color: colors.primary, key: 'support.status.answered', fallback: 'Répondu' },
-  closed:   { color: colors.textDimmed, key: 'support.status.closed', fallback: 'Fermé' },
+const STATUS_META: Record<
+  TicketStatus,
+  { color: string; key: string; fallback: string }
+> = {
+  open: {
+    color: '#FFB300',
+    key: 'support.status.open',
+    fallback: 'En attente',
+  },
+  answered: {
+    color: colors.primary,
+    key: 'support.status.answered',
+    fallback: 'Répondu',
+  },
+  closed: {
+    color: colors.textDimmed,
+    key: 'support.status.closed',
+    fallback: 'Fermé',
+  },
 };
 
 const SupportTicketsScreen = () => {
@@ -59,7 +95,11 @@ const SupportTicketsScreen = () => {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   // Relu à chaque ouverture : une erreur peut survenir entre deux ouvertures.
   useEffect(() => {
@@ -72,13 +112,25 @@ const SupportTicketsScreen = () => {
     if (!canSend || sending) return;
     setSending(true);
     try {
-      const id = await createTicket(subject, message, category!, subcategory, errorCode);
+      const id = await createTicket(
+        subject,
+        message,
+        category!,
+        subcategory,
+        errorCode,
+      );
       hapticSuccess();
       setComposeOpen(false);
-      setSubject(''); setMessage('');
-      setCategory(null); setSubcategory(null); setErrorCode(null);
+      setSubject('');
+      setMessage('');
+      setCategory(null);
+      setSubcategory(null);
+      setErrorCode(null);
       await load();
-      navigation.navigate('SupportTicketDetail', { ticketId: id, subject: subject.trim() });
+      navigation.navigate('SupportTicketDetail', {
+        ticketId: id,
+        subject: subject.trim(),
+      });
     } catch {
       hapticError();
     } finally {
@@ -86,47 +138,82 @@ const SupportTicketsScreen = () => {
     }
   };
 
-  const renderTicket = ({ item }: { item: SupportTicket }) => {
+  const renderTicket = ({
+    item,
+    index,
+  }: {
+    item: SupportTicket;
+    index: number;
+  }) => {
     const meta = STATUS_META[item.status];
     return (
-      <TouchableOpacity
-        style={styles.ticketCard}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id, subject: item.subject })}
-      >
-        <View style={styles.ticketTop}>
-          <Text style={styles.ticketSubject} numberOfLines={1}>{item.subject}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: meta.color + '1F', borderColor: meta.color + '40' }]}>
-            <Text style={[styles.statusText, { color: meta.color }]}>{t(meta.key, meta.fallback)}</Text>
-          </View>
-        </View>
-        {item.category ? (
-          <View style={styles.catBadge}>
-            <Text style={styles.catBadgeTxt}>
-              {(item.subcategory
-                ? t(`support.sub.${item.subcategory}`)
-                : t(`support.cat.${item.category}`)).toUpperCase()}
-              {item.error_code ? ` · ${item.error_code}` : ''}
+      <ListItemEntrance index={index}>
+        <TouchableOpacity
+          style={styles.ticketCard}
+          activeOpacity={0.8}
+          onPress={() =>
+            navigation.navigate('SupportTicketDetail', {
+              ticketId: item.id,
+              subject: item.subject,
+            })
+          }
+        >
+          <View style={styles.ticketTop}>
+            <Text style={styles.ticketSubject} numberOfLines={1}>
+              {item.subject}
             </Text>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: meta.color + '1F',
+                  borderColor: meta.color + '40',
+                },
+              ]}
+            >
+              <Text style={[styles.statusText, { color: meta.color }]}>
+                {t(meta.key, meta.fallback)}
+              </Text>
+            </View>
           </View>
-        ) : null}
-        <View style={styles.ticketBottom}>
-          <Text style={styles.ticketTime}>{formatTimeAgo(item.last_message_at, t)}</Text>
-          <Feather name="chevron-right" size={16} color={colors.textDimmed} />
-        </View>
-      </TouchableOpacity>
+          {item.category ? (
+            <View style={styles.catBadge}>
+              <Text style={styles.catBadgeTxt}>
+                {(item.subcategory
+                  ? t(`support.sub.${item.subcategory}`)
+                  : t(`support.cat.${item.category}`)
+                ).toUpperCase()}
+                {item.error_code ? ` · ${item.error_code}` : ''}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.ticketBottom}>
+            <Text style={styles.ticketTime}>
+              {formatTimeAgo(item.last_message_at, t)}
+            </Text>
+            <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+          </View>
+        </TouchableOpacity>
+      </ListItemEntrance>
     );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
           <Feather name="arrow-left" size={22} color={colors.textMain} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('support.title', 'Mes tickets')}</Text>
-          <Text style={styles.headerSub}>{t('support.subtitle', 'Support Strive')}</Text>
+          <Text style={styles.headerTitle}>
+            {t('support.title', 'Mes tickets')}
+          </Text>
+          <Text style={styles.headerSub}>
+            {t('support.subtitle', 'Support Strive')}
+          </Text>
         </View>
         <View style={{ width: 38 }} />
       </View>
@@ -148,37 +235,55 @@ const SupportTicketsScreen = () => {
                   onPress={() => setFilter(null)}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.chipTxt, !filter && styles.chipTxtActive]}>
+                  <Text
+                    style={[styles.chipTxt, !filter && styles.chipTxtActive]}
+                  >
                     {t('support.filterAll')}
                   </Text>
                 </TouchableOpacity>
-                {TICKET_CATEGORIES
-                  .filter(c => tickets.some(x => x.category === c))
-                  .map(c => (
-                    <TouchableOpacity
-                      key={c}
-                      style={[styles.chip, filter === c && styles.chipActive]}
-                      onPress={() => setFilter(filter === c ? null : c)}
-                      activeOpacity={0.85}
+                {TICKET_CATEGORIES.filter(c =>
+                  tickets.some(x => x.category === c),
+                ).map(c => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.chip, filter === c && styles.chipActive]}
+                    onPress={() => setFilter(filter === c ? null : c)}
+                    activeOpacity={0.85}
+                  >
+                    <Text
+                      style={[
+                        styles.chipTxt,
+                        filter === c && styles.chipTxtActive,
+                      ]}
                     >
-                      <Text style={[styles.chipTxt, filter === c && styles.chipTxtActive]}>
-                        {t(`support.cat.${c}`)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                      {t(`support.cat.${c}`)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             ) : null
           }
-          keyExtractor={(i) => i.id}
+          keyExtractor={i => i.id}
           renderItem={renderTicket}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
-                <MaterialCommunityIcons name="lifebuoy" size={30} color={colors.textDimmed} />
+                <MaterialCommunityIcons
+                  name="lifebuoy"
+                  size={30}
+                  color={colors.textDimmed}
+                />
               </View>
-              <Text style={styles.emptyTitle}>{t('support.empty', 'Aucun ticket pour l\'instant')}</Text>
-              <Text style={styles.emptyHint}>{t('support.emptyHint', 'Une question, un souci ? Ouvre un ticket, on te répond vite.')}</Text>
+              <Text style={styles.emptyTitle}>
+                {t('support.empty', "Aucun ticket pour l'instant")}
+              </Text>
+              <Text style={styles.emptyHint}>
+                {t(
+                  'support.emptyHint',
+                  'Une question, un souci ? Ouvre un ticket, on te répond vite.',
+                )}
+              </Text>
             </View>
           }
         />
@@ -186,123 +291,179 @@ const SupportTicketsScreen = () => {
 
       {/* CTA nouveau ticket */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.newBtn} onPress={() => setComposeOpen(true)} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.newBtn}
+          onPress={() => setComposeOpen(true)}
+          activeOpacity={0.85}
+        >
           <Feather name="plus" size={18} color={colors.background} />
-          <Text style={styles.newBtnText}>{t('support.newTicket', 'Nouveau ticket')}</Text>
+          <Text style={styles.newBtnText}>
+            {t('support.newTicket', 'Nouveau ticket')}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Compose modal */}
-      <Modal visible={composeOpen} transparent animationType="fade" onRequestClose={() => setComposeOpen(false)}>
+      <Modal
+        visible={composeOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setComposeOpen(false)}
+      >
         <Pressable style={styles.overlay} onPress={() => setComposeOpen(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-            <Pressable style={styles.modalCard} onPress={e => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>{t('support.newTicket', 'Nouveau ticket')}</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%' }}
+          >
+            <Pressable
+              style={styles.modalCard}
+              onPress={e => e.stopPropagation()}
+            >
+              <Text style={styles.modalTitle}>
+                {t('support.newTicket', 'Nouveau ticket')}
+              </Text>
 
               <ScrollView
                 style={styles.composeScroll}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
-              {/* 1. Catégorie — obligatoire : c'est elle qui trie la file. */}
-              <Text style={styles.inputLabel}>{t('support.categoryLabel')}</Text>
-              <View style={styles.chipWrap}>
-                {TICKET_CATEGORIES.map(c => {
-                  const active = category === c;
-                  return (
-                    <TouchableOpacity
-                      key={c}
-                      style={[styles.chip, active && styles.chipActive]}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      onPress={() => { setCategory(c); setSubcategory(null); }}
-                    >
-                      <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>
-                        {t(`support.cat.${c}`)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* 2. Sous-catégorie — seulement si la catégorie en a. */}
-              {category && subcategoriesFor(category).length > 0 ? (
-                <>
-                  <Text style={styles.inputLabel}>{t('support.subcategoryLabel')}</Text>
-                  <View style={styles.chipWrap}>
-                    {subcategoriesFor(category).map(sc => {
-                      const active = subcategory === sc;
-                      return (
-                        <TouchableOpacity
-                          key={sc}
-                          style={[styles.chip, active && styles.chipActive]}
-                          activeOpacity={0.85}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: active }}
-                          onPress={() => setSubcategory(active ? null : sc)}
-                        >
-                          <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>
-                            {t(`support.sub.${sc}`)}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </>
-              ) : null}
-
-              {/* 3. Code d'erreur — masqué s'il n'y a rien à rattacher. */}
-              {recent.length > 0 ? (
-                <>
-                  <Text style={styles.inputLabel}>{t('support.errorLabel')}</Text>
-                  {recent.map(f => {
-                    const code = SCAN_ERROR_CODES[f.reason as ScanFailureReason];
-                    if (!code) return null;
-                    const active = errorCode === code;
+                {/* 1. Catégorie — obligatoire : c'est elle qui trie la file. */}
+                <Text style={styles.inputLabel}>
+                  {t('support.categoryLabel')}
+                </Text>
+                <View style={styles.chipWrap}>
+                  {TICKET_CATEGORIES.map(c => {
+                    const active = category === c;
                     return (
                       <TouchableOpacity
-                        key={code + f.at}
-                        style={[styles.errRow, active && styles.errRowActive]}
+                        key={c}
+                        style={[styles.chip, active && styles.chipActive]}
                         activeOpacity={0.85}
-                        accessibilityRole="radio"
+                        accessibilityRole="button"
                         accessibilityState={{ selected: active }}
-                        onPress={() => setErrorCode(active ? null : code)}
+                        onPress={() => {
+                          setCategory(c);
+                          setSubcategory(null);
+                        }}
                       >
-                        <Feather
-                          name={active ? 'check-circle' : 'circle'}
-                          size={17}
-                          color={active ? colors.primary : 'rgba(255,255,255,0.18)'}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.errTitle}>{t(`support.reason.${f.reason}`, code)}</Text>
-                          <Text style={styles.errMeta}>{code} · {formatTimeAgo(new Date(f.at).toISOString(), t)}</Text>
-                        </View>
+                        <Text
+                          style={[
+                            styles.chipTxt,
+                            active && styles.chipTxtActive,
+                          ]}
+                        >
+                          {t(`support.cat.${c}`)}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </>
-              ) : null}
+                </View>
 
-              <Text style={styles.inputLabel}>{t('support.subjectLabel', 'Sujet')}</Text>
-              <TextInput
-                style={styles.input}
-                value={subject}
-                onChangeText={t => setSubject(t.slice(0, 140))}
-                placeholder={t('support.subjectPlaceholder', 'Ex : Problème de scan')}
-                placeholderTextColor={colors.textDimmed}
-                maxLength={140}
-              />
-              <Text style={styles.inputLabel}>{t('support.messageLabel', 'Message')}</Text>
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                value={message}
-                onChangeText={t => setMessage(t.slice(0, 4000))}
-                placeholder={t('support.messagePlaceholder', 'Décris ta demande en détail…')}
-                placeholderTextColor={colors.textDimmed}
-                multiline
-                textAlignVertical="top"
-              />
+                {/* 2. Sous-catégorie — seulement si la catégorie en a. */}
+                {category && subcategoriesFor(category).length > 0 ? (
+                  <>
+                    <Text style={styles.inputLabel}>
+                      {t('support.subcategoryLabel')}
+                    </Text>
+                    <View style={styles.chipWrap}>
+                      {subcategoriesFor(category).map(sc => {
+                        const active = subcategory === sc;
+                        return (
+                          <TouchableOpacity
+                            key={sc}
+                            style={[styles.chip, active && styles.chipActive]}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            onPress={() => setSubcategory(active ? null : sc)}
+                          >
+                            <Text
+                              style={[
+                                styles.chipTxt,
+                                active && styles.chipTxtActive,
+                              ]}
+                            >
+                              {t(`support.sub.${sc}`)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+
+                {/* 3. Code d'erreur — masqué s'il n'y a rien à rattacher. */}
+                {recent.length > 0 ? (
+                  <>
+                    <Text style={styles.inputLabel}>
+                      {t('support.errorLabel')}
+                    </Text>
+                    {recent.map(f => {
+                      const code =
+                        SCAN_ERROR_CODES[f.reason as ScanFailureReason];
+                      if (!code) return null;
+                      const active = errorCode === code;
+                      return (
+                        <TouchableOpacity
+                          key={code + f.at}
+                          style={[styles.errRow, active && styles.errRowActive]}
+                          activeOpacity={0.85}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: active }}
+                          onPress={() => setErrorCode(active ? null : code)}
+                        >
+                          <Feather
+                            name={active ? 'check-circle' : 'circle'}
+                            size={17}
+                            color={
+                              active ? colors.primary : 'rgba(255,255,255,0.18)'
+                            }
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.errTitle}>
+                              {t(`support.reason.${f.reason}`, code)}
+                            </Text>
+                            <Text style={styles.errMeta}>
+                              {code} ·{' '}
+                              {formatTimeAgo(new Date(f.at).toISOString(), t)}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                ) : null}
+
+                <Text style={styles.inputLabel}>
+                  {t('support.subjectLabel', 'Sujet')}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={subject}
+                  onChangeText={t => setSubject(t.slice(0, 140))}
+                  placeholder={t(
+                    'support.subjectPlaceholder',
+                    'Ex : Problème de scan',
+                  )}
+                  placeholderTextColor={colors.textDimmed}
+                  maxLength={140}
+                />
+                <Text style={styles.inputLabel}>
+                  {t('support.messageLabel', 'Message')}
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  value={message}
+                  onChangeText={t => setMessage(t.slice(0, 4000))}
+                  placeholder={t(
+                    'support.messagePlaceholder',
+                    'Décris ta demande en détail…',
+                  )}
+                  placeholderTextColor={colors.textDimmed}
+                  multiline
+                  textAlignVertical="top"
+                />
               </ScrollView>
 
               <TouchableOpacity
@@ -311,10 +472,14 @@ const SupportTicketsScreen = () => {
                 disabled={sending || !canSend}
                 activeOpacity={0.85}
               >
-                {sending ? <ActivityIndicator color={colors.background} /> : (
+                {sending ? (
+                  <ActivityIndicator color={colors.background} />
+                ) : (
                   <>
                     <Feather name="send" size={16} color={colors.background} />
-                    <Text style={styles.sendBtnText}>{t('support.send', 'Envoyer')}</Text>
+                    <Text style={styles.sendBtnText}>
+                      {t('support.send', 'Envoyer')}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -329,63 +494,162 @@ const SupportTicketsScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   headerCenter: { flex: 1, marginHorizontal: 14 },
   headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
   headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
 
-  list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, flexGrow: 1 },
-  ticketCard: {
-    backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 12,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  list: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+    flexGrow: 1,
   },
-  ticketTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  ticketSubject: { color: colors.textMain, fontSize: 15, fontWeight: '700', flex: 1 },
-  statusBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  ticketCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  ticketTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  ticketSubject: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
   statusText: { fontSize: 11, fontWeight: '800' },
-  ticketBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  ticketBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
   ticketTime: { color: colors.textDimmed, fontSize: 12 },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 10 },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+    gap: 10,
+  },
   emptyIcon: {
-    width: 68, height: 68, borderRadius: 34, backgroundColor: colors.surface,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.12)',
   },
   emptyTitle: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
-  emptyHint: { color: colors.textDimmed, fontSize: 13, textAlign: 'center', lineHeight: 19, maxWidth: 280 },
+  emptyHint: {
+    color: colors.textDimmed,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    maxWidth: 280,
+  },
 
   footer: { paddingHorizontal: 20, paddingVertical: 14 },
   newBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  newBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  newBtnText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 },
-  modalCard: {
-    backgroundColor: colors.surface, borderRadius: 22, padding: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    padding: 20,
   },
-  modalTitle: { color: colors.textMain, fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  inputLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 7, marginTop: 4 },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    color: colors.textMain,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 16,
+  },
+  inputLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 7,
+    marginTop: 4,
+  },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.05)', color: colors.textMain,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    color: colors.textMain,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   inputMultiline: { height: 120, marginBottom: 4 },
   sendBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: colors.primary, paddingVertical: 15, borderRadius: 14, marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: 15,
+    borderRadius: 14,
+    marginTop: 16,
   },
   // ── Formulaire : catégorie, sous-catégorie, code d'erreur ──────────────────
   // Le formulaire est devenu plus haut que l'écran sur les petits modèles :
@@ -401,7 +665,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
   },
-  chipActive: { backgroundColor: colors.primary + '1C', borderColor: colors.primary + '70' },
+  chipActive: {
+    backgroundColor: colors.primary + '1C',
+    borderColor: colors.primary + '70',
+  },
   chipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   chipTxtActive: { color: colors.primary },
   errRow: {
@@ -416,9 +683,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  errRowActive: { backgroundColor: colors.primary + '12', borderColor: colors.primary + '55' },
+  errRowActive: {
+    backgroundColor: colors.primary + '12',
+    borderColor: colors.primary + '55',
+  },
   errTitle: { color: colors.textMain, fontSize: 13.5, fontWeight: '700' },
-  errMeta: { color: colors.textDimmed, fontSize: 11.5, fontWeight: '500', marginTop: 2 },
+  errMeta: {
+    color: colors.textDimmed,
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginTop: 2,
+  },
   // Pastille de catégorie sur la carte d'un ticket + filtre de la liste.
   catBadge: {
     alignSelf: 'flex-start',
@@ -430,8 +705,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.09)',
     marginTop: 6,
   },
-  catBadgeTxt: { color: colors.textMuted, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
-  filterRow: { paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', gap: 8 },
+  catBadgeTxt: {
+    color: colors.textMuted,
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  filterRow: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
   sendBtnText: { color: colors.background, fontSize: 15, fontWeight: '800' },
 });
 

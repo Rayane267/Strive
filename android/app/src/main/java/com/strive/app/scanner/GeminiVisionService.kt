@@ -211,7 +211,7 @@ object GeminiVisionService {
             val destinationAddress = data.optString("destination_address")
                 .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
 
-            if (fare < 5 || fare > 200) return null
+            if (fare < 8 || fare > 200) return null
             if (distanceKm < 0.3 || distanceKm > 500) return null
             // Ratio plausible : rejette les combinaisons aberrantes (distance
             // hallucinée minuscule → €/km démentiel). Mirror JS / iOS.

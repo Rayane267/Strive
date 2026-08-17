@@ -52,5 +52,13 @@ export interface Ride {
   net_profit?: number | null;   // tarif − fuel_cost (net réel daté)
   pickup_address?: string | null;
   destination_address?: string | null;
+  /**
+   * Horodatage du SCAN (epoch secondes), clé de corrélation avec les décisions
+   * « Prise / Refusée » tapées hors de l'app (Live Activity, notification, Siri).
+   * `created_at` ne peut pas jouer ce rôle : c'est l'heure d'insertion, qui peut
+   * arriver des heures après le scan quand l'app était fermée.
+   * `null` pour les courses créées avant la migration 20260816_rides_scan_ts.
+   */
+  scan_ts?: number | null;
   created_at: string;
 }

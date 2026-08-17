@@ -592,7 +592,7 @@
         "height": 20
       },
       {
-        "text": "Gain 5.00",
+        "text": "Gain 8.00",
         "x": 50,
         "y": 200,
         "width": 200,
@@ -608,7 +608,7 @@
     ],
     "expected": {
       "platform": "BOLT",
-      "fare": 5,
+      "fare": 8,
       "distanceKm": 2
     }
   },

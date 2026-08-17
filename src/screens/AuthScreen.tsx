@@ -3,15 +3,16 @@ import {
   StyleSheet,
   View,
   Text,
+  Image,
   TouchableOpacity,
   StatusBar,
   Platform,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { Toast, useToast } from '../components/Toast';
+import BrandLoader from '../components/BrandLoader';
 import { supabase } from '../services/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { sha256 } from 'js-sha256';
@@ -19,7 +20,6 @@ import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
 import { enforceOAuthSignupQuota, registerOAuthSignup, enforceSignupQuota } from '../utils/deviceId';
-import BrandLoader from '../components/BrandLoader';
 
 let appleAuth: any = null;
 if (Platform.OS === 'ios') {
@@ -163,15 +163,14 @@ const AuthScreen = () => {
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
+      {/* Identité en haut, actions en bas : le pouce ne remonte pas chercher un
+          bouton de connexion, et le vide entre les deux laisse la marque
+          respirer au premier lancement. */}
       <View style={styles.hero}>
-        <Image
-          source={require('../assets/strive-logo.png')}
-          style={styles.logoImg}
-        />
-
-        <View style={styles.appNameWrap}>
-          <Text style={styles.appName}>Strive</Text>
-          <View style={styles.appNameLine} />
+        <Image source={require('../assets/strive-logo.png')} style={styles.logoImg} />
+        <View style={styles.wordmarkWrap}>
+          <Text style={styles.wordmark}>Strive</Text>
+          <View style={styles.wordmarkLine} />
         </View>
       </View>
 
@@ -184,34 +183,36 @@ const AuthScreen = () => {
         ) : (
           <>
             {/* Google — iOS + Android */}
-            <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogleLogin} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.btnGoogle}
+              onPress={handleGoogleLogin}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('auth.continueGoogle')}
+            >
               <View style={styles.googleIconWrap}>
                 <FontAwesome name="google" size={17} color="#4285F4" />
               </View>
               <Text style={styles.btnGoogleText}>{t('auth.continueGoogle')}</Text>
             </TouchableOpacity>
 
-            {/* Apple — iOS uniquement */}
+            {/* Apple — iOS uniquement : le SDK n'existe pas sur Android, afficher
+                le bouton y mènerait à un bouton mort. */}
             {Platform.OS === 'ios' && (
-              <TouchableOpacity style={styles.btnApple} onPress={handleAppleLogin} activeOpacity={0.85}>
-                <FontAwesome name="apple" size={20} color="#fff" />
+              <TouchableOpacity
+                style={styles.btnApple}
+                onPress={handleAppleLogin}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('auth.continueApple')}
+              >
+                <FontAwesome name="apple" size={20} color="#FFFFFF" />
                 <Text style={styles.btnAppleText}>{t('auth.continueApple')}</Text>
               </TouchableOpacity>
             )}
-
-            {/* Facebook — iOS + Android (à activer après config Facebook Developer)
-            <TouchableOpacity style={styles.btnFacebook} onPress={handleFacebookLogin} activeOpacity={0.85}>
-              <FontAwesome name="facebook" size={18} color="#fff" />
-              <Text style={styles.btnFacebookText}>{t('auth.continueFacebook', 'Continuer avec Facebook')}</Text>
-            </TouchableOpacity>
-            */}
           </>
         )}
 
-        {/* Ces deux libellés étaient stylés en lien mais sans `onPress` : verts,
-            en gras, et inertes. Les mêmes URL sont déjà ouvertes depuis
-            ProfileScreen — c'est aussi ce qu'attend la revue App Store sur un
-            écran de création de compte. */}
         <Text style={styles.footer}>
           {t('auth.termsText')}{' '}
           <Text
@@ -241,54 +242,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingHorizontal: 24,
   },
+
   hero: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
+    gap: 18,
   },
-  logoImg: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-  },
-  appNameWrap: {
-    alignItems: 'center',
-  },
-  appName: {
+  logoImg: { width: 88, height: 88, borderRadius: 22 },
+  wordmarkWrap: { alignItems: 'center' },
+  wordmark: {
     fontSize: 48,
     fontWeight: '900',
     color: colors.textMain,
     letterSpacing: -1.5,
   },
-  appNameLine: {
+  wordmarkLine: {
     width: 60,
     height: 3,
     borderRadius: 2,
     backgroundColor: colors.primary,
     marginTop: 6,
   },
-  actions: {
-    paddingBottom: 32,
-    gap: 12,
-  },
-  loadingWrap: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 12,
-  },
-  loadingText: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
+  actions: { paddingBottom: 32, gap: 12 },
+  loadingWrap: { alignItems: 'center', paddingVertical: 24, gap: 12 },
+  loadingText: { color: colors.textMuted, fontSize: 14 },
+
+  // Boutons en pilule : hauteur 58 (au-dessus des 44 pt de cible tactile
+  // minimale, confortable pour un pouce en conduite) et rayon plein.
   btnGoogle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     backgroundColor: '#FFFFFF',
-    height: 54,
-    borderRadius: 14,
+    height: 58,
+    borderRadius: 29,
   },
   googleIconWrap: {
     width: 24,
@@ -296,58 +285,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  btnGoogleText: {
-    color: '#3C4043',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  btnGoogleText: { color: '#3C4043', fontSize: 16, fontWeight: '700' },
   btnApple: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     backgroundColor: '#000000',
-    height: 54,
-    borderRadius: 14,
+    height: 58,
+    borderRadius: 29,
     borderWidth: 1,
     // #000 sur un fond #0A120E : sans bordure lisible, le bouton se fond dans la
     // page et on ne voit plus que son texte. Le blanc étant déjà pris par Google,
     // on garde le noir (autorisé par les règles Apple) et on dessine le contour.
     borderColor: 'rgba(255,255,255,0.22)',
   },
-  btnAppleText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  btnFacebook: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#1877F2',
-    height: 54,
-    borderRadius: 14,
-  },
-  btnFacebookText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  btnAppleText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
   footer: {
     color: colors.textDimmed,
-    // 11px était sous le seuil de confort pour un texte que l'utilisateur doit
-    // pouvoir lire ET toucher ; l'interligne élargit aussi la zone tactile des
-    // deux liens, qui sont imbriqués dans la phrase.
     fontSize: 12.5,
     textAlign: 'center',
     lineHeight: 20,
     marginTop: 16,
   },
-  footerLink: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
+  footerLink: { color: colors.primary, fontWeight: '600' },
 });
 
 export default AuthScreen;

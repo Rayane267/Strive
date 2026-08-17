@@ -49,15 +49,36 @@ const PLATFORMS = [
 
 // Propositions rapides. `null` ouvre une saisie libre : taper une pastille bat
 // le clavier, mais on ne ferme jamais la porte au chiffre exact.
-const HOURS_CHOICES: (number | null)[] = [35, 45, 55, null];
-const GOAL_CHOICES: (number | null)[] = [2000, 2500, 3500, null];
-const COSTS_CHOICES: (number | null)[] = [0, 400, 800, null];
+//
+// Les valeurs sont calées sur le métier, pas sur des ronds arbitraires. Un VTC
+// à temps plein roule 45–60 h effectives, pas 35 ; et ses charges fixes ne sont
+// quasiment jamais nulles — véhicule en LOA plus assurance VTC tournent autour
+// de 700 €/mois, une location tout compris chez un loueur VTC autour de
+// 1 400 €. Les anciens presets (35 h, 0 € de charges) donnaient un CA requis si
+// bas que `deriveThreshold` retombait sur le plancher dans presque tous les cas :
+// l'écran de résultat affichait alors un chiffre qui ne devait rien aux réponses.
+//
+// Cinq propositions plutôt que trois : à trois, l'écart entre deux pastilles
+// était tel que le chauffeur tapait « Autre » — donc le clavier — pour la
+// plupart des situations réelles. Cinq + « Autre » se posent en grille de 3
+// colonnes sur deux lignes, ce qui agrandit aussi la cible tactile.
+const HOURS_CHOICES: (number | null)[] = [35, 40, 45, 50, 60, null];
+const GOAL_CHOICES: (number | null)[] = [1500, 2000, 2500, 3000, 3500, null];
+const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
 const STATUS_CHOICES: (number | null)[] = [
   SOCIAL_RATES.auto_entrepreneur,
   SOCIAL_RATES.societe,
   SOCIAL_RATES.salarie,
   null,
 ];
+
+/**
+ * Milliers séparés par une espace insécable. `toLocaleString` dépend d'un Intl
+ * dont la présence varie selon la build Hermes ; sur un montant entier en euros
+ * la règle tient en une ligne.
+ */
+const formatEuros = (n: number) =>
+  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
 
 /** Les 5 questions, puis l'écran de résultat. */
 const STEPS = ['platforms', 'hours', 'goal', 'costs', 'status', 'result'] as const;
@@ -73,9 +94,11 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const isLast = index === STEPS.length - 1;
 
   const [platforms, setPlatforms] = useState<string[]>(['UBER']);
-  const [weeklyHours, setWeeklyHours] = useState(45);
+  const [weeklyHours, setWeeklyHours] = useState(50);
   const [monthlyGoal, setMonthlyGoal] = useState(2500);
-  const [fixedCosts, setFixedCosts] = useState(0);
+  // Défaut à 700 € plutôt que 0 : partir de « aucune charge » est le cas rare,
+  // et c'est celui qui fausse le plus le seuil vers le bas.
+  const [fixedCosts, setFixedCosts] = useState(700);
   const [socialRate, setSocialRate] = useState<number>(SOCIAL_RATES.auto_entrepreneur);
 
   /** Champ en saisie libre, ou null si tout est sur des pastilles. */
@@ -163,7 +186,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // ── Rendus ────────────────────────────────────────────────────────────────
 
   const ChipRow = ({
-    choices, value, onPick, unit, zeroLabel, labelFor, isPercent, wrap,
+    choices, value, onPick, unit, zeroLabel, labelFor, subFor, isPercent, wrap, grid,
   }: {
     choices: (number | null)[];
     value: number;
@@ -171,20 +194,30 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     unit?: string;
     zeroLabel?: string;
     labelFor?: (v: number) => string;
+    /** Légende sous le chiffre — dit à quelle situation réelle il correspond. */
+    subFor?: (v: number) => string;
     isPercent?: boolean;
+    /** Grille 2 colonnes (libellés longs : statut). */
     wrap?: boolean;
+    /** Grille 3 colonnes (6 pastilles : 5 propositions + « Autre »). */
+    grid?: boolean;
   }) => {
     const onAChip = choices.some(c => c !== null && c === value);
     return (
       <>
-        <View style={[styles.chipRow, wrap && styles.chipRowWrap]}>
+        <View style={[styles.chipRow, (wrap || grid) && styles.chipRowWrap]}>
           {choices.map((c, i) => {
             const isOther = c === null;
             const active = isOther ? !onAChip : c === value;
             return (
               <TouchableOpacity
                 key={i}
-                style={[styles.chip, wrap && styles.chipWrapped, active && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  wrap && styles.chipWrapped,
+                  grid && styles.chipGrid,
+                  active && styles.chipActive,
+                ]}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
@@ -204,6 +237,14 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                         ? zeroLabel
                         : `${c}${unit ?? ''}`}
                 </Text>
+                {!isOther && subFor ? (
+                  <Text
+                    style={[styles.chipSub, active && styles.chipSubActive]}
+                    numberOfLines={2}
+                  >
+                    {subFor(c as number)}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
             );
           })}
@@ -270,19 +311,34 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         );
 
       case 'hours':
-        return <ChipRow choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
+        return <ChipRow grid choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
 
       case 'goal':
-        return <ChipRow choices={GOAL_CHOICES} value={monthlyGoal} onPick={setMonthlyGoal} unit=" €" />;
+        return (
+          <ChipRow
+            grid
+            choices={GOAL_CHOICES}
+            value={monthlyGoal}
+            onPick={setMonthlyGoal}
+            labelFor={v => formatEuros(v)}
+          />
+        );
 
       case 'costs':
         return (
           <ChipRow
+            grid
             choices={COSTS_CHOICES}
             value={fixedCosts}
             onPick={setFixedCosts}
-            unit=" €"
             zeroLabel={t('onboarding.costs.none')}
+            labelFor={v => (v === 0 ? t('onboarding.costs.none') : formatEuros(v))}
+            subFor={v =>
+              v === 0 ? t('onboarding.costs.subOwned')
+              : v === 400 ? t('onboarding.costs.subCredit')
+              : v === 700 ? t('onboarding.costs.subLease')
+              : v === 1000 ? t('onboarding.costs.subWeekly')
+              : t('onboarding.costs.subRental')}
           />
         );
 
@@ -309,7 +365,31 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
               {derived.hourly.toFixed(0)} €/h
             </Text>
             <Text style={styles.resultKm}>{t('onboarding.result.orKm', { km: derived.km.toFixed(2) })}</Text>
+
             <View style={styles.resultDivider} />
+
+            {/* Les trois chiffres qui rendent le seuil vérifiable : sans eux, la
+                carte affiche un nombre sorti de nulle part — et dans le cas
+                plancher, un nombre identique quelles que soient les réponses. */}
+            <View style={styles.statRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatEuros(derived.requiredRevenue)}</Text>
+                <Text style={styles.statLabel}>{t('onboarding.result.statRevenue')}</Text>
+              </View>
+              <View style={styles.statSep} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{derived.monthlyHours} h</Text>
+                <Text style={styles.statLabel}>{t('onboarding.result.statHours')}</Text>
+              </View>
+              <View style={styles.statSep} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatEuros(monthlyGoal)}</Text>
+                <Text style={styles.statLabel}>{t('onboarding.result.statNet')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.resultDivider} />
+
             <Text style={styles.resultNote}>
               {derived.flooredByProfitability
                 ? t('onboarding.result.floored')
@@ -485,9 +565,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipWrapped: { flex: 0, flexBasis: '47%', flexGrow: 1 },
+  // 31 % × 3 + 2 gouttières de 8 px tient dans la largeur utile sur un 375 pt ;
+  // `flexGrow` rattrape le reste et égalise la dernière ligne.
+  chipGrid: { flex: 0, flexBasis: '31%', flexGrow: 1, paddingVertical: 16 },
   chipActive: { backgroundColor: colors.primary + '1C', borderColor: colors.primary + '70' },
   chipTxt: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   chipTxtActive: { color: colors.primary },
+  chipSub: {
+    color: colors.textDimmed,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 13,
+    marginTop: 4,
+  },
+  chipSubActive: { color: colors.primary + 'B0' },
 
   draftRow: {
     flexDirection: 'row',
@@ -557,6 +649,27 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.primary + '38',
     marginVertical: 16,
+  },
+
+  // Trois colonnes de largeur égale : c'est l'alignement qui les fait lire
+  // comme un même calcul plutôt que comme trois faits séparés.
+  statRow: { flexDirection: 'row', alignItems: 'stretch', alignSelf: 'stretch' },
+  stat: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  statSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 2 },
+  statValue: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    color: colors.textDimmed,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 4,
   },
   resultNote: {
     color: colors.textMuted,

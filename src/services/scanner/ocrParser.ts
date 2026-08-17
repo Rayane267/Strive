@@ -109,7 +109,7 @@ const NON_ADDRESS_WORDS = [
 
 // ─── Sanity bounds ────────────────────────────────────────────────────────────
 
-const FARE_MIN = 5;
+const FARE_MIN = 8;
 const FARE_MAX = 200;
 const DIST_MIN = 0.3;
 const DIST_MAX = 500;
@@ -243,7 +243,8 @@ function extractFare(
       // plafond plausible, on réinterprète les 2 derniers chiffres en centimes.
       // Deux chiffres ou plus, OU un chiffre seul de 6 à 9 : une course à 9 €
       // existe (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un
-      // pourboire suggéré, un pack ou une note — cf. fixture canonique.
+      // pourboire suggéré, un pack ou une note — cf. fixture canonique. La regex
+      // reste plus large que le plancher FARE_MIN (8 €), qui écarte 6 et 7.
       const glued = /(\d{2,6}|[6-9])\s*€/.exec(deRated);
       if (glued) {
         const raw = parseInt(glued[1], 10);

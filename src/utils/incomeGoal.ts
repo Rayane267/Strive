@@ -61,6 +61,15 @@ export type DerivedThreshold = {
   /** Ce que l'objectif seul exigeait, avant plancher. */
   rawHourly: number;
   /**
+   * Chiffre d'affaires mensuel qu'il faut encaisser pour que l'objectif net
+   * tienne, charges fixes et sociales comprises. Exposé parce que c'est le
+   * chiffre que le chauffeur reconnaît — un €/h dérivé ne se vérifie pas de
+   * tête, un CA mensuel si.
+   */
+  requiredRevenue: number;
+  /** Heures travaillées par mois (heures hebdo × semaines/mois). */
+  monthlyHours: number;
+  /**
    * Vrai quand l'objectif est atteignable sous le seuil de rentabilité — donc
    * que le plancher s'est appliqué. À annoncer comme une bonne nouvelle, pas
    * comme un réglage refusé.
@@ -98,7 +107,14 @@ export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
   const floored = rawHourly < FREE_THRESHOLDS.hourly;
   const hourly = floored ? FREE_THRESHOLDS.hourly : rawHourly;
 
-  return { hourly, km: kmForHourly(hourly), rawHourly, flooredByProfitability: floored };
+  return {
+    hourly,
+    km: kmForHourly(hourly),
+    rawHourly,
+    requiredRevenue: Math.round(requiredRevenue),
+    monthlyHours: Math.round(monthlyHours),
+    flooredByProfitability: floored,
+  };
 }
 
 /**

@@ -88,4 +88,6 @@ RCT_EXTERN_METHOD(scheduleLocalNotification:(NSString *)identifier
 
 RCT_EXTERN_METHOD(cancelLocalNotification:(NSString *)identifier)
 
+RCT_EXTERN_METHOD(selectionHaptic)
+
 @end

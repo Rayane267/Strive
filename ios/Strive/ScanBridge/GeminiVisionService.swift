@@ -121,7 +121,8 @@ final class GeminiVisionService {
             ["inline_data": ["mime_type": "image/jpeg", "data": base64]],
             ["text": Self.prompt],
           ]
-        ]]
+        ]],
+        "generationConfig": Self.generationConfig,
       ])
       request = req
     } else if let key = apiKey,
@@ -140,7 +141,8 @@ final class GeminiVisionService {
               "data": base64,
             ]],
           ]
-        ]]
+        ]],
+        "generationConfig": Self.generationConfig,
       ])
       request = req
     } else {
@@ -159,6 +161,19 @@ final class GeminiVisionService {
   }
 
   // MARK: - Private
+
+  /// Lecture d'écran structurée : aucun raisonnement à produire. Sans
+  /// `generationConfig`, gemini-2.5-flash déclenche son « thinking » dynamique et
+  /// ajoute plusieurs secondes de latence — inacceptable sur ce chemin, où la
+  /// carte déployée ne reste affichée que ~6 s (limite iOS) et où le fallback
+  /// est déjà le chemin le plus lent. Budget de réflexion à zéro, sortie JSON
+  /// stricte et bornée. À garder aligné avec `geminiFallback.ts`.
+  private static let generationConfig: [String: Any] = [
+    "thinkingConfig": ["thinkingBudget": 0],
+    "responseMimeType": "application/json",
+    "temperature": 0,
+    "maxOutputTokens": 512,
+  ]
 
   private static let prompt = """
   Analyse cette capture d'écran d'une offre de course VTC (Uber, Bolt ou Heetch).
@@ -203,13 +218,26 @@ final class GeminiVisionService {
     guard let responseText = text else { return nil }
 
     // Extraire le JSON de la réponse (peut contenir du markdown ```json ... ```)
-    let jsonString: String
-    if let start = responseText.range(of: "{"),
-       let end = responseText.range(of: "}", options: .backwards) {
-      jsonString = String(responseText[start.lowerBound...end.upperBound])
-    } else {
-      return nil
-    }
+    //
+    // Intervalle SEMI-OUVERT (`..<`). `end.upperBound` est la position qui SUIT
+    // l'accolade fermante : avec un intervalle fermé, Swift lisait un caractère
+    // au-delà, et quand le `}` terminait la chaîne — le cas nominal, puisqu'on
+    // demande `responseMimeType: application/json` — cette position valait
+    // `endIndex`. Le runtime tuait alors le process (EXC_BREAKPOINT dans
+    // `String.index(after:)`), en plein callback URLSession : le raccourci
+    // rapportait « Strive a quitté inopinément » à chaque recours à Gemini.
+    //
+    // Bornes revalidées avant la découpe : `range(of:)` cherche les deux
+    // accolades indépendamment, rien ne garantit que la fermante suive
+    // l'ouvrante. Sur une réponse tronquée ou inattendue (« } … { »), l'ordre
+    // s'inverse et un intervalle inversé est, lui aussi, une erreur fatale.
+    // Aucune forme de réponse ne doit pouvoir faire tomber le process : ici on
+    // rend `nil`, et l'appelant traite l'échec Gemini comme tel.
+    guard let start = responseText.range(of: "{"),
+          let end = responseText.range(of: "}", options: .backwards),
+          start.lowerBound < end.upperBound
+    else { return nil }
+    let jsonString = String(responseText[start.lowerBound..<end.upperBound])
 
     guard let parsed = try? JSONSerialization.jsonObject(
       with: Data(jsonString.utf8)
@@ -227,8 +255,8 @@ final class GeminiVisionService {
     // Sanity bounds (mêmes que Android) + ratio plausible : rejette une distance
     // hallucinée minuscule → €/km démentiel. Mirror JS / Android.
     let ratio = distanceKm > 0 ? fare / distanceKm : .infinity
-    guard fare >= 3, fare <= 200,
-          distanceKm >= 0.3, distanceKm <= 1000,
+    guard fare >= 8, fare <= 200,
+          distanceKm >= 0.3, distanceKm <= 500,
           ratio >= 0.2, ratio <= 15
     else { return nil }
 

@@ -62,15 +62,13 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed", "onRideDecision", "onScanFailure"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onRideDecision", "onScanFailure"]
   }
 
   static let rideDecisionsKey = "pendingRideDecisions"
   /// Échecs empilés par l'AppIntent / la Share Extension — ces process n'ont pas
   /// de session Supabase et ne peuvent pas écrire la trace eux-mêmes.
   static let pendingFailuresKey = "pendingScanFailures"
-
-  private var laDismissObserver: Any?
 
   override func startObserving() {
     hasListeners = true
@@ -80,22 +78,10 @@ class ScanBridgeModule: RCTEventEmitter {
     handleShareExtensionResult()
     drainAndEmitRideDecisions()
     drainAndEmitScanFailures()
-    if #available(iOS 16.2, *) {
-      laDismissObserver = NotificationCenter.default.addObserver(
-        forName: LiveActivityManager.dismissedNotification,
-        object: nil, queue: .main
-      ) { [weak self] _ in
-        self?.sendEvent(withName: "onLiveActivityDismissed", body: nil)
-      }
-    }
   }
 
   override func stopObserving() {
     hasListeners = false
-    if let obs = laDismissObserver {
-      NotificationCenter.default.removeObserver(obs)
-      laDismissObserver = nil
-    }
   }
 
   // MARK: - Lifecycle
@@ -144,6 +130,20 @@ class ScanBridgeModule: RCTEventEmitter {
       name: UIApplication.didBecomeActiveNotification,
       object: nil
     )
+
+    // L'état premier plan est POUSSÉ vers LiveActivityManager depuis ici : ce
+    // manager est aussi compilé dans la Share Extension, où `UIApplication.shared`
+    // est interdit (l'archive échoue). Cette cible-ci est l'app, elle a le droit.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(appDidEnterBackground),
+      name: UIApplication.didEnterBackgroundNotification,
+      object: nil
+    )
+  }
+
+  @objc private func appDidEnterBackground() {
+    if #available(iOS 16.2, *) { LiveActivityManager.shared.setHostAppActive(false) }
   }
 
   deinit {
@@ -153,12 +153,20 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   @objc private func appDidBecomeActive() {
+    // À jour AVANT ensureRunning() : c'est cette valeur que consulte l'observateur
+    // d'état de la carte pour choisir entre ré-armer et notifier.
+    if #available(iOS 16.2, *) { LiveActivityManager.shared.setHostAppActive(true) }
     // Sur iOS le scan passe toujours par la Share Extension → on traite les
     // résultats en attente à chaque retour au premier plan, que startScanner()
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
     drainAndEmitRideDecisions()
     drainAndEmitScanFailures()
+    // Carte de session disparue sans geste du chauffeur (iOS la termine seul :
+    // limite de durée, pression mémoire) ? On la recrée MAINTENANT, seul moment
+    // où `Activity.request()` est autorisé. Sans ça, tous les scans suivants
+    // lancés depuis le raccourci retombaient sur une notification.
+    if #available(iOS 16.2, *) { LiveActivityManager.shared.ensureRunning() }
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -254,8 +262,11 @@ class ScanBridgeModule: RCTEventEmitter {
         }
         if payload["verdictLevel"] == nil {
           let prefs = UserDefaults(suiteName: Self.appGroupId)
-          let minH = prefs?.double(forKey: "minHourlyRate") ?? 25.0
-          let minK = prefs?.double(forKey: "minKmRate") ?? 1.2
+          // `object(forKey:)` : `double(forKey:)` rend 0.0 sur clé absente, donc
+          // le défaut ne s'appliquait pas et le verdict tombait à 2 (vert) pour
+          // tout. Même correctif que ScanProcessor.computeFinal.
+          let minH = (prefs?.object(forKey: "minHourlyRate") as? Double) ?? 25.0
+          let minK = (prefs?.object(forKey: "minKmRate") as? Double) ?? 1.2
           let hr = (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0
           let km = (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0
           payload["verdictLevel"] = (hr >= minH && km >= minK) ? 2 : (hr >= minH || km >= minK) ? 1 : 0
@@ -379,6 +390,20 @@ class ScanBridgeModule: RCTEventEmitter {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(edgeUrl, forKey: "geminiEdgeUrl")
       defaults.set(supabaseAnonKey, forKey: "geminiSupabaseKey")
+      // Racine du projet Supabase, déduite de l'URL de l'edge function
+      // (`https://<ref>.supabase.co/functions/v1/gemini-proxy`) : c'est elle que
+      // `RideUploader` utilise pour écrire la course dès le scan. Déduite plutôt
+      // que poussée par un appel de plus — le JS construit déjà l'edge URL à
+      // partir de la même racine, et un build JS antérieur reste ainsi couvert.
+      if let comps = URLComponents(string: edgeUrl), let host = comps.host {
+        var root = URLComponents()
+        root.scheme = comps.scheme ?? "https"
+        root.host = host
+        root.port = comps.port
+        if let rootUrl = root.string {
+          defaults.set(rootUrl, forKey: "supabaseRestUrl")
+        }
+      }
     }
   }
 
@@ -388,6 +413,23 @@ class ScanBridgeModule: RCTEventEmitter {
     GeminiVisionService.shared.supabaseUserJwt = jwt
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(jwt, forKey: "supabaseUserJwt")
+    }
+  }
+
+  /// Haptique de SÉLECTION iOS (`UISelectionFeedbackGenerator`) — le petit tic
+  /// sec des sélecteurs système, pour le changement d'onglet.
+  ///
+  /// `Vibration.vibrate()` de React Native ne sait pas produire ça : sur iPhone
+  /// il déclenche le vibreur complet, quelle que soit la durée demandée. Sur une
+  /// barre d'onglets, c'est une secousse là où l'utilisateur attend un tic.
+  ///
+  /// `prepare()` avant `selectionChanged()` : sans lui, le Taptic Engine sort de
+  /// veille au moment du déclenchement et le retour arrive après l'animation.
+  @objc func selectionHaptic() {
+    DispatchQueue.main.async {
+      let generator = UISelectionFeedbackGenerator()
+      generator.prepare()
+      generator.selectionChanged()
     }
   }
 

@@ -8,7 +8,7 @@ struct StriveLiveActivity: Widget {
 
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: StriveActivityAttributes.self) { context in
-      LockScreenView(state: context.state)
+      LockScreenView(state: context.state, stale: context.isStale)
         // Tint opaque : en présentation bannière (iPhone sans Dynamic Island)
         // et en mode clair, un tint semi-transparent n'est pas honoré de façon
         // fiable → fond blanc + texte blanc = rectangle blanc. LockScreenView
@@ -17,16 +17,22 @@ struct StriveLiveActivity: Widget {
         .activitySystemActionForegroundColor(.white)
 
     } dynamicIsland: { context in
-      let isScanning = context.state.platform == "SCANNING"
+      // Les retours à l'état de base passent par des `DispatchQueue.asyncAfter`
+      // de l'app hôte : quand le chauffeur est dans Uber/Maps, Strive est
+      // suspendue et ces timers ne se déclenchent pas → la carte restait bloquée
+      // sur le verdict (croix rouge en `minimal`) indéfiniment. Le `staleDate`,
+      // lui, est arbitré par le système : passé ce délai on retombe sur l'idle.
+      let stale = context.isStale
+      let isScanning = !stale && context.state.platform == "SCANNING"
       // Rappel post-résultat : 20 s pendant lesquelles il ne reste que le prix
       // de la course et le €/km, le temps de les relire. Compté comme idle par
       // toutes les branches « résultat » — la carte complète a disparu — mais
       // traité explicitement là où il doit s'afficher.
-      let isRecap = context.state.platform == "RECAP"
-      let isIdle = context.state.platform == "IDLE" || isRecap
-      let isError = context.state.platform == "ERROR"
+      let isRecap = !stale && context.state.platform == "RECAP"
+      let isIdle = stale || context.state.platform == "IDLE" || isRecap
+      let isError = !stale && context.state.platform == "ERROR"
       // Teaser quota free : on réutilise le visuel résultat mais flouté + cadenas.
-      let isLocked = context.state.platform == "LOCKED"
+      let isLocked = !stale && context.state.platform == "LOCKED"
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
       let lockGreen = Color(red: 0.0, green: 0.78, blue: 0.32)
       return DynamicIsland {
@@ -60,15 +66,15 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.center) {
           if isError {
-            Text("Analyse impossible")
+            Text(laString(fr: "Analyse impossible", en: "Analysis failed"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isScanning {
-            Text("Analyse…")
+            Text(laString(fr: "Analyse…", en: "Analyzing…"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isLocked {
-            Text("Passe Plus pour voir")
+            Text(laString(fr: "Passe Plus pour voir", en: "Go Plus to see"))
               .font(.system(size: 14, weight: .bold))
               .foregroundColor(.white)
           } else if isRecap {
@@ -85,12 +91,12 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           if isError {
-            Text("Réessayez avec une autre capture")
+            Text(laString(fr: "Réessayez avec une autre capture", en: "Try another screenshot"))
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
               .padding(.vertical, 4)
           } else if isLocked {
-            Text("Se rembourse en une course")
+            Text(laString(fr: "Se rembourse en une course", en: "Pays for itself in one ride"))
               .font(.system(size: 12, weight: .medium))
               .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
@@ -132,12 +138,15 @@ struct StriveLiveActivity: Widget {
             .frame(width: 20, height: 20)
             .clipShape(RoundedRectangle(cornerRadius: 5))
         } else {
-          Image(systemName: "car.fill")
+          // Icône de verdict plutôt que `car.fill` : sur les ~10 s dont dispose le
+          // chauffeur, la forme se lit plus vite que la couleur (soleil, volant,
+          // daltonisme) et `car.fill` n'apprenait rien. Aligné sur `minimal`.
+          Image(systemName: verdictIcon(context.state.verdictLevel))
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       } compactTrailing: {
         if isError {
-          Text("Erreur")
+          Text(laString(fr: "Erreur", en: "Error"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(errorRed)
         } else if isScanning {
@@ -197,17 +206,21 @@ struct StriveLiveActivity: Widget {
 @available(iOS 16.2, *)
 private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
+  /// Contenu périmé (staleDate dépassé) : l'app hôte est suspendue et n'a pas pu
+  /// repasser la carte en idle — on l'affiche comme telle plutôt que de figer un
+  /// verdict vieux de plusieurs minutes.
+  var stale: Bool = false
   var body: some View {
-    let isScanning = state.platform == "SCANNING"
-    let isError = state.platform == "ERROR"
-    let isLocked = state.platform == "LOCKED"
+    let isScanning = !stale && state.platform == "SCANNING"
+    let isError = !stale && state.platform == "ERROR"
+    let isLocked = !stale && state.platform == "LOCKED"
     // Vraie course (UBER/BOLT/HEETCH/UNKNOWN…) — ni idle, ni scanning, ni erreur,
     // ni teaser. C'est le seul état où l'on veut la CARTE RÉSULTAT sur le lock
     // screen (crucial pour les iPhone sans Dynamic Island : voir la branche).
     // "RECAP" exclu : c'est l'état d'après-résultat (prix + €/km pendant 20 s,
     // visible dans la Dynamic Island). Sur le lock screen la carte complète a
     // disparu, on retombe donc sur le résumé de session comme pour l'idle.
-    let isResult = !isScanning && !isError && !isLocked
+    let isResult = !stale && !isScanning && !isError && !isLocked
       && state.platform != "IDLE" && state.platform != "RECAP"
 
     // Fond noir posé en .background (et NON en ZStack avec un Color.black, qui
@@ -221,7 +234,7 @@ private struct LockScreenView: View {
       ZStack {
         VStack(spacing: 12) {
           HStack(spacing: 8) {
-            Text("Course")
+            Text(laString(fr: "Course", en: "Ride"))
               .font(.system(size: 15, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
 
@@ -248,10 +261,10 @@ private struct LockScreenView: View {
           Image(systemName: "lock.fill")
             .font(.system(size: 17, weight: .bold))
             .foregroundColor(.white)
-          Text("Passe Plus pour voir")
+          Text(laString(fr: "Passe Plus pour voir", en: "Go Plus to see"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white)
-          Text("Se rembourse en une course")
+          Text(laString(fr: "Se rembourse en une course", en: "Pays for itself in one ride"))
             .font(.system(size: 11, weight: .medium))
             .foregroundColor(.white.opacity(0.6))
         }
@@ -261,7 +274,8 @@ private struct LockScreenView: View {
       // iPhone SANS Dynamic Island (iPhone 11–14 non-Pro, SE…), qui n'ont QUE
       // cette présentation : sans cette branche, ils ne verraient jamais le
       // résultat de scan (uniquement le dashboard de session). L'auto-dismiss
-      // 15 s (LiveActivityManager) fait ensuite revenir la carte session. ──
+      // 20 s (LiveActivityManager) fait ensuite passer au récap, puis 20 s plus
+      // tard à la carte session. ──
       VStack(spacing: 10) {
         HStack(spacing: 8) {
           Text(state.platform.capitalized)
@@ -316,12 +330,12 @@ private struct LockScreenView: View {
           if isScanning {
             HStack(spacing: 5) {
               ProgressView().tint(accent).scaleEffect(0.7)
-              Text("Analyse…")
+              Text(laString(fr: "Analyse…", en: "Analyzing…"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
             }
           } else if isError {
-            Text("Erreur")
+            Text(laString(fr: "Erreur", en: "Error"))
               .font(.system(size: 11, weight: .bold))
               .foregroundColor(errorRed)
           } else {
@@ -354,7 +368,7 @@ private struct LockScreenView: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-              Text("GAINS")
+              Text(laString(fr: "GAINS", en: "EARNINGS"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(.white.opacity(0.3))
@@ -371,7 +385,7 @@ private struct LockScreenView: View {
                 .foregroundColor(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-              Text("/HEURE")
+              Text(laString(fr: "/HEURE", en: "/HOUR"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(accent.opacity(0.5))
@@ -564,7 +578,7 @@ private struct DecisionButtons: View {
   var body: some View {
     HStack(spacing: 8) {
       Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: false)) {
-        Label("Refusée", systemImage: "xmark")
+        Label(laString(fr: "Refusée", en: "Declined"), systemImage: "xmark")
           .font(.system(size: 13, weight: .bold))
           .frame(maxWidth: .infinity)
           .padding(.vertical, 4)
@@ -575,7 +589,7 @@ private struct DecisionButtons: View {
       .buttonStyle(.plain)
 
       Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: true)) {
-        Label("Prise", systemImage: "checkmark")
+        Label(laString(fr: "Prise", en: "Taken"), systemImage: "checkmark")
           .font(.system(size: 13, weight: .bold))
           .frame(maxWidth: .infinity)
           .padding(.vertical, 4)
@@ -586,6 +600,26 @@ private struct DecisionButtons: View {
       .buttonStyle(.plain)
     }
   }
+}
+
+// MARK: - Localisation
+
+/// Résout la langue UI (fr/en) depuis l'App Group — même contrat que
+/// `localizedString` dans LiveActivityManager, ShareViewController et
+/// AnalyzeRideIntent. Le widget est une cible séparée, sans accès à ces helpers :
+/// ses textes étaient donc figés en français, quelle que soit la langue de l'app.
+///
+/// ⚠️ Une Live Activity déjà affichée ne se re-rend pas sur changement de langue :
+/// elle garde la sienne jusqu'au prochain `update()` (donc au prochain scan).
+private func laString(fr: String, en: String) -> String {
+  let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+    ?? "group.com.striveapp.app"
+  // Anglais UNIQUEMENT si l'app est réglée en anglais ; français sinon. Pas de
+  // repli sur la locale système : un chauffeur qui a mis Strive en français sur
+  // un iPhone en anglais doit lire du français partout, y compris ici.
+  guard let appLang = UserDefaults(suiteName: groupId)?.string(forKey: "appLanguage")
+  else { return fr }
+  return appLang.hasPrefix("en") ? en : fr
 }
 
 // MARK: - Helpers couleurs

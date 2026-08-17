@@ -3,6 +3,37 @@ import UIKit
 import UserNotifications
 import ActivityKit
 
+/// Reprise UNIQUE d'une continuation. `performExpiringActivity` rappelle son
+/// bloc à l'expiration alors que le pipeline peut encore aboutir, et le watchdog
+/// de 25 s peut se déclencher juste après un callback : deux `resume` sur la même
+/// continuation font crasher le process. Encaisse aussi une reprise arrivée avant
+/// l'`attach` (callback synchrone).
+private final class OnceContinuation {
+  private let lock = NSLock()
+  private var cont: CheckedContinuation<String, Never>?
+  private var pending: String?
+
+  func attach(_ c: CheckedContinuation<String, Never>) {
+    lock.lock()
+    if let value = pending {
+      lock.unlock()
+      c.resume(returning: value)
+      return
+    }
+    cont = c
+    lock.unlock()
+  }
+
+  func resume(_ value: String) {
+    lock.lock()
+    let c = cont
+    cont = nil
+    if c == nil && pending == nil { pending = value }
+    lock.unlock()
+    c?.resume(returning: value)
+  }
+}
+
 /// App Intent exposé à l'app Shortcuts — flow identique à Android :
 ///   1. OCR (Vision)
 ///   2. Parser identique (`OcrParser.swift` ↔ `OcrParser.kt`)
@@ -99,61 +130,83 @@ struct AnalyzeRideIntent: AppIntent {
       return .result(value: "too_soon")
     }
 
-    // Découplage pour minimiser le carré blanc « raccourci en cours » : l'OCR +
-    // TomTom (et le fallback Gemini) tournent sous une activité de fond, et
-    // `perform()` REND LA MAIN IMMÉDIATEMENT. L'indicateur système disparaît en
-    // une fraction de seconde au lieu de rester 5-10 s (durée du pipeline). Le
-    // résultat s'affiche seul, une seule fois, quand TomTom a fini — aucune
-    // valeur provisoire n'est montrée.
-    //
-    // performExpiringActivity garde le process vivant (~qq secondes à ~30 s) le
-    // temps du pipeline ; le sémaphore maintient l'assertion jusqu'au résultat.
-    ProcessInfo.processInfo.performExpiringActivity(withReason: "StriveScanRefine") { expired in
-      // Le système reprend la main : le pipeline ne rendra pas de résultat. Sans
-      // libérer le verrou ici, les 30 s suivantes répondent « analyse déjà en
-      // cours » à chaque tap — le scan paraît mort alors qu'il n'a jamais tourné.
-      // iOS reprend la main avant la fin du pipeline (pression mémoire/CPU —
-      // typiquement Waze + appel + CarPlay). On PRÉVIENT : jusqu'ici la trace
-      // partait en base et le chauffeur ne voyait strictement rien.
-      if expired {
-        self.logFailure("expired")
-        ScanProcessor.markScanFinished()
-        self.notifyScanAborted(code: .expired)
-        return
-      }
-      let sem = DispatchSemaphore(value: 0)
-      ScanProcessor.shared.process(image: image) { finalResult in
-        // Adresses présentes → on présente directement. Sinon (ou aucun
-        // résultat) → fallback Gemini (récupère les 2 adresses → TomTom →
-        // vraie distance/durée). Si Gemini échoue aussi → « scan échoué »
-        // affiché DANS la Live Activity, et RIEN n'est enregistré.
-        if let result = finalResult, self.hasBothAddresses(result) {
-          _ = self.presentResult(result)
-          sem.signal()
+    return .result(value: await runPipeline(image: image))
+  }
+
+  /// Exécute le pipeline (OCR → TomTom → fallback Gemini) et NE REND LA MAIN
+  /// qu'une fois le résultat présenté.
+  ///
+  /// Le découplage inverse (`perform()` rendait la main tout de suite, le
+  /// résultat était poussé plus tard depuis le bloc de fond) supprimait bien
+  /// l'indicateur « raccourci en cours », mais faisait perdre à la Live Activity
+  /// sa priorité d'affichage : mise à jour depuis une simple assertion de fond,
+  /// elle ne passait plus devant ce qui occupe la Dynamic Island (appel, Waze,
+  /// minuteur) et le chauffeur devait toucher l'Island pour voir son verdict.
+  /// Tant que l'intent est en cours, la présentation est traitée comme une
+  /// action déclenchée par l'utilisateur et passe devant. L'indicateur système
+  /// visible pendant les 5-10 s du scan est le prix assumé de ce choix.
+  ///
+  /// `performExpiringActivity` est conservé : il couvre la queue de traitement
+  /// (écriture du résultat, quota) si le système décide de suspendre le process.
+  private func runPipeline(image: UIImage) async -> String {
+    let once = OnceContinuation()
+    return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
+      once.attach(cont)
+      ProcessInfo.processInfo.performExpiringActivity(withReason: "StriveScanRefine") { expired in
+        // Le système reprend la main : le pipeline ne rendra pas de résultat. Sans
+        // libérer le verrou ici, les 30 s suivantes répondent « analyse déjà en
+        // cours » à chaque tap — le scan paraît mort alors qu'il n'a jamais tourné.
+        // iOS reprend la main avant la fin du pipeline (pression mémoire/CPU —
+        // typiquement Waze + appel + CarPlay). On PRÉVIENT : jusqu'ici la trace
+        // partait en base et le chauffeur ne voyait strictement rien.
+        if expired {
+          self.logFailure("expired")
+          ScanProcessor.markScanFinished()
+          self.notifyScanAborted(code: .expired)
+          once.resume("expired")
           return
         }
-        self.geminiFallback(image: image) { recovered in
-          if let recovered = recovered {
-            _ = self.presentResult(recovered)
-          } else {
-            self.presentFailure()
+        let sem = DispatchSemaphore(value: 0)
+        ScanProcessor.shared.process(image: image) { finalResult in
+          // Adresses présentes → on présente directement. Sinon (ou aucun
+          // résultat) → fallback Gemini (récupère les 2 adresses → TomTom →
+          // vraie distance/durée). Si Gemini échoue aussi → « scan échoué »
+          // affiché DANS la Live Activity, et RIEN n'est enregistré.
+          if let result = finalResult, self.hasBothAddresses(result) {
+            // La continuation n'est reprise qu'une fois la course écrite en base :
+            // `perform` rendu, iOS suspend le process et tuerait la requête en vol.
+            self.presentResult(result) { value in
+              once.resume(value)
+              sem.signal()
+            }
+            return
           }
-          sem.signal()
+          self.geminiFallback(image: image) { recovered in
+            if let recovered = recovered {
+              self.presentResult(recovered) { value in
+                once.resume(value)
+                sem.signal()
+              }
+            } else {
+              self.presentFailure()
+              once.resume("no_ride")
+              sem.signal()
+            }
+          }
+        }
+        // Borne l'attente (watchdog interne ScanProcessor = 20 s ; on laisse une
+        // marge). Évite de tenir l'assertion de fond indéfiniment si un callback
+        // ne revient jamais.
+        // Filet de sécurité : si aucun callback n'est revenu dans les temps, le
+        // verrou n'a été libéré par personne. `markScanFinished` est idempotent.
+        if sem.wait(timeout: .now() + 25) == .timedOut {
+          self.logFailure("timeout")
+          ScanProcessor.markScanFinished()
+          self.notifyScanAborted(code: .timeout)
+          once.resume("timeout")
         }
       }
-      // Borne l'attente (watchdog interne ScanProcessor = 20 s ; on laisse une
-      // marge). Évite de tenir l'assertion de fond indéfiniment si un callback
-      // ne revient jamais.
-      // Filet de sécurité : si aucun callback n'est revenu dans les temps, le
-      // verrou n'a été libéré par personne. `markScanFinished` est idempotent.
-      if sem.wait(timeout: .now() + 25) == .timedOut {
-        self.logFailure("timeout")
-        ScanProcessor.markScanFinished()
-        self.notifyScanAborted(code: .timeout)
-      }
     }
-
-    return .result(value: "started")
   }
 
   // MARK: - Présentation résultat / échec / fallback Gemini
@@ -166,7 +219,15 @@ struct AnalyzeRideIntent: AppIntent {
 
   /// Affiche le résultat (Live Activity ou notif) + l'enregistre pour l'app.
   /// scanTs : clé de corrélation course ↔ décision (lastScanTimestamp + userInfo).
-  private func presentResult(_ result: ScanProcessor.FinalResult) -> String {
+  ///
+  /// `done` est appelé quand TOUT est écrit, écriture en base comprise : c'est ce
+  /// qui maintient le process en vie le temps de la requête. Aucun thread n'est
+  /// bloqué au passage — cette méthode peut tourner sur le main thread (le succès
+  /// TomTom y repasse), où une attente synchrone exposerait au watchdog.
+  private func presentResult(
+    _ result: ScanProcessor.FinalResult,
+    done: @escaping (String) -> Void
+  ) {
     // Verrou anti double-appui libéré dès qu'on a un résultat à montrer.
     ScanProcessor.markScanFinished()
     let scanTs = Date().timeIntervalSince1970
@@ -191,21 +252,47 @@ struct AnalyzeRideIntent: AppIntent {
       // Le scan a réussi mais la Live Activity n'a rien pu afficher : on retombe
       // sur la notification ET on trace, sinon la panne reste invisible côté
       // données alors qu'elle se voit chez tous les chauffeurs sans session.
-      if liveActivityReady { logFailure("la_start_failed") }
+      // Deux causes très différentes derrière le même symptôme : (a) aucune carte
+      // à l'écran — le chauffeur l'a masquée ou iOS l'a terminée — et
+      // `Activity.request()` est alors simplement interdit en arrière-plan : une
+      // limite iOS attendue, que la notification de repli couvre déjà, donc RIEN
+      // à tracer ; (b) une carte vivante qui refuse l'update est un vrai échec.
+      // Les confondre remplissait `scan_failures` de faux positifs et masquait
+      // les (b). Pas de motif dédié au cas (a) : le vocabulaire de `log_scan_failure`
+      // est fermé, tout motif inconnu retombe sur 'other' et brouille les agrégats.
+      if liveActivityReady, !Activity<StriveActivityAttributes>.activities.isEmpty {
+        logFailure("la_start_failed")
+      }
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
+      var body = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
+      // Le chauffeur a masqué la carte (ou iOS l'a terminée) alors que sa session
+      // tourne toujours : sans un mot ici, il croit sa session fermée et ne sait
+      // pas que la carte revient d'elle-même. `Activity.request()` étant interdit
+      // en arrière-plan, ouvrir l'app est la seule façon de la ré-armer.
+      if liveActivityReady {
+        body += "\n" + localizedString(
+          "notif.laHidden",
+          fr: "Carte masquée — session toujours active. Ouvrez Strive pour la réafficher.",
+          en: "Card hidden — session still active. Open Strive to bring it back."
+        )
+      }
       sendLocalNotification(
         title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
-        body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
-        category: "STRIVE_SCAN_RESULT", scanTs: scanTs
+        body: body,
+        category: "STRIVE_SCAN_RESULT", scanTs: scanTs,
+        // Le repli notification est justement le chemin emprunté quand la carte
+        // n'a rien pu afficher : s'il est silencé par la Concentration, le
+        // chauffeur ne reçoit alors STRICTEMENT rien de son scan.
+        level: .timeSensitive
       )
     }
     markPresented()
     incrementScanCount()
-    saveResultForMainApp(result, scanTs: scanTs)
-    return String(
+    let summary = String(
       format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
       result.scan.platform.rawValue, result.scan.fare, result.hourlyRate, result.kmRate
     )
+    saveResultForMainApp(result, scanTs: scanTs) { done(summary) }
   }
 
   /// « Scan échoué » : affiché DANS la Live Activity (ou notif si LA désactivée).
@@ -223,11 +310,24 @@ struct AnalyzeRideIntent: AppIntent {
       shown = LiveActivityManager.shared.showError()
     }
     if !shown {
+      var body = localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot.")
+      // Même raison que dans presentResult : carte masquée mais session vivante.
+      if liveActivityReady {
+        body += "\n" + localizedString(
+          "notif.laHidden",
+          fr: "Carte masquée — session toujours active. Ouvrez Strive pour la réafficher.",
+          en: "Card hidden — session still active. Open Strive to bring it back."
+        )
+      }
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.noRide", fr: "Aucune offre détectée — réessayez avec une autre capture.", en: "No ride offer detected — try again with another screenshot."),
+        body: body,
         // « pas une course » est un résultat légitime, pas une panne : pas de code.
-        code: ScanProcessor.shared.lastScanMayBeRide ? .geminiKo : nil
+        code: ScanProcessor.shared.lastScanMayBeRide ? .geminiKo : nil,
+        // Réponse directe à un scan déclenché il y a quelques secondes : doit
+        // traverser la Concentration, sinon le chauffeur attend un verdict qui
+        // ne viendra jamais et rescanne.
+        level: .timeSensitive
       )
     }
     markPresented()
@@ -249,7 +349,10 @@ struct AnalyzeRideIntent: AppIntent {
         fr: "Analyse interrompue — relancez le scan.",
         en: "Analysis interrupted — run the scan again."
       ),
-      code: code
+      code: code,
+      // Le chauffeur attend un verdict qui n'arrivera pas : lui dire de relancer
+      // n'a de valeur que tout de suite.
+      level: .timeSensitive
     )
   }
 
@@ -368,25 +471,39 @@ struct AnalyzeRideIntent: AppIntent {
   private func localizedString(_ key: String, fr: String, en: String) -> String {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
-    let appLang = UserDefaults(suiteName: appGroupId)?.string(forKey: "appLanguage")
-    let lang = appLang ?? Locale.current.language.languageCode?.identifier ?? "en"
-    return lang.hasPrefix("fr") ? fr : en
+    // Anglais uniquement si l'app est réglée en anglais, français sinon — la
+    // locale système ne fait PAS foi.
+    guard let appLang = UserDefaults(suiteName: appGroupId)?.string(forKey: "appLanguage")
+    else { return fr }
+    return appLang.hasPrefix("en") ? en : fr
   }
 
   /// `code` est ajouté en fin de corps pour que le chauffeur puisse le citer en
   /// support. Même contrat que la Share Extension (cf. `ScanErrorCode`) : ce que
   /// l'utilisateur rapporte est directement croisable avec `scan_failures.reason`.
+  /// `level` : `.timeSensitive` pour tout ce qui répond à un scan que le chauffeur
+  /// vient de déclencher. Sans ça, ces notifications sont SILENCÉES par « Ne pas
+  /// déranger » et par les Concentrations — dont « Ne pas déranger en voiture »,
+  /// que le téléphone active tout seul dès qu'il détecte la conduite ou se
+  /// connecte au Bluetooth du véhicule. Autrement dit : le cas d'usage normal
+  /// d'un chauffeur VTC. Le verdict d'une course est périssable — il ne vaut que
+  /// dans les secondes qui suivent — c'est exactement ce que ce niveau désigne.
+  /// Réservé aux réponses de scan : tout passer en `.timeSensitive` reviendrait à
+  /// annuler la Concentration du chauffeur, ce qu'Apple comme les utilisateurs
+  /// sanctionnent.
   private func sendLocalNotification(
     title: String,
     body: String,
     category: String? = nil,
     scanTs: Double? = nil,
-    code: ScanErrorCode? = nil
+    code: ScanErrorCode? = nil,
+    level: UNNotificationInterruptionLevel = .active
   ) {
     let content = UNMutableNotificationContent()
     content.title = title
     content.body = code == nil ? body : "\(body) (\(code!.rawValue))"
     content.sound = .default
+    content.interruptionLevel = level
     // Boutons Accepter/Refuser : la catégorie STRIVE_SCAN_RESULT est enregistrée
     // par l'app principale (AppDelegate). scanTs corrèle la décision à la course.
     if let category = category { content.categoryIdentifier = category }
@@ -445,10 +562,16 @@ struct AnalyzeRideIntent: AppIntent {
     }
   }
 
-  private func saveResultForMainApp(_ result: ScanProcessor.FinalResult, scanTs: Double) {
+  /// `done` : appelé une fois l'écriture en base terminée (ou abandonnée). Le
+  /// dépôt dans l'App Group, lui, est fait immédiatement et sans condition.
+  private func saveResultForMainApp(
+    _ result: ScanProcessor.FinalResult,
+    scanTs: Double,
+    done: @escaping () -> Void
+  ) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { done(); return }
 
     var body: [String: Any] = [
       "platform": result.scan.platform.rawValue,
@@ -477,6 +600,15 @@ struct AnalyzeRideIntent: AppIntent {
 
     enqueueScanResult(body, defaults: defaults)
 
+    // Jumelle minimale de `lastScanResult`, que le drain de l'app NE purge PAS :
+    // c'est elle qui alimente l'incrément KPI du bouton ✅ / des commandes Siri
+    // (cf. lastScannedFareKm). Montant affiché (net de carburant si l'option est
+    // active) pour rester cohérent avec ce que la carte montre.
+    defaults.set(
+      ["scanTs": scanTs, "fare": result.displayFare, "km": result.totalDistanceKm],
+      forKey: "lastTaggableRide"
+    )
+
     if let data = try? JSONSerialization.data(withJSONObject: body) {
       defaults.set(data, forKey: "lastScanResult")
       defaults.set(scanTs, forKey: "lastScanTimestamp")
@@ -487,6 +619,15 @@ struct AnalyzeRideIntent: AppIntent {
         CFNotificationName("com.striveapp.app.scanResult" as CFString),
         nil, nil, true
       )
+    }
+
+    // Enregistrement en base, maintenant que le dépôt App Group est fait : si la
+    // requête échoue ou que le process meurt avant, la file rattrape à
+    // l'ouverture, et l'index unique sur `scan_ts` interdit le doublon.
+    // `markQueuedResultSaved` marque l'entrée de la file ET `lastScanResult`.
+    RideUploader.upload(result, scanTs: scanTs) { saved in
+      if saved { RideUploader.markQueuedResultSaved(scanTs: scanTs) }
+      done()
     }
   }
 }
@@ -511,7 +652,12 @@ private func tagLastScannedRide(accepted: Bool) async -> Bool {
   let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
     ?? "group.com.striveapp.app"
   guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
-  let scanTs = defaults.double(forKey: "lastScanTimestamp")
+  // `lastTaggableRide` d'abord : `lastScanTimestamp` est purgé par le drain de
+  // l'app (handleShareExtensionResult), si bien qu'après une simple ouverture de
+  // Strive, Siri répondait « aucune course récente à marquer » sur une course
+  // tout juste scannée. La clé jumelle, elle, survit à la relève.
+  let scanTs = (defaults.dictionary(forKey: "lastTaggableRide")?["scanTs"] as? NSNumber)?.doubleValue
+    ?? defaults.double(forKey: "lastScanTimestamp")
   guard scanTs > 0 else { return false }
 
   // Incrément KPI du jour + retour à l'état de base, IMMÉDIAT et sans JS

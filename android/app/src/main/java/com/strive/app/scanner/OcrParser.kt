@@ -33,7 +33,7 @@ object OcrParser {
 
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
-    private var fareMin = 5.0
+    private var fareMin = 8.0
     private var fareMax = 200.0
     private var distMin = 0.3
     private var distMax = 500.0
@@ -150,7 +150,8 @@ object OcrParser {
     // Tarif sans séparateur ("1743€" ou "17 €"). Deux chiffres ou plus, OU un
     // chiffre seul de 6 à 9 : une course à 9 € existe (tarif minimum VTC), alors
     // qu'un "5€" sec est presque toujours un pourboire, un pack ou une note —
-    // contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
+    // contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift). La regex reste plus
+    // large que le plancher fareMin (8 €), qui écarte ensuite 6 et 7.
     private val PRICE_GLUED_REGEX = Regex("""(\d{2,6}|[6-9])\s*€""")
     // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
     private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")

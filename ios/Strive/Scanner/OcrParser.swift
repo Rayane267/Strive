@@ -22,7 +22,7 @@ final class OcrParser {
 
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
-  private var fareMin: Double = 5.0
+  private var fareMin: Double = 8.0
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
   private var distMax: Double = 500.0
@@ -96,8 +96,9 @@ final class OcrParser {
     pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
   // Deux chiffres ou plus, OU un chiffre seul de 6 à 9 : une course à 9 € existe
   // (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un pourboire
-  // suggéré, un pack ou une note. En dessous de 6, le plancher fareMin ne laisse
-  // de toute façon passer que 5 — c'est la seule valeur qu'on refuse ici.
+  // suggéré, un pack ou une note. La regex reste volontairement plus large que le
+  // plancher `fareMin` (8 €), qui écarte ensuite 6 et 7 : sans ça, un changement
+  // de plancher obligerait à modifier deux endroits pour rester cohérent.
   // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS/Kotlin.
   private static let priceWholeRegex = try! NSRegularExpression(
     pattern: #"(\d{2,6}|[6-9])\s*€"#)

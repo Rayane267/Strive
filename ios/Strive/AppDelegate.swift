@@ -54,7 +54,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // TomTomService, GeminiVisionService) et n'utilise pas une ligne de JS.
     // Mesuré : ~2 s à froid, immédiat à chaud. En usage réel le chauffeur n'ouvre
     // jamais l'app, elle est donc évincée en permanence : le coût était payé à
-    // presque chaque scan.
+    // presque chaque scan. Ce lancement se fait de surcroît sous un budget serré,
+    // où le process se fait déjà tuer par iOS (« Strive a quitté inopinément »
+    // remonté par Raccourcis) : y rajouter le pont ne ferait qu'aggraver.
+    //
+    // Ce qui avait motivé un retour en arrière ici — la course enregistrée dès le
+    // scan, et non à l'ouverture de l'app — est désormais assuré sans le pont :
+    // `RideUploader` écrit directement dans Supabase depuis le process de scan.
     //
     // Les autres lancements en arrière-plan sont dans le même cas : les actions
     // « Accepter / Refuser » d'une notification écrivent dans l'App Group en Swift,
@@ -167,8 +173,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   private static let decisionsKey = "pendingRideDecisions"
 
   private func registerScanResultCategory() {
-    let fr = (UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-      ?? Locale.current.languageCode ?? "en").hasPrefix("fr")
+    // Anglais uniquement si l'app est réglée en anglais, français sinon — même
+    // règle que partout ailleurs (la locale système ne fait pas foi).
+    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
+    let fr = !(appLang?.hasPrefix("en") ?? false)
     let accept = UNNotificationAction(
       identifier: Self.acceptActionId,
       title: fr ? "✅ Course prise" : "✅ Ride taken",

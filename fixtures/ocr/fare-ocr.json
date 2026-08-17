@@ -35,7 +35,7 @@
   },
   {
     "name": "single-digit-whole-euro-rejected",
-    "description": "DÉCISION CANONIQUE : '5€' sec n'est pas un tarif (pourboire suggéré, pack, note). Les trois parsers utilisent (\\d{2,6}|[6-9]), donc 5 reste refusé — et c'est la seule valeur d'un chiffre que le plancher fareMin=5 laisserait passer.",
+    "description": "DÉCISION CANONIQUE : '5€' sec n'est pas un tarif (pourboire suggéré, pack, note). Les trois parsers utilisent (\\d{2,6}|[6-9]), donc 5 est refusé par la regex elle-même — et le plancher fareMin=8 le refuserait de toute façon, comme 6 et 7.",
     "screenHeight": 1920,
     "blocks": [
       { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
@@ -46,7 +46,7 @@
   },
   {
     "name": "single-digit-whole-euro-nine-accepted",
-    "description": "'9 €' sec EST un tarif plausible (course au minimum VTC). Écarté, il ne faisait pas échouer le scan : priceRegex n'exige pas le symbole € et la distance '8.2 km' devenait candidate au-dessus du plancher fareMin=5 — le scan affichait donc 8,2 € au lieu de 9 €. Cette fixture verrouille les deux à la fois : le chiffre seul accepté, et le tarif qui l'emporte sur la distance au scoring.",
+    "description": "'9 €' sec EST un tarif plausible (course au minimum VTC). Écarté, il ne faisait pas échouer le scan : priceRegex n'exige pas le symbole € et la distance '8.2 km' devenait candidate au-dessus du plancher fareMin=8 — le scan affichait donc 8,2 € au lieu de 9 €. Cette fixture verrouille les deux à la fois : le chiffre seul accepté, et le tarif qui l'emporte sur la distance au scoring.",
     "screenHeight": 1920,
     "blocks": [
       { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },

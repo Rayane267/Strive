@@ -26,6 +26,10 @@ export interface ScanResult {
   /** Horodatage du scan (epoch s) — clé de corrélation avec la décision
    *  Accepter/Refuser tapée sur la notification iOS. */
   scanTs?: number;
+  /** iOS : la course a déjà été écrite en base par le process de scan (Share
+   *  Extension / raccourci) au moment du scan. L'app n'a donc plus qu'à
+   *  rafraîchir sa liste — surtout pas à ré-insérer. */
+  savedRemotely?: boolean;
 }
 
 /** Décision Accepter/Refuser émise par une action de notification iOS. */

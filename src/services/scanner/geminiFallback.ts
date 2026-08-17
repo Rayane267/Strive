@@ -30,7 +30,7 @@ Extrais les données EXACTES lues à l'écran (ne devine pas) et renvoie UNIQUEM
 }
 Si ce n'est pas un écran d'offre VTC : {"error":"not_a_ride"}.`;
 
-const FARE_MIN = 5;
+const FARE_MIN = 8;
 const FARE_MAX = 200;
 const DIST_MIN = 0.3;
 const DIST_MAX = 500;
@@ -53,6 +53,16 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
           { text: PROMPT },
         ],
       }],
+      // Lecture d'écran structurée : rien à raisonner. Sans ce bloc,
+      // gemini-2.5-flash active son « thinking » dynamique et ajoute plusieurs
+      // secondes sur le chemin le plus lent du scan. Aligné sur
+      // GeminiVisionService.swift.
+      generationConfig: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: 'application/json',
+        temperature: 0,
+        maxOutputTokens: 512,
+      },
     };
 
     // L'edge function exige le JWT user (anti-DoW) — fallback sur l'anon key

@@ -6,7 +6,7 @@ import { Ride } from '../types/database';
 const RIDE_COLUMNS =
   'id, user_id, platform, status, fare_estimated, fare_final, distance_km, ' +
   'duration_min, hourly_rate, km_rate, fuel_cost, net_profit, ' +
-  'pickup_address, destination_address, created_at';
+  'pickup_address, destination_address, scan_ts, created_at';
 
 export async function fetchRides(
   userId: string,
@@ -41,6 +41,11 @@ export async function createRide(params: {
   pickupAddress?: string | null;
   destinationAddress?: string | null;
   /**
+   * Horodatage du scan (epoch secondes) — clé de corrélation avec les décisions
+   * « Prise / Refusée » tapées hors de l'app. Voir `fetchRideIdByScanTs`.
+   */
+  scanTs?: number | null;
+  /**
    * `null` quand le trigger `aa_skip_duplicate_ride` a écarté l'insertion : la
    * course identique a déjà été enregistrée dans les 90 s. Ce n'est PAS une
    * erreur — l'appelant doit traiter ce cas comme un succès sans rien créer.
@@ -61,6 +66,16 @@ export async function createRide(params: {
       net_profit: params.netProfit ?? null,
       pickup_address: params.pickupAddress ?? null,
       destination_address: params.destinationAddress ?? null,
+      // 0 = payload sans scanTs (ancien build encore en file) → on n'écrit pas
+      // une clé qui ne corrélera rien.
+      scan_ts: params.scanTs ? params.scanTs : null,
+      // Heure du SCAN quand on la connaît, pas celle de l'insertion. Une course
+      // scannée app fermée n'arrive ici qu'à la réouverture : le défaut `now()`
+      // horodatait toute une matinée de courses « à l'instant », et faussait
+      // aussi bien la liste que les agrégats par jour.
+      ...(params.scanTs
+        ? { created_at: new Date(params.scanTs * 1000).toISOString() }
+        : {}),
     })
     .select()
     // `maybeSingle` et pas `single` : le trigger anti-doublon annule l'insert
@@ -69,8 +84,42 @@ export async function createRide(params: {
     // file offline — d'où le doublon recréé plus tard, hors fenêtre de 90 s.
     .maybeSingle();
 
-  if (error) throw error;
+  // 23505 = l'index unique (user_id, scan_ts) a refusé l'insertion : la course
+  // est DÉJÀ en base — écrite par le process de scan lui-même, ou par un rejeu
+  // antérieur de la file. Même sémantique que le trigger anti-doublon : succès
+  // sans rien créer. La traiter en panne remettrait la course en file offline,
+  // qui la re-proposerait indéfiniment.
+  if (error) {
+    if ((error as { code?: string }).code === '23505') return null;
+    throw error;
+  }
   return (data ?? null) as Ride | null;
+}
+
+/**
+ * Retrouve la course d'un scan par sa clé exacte. Sert aux décisions
+ * « Prise / Refusée » tapées hors de l'app : le process qui les émet ne connaît
+ * que `scanTs`, et le mapping mémoire du Dashboard est perdu dès que le JS
+ * redémarre. Interroger la base est alors la seule façon de retrouver la course
+ * — la corrélation sur `created_at` échouait dès que l'insertion avait eu lieu
+ * plus de 3 minutes après le scan, ce qui est le cas normal d'un scan app fermée.
+ *
+ * Renvoie `null` si aucune course ne porte ce scan (course jamais enregistrée,
+ * ou antérieure à la migration qui a introduit la colonne).
+ */
+export async function fetchRideIdByScanTs(
+  userId: string,
+  scanTs: number,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('rides')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('scan_ts', scanTs)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 export async function updateRideStatus(

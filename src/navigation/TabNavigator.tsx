@@ -14,6 +14,8 @@ import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
 import { colors } from '../theme/colors';
+import { hapticSelection } from '../utils/haptics';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
 
 import DashboardScreenRaw from '../screens/DashboardScreen';
@@ -43,6 +45,114 @@ const INDICATOR_INSET_V = 5;
 // Horizontal padding between indicator edge and tab cell edge
 const INDICATOR_INSET_H = 4;
 
+const INACTIVE_TINT = 'rgba(255,255,255,0.42)';
+
+// Ressort du déplacement : arrivée franche, sans rebond — c'est l'étirement du
+// verre qui porte la matière, pas un dépassement de position.
+const TRAVEL_SPRING = { damping: 22, stiffness: 220, mass: 0.75 } as const;
+// Ressort du pop d'icône : amorti bas => dépassement visible. C'est le rebond.
+const POP_SPRING = { damping: 9, stiffness: 260, mass: 0.9 } as const;
+
+/**
+ * Une cellule d'onglet : pop de l'icône à la sélection, compression à l'appui.
+ *
+ * L'icône et le libellé sont dessinés DEUX fois, en actif et en inactif, et se
+ * croisent en opacité. Une interpolation de couleur obligerait à repasser par le
+ * thread JS à chaque frame (`useNativeDriver` ne sait pas animer `color`) : à
+ * quatre onglets ça se verrait au premier ralentissement.
+ */
+const TabItem = ({
+  route, focused, label, reduceMotion, onPress, accessibilityLabel,
+}: {
+  route: string;
+  focused: boolean;
+  label: string;
+  reduceMotion: boolean;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) => {
+  const focus = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const press = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      Animated.timing(focus, {
+        toValue: focused ? 1 : 0, duration: 150, useNativeDriver: true,
+      }).start();
+      return;
+    }
+    Animated.spring(focus, {
+      toValue: focused ? 1 : 0, useNativeDriver: true, ...POP_SPRING,
+    }).start();
+  }, [focused, focus, reduceMotion]);
+
+  // Le ressort dépasse 1 avant de se stabiliser : l'échelle monte donc au-delà
+  // de 1,12 pendant un instant, et c'est ce dépassement qui fait le rebond.
+  const popScale = reduceMotion
+    ? 1
+    : focus.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+
+  const activeOpacity = focus.interpolate({
+    inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp',
+  });
+  const inactiveOpacity = focus.interpolate({
+    inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp',
+  });
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      // Le retour d'appui est joué par `press` : l'opacité par défaut de
+      // TouchableOpacity ferait un second effet, en désaccord avec le premier.
+      activeOpacity={1}
+      onPressIn={() => {
+        Animated.timing(press, {
+          toValue: 0.94, duration: 90, useNativeDriver: true,
+        }).start();
+      }}
+      onPressOut={() => {
+        Animated.spring(press, {
+          toValue: 1, useNativeDriver: true, damping: 14, stiffness: 320, mass: 0.7,
+        }).start();
+      }}
+      style={styles.item}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Animated.View
+        style={[styles.itemInner, { transform: [{ scale: press }, { scale: popScale }] }]}
+      >
+        <View>
+          <Animated.View style={{ opacity: inactiveOpacity }}>
+            {TAB_ICONS[route]?.(INACTIVE_TINT, 22)}
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: activeOpacity }]}>
+            {TAB_ICONS[route]?.(colors.primary, 22)}
+          </Animated.View>
+        </View>
+        <View>
+          <Animated.Text
+            style={[styles.label, { color: INACTIVE_TINT, opacity: inactiveOpacity }]}
+            numberOfLines={1}
+          >
+            {label}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.label, styles.labelOverlay,
+              { color: colors.primary, opacity: activeOpacity },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Animated.Text>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const numTabs = state.routes.length;
@@ -50,21 +160,50 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const [rowWidth, setRowWidth] = useState(0);
   const tabWidth = rowWidth > 0 ? rowWidth / numTabs : 0;
 
+  const reduceMotion = useReduceMotion();
+
   const animIndex = useRef(new Animated.Value(state.index)).current;
+  // Cible atteinte instantanément, pendant qu'`animIndex` la rattrape au ressort.
+  // L'écart entre les deux EST la distance qu'il reste à parcourir : c'est lui
+  // qui pilote la déformation, sans avoir à mesurer une vitesse.
+  const targetIndex = useRef(new Animated.Value(state.index)).current;
 
   useEffect(() => {
+    targetIndex.setValue(state.index);
+    if (reduceMotion) {
+      Animated.timing(animIndex, {
+        toValue: state.index, duration: 150, useNativeDriver: true,
+      }).start();
+      return;
+    }
     Animated.spring(animIndex, {
-      toValue: state.index,
-      useNativeDriver: true,
-      damping: 22,
-      stiffness: 220,
-      mass: 0.75,
+      toValue: state.index, useNativeDriver: true, ...TRAVEL_SPRING,
     }).start();
-  }, [state.index, animIndex]);
+  }, [state.index, animIndex, targetIndex, reduceMotion]);
 
   const indicatorX = animIndex.interpolate({
     inputRange: state.routes.map((_, i) => i),
     outputRange: state.routes.map((_, i) => i * tabWidth),
+    extrapolate: 'clamp',
+  });
+
+  // Distance restante, en onglets, signée selon le sens du déplacement.
+  const remaining = Animated.subtract(animIndex, targetIndex);
+
+  // Le verre s'allonge dans le sens de la marche et se rétracte en arrivant.
+  // L'amplitude suit la distance : un saut vers l'onglet voisin s'étire à peine,
+  // une traversée complète s'étire franchement. Sortie symétrique (la valeur est
+  // signée), d'où les paliers en miroir de part et d'autre de zéro.
+  const stretch = remaining.interpolate({
+    inputRange: [-3, -1, 0, 1, 3],
+    outputRange: [1.24, 1.1, 1, 1.1, 1.24],
+    extrapolate: 'clamp',
+  });
+  // Compensation verticale : un volume qui s'étire s'amincit. Sans elle
+  // l'indicateur gonfle au lieu de se déformer.
+  const squash = remaining.interpolate({
+    inputRange: [-3, -1, 0, 1, 3],
+    outputRange: [0.9, 0.96, 1, 0.96, 0.9],
     extrapolate: 'clamp',
   });
 
@@ -100,6 +239,10 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
                         new Animated.Value(INDICATOR_INSET_H),
                       ),
                     },
+                    // Après la translation : la déformation s'applique autour du
+                    // centre de l'indicateur, où qu'il se trouve.
+                    { scaleX: reduceMotion ? 1 : stretch },
+                    { scaleY: reduceMotion ? 1 : squash },
                   ],
                 },
               ]}
@@ -117,8 +260,6 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];
             const focused = state.index === index;
-            const iconColor = focused ? colors.primary : 'rgba(255,255,255,0.42)';
-            const label = (options.tabBarLabel as string) ?? route.name;
 
             const onPress = () => {
               const event = navigation.emit({
@@ -127,27 +268,23 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
                 canPreventDefault: true,
               });
               if (!focused && !event.defaultPrevented) {
+                // Avant la navigation : le tic doit coïncider avec le doigt, pas
+                // avec le montage de l'écran suivant.
+                hapticSelection();
                 navigation.navigate(route.name);
               }
             };
 
             return (
-              <TouchableOpacity
+              <TabItem
                 key={route.key}
+                route={route.name}
+                focused={focused}
+                label={(options.tabBarLabel as string) ?? route.name}
+                reduceMotion={reduceMotion}
                 onPress={onPress}
-                activeOpacity={0.75}
-                style={styles.item}
-                accessibilityRole="button"
                 accessibilityLabel={options.tabBarAccessibilityLabel}
-              >
-                {TAB_ICONS[route.name]?.(iconColor, 22)}
-                <Text
-                  style={[styles.label, { color: iconColor }]}
-                  numberOfLines={1}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
+              />
             );
           })}
         </View>
@@ -174,6 +311,7 @@ const AndroidTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) =>
             canPreventDefault: true,
           });
           if (!focused && !event.defaultPrevented) {
+            hapticSelection();
             navigation.navigate(route.name);
           }
         };
@@ -321,6 +459,13 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Porte les transformations : la cellule, elle, garde sa zone tactile pleine
+  // hauteur — un doigt ne doit pas rater l'onglet parce que l'icône a rétréci.
+  itemInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 3,
   },
 
@@ -328,6 +473,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 0.1,
+  },
+
+  // Le libellé actif se superpose exactement à l'inactif — les deux se croisent
+  // en opacité, sans décaler la mise en page.
+  labelOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    textAlign: 'center',
   },
 
   // Android classic tab bar

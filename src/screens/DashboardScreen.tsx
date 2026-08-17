@@ -17,7 +17,6 @@ import {
   Image,
   RefreshControl,
   NativeModules,
-  NativeEventEmitter,
   AppState,
   Alert,
   Linking,
@@ -28,7 +27,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
-import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
+import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare, fetchRideIdByScanTs } from '../services/ridesService';
 import { computeWeeklyTease, WeeklyTease } from '../utils/weeklyTease';
 import { fetchParserConfig } from '../services/parserConfigService';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +45,7 @@ import { logScanDebug } from '../services/scanDebugService';
 import { logScanFailure, rememberLastFailure } from '../services/scanFailureService';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
@@ -115,6 +115,22 @@ async function fetchTodayAcceptedTotals(userId: string, resetHour: number): Prom
   return { earnings, km };
 }
 
+// Horodatage de la dernière course enregistrée depuis `sinceIso`, ou `null`.
+// Source de vérité de l'activité du chauffeur : le compteur JS ne voit que les
+// scans traités par l'app au premier plan, alors que les scans lancés app
+// suspendue (bouton Action iOS, bulle Android) sont mis en file côté natif.
+async function fetchLastRideTs(userId: string, sinceIso: string): Promise<number | null> {
+  const { data } = await supabase
+    .from('rides')
+    .select('created_at')
+    .eq('user_id', userId)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.created_at ? new Date(data.created_at).getTime() : null;
+}
+
 // Sécurité « session oubliée » (cf. effet de restauration) : bornes appliquées
 // quand une session ouverte est retrouvée à l'ouverture de l'app (les timers JS
 // ne tournent pas app fermée). Sans activité depuis ce délai → abandonnée ;
@@ -161,6 +177,16 @@ const DashboardScreen = () => {
   const [weeklyTease, setWeeklyTease] = useState<WeeklyTease>({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Mise en ligne : onde émise depuis la pastille d'état, jouée UNE fois à la
+  // bascule. Distincte de `pulseAnim`, qui marque l'état permanent « en ligne » —
+  // une transition et un état continu ne doivent pas parler avec le même signe.
+  const goLiveAnim = useRef(new Animated.Value(0)).current;
+  const dotPop = useRef(new Animated.Value(1)).current;
+  // Fond de la pastille : passait d'un style à l'autre sans transition.
+  const onlineTint = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => { reduceMotionRef.current = reduceMotion; }, [reduceMotion]);
 
   // ── Push notifications ─────────────────────────────────────────────────
   useEffect(() => {
@@ -169,6 +195,22 @@ const DashboardScreen = () => {
     const cleanup = setupNotificationListeners();
     return cleanup;
   }, [user?.id]);
+
+  // Résolue quand l'effet de restauration ci-dessous a tranché : session reprise,
+  // clôturée, ou aucune session ouverte. Le handler de scan l'attend avant de
+  // tester `isOnlineRef` (cf. le garde dans onScanResult).
+  const sessionRestoredRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
+  if (!sessionRestoredRef.current) {
+    let resolve!: () => void;
+    const promise = new Promise<void>(r => { resolve = r; });
+    sessionRestoredRef.current = { promise, resolve };
+  }
+  // Bornée : si la BDD ne répond pas, on ne bloque pas un scan indéfiniment.
+  const awaitSessionRestored = () =>
+    Promise.race([
+      sessionRestoredRef.current!.promise,
+      new Promise<void>(r => setTimeout(r, 5000)),
+    ]);
 
   // Restaure une session existante depuis la BDD (jamais de nouvelle session auto)
   useEffect(() => {
@@ -191,18 +233,8 @@ const DashboardScreen = () => {
         // la clôture à la dernière activité réelle (ou au plafond) au lieu de la
         // rouvrir. Le temps mort n'est jamais compté.
         const startTs = new Date(data.start_at).getTime();
-        const { data: lastRide } = await supabase
-          .from('rides')
-          .select('created_at')
-          .eq('user_id', user.id)
-          .gte('created_at', data.start_at)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const lastActivityTs = Math.max(
-          startTs,
-          lastRide?.created_at ? new Date(lastRide.created_at).getTime() : startTs,
-        );
+        const lastRideTs = await fetchLastRideTs(user.id, data.start_at);
+        const lastActivityTs = Math.max(startTs, lastRideTs ?? startTs);
         const now = Date.now();
         const abandoned =
           now - lastActivityTs > SESSION_INACTIVITY_MS ||
@@ -229,6 +261,10 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(startTs);
         setIsOnline(true);
+        // Ref mise à jour SYNCHRONEMENT : son effet de sync ne tourne qu'après le
+        // re-render, et le handler de scan lit `isOnlineRef` dès la reprise de la
+        // file native — il jetait la course si le render n'avait pas eu lieu.
+        isOnlineRef.current = true;
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
         // Hors du bloc Live Activity : le compteur du Dashboard en a besoin sur
         // les deux plateformes, y compris quand la LA est indisponible.
@@ -253,20 +289,17 @@ const DashboardScreen = () => {
           });
         }
       }
-    })();
+    })()
+      // Verdict rendu (session reprise, clôturée ou absente) : les scans natifs
+      // en attente peuvent être traités.
+      .finally(() => sessionRestoredRef.current!.resolve());
   }, [user?.id]);
 
-  // ── Live Activity dismissed → stop session ──
-  useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const emitter = new NativeEventEmitter(ScanBridge);
-    const sub = emitter.addListener('onLiveActivityDismissed', () => {
-      if (isOnline && handleToggleOnlineRef.current) {
-        handleToggleOnlineRef.current();
-      }
-    });
-    return () => sub.remove();
-  }, [isOnline]);
+  // La disparition de la Live Activity ne ferme PLUS la session : « Tout
+  // effacer » dans le centre de notifications, la limite de durée iOS ou une fin
+  // déclenchée par le raccourci produisaient le même signal qu'un balayage
+  // volontaire, et coupaient le chauffeur en plein service. Le natif ré-arme la
+  // carte au retour au premier plan ; seul le toggle fait passer hors ligne.
 
   // Sync l'état session → natif : garantit que la bulle (Android) / Share
   // Extension (iOS) connaît l'état « en ligne » même après un redémarrage du
@@ -331,6 +364,22 @@ const DashboardScreen = () => {
   const tierRef = useRef(tier);
   const extraCreditsRef = useRef(extraCredits);
   const dayResetHourRef = useRef(dayResetHour);
+  // L'id user est lu APRÈS l'attente de restauration de session dans le listener
+  // de scan : la valeur capturée à l'abonnement peut encore être nulle alors que
+  // le natif, lui, vide sa file dès cet abonnement.
+  const userIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
+  // Rechargement coalescé : le natif livre toute sa file d'un coup (une matinée
+  // de courses déjà enregistrées côté natif = autant d'events), une seule
+  // relecture de la base suffit.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefreshRef = useRef(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => fetchDataRef.current?.(), 400);
+  });
+  useEffect(() => () => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, []);
   useEffect(() => { canScanRef.current = canScan; }, [canScan]);
   useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
@@ -433,19 +482,24 @@ const DashboardScreen = () => {
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
-      if (!user?.id) return;
-      // Quota atteint côté client → on ignore le scan natif sans tenter
-      // d'INSERT en DB (qui planterait avec daily_scan_quota_exceeded). Le
-      // paywall scanLimitCard est déjà affiché en bas du Dashboard.
-      if (!isOnlineRef.current) {
-        hapticError();
+      // Démarrage à froid : le natif vide sa file de scans (bouton Action, Share
+      // Extension) DÈS que le JS s'abonne — donc avant que la restauration de
+      // session ait répondu. Tout `return` pris ici perd la course
+      // DÉFINITIVEMENT : l'App Group est purgé au moment de l'émission.
+      await awaitSessionRestored();
+      // …et l'id user est relu APRÈS l'attente, jamais capturé à l'abonnement :
+      // il valait encore `undefined` sur un démarrage à froid, et la file
+      // entière partait à la poubelle sans laisser de trace.
+      const userId = userIdRef.current;
+      if (!userId) {
+        __DEV__ && console.warn('[Scanner] pas de session — scan non enregistré');
         return;
       }
-      if (!canScanRef.current) {
-        __DEV__ && console.warn('[Scanner] quota atteint — scan ignoré');
-        hapticError();
-        return;
-      }
+      // Ni l'état « en ligne » ni le quota ne sont testés ici. Ils décrivent
+      // l'instant où l'app s'ouvre, pas celui du scan : une session close entre
+      // temps (ou un compteur déjà à la limite) faisait disparaître des courses
+      // pourtant scannées en service. Le natif applique déjà ces deux règles
+      // AVANT d'analyser — ce qui arrive jusqu'ici a donc été autorisé.
       // Anti-doublon : on déduplique sur l'identité du scan (`scanTs`), pas sur
       // son heure d'arrivée. Le natif vide sa file d'attente d'un seul coup —
       // plusieurs courses légitimes arrivent donc dans la même milliseconde, et
@@ -466,6 +520,27 @@ const DashboardScreen = () => {
           return;
         }
         lastScanTsRef.current = now;
+      }
+
+      // Course déjà écrite en base par le process de scan (`RideUploader`) : on
+      // s'arrête ici. Tout ce qui suit — rattrapage Gemini, recalcul, écriture —
+      // referait sur une capture périmée un travail déjà fait au moment du scan,
+      // et rappellerait Gemini à chaque ouverture pour rien. La base fait foi :
+      // on recharge la liste, une seule fois pour toute la file.
+      if ((nativeResult as any).savedRemotely) {
+        __DEV__ && console.info('[SCAN] déjà enregistrée par le natif — refresh');
+        // La télémétrie reste alimentée : elle ne dépend que de ce que le natif
+        // a lu, pas du chemin JS qu'on vient de court-circuiter.
+        logScanEvent({
+          platform: nativeResult.platform,
+          addressesFound: (nativeResult.pickupAddress ? 1 : 0) + (nativeResult.destinationAddress ? 1 : 0),
+          geminiFallback: false,
+          durationSource: (nativeResult.durationMin && nativeResult.durationMin > 0) ? 'reported' : 'estimated',
+          verdict: (nativeResult as any).verdictLevel ?? 0,
+          fareBucket: fareBucket(nativeResult.fare),
+        });
+        scheduleRefreshRef.current();
+        return;
       }
 
       __DEV__ && console.info(
@@ -650,7 +725,7 @@ const DashboardScreen = () => {
       // pour garantir zéro scan perdu — useOfflineSync re-tente à la reconnexion.
       try {
         const newRide = await createRide({
-          userId: user.id,
+          userId,
           platform: result.platform,
           fare: result.fare,
           distanceKm: totalDistance,
@@ -661,13 +736,19 @@ const DashboardScreen = () => {
           netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
+          // Clé de corrélation avec les boutons Prise/Refusée tapés hors de
+          // l'app : elle seule survit à un redémarrage du JS.
+          scanTs: scanTs || null,
         });
-        // `null` = doublon écarté par le trigger : la course identique est déjà
-        // dans la liste et déjà comptée. On ne recrée pas de carte, on ne
-        // ré-incrémente pas le compteur, et surtout on ne met RIEN en file
-        // offline — c'est ce qui recréait le doublon plus tard.
+        // `null` = la course est déjà en base : soit le trigger anti-doublon,
+        // soit l'index unique sur `scan_ts` — c'est-à-dire le filet Swift qui a
+        // gagné la course de vitesse (il écrit dès le scan, sans attendre le
+        // pont RN). On ne recrée rien et on ne met RIEN en file offline — c'est
+        // ce qui recréait le doublon plus tard — mais on recharge la liste,
+        // sinon la course existe en base sans apparaître à l'écran.
         if (!newRide) {
-          __DEV__ && console.warn('[SCAN] doublon écarté côté DB — rien à créer');
+          __DEV__ && console.warn('[SCAN] déjà en base — refresh de la liste');
+          scheduleRefreshRef.current();
           return;
         }
         setRides(prev => [newRide, ...prev]);
@@ -687,7 +768,7 @@ const DashboardScreen = () => {
         // que le réseau marche pour les vider maintenant.
         syncOfflineQueue(async (queuedRide) => {
           await createRide({
-            userId: user.id,
+            userId,
             platform: queuedRide.platform,
             fare: queuedRide.fare_estimated,
             distanceKm: queuedRide.distance_km,
@@ -698,12 +779,15 @@ const DashboardScreen = () => {
             netProfit: queuedRide.net_profit,
             pickupAddress: queuedRide.pickup_address,
             destinationAddress: queuedRide.destination_address,
+            // Une course passée par la file offline garde sa clé de scan :
+            // sinon un ✅ tapé sur la carte ne la retrouverait jamais.
+            scanTs: queuedRide.scan_ts ?? null,
           });
         }).catch(() => {});
       } catch (e) {
         __DEV__ && console.warn('[SCAN] createRide KO — queue offline', e);
         await queueOfflineRide({
-          user_id: user.id,
+          user_id: userId,
           platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
           status: 'PENDING',
           fare_estimated: result.fare,
@@ -714,14 +798,16 @@ const DashboardScreen = () => {
           km_rate: kmRate,
           fuel_cost: fuelCost,
           net_profit: netProfit,
+          scan_ts: scanTs || null,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
-          created_at: new Date().toISOString(),
+          // Heure du SCAN : la file offline peut n'être vidée que bien plus tard.
+          created_at: new Date((scanTs || Date.now() / 1000) * 1000).toISOString(),
         });
         // Affiche localement pour retour utilisateur (ID temporaire)
         setRides(prev => [{
           id: `offline-${Date.now()}`,
-          user_id: user.id,
+          user_id: userId,
           platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
           status: 'PENDING',
           fare_estimated: result.fare,
@@ -786,6 +872,15 @@ const DashboardScreen = () => {
     }
   };
 
+  // Teinte de la pastille : 220 ms suffisent à faire lire le changement sans le
+  // faire attendre. Pilote `backgroundColor`, donc hors driver natif — une seule
+  // vue, une seule fois par bascule.
+  useEffect(() => {
+    Animated.timing(onlineTint, {
+      toValue: isOnline ? 1 : 0, duration: 220, useNativeDriver: false,
+    }).start();
+  }, [isOnline, onlineTint]);
+
   useEffect(() => {
     if (isOnline) {
       Animated.loop(
@@ -848,16 +943,31 @@ const DashboardScreen = () => {
     }
   }, [sessionSeconds]);
 
-  // Décision Accepter/Refuser venue d'une action de notification (iOS) :
-  //  1. mapping en mémoire scanTs → id (cas app vivante),
-  //  2. sinon repli sur la course PENDING dont la création est la plus proche
-  //     du scan (≤ 3 min) — couvre le cold start où le mapping est vide,
-  //  3. sinon la course n'existe pas encore → on bufferise (appliquée à sa création).
-  const applyRideDecision = useCallback((scanTs: number, status: 'ACCEPTED' | 'DECLINED') => {
+  // Décision Prise/Refusée venue d'un bouton hors de l'app (Live Activity,
+  // action de notification, Siri) : l'émetteur ne connaît que `scanTs`.
+  //  1. mapping en mémoire scanTs → id (app restée vivante depuis le scan),
+  //  2. la clé exacte portée par la course elle-même (`scan_ts`),
+  //  3. la même clé, demandée à la base : la course peut être enregistrée sans
+  //     être dans la liste chargée, et le mapping mémoire meurt avec le process,
+  //  4. repli historique pour les courses antérieures à la colonne `scan_ts`,
+  //  5. sinon la course n'existe pas encore → on bufferise (appliquée à sa création).
+  const applyRideDecision = useCallback(async (scanTs: number, status: 'ACCEPTED' | 'DECLINED') => {
     let rideId = rideIdByScanTsRef.current.get(scanTs);
     if (!rideId) {
+      rideId = ridesRef.current.find(r => r.scan_ts != null && r.scan_ts === scanTs)?.id;
+    }
+    if (!rideId && user?.id) {
+      try {
+        rideId = (await fetchRideIdByScanTs(user.id, scanTs)) ?? undefined;
+      } catch {}
+    }
+    if (!rideId) {
+      // Corrélation temporelle : `created_at` est l'heure d'INSERTION, qui peut
+      // suivre le scan de plusieurs heures quand l'app était fermée. Ne vaut
+      // donc que pour les courses sans `scan_ts` — les nouvelles passent par
+      // les étapes ci-dessus.
       const cand = ridesRef.current
-        .filter(r => r.status === 'PENDING')
+        .filter(r => r.status === 'PENDING' && r.scan_ts == null)
         .map(r => ({ id: r.id, dt: Math.abs(new Date(r.created_at).getTime() / 1000 - scanTs) }))
         .filter(x => x.dt < 180)
         .sort((a, b) => a.dt - b.dt)[0];
@@ -865,7 +975,7 @@ const DashboardScreen = () => {
     }
     if (rideId) handleStatusUpdate(rideId, status);
     else bufferedDecisionsRef.current.set(scanTs, status);
-  }, [handleStatusUpdate]);
+  }, [handleStatusUpdate, user?.id]);
 
   useEffect(() => { applyRideDecisionRef.current = applyRideDecision; }, [applyRideDecision]);
   useEffect(() => { ridesRef.current = rides; }, [rides]);
@@ -954,8 +1064,20 @@ const DashboardScreen = () => {
   useEffect(() => {
     if (!isOnline) return;
     lastScanTimeRef.current = Date.now();
-    const check = setInterval(() => {
+    const check = setInterval(async () => {
       if (Date.now() - lastScanTimeRef.current > SESSION_INACTIVITY_MS) {
+        // `lastScanTimeRef` ne voit que les scans traités par le JS : ceux
+        // lancés app suspendue (bouton Action iOS, bulle Android) sont mis en
+        // file côté natif et drainés plus tard. On revalide donc sur la base
+        // avant de couper — sinon une session bien active se fermait seule.
+        if (user?.id) {
+          const since = new Date(Date.now() - SESSION_INACTIVITY_MS).toISOString();
+          const lastRideTs = await fetchLastRideTs(user.id, since);
+          if (lastRideTs) {
+            lastScanTimeRef.current = Math.max(lastScanTimeRef.current, lastRideTs);
+            return;
+          }
+        }
         notifySessionClosed();
         // Stoppe aussi la bulle/scanner natif (Android : stopScanner) — sinon
         // l'overlay reste affiché alors que la session est fermée.
@@ -965,7 +1087,7 @@ const DashboardScreen = () => {
       }
     }, 5 * 60_000);
     return () => clearInterval(check);
-  }, [isOnline]);
+  }, [isOnline, user?.id]);
 
   // Split session that already spans a past reset boundary (app restored / came back from background)
   useEffect(() => {
@@ -1106,6 +1228,27 @@ const DashboardScreen = () => {
       }
       await supabase.from('profiles').update({ is_online: newStatus }).eq('id', user.id);
       setIsOnline(newStatus);
+      // Après l'écriture, pas au doigt : l'onde annonce une session ouverte, elle
+      // ne doit pas partir sur une requête qui échoue. Le bouton montre son
+      // indicateur d'activité pendant ce court intervalle.
+      if (newStatus) {
+        hapticSuccess();
+        // « Réduire les animations » : l'haptique et la teinte suffisent à
+        // marquer le passage, l'onde et le rebond du point sont supprimés.
+      }
+      if (newStatus && !reduceMotionRef.current) {
+        goLiveAnim.setValue(0);
+        Animated.timing(goLiveAnim, {
+          toValue: 1, duration: 900, useNativeDriver: true,
+        }).start();
+        dotPop.setValue(1);
+        Animated.sequence([
+          Animated.timing(dotPop, { toValue: 1.35, duration: 140, useNativeDriver: true }),
+          Animated.spring(dotPop, {
+            toValue: 1, useNativeDriver: true, damping: 8, stiffness: 240, mass: 0.8,
+          }),
+        ]).start();
+      }
       refreshProfile();
     } catch (e) {
       __DEV__ && console.error(e);
@@ -1273,9 +1416,64 @@ const DashboardScreen = () => {
         </View>
 
         {/* ── ONLINE TOGGLE ── */}
-        <View style={[styles.onlinePill, isOnline && styles.onlinePillActive]}>
+        <Animated.View
+          style={[
+            styles.onlinePill,
+            // Conserve l'ombre renforcée de l'état actif ; le fond et la bordure,
+            // eux, sont repris juste après par les valeurs animées (dernier style
+            // gagnant), avec exactement les mêmes couleurs qu'auparavant.
+            isOnline && styles.onlinePillActive,
+            {
+              backgroundColor: onlineTint.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['#111E18', '#0D1F17'],
+              }),
+              borderColor: onlineTint.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['rgba(0,230,118,0.15)', 'rgba(0,230,118,0.4)'],
+              }),
+            },
+          ]}
+        >
           <View style={styles.onlineLeft}>
-            <Animated.View style={[styles.onlineDot, !isOnline && styles.onlineDotOff, isOnline && { transform: [{ scale: pulseAnim }] }]} />
+            {/* Onde de mise en ligne : deux anneaux émis depuis la pastille, le
+                second à mi-course du premier — un anneau seul se lit comme un
+                artefact, deux se lisent comme une émission. Le conteneur fait la
+                taille du point : les anneaux s'en échappent par l'échelle, donc
+                toujours centrés dessus. `pointerEvents none` — ils débordent de
+                la pastille et ne doivent jamais intercepter le doigt. */}
+            <View style={styles.onlineDotWrap} pointerEvents="box-none">
+              {[0, 1].map(ring => (
+                <Animated.View
+                  key={ring}
+                  pointerEvents="none"
+                  style={[
+                    styles.onlineRing,
+                    {
+                      opacity: goLiveAnim.interpolate({
+                        inputRange: ring === 0 ? [0, 0.05, 0.7] : [0.3, 0.35, 1],
+                        outputRange: [0, 0.5, 0],
+                        extrapolate: 'clamp',
+                      }),
+                      transform: [{
+                        scale: goLiveAnim.interpolate({
+                          inputRange: ring === 0 ? [0, 0.7] : [0.3, 1],
+                          outputRange: [1, 3.2],
+                          extrapolate: 'clamp',
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              ))}
+              <Animated.View
+                style={[
+                  styles.onlineDot,
+                  !isOnline && styles.onlineDotOff,
+                  { transform: [{ scale: isOnline ? Animated.multiply(pulseAnim, dotPop) : dotPop }] },
+                ]}
+              />
+            </View>
             <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}>
               {isOnline
                 ? `${t('dashboard.online')}  ·  ${formatDuration(todayOnlineBaseSeconds + sessionSeconds)}`
@@ -1298,7 +1496,7 @@ const DashboardScreen = () => {
               </Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Animated.View>
 
         {/* ── TODAY'S SESSION ── */}
         <View style={styles.sessionHeader}>
@@ -1677,6 +1875,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
   },
   onlineLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Conteneur à la taille exacte du point : sert d'origine aux anneaux, qui n'en
+  // sortent que par l'échelle et restent donc centrés dessus.
+  onlineDotWrap: { width: 9, height: 9, alignItems: 'center', justifyContent: 'center' },
+  onlineRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
   onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   onlineDotOff: { backgroundColor: '#3a3a3a' },
   onlineLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },

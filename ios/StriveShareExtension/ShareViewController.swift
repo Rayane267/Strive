@@ -24,9 +24,11 @@ class ShareViewController: UIViewController {
   /// Résout la langue UI (fr/en) : pref synchronisée par l'app principale via
   /// App Group (`appLanguage`), sinon locale système. Même logique que AnalyzeRideIntent.
   private func localizedString(fr: String, en: String) -> String {
-    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-    let lang = appLang ?? Locale.current.languageCode ?? "en"
-    return lang.hasPrefix("fr") ? fr : en
+    // Anglais uniquement si l'app est réglée en anglais, français sinon — la
+    // locale système ne fait PAS foi.
+    guard let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
+    else { return fr }
+    return appLang.hasPrefix("en") ? en : fr
   }
 
   // MARK: - UI Elements
@@ -356,14 +358,77 @@ class ShareViewController: UIViewController {
     DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
   }
 
+  /// Vrai si CETTE exécution a pris le verrou anti double-scan. Indispensable :
+  /// le verrou est un horodatage global dans l'App Group, sans notion de
+  /// propriétaire — une extension qui affiche « analyse déjà en cours » puis se
+  /// ferme libérerait le verrou d'un scan appartenant à un autre process.
+  private var ownsScanLock = false
+
+  /// Libère le verrou, uniquement si on l'a pris. Idempotent.
+  private func releaseScanLockIfOwned() {
+    guard ownsScanLock else { return }
+    ownsScanLock = false
+    ScanProcessor.markScanFinished()
+  }
+
   /// Marque l'état terminal atteint et désarme le filet. Idempotent.
+  /// Libère aussi le verrou de scan : centralisé ici pour qu'un futur chemin de
+  /// sortie ne puisse pas l'oublier et bloquer les scans suivants 30 s durant.
   private func disarmWatchdog() {
     hasShownOutcome = true
     uiWatchdog?.cancel()
     uiWatchdog = nil
+    releaseScanLockIfOwned()
   }
 
+  /// Le partage de capture N'ANALYSE PLUS. Le scan iOS passe exclusivement par le
+  /// bouton Action / raccourci (`AnalyzeRideIntent`) : c'est le seul chemin qui
+  /// peut afficher le verdict dans la Live Activity et taguer la course sans
+  /// ouvrir l'app. Ici on se contente de renvoyer le chauffeur vers Strive.
+  ///
+  /// Le pipeline complet (OCR → Gemini → TomTom → App Group) reste plus bas dans
+  /// ce fichier mais n'est plus atteignable — à supprimer dans un second temps.
   private func processSharedImage() {
+    showUseTheApp()
+  }
+
+  /// Message de redirection + bouton d'ouverture de l'app.
+  private func showUseTheApp() {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.text = localizedString(
+      fr: "📱  Passez par l'application\nLe scan se lance depuis Strive, avec le bouton Action ou le raccourci.",
+      en: "📱  Use the app\nScanning runs from Strive, via the Action button or the shortcut."
+    )
+    statusLabel.numberOfLines = 0
+    statusLabel.textAlignment = .center
+    statusLabel.textColor = UIColor(white: 1.0, alpha: 0.7)
+
+    // Bouton autonome : celui de `resultContainer` est contraint aux libellés du
+    // résultat, qu'on n'affiche plus.
+    let openButton = UIButton(type: .system)
+    openButton.setTitle(localizedString(fr: "Ouvrir Strive", en: "Open Strive"), for: .normal)
+    openButton.setTitleColor(bgColor, for: .normal)
+    openButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+    openButton.backgroundColor = primaryColor
+    openButton.layer.cornerRadius = 14
+    openButton.translatesAutoresizingMaskIntoConstraints = false
+    openButton.addTarget(self, action: #selector(openMainApp), for: .touchUpInside)
+    containerView.addSubview(openButton)
+
+    NSLayoutConstraint.activate([
+      openButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 24),
+      openButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+      openButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+      openButton.heightAnchor.constraint(equalToConstant: 50),
+      openButton.bottomAnchor.constraint(
+        lessThanOrEqualTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+    ])
+  }
+
+  /// ⚠️ Plus appelé — cf. `processSharedImage`. Conservé le temps de valider la
+  /// bascule vers le raccourci, puis à supprimer avec le reste du pipeline.
+  private func legacyProcessSharedImage() {
     // Court-circuit : quota journalier atteint → on n'engage ni Vision ni
     // TomTom ni Gemini (zéro coût). L'utilisateur voit un message dédié.
     let defaults = UserDefaults(suiteName: Self.appGroupId)
@@ -380,6 +445,18 @@ class ShareViewController: UIViewController {
       showQuotaReached()
       return
     }
+    // Verrou anti double-scan, partagé avec le raccourci via l'App Group. Posé
+    // APRÈS les gardes ci-dessus : un scan refusé d'entrée ne doit pas bloquer le
+    // suivant. Sans ce verrou, deux partages rapprochés lançaient deux pipelines
+    // complets — deux appels Gemini payants, deux courses en base, deux scans
+    // décomptés du quota — pour une seule offre à l'écran. Le raccourci était
+    // protégé depuis longtemps, le Share Sheet non, alors que le commentaire de
+    // `shouldThrottleRapidScan` affirmait le couvrir.
+    if ScanProcessor.shouldThrottleRapidScan() {
+      showScanAlreadyRunning()
+      return
+    }
+    ownsScanLock = true
 
     guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
           let attachments = extensionItem.attachments
@@ -639,6 +716,21 @@ class ShareViewController: UIViewController {
     body["scanTs"] = scanTs
     enqueueScanResult(body, defaults: defaults)
 
+    // Enregistrement IMMÉDIAT en base : la course ne dépend plus de la prochaine
+    // ouverture de l'app. La file ci-dessus reste écrite d'abord — si l'utilisateur
+    // referme le panneau avant la réponse réseau, le process meurt et c'est elle
+    // qui rattrape (l'index unique sur scan_ts empêche tout doublon).
+    RideUploader.upload(final, scanTs: scanTs) { saved in
+      if saved { RideUploader.markQueuedResultSaved(scanTs: scanTs) }
+    }
+
+    // Jumelle minimale que le drain de l'app NE purge PAS — source de l'incrément
+    // KPI natif du bouton ✅ / des commandes Siri (cf. lastScannedFareKm).
+    defaults.set(
+      ["scanTs": scanTs, "fare": final.displayFare, "km": final.totalDistanceKm],
+      forKey: "lastTaggableRide"
+    )
+
     if let data = try? JSONSerialization.data(withJSONObject: body) {
       defaults.set(data, forKey: Self.scanResultKey)
       defaults.set(scanTs, forKey: Self.scanTimestampKey)
@@ -711,8 +803,10 @@ class ShareViewController: UIViewController {
       kmOk = level >= 2
     } else {
       let prefs = UserDefaults(suiteName: Self.appGroupId)
-      let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25
-      let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
+      // `object(forKey:)` : `double(forKey:)` rend 0.0 sur clé absente → seuils
+      // à 0, tout passait pour rentable. Même correctif que ScanProcessor.
+      let minHourly = (prefs?.object(forKey: "minHourlyRate") as? Double) ?? 25
+      let minKm = (prefs?.object(forKey: "minKmRate") as? Double) ?? 1.2
       hrOk = hourlyRate >= minHourly
       kmOk = kmRate >= minKm
     }
@@ -727,6 +821,21 @@ class ShareViewController: UIViewController {
       hourlyRateLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
       fareLabel.textColor = UIColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
     }
+  }
+
+  /// Un scan tourne déjà (ce partage, un précédent, ou le raccourci). On ne
+  /// relance pas un pipeline en parallèle : le résultat en cours s'affichera dans
+  /// l'app / la Live Activity, on y renvoie le chauffeur.
+  private func showScanAlreadyRunning() {
+    spinnerView.stopAnimating()
+    spinnerView.isHidden = true
+    statusLabel.text = localizedString(
+      fr: "⏳  Analyse déjà en cours\nOuvrez Strive pour voir le résultat",
+      en: "⏳  Analysis already running\nOpen Strive to see the result"
+    )
+    statusLabel.numberOfLines = 0
+    statusLabel.textAlignment = .center
+    statusLabel.textColor = UIColor(white: 1.0, alpha: 0.6)
   }
 
   private func showScannerDisabled() {
@@ -880,7 +989,11 @@ class ShareViewController: UIViewController {
 
   // MARK: - Actions
 
+  /// Sorties manuelles : iOS tue le process dès la fermeture de la feuille. Sans
+  /// libération ici, un verrou pris par un scan encore en cours resterait tenu
+  /// jusqu'à son plafond de 30 s et bloquerait les scans par raccourci.
   @objc private func openMainApp() {
+    releaseScanLockIfOwned()
     // Apple rejette en review tout walk de la responder-chain pour récupérer
     // UIApplication depuis une extension. La seule API publique pour ouvrir
     // l'app hôte est `extensionContext.open(_:completionHandler:)`.
@@ -894,6 +1007,7 @@ class ShareViewController: UIViewController {
   }
 
   @objc private func dismissExtension() {
+    releaseScanLockIfOwned()
     extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
   }
 }
