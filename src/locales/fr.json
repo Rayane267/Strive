@@ -149,7 +149,8 @@
         "saveFailed": "Erreur lors de l'enregistrement"
       }
     },
-    "deleteAccountSub": "Action irréversible"
+    "deleteAccountSub": "Action irréversible",
+    "weekEarnings": "Gains de la semaine"
   },
   "scanner": {
     "title": "Configurer le scanner",

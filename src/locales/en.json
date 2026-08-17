@@ -149,7 +149,8 @@
         "saveFailed": "Error while saving"
       }
     },
-    "deleteAccountSub": "This cannot be undone"
+    "deleteAccountSub": "This cannot be undone",
+    "weekEarnings": "This week's earnings"
   },
   "scanner": {
     "title": "Set up scanner",

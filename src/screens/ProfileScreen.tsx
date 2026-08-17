@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   View,
@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticLight } from '../utils/haptics';
+import { fetchRides, effectiveFare } from '../services/ridesService';
 
 type MenuItem = {
   icon: string;
@@ -51,6 +52,32 @@ const ProfileScreen = () => {
 
   const tier = profile?.subscription_tier?.toLowerCase();
   const isPlus = tier === 'plus' || tier === 'pro' || tier === 'premium';
+
+  // Gains des 7 derniers jours : seules les courses acceptées comptent, une
+  // course refusée n'a rapporté rien. `null` tant que la requête n'a pas
+  // répondu — la carte se tait plutôt que d'annoncer 0 € à un chauffeur qui
+  // vient d'en faire dix.
+  const [weekEarnings, setWeekEarnings] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const rides = await fetchRides(user.id, since);
+        const total = rides
+          .filter(r => r.status === 'ACCEPTED')
+          .reduce((sum, r) => sum + effectiveFare(r), 0);
+        if (!cancelled) setWeekEarnings(total);
+      } catch {
+        // Écran de profil : un échec réseau ne doit pas le vider. La carte
+        // reste simplement absente.
+        if (!cancelled) setWeekEarnings(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const changeLanguage = (lang: string) => {
     if (lang === i18n.language) return;
@@ -287,6 +314,30 @@ const ProfileScreen = () => {
             )}
           </View>
         </SafeGradient>
+
+        {/* Gains de la semaine, posés entre l'identité et les réglages : c'est
+            le seul chiffre que le chauffeur vient chercher ici, et il donne au
+            profil une raison d'être ouvert autrement que pour se déconnecter. */}
+        {weekEarnings !== null && (
+          <View style={styles.earnCard}>
+            <View style={styles.earnTexts}>
+              <Text style={styles.earnLabel}>{t('profile.weekEarnings')}</Text>
+              <View style={styles.earnAmountRow}>
+                <Text style={styles.earnWhole}>
+                  {Math.floor(weekEarnings).toLocaleString('fr-FR')}
+                </Text>
+                {/* Les centimes en retrait : ils comptent, mais ce sont les
+                    euros qui se lisent d'un coup d'œil. */}
+                <Text style={styles.earnCents}>
+                  ,{Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} €
+                </Text>
+              </View>
+            </View>
+            <View style={styles.earnBadge}>
+              <Feather name="trending-up" size={20} color={colors.primary} />
+            </View>
+          </View>
+        )}
 
         {/* ── ACCOUNT SECTION ── */}
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
@@ -609,6 +660,46 @@ const styles = StyleSheet.create({
   profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
 
   // Section title
+  earnCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 22,
+  },
+  earnTexts: { flex: 1 },
+  earnLabel: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  earnAmountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6 },
+  earnWhole: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1.2,
+  },
+  earnCents: {
+    color: colors.textMuted,
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  earnBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '1F',
+  },
+
   sectionTitle: {
     color: colors.textDimmed,
     fontSize: 11,
