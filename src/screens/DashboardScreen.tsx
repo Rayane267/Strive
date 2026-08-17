@@ -50,6 +50,7 @@ import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offl
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
+import OrbitRing from '../components/OrbitRing';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 import {
@@ -153,6 +154,13 @@ const DashboardScreen = () => {
   const [fuelPerKm, setFuelPerKm] = useState(0);
 
   const tier = getEffectivePlanTier(profile);
+  // Les trois paliers sont nommés tels quels sur la pastille. Un « Plus »
+  // affiché à un abonné Premium lui donnerait l'impression d'avoir été
+  // déclassé — et c'est le seul endroit de l'app où il lit son palier.
+  const planLabel =
+    tier === 'premium' ? t('tier.premiumName', 'Premium')
+    : tier === 'plus' ? t('tier.plusName', 'Plus')
+    : t('tier.freeBadge', 'Free');
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
   // Utiliser stats.scans (autoritatif depuis fetchData + incrément local au scan)
@@ -1387,33 +1395,69 @@ const DashboardScreen = () => {
         }
       >
 
-        {/* ── HEADER ── */}
+        {/* En-tête en deux temps : une rangée de contrôles où le logo ne sert
+            plus d'étiquette mais de pastille de plan, puis le nom de l'écran en
+            très gros. Le logo et le sous-titre « tableau de bord en direct »
+            disaient au chauffeur où il était dans une app qu'il vient d'ouvrir
+            lui-même — le titre le dit mieux et en un mot. */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Image
-              source={require('../assets/strive-logo.png')}
-              style={styles.appIconImg}
-            />
-            <View>
-              <Text style={styles.appTitle}>Strive</Text>
-              <Text style={styles.appSubtitle}>{t('dashboard.subtitle')}</Text>
-            </View>
-          </View>
-          {Platform.OS === 'android' && (
+          {/* Les seuils d'acceptation sont le seul réglage qu'un chauffeur
+              retouche vraiment, et il était à trois taps de profondeur. */}
+          <TouchableOpacity
+            style={[styles.headerBtn, styles.headerBtnLeft]}
+            onPress={() => navigation.navigate('Preferences')}
+            accessibilityRole="button"
+            accessibilityLabel={t('preferences.title')}
+          >
+            <MaterialCommunityIcons name="tune-vertical" size={21} color={colors.textMain} />
+          </TouchableOpacity>
+
+          <OrbitRing>
             <TouchableOpacity
-              style={[styles.settingsBtn, scannerActive && { backgroundColor: 'rgba(0,230,118,0.15)', borderColor: colors.primary }]}
+              style={styles.planPill}
+              onPress={() => navigation.navigate('SubscriptionScreen')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={planLabel}
+            >
+              <Image
+                source={require('../assets/strive-logo.png')}
+                style={styles.planPillLogo}
+              />
+              <Text style={styles.planPillText}>{planLabel}</Text>
+            </TouchableOpacity>
+          </OrbitRing>
+
+          {/* Même place, même rôle — le scan — mais l'affordance diffère : sur
+              Android on l'allume et l'éteint, sur iOS il passe par l'extension
+              de partage, donc le bouton mène au tutoriel qui en apprend le geste.
+              Sans cela le côté droit resterait vide sur iOS. */}
+          {Platform.OS === 'android' ? (
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnRight, scannerActive && styles.headerBtnActive]}
               onPress={handleToggleScanner}
               accessibilityRole="button"
               accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
             >
               <MaterialCommunityIcons
                 name="line-scan"
-                size={20}
-                color={scannerActive ? colors.primary : colors.textMuted}
+                size={21}
+                color={scannerActive ? colors.primary : colors.textMain}
               />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnRight]}
+              onPress={() => navigation.navigate('Tutorial')}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.tutorial')}
+            >
+              <MaterialCommunityIcons name="line-scan" size={21} color={colors.textMain} />
             </TouchableOpacity>
           )}
         </View>
+
+        <Text style={styles.screenTitle}>{t('dashboard.home', 'Accueil')}</Text>
 
         {/* ── ONLINE TOGGLE ── */}
         <Animated.View
@@ -1542,15 +1586,11 @@ const DashboardScreen = () => {
         </View>
 
 
-        {/* ── OFFLINE HINT ── */}
-        {!isOnline && (
-          <View style={styles.offlineHint}>
-            <MaterialCommunityIcons name="line-scan" size={17} color="#FFB300" />
-            <Text style={styles.offlineHintText}>
-              {t('dashboard.offlineBanner', 'Passez en ligne pour activer le scanner')}
-            </Text>
-          </View>
-        )}
+        {/* Le bandeau orange « Passez en ligne pour activer le scanner » a été
+            retiré : la barre juste au-dessus dit déjà qu'on est hors ligne, et
+            l'état vide plus bas le redit une troisième fois. Trois avertissements
+            pour un même fait, dont un en orange, faisaient passer un état normal
+            pour une anomalie. */}
 
         {/* ── ERROR STATE ── */}
         {fetchError && (
@@ -1826,34 +1866,52 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16, paddingTop: 6 },
 
   // HEADER
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  appIconImg: {
-    width: 42, height: 42, borderRadius: 12,
+  // La pastille est centrée quoi qu'il arrive, et les deux boutons sont posés en
+  // absolu de part et d'autre. Une simple rangée `space-between` la décalerait
+  // selon la présence du bouton de scan — il n'existe que sur Android.
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  appIconWrap: {
-    width: 46, height: 46, borderRadius: 13,
-    backgroundColor: 'rgba(0,230,118,0.15)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.35)',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+
+  // Pastille de plan : le logo n'étiquette plus l'écran, il porte le statut de
+  // l'abonnement et mène au paywall.
+  planPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    paddingLeft: 6,
+    paddingRight: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  appTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  appSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
-  settingsBtn: {
-    width: 40, height: 40, borderRadius: 20,
+  planPillLogo: { width: 30, height: 30, borderRadius: 15 },
+  planPillText: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+
+  // Le nom de l'écran en très gros : c'est lui qui situe, pas un logo.
+  screenTitle: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    marginBottom: 20,
+  },
+
+  headerBtn: {
+    position: 'absolute',
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+  },
+  headerBtnLeft: { left: 0 },
+  headerBtnRight: { right: 0 },
+  headerBtnActive: {
+    backgroundColor: 'rgba(0,230,118,0.15)',
+    borderColor: colors.primary,
   },
 
   // ONLINE PILL
@@ -1995,9 +2053,25 @@ const styles = StyleSheet.create({
   upgradeCardPerkDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
 
   // WAITING
-  waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 10 },
-  waitingTitle: { color: colors.textDimmed, fontSize: 14 },
-  waitingSubtitle: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', maxWidth: 260, lineHeight: 18, opacity: 0.7 },
+  // L'état vide est posé dans une carte plutôt que flotté sur le fond : sans
+  // contenant, il laissait un trou de deux tiers d'écran qui se lisait comme un
+  // écran cassé. Dans une carte, l'absence de course devient un état affiché.
+  waitingContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  waitingTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  waitingSubtitle: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 20,
+  },
 
 
 

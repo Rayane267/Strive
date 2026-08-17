@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -269,12 +270,7 @@ const CarSettingsScreen = () => {
           <Text style={styles.headerTitle}>{t('settings.title', 'Mon véhicule')}</Text>
           <Text style={styles.headerSub}>{t('settings.subtitle', 'Informations du véhicule')}</Text>
         </View>
-        <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
-          <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
-            {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
-          </Text>
-        </View>
+        <PlanBadge />
       </View>
 
       <View style={{ flex: 1, position: 'relative' }}>

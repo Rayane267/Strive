@@ -23,7 +23,7 @@ import { supabase } from '../services/supabase';
 import { updateProfile } from '../services/profileService';
 import { useAuth } from '../context/AuthContext';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { getEffectivePlanTier } from '../services/subscriptionService';
+import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
 
 import AvatarView from '../components/AvatarView';
@@ -94,10 +94,10 @@ const InputField = ({
 const AccountInfoScreen = () => {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { user, profile, refreshProfile } = useAuth();
+  // `profile` n'est plus lu ici : PlanBadge le récupère lui-même.
+  const { user, refreshProfile } = useAuth();
   const { isConnected } = useNetworkStatus();
 
-  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -327,12 +327,7 @@ const AccountInfoScreen = () => {
           <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
           <Text style={styles.headerSub}>{t('accountInfo.subtitle', 'Informations personnelles')}</Text>
         </View>
-        <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
-          <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
-            {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
-          </Text>
-        </View>
+        <PlanBadge />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

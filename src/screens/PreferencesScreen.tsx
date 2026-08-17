@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
+import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
@@ -200,12 +201,7 @@ const PreferencesScreen = () => {
           <Text style={styles.headerTitle}>{t('preferences.title', 'Préférences')}</Text>
           <Text style={styles.headerSub}>{t('preferences.subtitle', 'Filtres de trajet')}</Text>
         </View>
-        <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
-          <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
-            {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
-          </Text>
-        </View>
+        <PlanBadge />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

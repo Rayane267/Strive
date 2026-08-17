@@ -19,6 +19,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
+import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -291,10 +292,7 @@ const ProfileScreen = () => {
             ) : null}
 
             {isPlus ? (
-              <View style={styles.tierBadgePlus}>
-                <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
-                <Text style={styles.tierBadgePlusText}>{t('tier.plusBadge')}</Text>
-              </View>
+              <PlanBadge style={styles.tierBadgeSpacing} />
             ) : (
               <TouchableOpacity
                 style={styles.upgradeBtnWrap}
@@ -594,16 +592,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 14,
   },
-  tierBadgePlus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginTop: 4,
-  },
+  tierBadgeSpacing: { marginTop: 4 },
   tierBadgePlusText: {
     color: colors.background,
     fontSize: 11,

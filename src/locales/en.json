@@ -275,7 +275,8 @@
     "liveActivityPermission": {
       "title": "Live Activities",
       "message": "To see scan results in real time, turn on Live Activities in Settings → Strive."
-    }
+    },
+    "home": "Home"
   },
   "shop": {
     "title": "Shop",
@@ -933,11 +934,13 @@
   },
   "tier": {
     "free": "Free",
-    "freeBadge": "FREE",
+    "freeBadge": "Free",
     "plus": "★ Plus",
     "plusBadge": "PLUS",
     "premiumBadge": "PREMIUM",
-    "plusOnly": "Strive Plus only"
+    "plusOnly": "Strive Plus only",
+    "plusName": "Plus",
+    "premiumName": "Premium"
   },
   "countries": {
     "fr": "France",
