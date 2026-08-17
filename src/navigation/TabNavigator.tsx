@@ -10,7 +10,6 @@ import {
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
 import { colors } from '../theme/colors';
@@ -33,11 +32,14 @@ const ProfileScreen = withErrorBoundary(ProfileScreenRaw);
 
 const Tab = createBottomTabNavigator();
 
+// Une seule famille d'icônes, toutes en version pleine. Le profil tirait son
+// glyphe de FontAwesome5, dont la variante par défaut est un contour : à côté de
+// trois icônes pleines, il paraissait décroché.
 const TAB_ICONS: Record<string, (color: string, size: number) => React.ReactNode> = {
-  Dashboard: (c, s) => <MaterialCommunityIcons name="view-dashboard"    size={s} color={c} />,
+  Dashboard: (c, s) => <MaterialCommunityIcons name="home"              size={s} color={c} />,
   History:   (c, s) => <MaterialCommunityIcons name="history"           size={s} color={c} />,
   Analytics: (c, s) => <MaterialCommunityIcons name="google-analytics"  size={s} color={c} />,
-  Profile:   (c, s) => <FontAwesome5           name="user"              size={s - 2} color={c} />,
+  Profile:   (c, s) => <MaterialCommunityIcons name="account"           size={s} color={c} />,
 };
 
 // Vertical padding inside the pill for the sliding indicator

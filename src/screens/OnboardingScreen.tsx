@@ -23,7 +23,6 @@ import {
   TextInput,
   Animated,
   Easing,
-  Dimensions,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,20 +30,21 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react-native';
 import { useNavigation } from '@react-navigation/native';
-import SafeGradient from '../components/SafeGradient';
 import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { deriveThreshold, SOCIAL_RATES, DriverStatus } from '../utils/incomeGoal';
+import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionService';
 
-const { width, height } = Dimensions.get('window');
-
-/** Couleurs de marque des plateformes — identité, pas décoration. */
+// « OTHER » est un choix comme un autre : il n'ouvre aucune saisie. Le scanner
+// n'a pas besoin de connaître le nom de la plateforme pour lire un montant, et
+// demander lequel ferait payer un clavier pour une information inexploitée.
 const PLATFORMS = [
-  { key: 'UBER', label: 'Uber', dot: '#FFFFFF' },
-  { key: 'BOLT', label: 'Bolt', dot: '#34BB78' },
-  { key: 'HEETCH', label: 'Heetch', dot: '#FF3B80' },
+  { key: 'UBER', label: 'Uber' },
+  { key: 'BOLT', label: 'Bolt' },
+  { key: 'HEETCH', label: 'Heetch' },
+  { key: 'OTHER', label: null },
 ] as const;
 
 // Propositions rapides. `null` ouvre une saisie libre : taper une pastille bat
@@ -86,32 +86,49 @@ type Step = typeof STEPS[number];
 
 const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigation = useNavigation<any>();
+  const isPremium = getEffectivePlanTier(profile) !== 'free';
 
   const [index, setIndex] = useState(0);
   const step: Step = STEPS[index];
   const isLast = index === STEPS.length - 1;
 
-  const [platforms, setPlatforms] = useState<string[]>(['UBER']);
-  const [weeklyHours, setWeeklyHours] = useState(50);
-  const [monthlyGoal, setMonthlyGoal] = useState(2500);
-  // Défaut à 700 € plutôt que 0 : partir de « aucune charge » est le cas rare,
-  // et c'est celui qui fausse le plus le seuil vers le bas.
-  const [fixedCosts, setFixedCosts] = useState(700);
-  const [socialRate, setSocialRate] = useState<number>(SOCIAL_RATES.auto_entrepreneur);
+  // Aucune réponse pré-cochée : une valeur par défaut est une réponse que le
+  // chauffeur n'a pas donnée, et elle produit pourtant un seuil de rentabilité
+  // qu'il croira être le sien. `null` = pas encore répondu, et le bouton
+  // « Continuer » reste inactif tant que c'est le cas.
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [weeklyHours, setWeeklyHours] = useState<number | null>(null);
+  const [monthlyGoal, setMonthlyGoal] = useState<number | null>(null);
+  const [fixedCosts, setFixedCosts] = useState<number | null>(null);
+  const [socialRate, setSocialRate] = useState<number | null>(null);
 
   /** Champ en saisie libre, ou null si tout est sur des pastilles. */
   const [editing, setEditing] = useState<Step | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const derived = deriveThreshold({ monthlyGoal, weeklyHours, fixedCosts, socialRate });
+  const derived =
+    monthlyGoal !== null && weeklyHours !== null && fixedCosts !== null && socialRate !== null
+      ? deriveThreshold({ monthlyGoal, weeklyHours, fixedCosts, socialRate })
+      : null;
+
+  /** Une étape n'est franchissable qu'une fois sa question répondue. */
+  const answered: Record<Step, boolean> = {
+    platforms: platforms.length > 0,
+    hours: weeklyHours !== null,
+    goal: monthlyGoal !== null,
+    costs: fixedCosts !== null,
+    status: socialRate !== null,
+    result: true,
+  };
+  const canContinue = answered[step];
 
   /** Statut déduit du taux — « autre » dès que le taux est saisi à la main. */
   const driverStatus: DriverStatus =
     (Object.keys(SOCIAL_RATES) as (keyof typeof SOCIAL_RATES)[])
-      .find(k => SOCIAL_RATES[k] === socialRate) ?? 'autre';
+      .find(k => socialRate !== null && SOCIAL_RATES[k] === socialRate) ?? 'autre';
 
   // ── Transition entre questions ────────────────────────────────────────────
   // Un seul moment animé : le contenu sort et rentre avec un léger décalage
@@ -170,9 +187,13 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   // ── Saisie libre ──────────────────────────────────────────────────────────
 
-  const openDraft = (current: number, isPercent: boolean) => {
+  const openDraft = (current: number | null, isPercent: boolean) => {
     hapticLight();
-    setDraft(isPercent ? String(Math.round(current * 100)) : String(current));
+    // Champ vide quand rien n'a encore été répondu : pré-remplir reviendrait à
+    // proposer une réponse, ce que « Autre » est justement censé éviter.
+    setDraft(
+      current === null ? '' : isPercent ? String(Math.round(current * 100)) : String(current),
+    );
     setEditing(step);
   };
 
@@ -196,8 +217,8 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     choices, value, onPick, unit, zeroLabel, labelFor, subFor, isPercent,
   }: {
     choices: (number | null)[];
-    value: number;
-    onPick: (v: number) => void;
+    value: number | null;
+    onPick: (v: number | null) => void;
     unit?: string;
     zeroLabel?: string;
     labelFor?: (v: number) => string;
@@ -211,7 +232,10 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         <View style={styles.optionList}>
           {choices.map((c, i) => {
             const isOther = c === null;
-            const active = isOther ? !onAnOption : c === value;
+            // « Autre » ne s'allume qu'une fois une valeur saisie : tant que rien
+            // n'est répondu, `value` vaut null et aucune carte ne doit paraître
+            // choisie.
+            const active = isOther ? value !== null && !onAnOption : c === value;
             return (
               <TouchableOpacity
                 key={i}
@@ -220,8 +244,16 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 onPress={() => {
-                  if (isOther) { openDraft(value, !!isPercent); return; }
                   hapticLight();
+                  // Retaper la carte déjà choisie annule la réponse et regrise
+                  // « Continuer » : on ne peut pas se retrouver coincé avec une
+                  // réponse tapée par erreur.
+                  if (active) {
+                    setEditing(null);
+                    onPick(null);
+                    return;
+                  }
+                  if (isOther) { openDraft(value, !!isPercent); return; }
                   setEditing(null);
                   onPick(c as number);
                 }}
@@ -272,36 +304,31 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     switch (step) {
       case 'platforms':
         return (
-          <View style={styles.platformList}>
+          <View style={styles.optionList}>
             {PLATFORMS.map(p => {
               const active = platforms.includes(p.key);
               return (
                 <TouchableOpacity
                   key={p.key}
-                  style={[styles.platformRow, active && styles.platformRowActive]}
+                  style={[styles.option, active && styles.optionActive]}
                   activeOpacity={0.85}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: active }}
                   onPress={() => {
                     hapticLight();
-                    // Au moins une plateforme : décocher la dernière n'a pas de sens,
-                    // le scanner doit savoir quoi reconnaître.
+                    // Toute plateforme peut être décochée, y compris la dernière :
+                    // « Continuer » se grise alors, ce qui dit mieux qu'un clic
+                    // sans effet qu'il faut au moins un choix.
                     setPlatforms(prev =>
                       prev.includes(p.key)
-                        ? (prev.length > 1 ? prev.filter(k => k !== p.key) : prev)
+                        ? prev.filter(k => k !== p.key)
                         : [...prev, p.key],
                     );
                   }}
                 >
-                  <View style={[styles.platformDot, { backgroundColor: p.dot }]} />
-                  <Text style={[styles.platformLabel, active && styles.platformLabelActive]}>
-                    {p.label}
+                  <Text style={[styles.optionTxt, active && styles.optionTxtActive]}>
+                    {p.label ?? t('onboarding.other')}
                   </Text>
-                  <Feather
-                    name={active ? 'check-circle' : 'circle'}
-                    size={20}
-                    color={active ? colors.primary : 'rgba(255,255,255,0.18)'}
-                  />
                 </TouchableOpacity>
               );
             })}
@@ -329,12 +356,6 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             onPick={setFixedCosts}
             zeroLabel={t('onboarding.costs.none')}
             labelFor={v => (v === 0 ? t('onboarding.costs.none') : formatEuros(v))}
-            subFor={v =>
-              v === 0 ? t('onboarding.costs.subOwned')
-              : v === 400 ? t('onboarding.costs.subCredit')
-              : v === 700 ? t('onboarding.costs.subLease')
-              : v === 1000 ? t('onboarding.costs.subWeekly')
-              : t('onboarding.costs.subRental')}
           />
         );
 
@@ -355,11 +376,40 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
       case 'result':
         return derived ? (
           <View style={styles.resultCard}>
-            <Text style={styles.resultLabel}>{t('onboarding.result.label')}</Text>
-            <Text style={styles.resultValue} numberOfLines={1} adjustsFontSizeToFit>
-              {derived.hourly.toFixed(0)} €/h
-            </Text>
-            <Text style={styles.resultKm}>{t('onboarding.result.orKm', { km: derived.km.toFixed(2) })}</Text>
+            {/* Le chiffre reste masqué en gratuit : c'est la contrepartie de
+                l'abonnement, et il ne servirait à rien de le donner ici puisque
+                le palier gratuit applique de toute façon FREE_THRESHOLDS. Les
+                trois statistiques dessous, elles, viennent des réponses du
+                chauffeur et rendent le calcul crédible sans le livrer. */}
+            {isPremium ? (
+              <>
+                <Text style={styles.resultLabel}>{t('onboarding.result.label')}</Text>
+                <Text style={styles.resultValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {derived.hourly.toFixed(0)} €/h
+                </Text>
+                <Text style={styles.resultKm}>
+                  {t('onboarding.result.orKm', { km: derived.km.toFixed(2) })}
+                </Text>
+              </>
+            ) : (
+              <>
+                {/* Les deux seuils l'un au-dessus de l'autre : c'est l'écart qui
+                    argumente, pas une phrase de vente. Le chiffre du haut est
+                    bien celui qui s'applique au compte gratuit. */}
+                <Text style={styles.tierLabel}>{t('onboarding.result.currentLabel')}</Text>
+                <Text style={styles.tierCurrent}>{FREE_THRESHOLDS.hourly} €/h</Text>
+                <Text style={styles.tierSub}>{t('onboarding.result.currentSub')}</Text>
+
+                <View style={styles.resultDivider} />
+
+                <Text style={styles.tierLabel}>{t('onboarding.result.optimizedLabel')}</Text>
+                <View style={styles.lockedRow}>
+                  <Text style={styles.resultValue}>••</Text>
+                  <Text style={styles.lockedUnit}>€/h</Text>
+                  <Feather name="lock" size={22} color={colors.primary} />
+                </View>
+              </>
+            )}
 
             <View style={styles.resultDivider} />
 
@@ -378,58 +428,69 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
               </View>
               <View style={styles.statSep} />
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatEuros(monthlyGoal)}</Text>
+                <Text style={styles.statValue}>{formatEuros(monthlyGoal ?? 0)}</Text>
                 <Text style={styles.statLabel}>{t('onboarding.result.statNet')}</Text>
               </View>
             </View>
 
             <View style={styles.resultDivider} />
 
-            <Text style={styles.resultNote}>
-              {derived.flooredByProfitability
-                ? t('onboarding.result.floored')
-                : t('onboarding.result.fromGoal')}
-            </Text>
+            {isPremium ? (
+              <Text style={styles.resultNote}>
+                {derived.flooredByProfitability
+                  ? t('onboarding.result.floored')
+                  : t('onboarding.result.fromGoal')}
+              </Text>
+            ) : null}
           </View>
         ) : null;
     }
   };
 
+  /**
+   * Le seuil qui vient d'être calculé n'est appliqué qu'aux offres des abonnés :
+   * en gratuit, `DashboardScreen` force FREE_THRESHOLDS pour tout le monde. On le
+   * dit ici, au seul moment où le chauffeur a son propre chiffre sous les yeux et
+   * peut mesurer l'écart. Rien à afficher s'il est déjà abonné.
+   */
+  const renderPlusPitch = () => {
+    if (step !== 'result' || !derived || isPremium) return null;
+    return (
+      <View style={styles.plusCard}>
+        <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
+        <Text style={styles.plusBody}>
+          {t('onboarding.result.plusBody', { free: FREE_THRESHOLDS.hourly })}
+        </Text>
+      </View>
+    );
+  };
+
   const title = t(`onboarding.${step}.title`);
-  const desc = t(`onboarding.${step}.desc`);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.glow} pointerEvents="none" />
-
-      {/* Chrome identique au tutoriel : progression à gauche, sortie à droite. */}
+      {/* Chevron de retour puis barre de progression pleine largeur. Pas de
+          sortie : les cinq réponses produisent le seuil de rentabilité, et sans
+          elles le reste de l'app n'a rien à calculer. */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => go(index - 1)}
-          disabled={index === 0}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Retour')}
-        >
-          <Feather
-            name="arrow-left"
-            size={22}
-            color={index === 0 ? 'transparent' : colors.textMuted}
-          />
-        </TouchableOpacity>
+        {/* Rendu conditionnel plutôt qu'une couleur transparente : le glyphe
+            restait dessiné et se voyait sur le fond sombre. */}
+        {index === 0 ? (
+          <View style={styles.backSpacer} />
+        ) : (
+          <TouchableOpacity
+            onPress={() => go(index - 1)}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back', 'Retour')}
+          >
+            <Feather name="chevron-left" size={26} color={colors.primary} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${((index + 1) / STEPS.length) * 100}%` }]} />
         </View>
-
-        <TouchableOpacity
-          onPress={finish}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel={t('onboarding.skip')}
-        >
-          <Text style={styles.skipTxt}>{t('onboarding.skip')}</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -438,48 +499,35 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         keyboardShouldPersistTaps="handled"
       >
         <Animated.View
-          style={{
-            width: '100%',
-            alignItems: 'center',
-            opacity: anim,
-            transform: [{
-              translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }),
-            }],
-          }}
+          style={[
+            styles.stepWrap,
+            {
+              opacity: anim,
+              transform: [{
+                translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }),
+              }],
+            },
+          ]}
         >
           <Text style={styles.title}>{title}</Text>
-          {desc ? <Text style={styles.desc}>{desc}</Text> : null}
           <View style={styles.stepContent}>{renderStep()}</View>
+          {renderPlusPitch()}
         </Animated.View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <Text style={styles.counter}>
-          {t('onboarding.counter', { current: index + 1, total: STEPS.length })}
-        </Text>
         <TouchableOpacity
-          style={styles.cta}
+          style={[styles.cta, !canContinue && styles.ctaDisabled]}
           onPress={onPrimary}
           activeOpacity={0.88}
-          disabled={saving}
+          disabled={saving || !canContinue}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !canContinue }}
           accessibilityLabel={isLast ? t('onboarding.start') : t('onboarding.next')}
         >
-          <SafeGradient
-            colors={isLast ? [colors.primary, '#00C864'] : [colors.surface, colors.surfaceLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.ctaInner}
-          >
-            <Text style={[styles.ctaTxt, isLast && styles.ctaTxtLast]}>
-              {isLast ? t('onboarding.start') : t('onboarding.next')}
-            </Text>
-            <Feather
-              name="arrow-right"
-              size={19}
-              color={isLast ? colors.background : colors.textMain}
-            />
-          </SafeGradient>
+          <Text style={[styles.ctaTxt, !canContinue && styles.ctaTxtDisabled]}>
+            {isLast ? t('onboarding.start') : t('onboarding.next')}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -489,42 +537,38 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
-  // Halo discret, même vocabulaire que le tutoriel.
-  glow: {
-    position: 'absolute',
-    width: width * 0.9,
-    height: width * 0.9,
-    borderRadius: width * 0.45,
-    top: -height * 0.06,
-    alignSelf: 'center',
-    backgroundColor: colors.primary + '09',
-  },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 14,
   },
+  backSpacer: { width: 26 },
+  // Barre épaisse et pleinement arrondie, qui court sur toute la largeur restante :
+  // c'est elle qui porte la notion d'avancement, d'où la disparition du compteur
+  // « Étape n sur 6 » qui disait deux fois la même chose.
   progressTrack: {
     flex: 1,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 2,
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 2 },
-  skipTxt: { color: colors.textMuted, fontSize: 14, fontWeight: '600', letterSpacing: 0.3 },
+  progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
 
   body: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingVertical: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
   },
+  // Le titre est ancré en haut — il tombe au même endroit d'une question à
+  // l'autre — et les réponses se centrent dans la hauteur qui reste. Les caler
+  // en haut elles aussi laissait un grand vide sous les questions à trois
+  // réponses, et un écran plein sous celles à six.
+  stepWrap: { flex: 1, width: '100%' },
 
   // Plus d'air au-dessus du titre qu'en dessous : le regard entre par lui.
   title: {
@@ -536,14 +580,7 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     marginBottom: 12,
   },
-  desc: {
-    color: colors.textMuted,
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 23,
-    maxWidth: 320,
-  },
-  stepContent: { width: '100%', marginTop: 34 },
+  stepContent: { width: '100%', flex: 1, justifyContent: 'center' },
 
   // ── Cartes de réponse ──────────────────────────────────────────────────────
   optionList: { gap: 10 },
@@ -593,28 +630,6 @@ const styles = StyleSheet.create({
   draftUnit: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
 
   // ── Plateformes ────────────────────────────────────────────────────────────
-  // Même gabarit que les cartes de réponse pour que les six étapes se suivent
-  // sans rupture. L'état actif reste en teinte légère et non en aplat plein :
-  // le choix est multiple ici, et trois lignes vertes d'affilée écraseraient
-  // tout le reste de l'écran.
-  platformList: { gap: 10 },
-  platformRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    minHeight: 64,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-  },
-  platformRowActive: { backgroundColor: colors.primary + '14', borderColor: colors.primary + '5A' },
-  platformDot: { width: 10, height: 10, borderRadius: 5 },
-  platformLabel: { flex: 1, color: colors.textMuted, fontSize: 17, fontWeight: '700' },
-  platformLabelActive: { color: colors.textMain },
-
   // ── Carte de résultat ──────────────────────────────────────────────────────
   resultCard: {
     alignItems: 'center',
@@ -640,6 +655,23 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   resultKm: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  tierLabel: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  tierCurrent: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1,
+    marginTop: 4,
+  },
+  tierSub: { color: colors.textDimmed, fontSize: 12.5, marginTop: 2 },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  lockedUnit: { color: colors.primary, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   resultDivider: {
     width: 44,
     height: 1,
@@ -674,30 +706,37 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  footer: { paddingHorizontal: 24, paddingBottom: 18, gap: 14, alignItems: 'center' },
-  counter: { color: colors.textDimmed, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
+  plusCard: {
+    marginTop: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: colors.primary + '3A',
+  },
+  plusTitle: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+  plusBody: { color: colors.textMuted, fontSize: 13.5, lineHeight: 20, marginTop: 6 },
+
+  footer: { paddingHorizontal: 24, paddingBottom: 24 },
+  // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
+  // se lisait comme un bouton désactivé alors qu'il était bien actif.
   cta: {
     width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  ctaInner: {
-    flexDirection: 'row',
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 58,
-    gap: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.primary,
   },
-  ctaTxt: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-  ctaTxtLast: { color: colors.background },
+  ctaDisabled: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  ctaTxt: {
+    color: colors.background,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  ctaTxtDisabled: { color: colors.textDimmed },
 });
 
 export default OnboardingScreen;

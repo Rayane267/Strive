@@ -270,7 +270,13 @@
       "Bash(npx prettier *)",
       "WebFetch(domain:striveapp.fr)",
       "Read(//c/Users/dandu/Desktop/**)",
-      "Read(//d//**)"
+      "Read(//d//**)",
+      "Bash(emulator *)",
+      "Bash(./gradlew assembleDebug -q --console=plain)",
+      "Bash(adb wait-for-device *)",
+      "Bash(adb install *)",
+      "Bash(adb reverse *)",
+      "Bash(rm -f *.png)"
     ]
   },
   "enableAllProjectMcpServers": true,

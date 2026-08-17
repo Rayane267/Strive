@@ -97,3 +97,6 @@ yarn-error.log
 
 # Artefacts locaux de la CLI Supabase (ref projet, version)
 supabase/.temp/
+
+# Harnais local de capture d écran (non versionné)
+preview.tsx
