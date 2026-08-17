@@ -4,6 +4,7 @@ import {
   View,
   Text,
   Image,
+  TouchableOpacity,
   StatusBar,
   Platform,
   Linking,
@@ -12,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Toast, useToast } from '../components/Toast';
 import BrandLoader from '../components/BrandLoader';
 import { supabase } from '../services/supabase';
-import { GoogleSignin, GoogleSigninButton } from '@react-native-google-signin/google-signin';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { sha256 } from 'js-sha256';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
@@ -20,15 +21,8 @@ import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
 import { enforceOAuthSignupQuota, registerOAuthSignup, enforceSignupQuota } from '../utils/deviceId';
 
 let appleAuth: any = null;
-let AppleButton: any = null;
 if (Platform.OS === 'ios') {
-  const appleAuthModule = require('@invertase/react-native-apple-authentication');
-  appleAuth = appleAuthModule.default;
-  // Bouton natif ASAuthorizationAppleIDButton : Apple impose ses propres
-  // ressources pour « Sign in with Apple » (HIG), un logo redessiné ou repris
-  // d'une police d'icônes est un motif de rejet. Bonus : il se localise seul
-  // selon la langue du téléphone, donc pas de clé i18n pour son libellé.
-  AppleButton = appleAuthModule.AppleButton;
+  appleAuth = require('@invertase/react-native-apple-authentication').default;
 }
 
 GoogleSignin.configure({
@@ -187,28 +181,45 @@ const AuthScreen = () => {
           </View>
         ) : (
           <>
-            {/* Google — iOS + Android. Bouton natif fourni par le SDK : il porte
-                le logo « G » quadricolore officiel, seule marque autorisée par
-                les règles d'identité de Google. */}
-            <GoogleSigninButton
+            {/* Boutons dessinés par nous mais portant les marques officielles,
+                reprises telles quelles des kits Apple et Google (src/assets/icons).
+                Un logo redessiné ou emprunté à une police d'icônes est un motif
+                de rejet côté Apple et une violation des règles d'identité côté
+                Google. La pilule Google est calée sur #F2F2F2, la couleur que
+                Google impose à sa variante claire, si bien que le fond de la
+                tuile s'y fond sans raccord visible. */}
+            <TouchableOpacity
               style={styles.btnGoogle}
-              size={GoogleSigninButton.Size.Wide}
-              color={GoogleSigninButton.Color.Dark}
               onPress={handleGoogleLogin}
+              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={t('auth.continueGoogle')}
-            />
+            >
+              <Image
+                source={require('../assets/icons/google-icon-120.png')}
+                style={styles.brandIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.btnGoogleText}>{t('auth.continueGoogle')}</Text>
+            </TouchableOpacity>
 
             {/* Apple — iOS uniquement : le SDK n'existe pas sur Android, afficher
                 le bouton y mènerait à un bouton mort. */}
-            {Platform.OS === 'ios' && AppleButton && (
-              <AppleButton
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
                 style={styles.btnApple}
-                buttonStyle={AppleButton.Style.WHITE}
-                buttonType={AppleButton.Type.CONTINUE}
-                cornerRadius={29}
                 onPress={handleAppleLogin}
-              />
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('auth.continueApple')}
+              >
+                <Image
+                  source={require('../assets/icons/apple/png/apple-Logo-only_-_White@3x.png')}
+                  style={styles.appleIcon}
+                  resizeMode="contain"
+                />
+                <Text style={styles.btnAppleText}>{t('auth.continueApple')}</Text>
+              </TouchableOpacity>
             )}
           </>
         )}
@@ -268,14 +279,37 @@ const styles = StyleSheet.create({
   loadingWrap: { alignItems: 'center', paddingVertical: 24, gap: 12 },
   loadingText: { color: colors.textMuted, fontSize: 14 },
 
-  // Les deux boutons sont des vues natives fournies par les SDK : on ne pilote
-  // que leur gabarit (hauteur 58, au-dessus des 44 pt de cible tactile minimale
-  // et confortable pour un pouce en conduite). Couleurs, logo et typo sont
-  // imposés par Apple et Google et ne doivent pas être surchargés.
-  btnGoogle: { width: '100%', height: 58 },
-  // Apple en blanc : le noir se fondait dans le fond #0A120E. Le blanc est
-  // maintenant libre puisque Google occupe la variante sombre.
-  btnApple: { width: '100%', height: 58 },
+  // Deux pilules de gabarit identique : hauteur 58 (au-dessus des 44 pt de cible
+  // tactile minimale, confortable pour un pouce) et rayon plein.
+  btnGoogle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 58,
+    borderRadius: 29,
+    // Couleur imposée par les règles d'identité de Google pour la variante claire.
+    backgroundColor: '#F2F2F2',
+  },
+  // Texte gris très sombre, également prescrit par Google — pas du noir pur.
+  btnGoogleText: { color: '#1F1F1F', fontSize: 16, fontWeight: '700' },
+  btnApple: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    // #000 sur un fond #0A120E : sans bordure lisible, le bouton se fond dans la
+    // page et on ne voit plus que son texte. Le blanc étant déjà pris par Google,
+    // on garde le noir (autorisé par les règles Apple) et on dessine le contour.
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  btnAppleText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  brandIcon: { width: 22, height: 22 },
+  appleIcon: { width: 18, height: 22 },
 
   footer: {
     color: colors.textDimmed,

@@ -276,7 +276,9 @@
       "Bash(adb wait-for-device *)",
       "Bash(adb install *)",
       "Bash(adb reverse *)",
-      "Bash(rm -f *.png)"
+      "Bash(rm -f *.png)",
+      "Bash(npm i *)",
+      "Bash(C:/Users/dandu/AppData/Local/Temp/claude/D--STRIVEIOSVERSION-strive/e1ff38b8-6a21-40bd-afbc-2888c1f8a9df/scratchpad/node_modules/ffmpeg-static/ffmpeg.exe -i 'D:/STRIVEPAPIER/ScreenRecording_08-17-2026 21-27-24_1.mov' -vf fps=1,scale=380:-1 -q:v 6 C:/Users/dandu/AppData/Local/Temp/claude/D--STRIVEIOSVERSION-strive/e1ff38b8-6a21-40bd-afbc-2888c1f8a9df/scratchpad/frames/f%02d.jpg -y)"
     ]
   },
   "enableAllProjectMcpServers": true,

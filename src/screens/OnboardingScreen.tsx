@@ -140,12 +140,17 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     if (next < 0 || next >= STEPS.length) return;
     hapticLight();
     setEditing(null);
+    // La question répondue s'efface en reculant — fondu plus léger recul en
+    // échelle, ce qui la fait lire comme « emportée » plutôt que simplement
+    // masquée — puis la suivante revient de l'avant. Sortie brève et entrée
+    // deux fois plus longue : c'est le déséquilibre qui donne la sensation de
+    // réponse au doigt.
     Animated.timing(anim, {
-      toValue: 0, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      toValue: 0, duration: 160, easing: Easing.in(Easing.quad), useNativeDriver: true,
     }).start(() => {
       setIndex(next);
       Animated.timing(anim, {
-        toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       }).start();
     });
   };
@@ -503,9 +508,14 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             styles.stepWrap,
             {
               opacity: anim,
-              transform: [{
-                translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }),
-              }],
+              // Fondu pur, sans translation : la question répondue s'estompe sur
+              // place et la suivante se pose au même endroit. Le léger recul en
+              // échelle suffit à donner de la profondeur au passage — un
+              // déplacement vertical ferait lire l'arrivée comme une liste qui
+              // remonte, ce qui n'est pas le propos.
+              transform: [
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+              ],
             },
           ]}
         >
