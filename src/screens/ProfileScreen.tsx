@@ -11,6 +11,7 @@ import {
   Linking,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -287,9 +288,16 @@ const ProfileScreen = () => {
             ) : null}
 
             {isPlus ? (
+              // Le logo à la place de la couronne : la couronne est un symbole
+              // générique de « premium » qu'on trouve dans n'importe quelle app.
+              // La marque, elle, n'appartient qu'à Strive — et la pastille
+              // devient alors identique à celle du haut du Dashboard.
               <View style={styles.tierBadgePlus}>
-                <MaterialCommunityIcons name="crown" size={12} color={colors.textMain} />
-                <Text style={styles.tierBadgePlusText}>{t('tier.plusBadge')}</Text>
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.tierBadgeLogo}
+                />
+                <Text style={styles.tierBadgePlusText}>{t('tier.plusName', 'Plus')}</Text>
               </View>
             ) : (
               <TouchableOpacity
@@ -567,21 +575,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 18,
   },
+  // Même pastille que celle du Dashboard : fond clair, logo puis libellé en
+  // casse normale. Le vert plein était réservé aux actions ; un statut ne se
+  // tape pas, il s'affiche.
   tierBadgePlus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    gap: 8,
+    backgroundColor: colors.background,
+    paddingLeft: 6,
+    paddingRight: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
     marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
+  tierBadgeLogo: { width: 26, height: 26, borderRadius: 13 },
   tierBadgePlusText: {
     color: colors.textMain,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   upgradeBtnWrap: {
     marginTop: 8,
