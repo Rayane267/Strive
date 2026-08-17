@@ -309,11 +309,6 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 29,
     backgroundColor: '#000000',
-    borderWidth: 1,
-    // #000 sur un fond #0A120E : sans bordure lisible, le bouton se fond dans la
-    // page et on ne voit plus que son texte. Le blanc étant déjà pris par Google,
-    // on garde le noir (autorisé par les règles Apple) et on dessine le contour.
-    borderColor: 'rgba(255,255,255,0.22)',
   },
   btnAppleText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   brandIcon: { width: 22, height: 22 },
