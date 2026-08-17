@@ -1659,13 +1659,13 @@ const DashboardScreen = () => {
           ))
         ) : !isOnline ? (
           <View style={styles.waitingContainer}>
-            <MaterialCommunityIcons name="power-standby" size={36} color="rgba(255,255,255,0.15)" />
+            <MaterialCommunityIcons name="power-standby" size={36} color={colors.textMuted} />
             <Text style={styles.waitingTitle}>{t('dashboard.offlineHint', 'Passez en ligne pour scanner')}</Text>
             <Text style={styles.waitingSubtitle}>{t('dashboard.offlineHintSub', 'Le scanner fonctionne uniquement quand vous êtes en ligne.')}</Text>
           </View>
         ) : (
           <View style={styles.waitingContainer}>
-            <MaterialCommunityIcons name="radar" size={32} color="rgba(0,230,118,0.3)" />
+            <MaterialCommunityIcons name="radar" size={36} color={colors.primaryInk} />
             <Text style={styles.waitingTitle}>{t('dashboard.waiting')}</Text>
           </View>
         )}
@@ -1986,9 +1986,25 @@ const styles = StyleSheet.create({
   upgradeCardPerkDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
 
   // WAITING
-  waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 10 },
-  waitingTitle: { color: colors.textDimmed, fontSize: 14 },
-  waitingSubtitle: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', maxWidth: 260, lineHeight: 18, opacity: 0.7 },
+  // L'état vide est posé dans une carte plutôt que flotté sur le fond : sans
+  // contenant, il laissait un trou de deux tiers d'écran qui se lisait comme un
+  // écran cassé. Dans une carte, l'absence de course devient un état affiché.
+  waitingContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  waitingTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  waitingSubtitle: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 20,
+  },
 
 
 
