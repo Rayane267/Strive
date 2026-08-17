@@ -25,6 +25,13 @@ export const colors = {
   // ferait basculer vers du texte blanc, et primary rejoindrait primaryInk :
   // la distinction entre le fond et l'avant-plan disparaîtrait.
   primary: '#00B159',
+
+  // Vert vif, réservé à l'action prioritaire d'un écran — une seule par écran.
+  // C'est le « Brand Action » du document. Sa vivacité ne vaut que par sa
+  // rareté : posé partout, il cesserait de désigner quoi que ce soit et
+  // ramènerait le problème que `primary` vient de régler.
+  // 12,2:1 avec le texte sombre, donc lisible sans réserve.
+  accent: '#13EC80',
   // Vert d'avant-plan : dès que le vert devient du texte ou une icône.
   // #13EC80 sur blanc plafonne à 1,6:1, très en dessous des 4,5:1 exigés pour du
   // texte et des 3:1 pour une icône. #006D37 donne 5,6:1 et reste lisible en plein

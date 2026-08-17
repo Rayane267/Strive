@@ -1947,9 +1947,11 @@ const styles = StyleSheet.create({
   onlineDotOff: { backgroundColor: colors.textMuted },
   onlineLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   onlineLabelOn: { color: colors.textMain },
+  // Passer en ligne est l'action prioritaire de l'écran — et la seule : elle
+  // porte donc le vert vif, que rien d'autre n'utilise ici.
   toggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingVertical: 11, paddingHorizontal: 20, borderRadius: 50,
   },
   // Hors ligne, le bouton appelle à l'action et reste en vert plein. En ligne,

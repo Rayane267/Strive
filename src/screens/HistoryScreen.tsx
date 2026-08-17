@@ -695,13 +695,10 @@ const HistoryScreen = () => {
         </View>
       )}
 
-      {/* ── HERO CARD ── */}
-      <SafeGradient
-        colors={['#0F2D1F', '#0A150E']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.heroCard}
-      >
+      {/* Le dégradé sombre a disparu : sur le thème clair, le montant s'y
+          affichait en texte sombre sur fond sombre et devenait illisible. La
+          carte reprend l'aplat gris des autres conteneurs. */}
+      <View style={styles.heroCard}>
         <View style={styles.heroContent}>
           <View style={styles.heroMain}>
             <View style={styles.heroLeft}>
@@ -774,7 +771,7 @@ const HistoryScreen = () => {
             </View>
           </View>
         </View>
-      </SafeGradient>
+      </View>
 
       {/* ── FILTER TABS ── */}
       <View style={styles.filterRow}>
@@ -1043,7 +1040,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.outline,
   },
   dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dateBtnIcon: {
@@ -1099,10 +1096,8 @@ const styles = StyleSheet.create({
   heroCard: {
     borderRadius: 24,
     marginBottom: 18,
-    borderWidth: 1,
-    borderColor: colors.primary + '33',
     overflow: 'hidden',
-    backgroundColor: '#0A150E',
+    backgroundColor: colors.surface,
   },
   heroContent: {
     padding: 20,
@@ -1147,7 +1142,7 @@ const styles = StyleSheet.create({
   acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
   heroSep: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.outline,
     marginBottom: 16,
   },
   heroStats: { flexDirection: 'row' },
@@ -1163,7 +1158,7 @@ const styles = StyleSheet.create({
   },
   heroStatDiv: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.outline,
     marginVertical: 4,
   },
 
@@ -1179,11 +1174,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.outline,
   },
   filterTabActive: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.surface,
+    borderColor: colors.outline,
   },
   filterTabActiveAccepted: {
     backgroundColor: colors.primary + '1A',
@@ -1206,7 +1201,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.outline,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -1244,14 +1239,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 11,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopColor: colors.outline,
   },
   rateValue: { flex: 1, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
   rateUnit: { fontSize: 12, fontWeight: '700', letterSpacing: 0 },
   rateDivider: {
     width: 1,
     height: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
     marginRight: 14,
   },
 
@@ -1262,7 +1257,7 @@ const styles = StyleSheet.create({
     marginTop: 11,
     paddingTop: 11,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopColor: colors.outline,
   },
   routeRail: { alignItems: 'center', paddingTop: 5, paddingLeft: 1 },
   routeDot: { width: 7, height: 7, borderRadius: 4 },
@@ -1270,7 +1265,7 @@ const styles = StyleSheet.create({
     width: 1,
     flex: 1,
     minHeight: 11,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
     marginVertical: 2,
   },
   routeEnd: {
@@ -1310,7 +1305,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: colors.surface,
   },
   scoreValue: {
     fontSize: 22,
@@ -1362,7 +1357,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.outline,
   },
   skeletonRowText: { flex: 1, gap: 8 },
 
@@ -1412,7 +1407,7 @@ const styles = StyleSheet.create({
     padding: 18,
     width: '100%',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.outline,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
@@ -1431,7 +1426,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1444,10 +1439,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 9,
     paddingHorizontal: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.outline,
     alignItems: 'center',
   },
   presetChipText: {
@@ -1499,9 +1494,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.outline,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1515,9 +1510,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.outline,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1534,9 +1529,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     marginBottom: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.outline,
   },
   monthCellActive: {
     backgroundColor: colors.primary,

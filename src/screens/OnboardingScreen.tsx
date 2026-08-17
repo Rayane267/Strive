@@ -748,15 +748,17 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
   // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
   // se lisait comme un bouton désactivé alors qu'il était bien actif.
+  // « Continuer » est la seule action de l'écran : vert vif.
   cta: {
     width: '100%',
     height: 62,
     borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
-  ctaDisabled: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  // L'état inactif était un voile blanc translucide, invisible sur fond clair.
+  ctaDisabled: { backgroundColor: colors.outline },
   ctaTxt: {
     color: colors.textMain,
     fontSize: 17,
