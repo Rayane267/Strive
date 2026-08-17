@@ -296,8 +296,12 @@ const styles = StyleSheet.create({
     gap: 10,
     height: 58,
     borderRadius: 29,
-    // Couleur imposée par les règles d'identité de Google pour la variante claire.
-    backgroundColor: '#F2F2F2',
+    // Blanc cerné d'un filet gris — l'autre variante claire autorisée par les
+    // règles d'identité de Google. Le logo a été détouré pour l'occasion : sa
+    // plaque #F2F2F2 se serait vue comme un carré gris sur du blanc.
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
   },
   // Texte gris très sombre, également prescrit par Google — pas du noir pur.
   btnGoogleText: { color: '#1F1F1F', fontSize: 16, fontWeight: '700' },

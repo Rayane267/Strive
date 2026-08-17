@@ -483,12 +483,8 @@ const styles = StyleSheet.create({
     marginLeft: -10,
     width: 44,
     height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   headerCenter: { flex: 1, marginHorizontal: 14 },
   headerTitle: {

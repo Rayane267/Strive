@@ -233,11 +233,11 @@ const ProfileScreen = () => {
             <Text style={[styles.menuTitle, item.accent && { color: colors.textMain }]} numberOfLines={1}>
               {item.title}
             </Text>
-            {item.sub ? (
-              <Text style={[styles.menuSub, item.accent && { color: colors.primary }]} numberOfLines={1}>
-                {item.sub}
-              </Text>
-            ) : null}
+            {/* Sous-titres retirés : ils paraphrasaient l'intitulé de la ligne
+                (« Préférences » / « Paramètres d'acceptation des courses ») et
+                doublaient la hauteur de chaque entrée pour rien. Le champ `sub`
+                reste dans le type, les libellés existent toujours en traduction
+                — seul l'affichage est supprimé. */}
           </View>
           {item.plusLocked && <PlusBadge style={styles.menuPlusBadge} />}
           {item.badge ? (
@@ -655,8 +655,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 20,
     paddingHorizontal: 20,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    // Mêmes fond, rayon et bordure que les groupes de menu : la carte était en
+    // blanc translucide, donc d'un gris légèrement différent de tout ce qui
+    // l'entoure — l'écart se voyait sans rien signifier.
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
     marginBottom: 22,
   },
   earnTexts: { flex: 1 },

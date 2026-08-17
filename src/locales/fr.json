@@ -74,7 +74,7 @@
     "title": "Mon Profil",
     "subtitle": "Paramètres & Préférences",
     "general": "GÉNÉRAL",
-    "account": "Informations du compte",
+    "account": "Modifier le profil",
     "accountSub": "Email, Téléphone, Permis",
     "car": "Paramètres du véhicule",
     "carSub": "Détails du véhicule, Carburant",
@@ -767,7 +767,8 @@
     "errors": {
       "emailInvalid": "Email invalide",
       "phoneInvalid": "Numéro de téléphone invalide"
-    }
+    },
+    "title": "Profil"
   },
   "subscription": {
     "label": "STRIVE PLUS",

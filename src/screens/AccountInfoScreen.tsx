@@ -283,7 +283,7 @@ const AccountInfoScreen = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Feather name="chevron-left" size={30} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{t('profile.account', 'Mon profil')}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{t('accountInfo.title', 'Profil')}</Text>
           <View style={styles.planBadge}>
             <Skeleton width={40} height={12} radius={6} />
           </View>
@@ -320,7 +320,7 @@ const AccountInfoScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{t('profile.account', 'Mon profil')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{t('accountInfo.title', 'Profil')}</Text>
         <PlanBadge />
       </View>
 
@@ -447,12 +447,8 @@ const styles = StyleSheet.create({
     marginLeft: -10,
     width: 44,
     height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   headerCenter: { flex: 1, marginHorizontal: 14 },
   headerTitle: {

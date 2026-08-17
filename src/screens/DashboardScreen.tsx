@@ -1470,11 +1470,15 @@ const DashboardScreen = () => {
             {
               backgroundColor: onlineTint.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['#111E18', '#0D1F17'],
+                // Même gris que les autres conteneurs au repos, teinté de vert
+                // une fois en ligne. Les deux verts sombres précédents faisaient
+                // de cette barre la seule surface d'une nuance différente sur
+                // l'écran, sans que cet écart signifie quoi que ce soit.
+                outputRange: [colors.surface, '#153427'],
               }),
               borderColor: onlineTint.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['rgba(0,230,118,0.15)', 'rgba(0,230,118,0.4)'],
+                outputRange: ['rgba(255,255,255,0.05)', 'rgba(0,230,118,0.4)'],
               }),
             },
           ]}
@@ -1561,7 +1565,9 @@ const DashboardScreen = () => {
           </View>
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{stats.avgRate}€/h</Text>
+            {/* En blanc comme les deux autres : le vert distinguait ce chiffre
+                sans raison, alors que les trois disent la même journée. */}
+            <Text style={styles.statValue}>{stats.avgRate}€/h</Text>
             <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
           </View>
           <View
@@ -1917,10 +1923,10 @@ const styles = StyleSheet.create({
   // ONLINE PILL
   onlinePill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#111E18',
+    backgroundColor: colors.surface,
     borderRadius: 50, paddingVertical: 8, paddingLeft: 18, paddingRight: 8,
     marginBottom: 22,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -1974,10 +1980,10 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
     flex: 1,
-    backgroundColor: '#111E18',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },

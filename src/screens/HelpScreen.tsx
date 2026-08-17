@@ -129,10 +129,8 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     marginLeft: -10,
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: colors.surface,
+    width: 44, height: 44,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
   headerText: { flex: 1, alignItems: 'center' },
   headerTitle: {
