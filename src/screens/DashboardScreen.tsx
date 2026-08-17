@@ -1496,53 +1496,46 @@ const DashboardScreen = () => {
           )}
         </Animated.View>
 
-        {/* Un seul bandeau plutôt que trois tuiles séparées : les trois chiffres
-            décrivent la même chose — la journée en cours — et les réunir sous un
-            titre unique le dit, là où trois cartes alignées les présentaient
-            comme trois sujets distincts.
+        {/* ── TODAY'S SESSION ── */}
+        <View style={styles.sessionHeader}>
+          <Text style={styles.sessionTitle}>{t('dashboard.session')}</Text>
+          {isOnline && (
+            <View style={styles.liveBadge}>
+              <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
+              <Text style={styles.liveText}>{t('dashboard.live')}</Text>
+            </View>
+          )}
+        </View>
 
-            Vert profond et non vert néon : le néon reste réservé au bouton
-            « En ligne », qui est l'action de l'écran. Deux aplats fluo empilés se
-            disputeraient l'attention, et le document réserve explicitement le
-            néon à l'action la plus importante. */}
-        <View style={styles.sessionCard}>
-          <View style={styles.sessionHeader}>
-            <Text style={styles.sessionTitle}>{t('dashboard.session')}</Text>
-            {isOnline && (
-              <View style={styles.liveBadge}>
-                <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
-                <Text style={styles.liveText}>{t('dashboard.live')}</Text>
-              </View>
-            )}
+        <View style={styles.statRow}>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
+            <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
+            <Text style={styles.statValue}>{stats.earnings}€</Text>
+            <MaterialCommunityIcons name="cash" size={32} color={colors.primary + '40'} style={styles.statIcon} />
           </View>
-
-          <View style={styles.statRow}>
-            <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
-              <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
-              <Text style={styles.statValue}>{stats.earnings}€</Text>
-            </View>
-            <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
-              <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
-              <Text style={styles.statValue}>{stats.avgRate}€/h</Text>
-            </View>
-            <View
-              style={styles.statCard}
-              accessible
-              accessibilityLabel={
-                (dailyScans !== null
-                  ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
-                  : `${t('dashboard.scans')}: ${stats.scans}`)
-                + (extraCredits > 0 ? ` (+${extraCredits})` : '')
-              }
-            >
-              <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
-              <Text style={styles.statValue}>
-                {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
-                {extraCredits > 0 && (
-                  <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
-                )}
-              </Text>
-            </View>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
+            <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
+            <Text style={[styles.statValue, { color: colors.primaryInk }]}>{stats.avgRate}€/h</Text>
+            <Feather name="trending-up" size={32} color={colors.primary + '40'} style={styles.statIcon} />
+          </View>
+          <View
+            style={styles.statCard}
+            accessible
+            accessibilityLabel={
+              (dailyScans !== null
+                ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
+                : `${t('dashboard.scans')}: ${stats.scans}`)
+              + (extraCredits > 0 ? ` (+${extraCredits})` : '')
+            }
+          >
+            <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
+            <Text style={styles.statValue}>
+              {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
+              {extraCredits > 0 && (
+                <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
+              )}
+            </Text>
+            <MaterialCommunityIcons name="qrcode-scan" size={32} color={colors.primary + '40'} style={styles.statIcon} />
           </View>
         </View>
 
@@ -1902,42 +1895,33 @@ const styles = StyleSheet.create({
   toggleBtnText: { color: colors.textMain, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
 
   // SESSION
-  sessionCard: {
-    backgroundColor: colors.primaryInk,
-    borderRadius: 28,
-    padding: 20,
-    marginBottom: 20,
-  },
-  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sessionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sessionTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '700', letterSpacing: 1.8 },
   liveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+    backgroundColor: 'rgba(0,230,118,0.12)',
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
-  liveText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  liveText: { color: colors.primaryInk, fontSize: 11, fontWeight: '800' },
 
-  statRow: { flexDirection: 'row', gap: 10 },
-  // Les trois cellules sont posées DANS le bandeau : un voile blanc translucide
-  // les détache du vert sans introduire une seconde couleur, et la teinte du
-  // fond continue de transparaître à travers.
+  statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  // Trois tuiles côte à côte : ce sont des conteneurs, pas des cartes flottantes.
+  // Elles se posent donc en aplat gris sur le blanc de la page, sans ombre ni
+  // bordure — sur fond clair, chaque trait ajouté est du bruit, et à trois
+  // exemplaires alignés il devient une grille.
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 16,
+    overflow: 'hidden',
   },
-  statLabel: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-  statValue: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  statCreditBonus: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+  statLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
+  statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  statCreditBonus: { color: colors.primaryInk, fontSize: 15, fontWeight: '800' },
+  statIcon: { position: 'absolute', top: 10, right: 10 },
 
 
   // SECTION HEADER
