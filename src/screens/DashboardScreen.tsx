@@ -1395,6 +1395,17 @@ const DashboardScreen = () => {
             bord en direct » disaient au chauffeur où il était dans une app qu'il
             vient d'ouvrir lui-même — le titre le dit mieux et en un mot. */}
         <View style={styles.header}>
+          {/* Les seuils d'acceptation sont le seul réglage qu'un chauffeur
+              retouche vraiment, et il était à trois taps de profondeur. */}
+          <TouchableOpacity
+            style={[styles.headerBtn, styles.headerBtnLeft]}
+            onPress={() => navigation.navigate('Preferences')}
+            accessibilityRole="button"
+            accessibilityLabel={t('preferences.title')}
+          >
+            <MaterialCommunityIcons name="tune-vertical" size={21} color="#FFFFFF" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.planPill}
             onPress={() => navigation.navigate('SubscriptionScreen')}
@@ -1411,9 +1422,13 @@ const DashboardScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          {Platform.OS === 'android' && (
+          {/* Même place, même rôle — le scan — mais l'affordance diffère : sur
+              Android on l'allume et l'éteint, sur iOS il passe par l'extension
+              de partage, donc le bouton mène au tutoriel qui en apprend le geste
+              et installe le raccourci. */}
+          {Platform.OS === 'android' ? (
             <TouchableOpacity
-              style={[styles.settingsBtn, scannerActive && styles.settingsBtnActive]}
+              style={[styles.headerBtn, styles.headerBtnRight, scannerActive && styles.headerBtnActive]}
               onPress={handleToggleScanner}
               accessibilityRole="button"
               accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
@@ -1421,8 +1436,17 @@ const DashboardScreen = () => {
               <MaterialCommunityIcons
                 name="line-scan"
                 size={20}
-                color={scannerActive ? colors.primary : colors.textMuted}
+                color="#FFFFFF"
               />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnRight]}
+              onPress={() => navigation.navigate('Tutorial')}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.tutorial')}
+            >
+              <MaterialCommunityIcons name="line-scan" size={21} color="#FFFFFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -1871,18 +1895,22 @@ const styles = StyleSheet.create({
     letterSpacing: -0.9,
     marginBottom: 20,
   },
-  settingsBtn: {
+  // Les deux boutons encadrent la pastille sans la déplacer : ils sont posés en
+  // absolu, elle reste centrée sur la largeur de l'écran quoi qu'ils contiennent.
+  // Cercles pleins et non contours : sur le fond teinté, un cercle blanc cerné
+  // d'un filet se dissout, alors qu'un aplat neutre tient sa place. Gris et non
+  // vert — comme dans la référence, les boutons utilitaires restent neutres pour
+  // que la couleur de marque reste lisible là où elle compte, sur la pastille de
+  // plan et le bouton d'action.
+  headerBtn: {
     position: 'absolute',
-    right: 0,
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.background,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.textMuted,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.outline,
   },
-  settingsBtnActive: {
-    backgroundColor: colors.primary + '26',
-    borderColor: colors.primaryInk,
-  },
+  headerBtnLeft: { left: 0 },
+  headerBtnRight: { right: 0 },
+  headerBtnActive: { backgroundColor: colors.primaryInk },
 
   // ONLINE PILL
   // Même aplat gris que les tuiles : la barre appartient au même plan que le
