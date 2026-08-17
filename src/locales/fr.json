@@ -998,18 +998,13 @@
     "result": {
       "title": "Votre seuil de rentabilité",
       "desc": "",
-      "label": "Une course doit rapporter",
-      "orKm": "ou {{km}} €/km",
-      "statRevenue": "CA à faire",
-      "statHours": "Par mois",
-      "statNet": "Net visé",
       "fromGoal": "Calculé depuis votre objectif, vos heures et vos charges. Strive marquera à refuser toute course en dessous.",
       "floored": "Votre objectif est atteignable en dessous — nous gardons ce seuil, car une course moins payée vous coûte de l'argent une fois l'usure et les charges comptées.",
       "plusTitle": "Débloquez votre seuil",
-      "currentLabel": "Votre seuil actuel",
-      "currentSub": "Standard, identique pour tous",
-      "optimizedLabel": "Votre seuil optimisé",
-      "plusPersonal": "{{goal}} net en {{hours}} h par mois, ça se paie à un tarif précis."
+      "plusPersonal": "{{goal}} net en {{hours}} h par mois, ça se paie à un tarif précis.",
+      "yoursCaption": "le vôtre",
+      "standardCaption": "standard, pour tous",
+      "answersLine": "{{goal}} net · {{hours}} h par mois · {{revenue}} de chiffre"
     }
   }
 }

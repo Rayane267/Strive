@@ -40,6 +40,13 @@ import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionS
 // « OTHER » est un choix comme un autre : il n'ouvre aucune saisie. Le scanner
 // n'a pas besoin de connaître le nom de la plateforme pour lire un montant, et
 // demander lequel ferait payer un clavier pour une information inexploitée.
+/**
+ * Segments du trait discontinu marquant le seuil personnel. Construit à la main
+ * plutôt qu'avec `borderStyle: 'dashed'`, dont le rendu diffère entre iOS et
+ * Android et se déforme dès qu'une bordure est arrondie.
+ */
+const DASHES = Array.from({ length: 34 }, (_, i) => i);
+
 const PLATFORMS = [
   { key: 'UBER', label: 'Uber' },
   { key: 'BOLT', label: 'Bolt' },
@@ -404,85 +411,72 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         );
 
       case 'result':
-        return derived ? (
-          <View style={styles.resultCard}>
-            {/* Le chiffre reste masqué en gratuit : c'est la contrepartie de
-                l'abonnement, et il ne servirait à rien de le donner ici puisque
-                le palier gratuit applique de toute façon FREE_THRESHOLDS. Les
-                trois statistiques dessous, elles, viennent des réponses du
-                chauffeur et rendent le calcul crédible sans le livrer. */}
-            {isPremium ? (
-              <>
-                <Text style={styles.resultLabel}>{t('onboarding.result.label')}</Text>
-                <Text style={styles.resultValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {derived.hourly.toFixed(0)} €/h
-                </Text>
-                <Text style={styles.resultKm}>
-                  {t('onboarding.result.orKm', { km: derived.km.toFixed(2) })}
-                </Text>
-              </>
-            ) : (
-              <>
-                {/* Les deux seuils l'un au-dessus de l'autre : c'est l'écart qui
-                    argumente, pas une phrase de vente. Le chiffre du haut est
-                    bien celui qui s'applique au compte gratuit. */}
-                <Text style={styles.tierLabel}>{t('onboarding.result.currentLabel')}</Text>
-                <Text style={styles.tierCurrent}>{counted} €/h</Text>
-                <Text style={styles.tierSub}>{t('onboarding.result.currentSub')}</Text>
-
-                <View style={styles.resultDivider} />
-
-                {/* Le seuil verrouillé n'arrive qu'une fois le premier chiffre
-                    posé : les deux ensemble se liraient comme un seul bloc, et
-                    l'écart perdrait son effet. */}
-                <Animated.View
-                  style={{
-                    opacity: reveal.interpolate({ inputRange: [0.6, 1], outputRange: [0, 1] }),
-                  }}
-                >
-                  <Text style={styles.tierLabel}>{t('onboarding.result.optimizedLabel')}</Text>
-                  <View style={styles.lockedRow}>
-                    <Text style={styles.resultValue}>••</Text>
-                    <Text style={styles.lockedUnit}>€/h</Text>
-                    <Feather name="lock" size={22} color={colors.primary} />
-                  </View>
-                </Animated.View>
-              </>
-            )}
-
-            <View style={styles.resultDivider} />
-
-            {/* Les trois chiffres qui rendent le seuil vérifiable : sans eux, la
-                carte affiche un nombre sorti de nulle part — et dans le cas
-                plancher, un nombre identique quelles que soient les réponses. */}
-            <View style={styles.statRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatEuros(derived.requiredRevenue)}</Text>
-                <Text style={styles.statLabel}>{t('onboarding.result.statRevenue')}</Text>
+        if (!derived) return null;
+        return (
+          // Un seuil est une ligne : au-dessus, la course vaut le coup ; en
+          // dessous, elle coûte de l'argent. On la dessine donc, plutôt que de
+          // poser le chiffre dans une carte. La bande teintée entre le seuil
+          // standard et le sien est exactement ce qu'il laisse passer aujourd'hui
+          // — l'écart argumente tout seul, sans phrase de vente.
+          <View>
+            <Animated.View
+              style={{
+                opacity: reveal.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1] }),
+              }}
+            >
+              <View style={styles.markRow}>
+                {isPremium ? (
+                  <Text style={styles.markValue}>{derived.hourly.toFixed(0)} €/h</Text>
+                ) : (
+                  <>
+                    {/* Deux barres caviardées plutôt que des points de
+                        suspension : elles occupent la place exacte d'un nombre
+                        à deux chiffres et se lisent comme une valeur masquée,
+                        là où des puces typographiques flottaient au-dessus de
+                        la ligne de base. */}
+                    <View style={styles.redactRow}>
+                      <View style={styles.redact} />
+                      <View style={styles.redact} />
+                    </View>
+                    <Text style={styles.markUnit}>€/h</Text>
+                    <Feather name="lock" size={19} color={colors.primary} />
+                  </>
+                )}
+                <Text style={styles.markCaption}>{t('onboarding.result.yoursCaption')}</Text>
               </View>
-              <View style={styles.statSep} />
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{derived.monthlyHours} h</Text>
-                <Text style={styles.statLabel}>{t('onboarding.result.statHours')}</Text>
+              <View style={styles.dashRow}>
+                {DASHES.map(i => <View key={i} style={styles.dash} />)}
               </View>
-              <View style={styles.statSep} />
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatEuros(monthlyGoal ?? 0)}</Text>
-                <Text style={styles.statLabel}>{t('onboarding.result.statNet')}</Text>
-              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.gapBand,
+                {
+                  transform: [{
+                    scaleY: reveal.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1] }),
+                  }],
+                },
+              ]}
+            />
+
+            <View style={styles.solidLine} />
+            <View style={styles.markRow}>
+              <Text style={[styles.markValue, styles.markValueStd]}>{counted} €/h</Text>
+              <Text style={styles.markCaption}>{t('onboarding.result.standardCaption')}</Text>
             </View>
 
-            <View style={styles.resultDivider} />
-
-            {isPremium ? (
-              <Text style={styles.resultNote}>
-                {derived.flooredByProfitability
-                  ? t('onboarding.result.floored')
-                  : t('onboarding.result.fromGoal')}
-              </Text>
-            ) : null}
+            {/* Ses propres réponses, en une ligne : elles rendent le calcul
+                vérifiable sans reconstruire un tableau de statistiques. */}
+            <Text style={styles.answersLine}>
+              {t('onboarding.result.answersLine', {
+                goal: formatEuros(monthlyGoal ?? 0),
+                hours: derived.monthlyHours,
+                revenue: formatEuros(derived.requiredRevenue),
+              })}
+            </Text>
           </View>
-        ) : null;
+        );
     }
   };
 
@@ -695,81 +689,42 @@ const styles = StyleSheet.create({
   },
   draftUnit: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
 
-  // ── Plateformes ────────────────────────────────────────────────────────────
-  // ── Carte de résultat ──────────────────────────────────────────────────────
-  resultCard: {
-    alignItems: 'center',
-    paddingVertical: 26,
-    paddingHorizontal: 22,
-    borderRadius: 22,
-    backgroundColor: colors.primary + '12',
-    borderWidth: 1,
-    borderColor: colors.primary + '3A',
-  },
-  resultLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
-  resultValue: {
+  // ── Ligne de seuil ─────────────────────────────────────────────────────────
+  // Aucune carte, aucun filet décoratif : les deux seuls traits de l'écran sont
+  // les deux seuils eux-mêmes, et ils portent du sens.
+  markRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  markValue: {
     color: colors.primary,
-    fontSize: 46,
+    fontSize: 44,
     fontWeight: '900',
-    letterSpacing: -1.5,
-    marginTop: 8,
+    letterSpacing: -1.8,
   },
-  resultKm: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginTop: 2 },
-  tierLabel: {
-    color: colors.textMuted,
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  tierCurrent: {
-    color: colors.textMain,
-    fontSize: 34,
-    fontWeight: '900',
-    letterSpacing: -1,
-    marginTop: 4,
-  },
-  tierSub: { color: colors.textDimmed, fontSize: 12.5, marginTop: 2 },
-  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  lockedUnit: { color: colors.primary, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  resultDivider: {
-    width: 44,
-    height: 1,
-    backgroundColor: colors.primary + '38',
-    marginVertical: 16,
+  // Le seuil standard est celui qui s'applique vraiment aujourd'hui : il reste
+  // en blanc, couleur du fait acquis. Le vert est réservé à ce qui se débloque.
+  markValueStd: { color: colors.textMain },
+  markUnit: { color: colors.primary, fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
+  redactRow: { flexDirection: 'row', gap: 5, alignSelf: 'flex-end', marginBottom: 4 },
+  redact: { width: 22, height: 34, borderRadius: 5, backgroundColor: colors.primary + '4D' },
+  markCaption: { color: colors.textMuted, fontSize: 14, marginLeft: 2 },
+
+  dashRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: colors.primary + '80' },
+
+  // La bande grandit depuis le bas : elle se déploie à partir du seuil acquis
+  // vers celui qui manque, ce qui donne à l'écart un sens de lecture.
+  gapBand: {
+    height: 104,
+    backgroundColor: colors.primary + '14',
+    transformOrigin: 'bottom',
   },
 
-  // Trois colonnes de largeur égale : c'est l'alignement qui les fait lire
-  // comme un même calcul plutôt que comme trois faits séparés.
-  statRow: { flexDirection: 'row', alignItems: 'stretch', alignSelf: 'stretch' },
-  stat: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
-  statSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 2 },
-  statValue: {
-    color: colors.textMain,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  statLabel: {
+  solidLine: { height: 2, borderRadius: 1, backgroundColor: colors.textMain },
+
+  answersLine: {
     color: colors.textDimmed,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  resultNote: {
-    color: colors.textMuted,
     fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 19,
+    marginTop: 22,
   },
 
   // Une ligne, pas un paragraphe : le chiffre masqué juste au-dessus dit déjà

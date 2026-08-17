@@ -998,18 +998,13 @@
     "result": {
       "title": "Your break-even rate",
       "desc": "",
-      "label": "A ride has to pay",
-      "orKm": "or €{{km}}/km",
-      "statRevenue": "Revenue needed",
-      "statHours": "Per month",
-      "statNet": "Target net",
       "fromGoal": "Computed from your target, your hours and your costs. Strive will mark any ride below it as SKIP.",
       "floored": "Your target is reachable below this — we keep this rate, because a ride paying less costs you money once wear and contributions are counted.",
       "plusTitle": "Unlock your threshold",
-      "currentLabel": "Your current threshold",
-      "currentSub": "Standard, the same for everyone",
-      "optimizedLabel": "Your optimised threshold",
-      "plusPersonal": "{{goal}} net over {{hours}} h a month comes at a precise rate."
+      "plusPersonal": "{{goal}} net over {{hours}} h a month comes at a precise rate.",
+      "yoursCaption": "yours",
+      "standardCaption": "standard, for everyone",
+      "answersLine": "{{goal}} net · {{hours}} h a month · {{revenue}} revenue"
     }
   }
 }
