@@ -78,31 +78,26 @@ Suivre `docs/REVENUECAT_SETUP.md`. Points bloquants :
 
 ---
 
-## Phase 3 — Configuration EAS
+## Phase 3 — Configuration EAS ✅ (déjà opérationnelle)
 
-- [ ] **Se connecter**
-  ```bash
-  npx eas login
-  npx eas whoami
-  ```
+Vérifié : compte `rayane2677` / projet `@rayane2677s-organization/strive`, et le **build iOS production n°67 a réussi** le 17/08/2026 depuis le commit `6903678`. Toute la chaîne (credentials, provisioning des 3 bundle IDs, secrets) est donc **déjà prouvée fonctionnelle**. Rien à refaire ici.
 
-- [ ] **Vérifier les variables d'environnement de production**
-  `eas.json` → profil `production` utilise `"environment": "production"` : les variables sont stockées **côté EAS**, pas dans ton `.env` local.
-  ```bash
-  npx eas env:list --environment production
-  ```
-  Doivent être présentes : `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_KEY`, `REVENUECAT_API_KEY_IOS`, `TOMTOM_API_KEY`, `SENTRY_DSN`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`.
-  Pour en ajouter une :
-  ```bash
-  npx eas env:create --environment production --name TOMTOM_API_KEY --value "..." --visibility secret
-  ```
-  ⚠️ Vérifie que les URLs Supabase pointent bien sur le projet **prod** et pas sur un projet de test.
+- [x] Connecté (`eas whoami` → `rayane2677`)
+- [x] Credentials iOS : validés implicitement par les builds `store` réussis (65, 66, 67)
+- [x] Secrets : le profil `production` n'expose que `SENTRY_AUTH_TOKEN` et `STRIVE_ENV_FILE`.
+      `STRIVE_ENV_FILE` est un **file secret** contenant tout le `.env`, restauré au build par
+      `scripts/eas-build-pre-install.js`. Le `.env` local (9 clés, toutes remplies) date du **27/07/2026**.
+      ⚠️ Si tu as changé une clé depuis, re-pousse le fichier :
+      ```bash
+      npx eas env:update --scope project --environment production \
+        --name STRIVE_ENV_FILE --type file --visibility secret --value ./.env
+      ```
+- [x] Build number distant : **67** → le prochain build sera le **68** (auto-incrémenté)
 
-- [ ] **Credentials de signature**
-  ```bash
-  npx eas credentials -p ios
-  ```
-  Laisse EAS gérer : il crée le certificat de distribution et les provisioning profiles pour les **3** bundle IDs (app, `.share`, `.widget`). Vérifie que les 3 apparaissent, et que la capability **App Groups** (`group.com.striveapp.app`) est bien activée sur les 3 identifiants dans le portail Apple — sinon le partage de données entre l'app, la Share Extension et le Widget casse en prod.
+Note : `REVENUECAT_SECRET_API_KEY` est présent dans le `.env` mobile alors qu'il ne sert qu'à
+l'edge function Supabase (`revenuecat-webhook/index.ts:31`). Ce n'est **pas** une fuite —
+`react-native-dotenv` n'inline que les variables réellement importées depuis `@env`, et
+aucune n'importe celle-ci. À nettoyer un jour par hygiène, pas urgent.
 
 - [ ] **Version**
   `app.json` → `"version": "2.4.1"`. C'est le numéro que verront les utilisateurs. Si c'est ta **première** mise en ligne publique, `2.4.1` est parfaitement acceptable (les versions précédentes étaient internes) — ou repasse à `1.0.0` si tu préfères. Le build number est incrémenté automatiquement par EAS.
@@ -148,7 +143,7 @@ Dans App Store Connect → ton app → version 2.4.1.
 - [ ] **Nom** (30 car.) et **sous-titre** (30 car.)
 - [ ] **Description** — décris ce que fait l'app sans promettre de revenus garantis
 - [ ] **Mots-clés** (100 car., séparés par des virgules, sans espaces) — ⚠️ ne mets **pas** « Uber », « Bolt », « Heetch » : utiliser des marques tierces en mots-clés est un motif de rejet fréquent
-- [ ] **Captures d'écran** — obligatoires : **6,9"** (1290×2796) et **6,5"** (1242×2688). Ajoute 13" si tu déclares le support iPad (ton `Info.plist` autorise les orientations iPad → soit tu fournis les captures iPad, soit tu passes l'app en **iPhone only** dans les Targeted Device Families, ce qui est plus simple).
+- [ ] **Captures d'écran** — obligatoires : **6,9"** (1290×2796) et **6,5"** (1242×2688). Pas de captures iPad à produire : l'app est passée en **iPhone only** (`TARGETED_DEVICE_FAMILY = "1"`). ✅
   Ne montre **pas** l'interface d'Uber/Bolt dans les captures.
 - [ ] **Icône 1024×1024** — présente dans le bundle (`Icon-1024.png`) ✅, sans transparence ni coins arrondis
 - [ ] **Catégorie** : Business ou Finance
@@ -184,6 +179,18 @@ Dans App Store Connect → ton app → version 2.4.1.
 - [ ] **Compte de démonstration** : renseigne un identifiant/mot de passe qui marche. Un reviewer bloqué à l'écran de connexion = rejet automatique.
 - [ ] **Sélectionner le build** TestFlight dans la section *Build*.
 - [ ] **Mise à disposition** : choisis « **Publier manuellement** » plutôt qu'automatique — ça te laisse le contrôle de la date de sortie une fois approuvé.
+
+---
+
+## Phase 5 bis — Exigences de review déjà satisfaites (vérifié dans le code)
+
+Ces points sont les motifs de rejet classiques ; ils sont **déjà en place**, inutile d'y retoucher :
+
+- [x] **Suppression de compte dans l'app** (guideline 5.1.1(v)) — `src/screens/ProfileScreen.tsx:75`, avec confirmation par saisie et RPC `delete_account`, plus purge de l'avatar dans Storage avant suppression.
+- [x] **Restaurer les achats** (guideline 3.1.1) — `src/services/iapService.ts:268`, avec timeout de 15 s, exposé dans `SubscriptionScreen`.
+- [x] **Liens légaux sur le paywall** (guideline 3.1.2) — `SubscriptionScreen.tsx:540-545` → `striveapp.fr/terms` et `striveapp.fr/privacy`, **les deux pages sont bien en ligne** (vérifié, maj 13/06/2026).
+- [x] **Lien vers la gestion de l'abonnement Apple** — `SubscriptionScreen.tsx:235`.
+- [x] **iPhone only** — `TARGETED_DEVICE_FAMILY = "1"` sur les 3 targets, et clé `UISupportedInterfaceOrientations~ipad` retirée de l'`Info.plist`.
 
 ---
 
