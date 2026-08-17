@@ -58,10 +58,10 @@ const PLATFORMS = [
 // bas que `deriveThreshold` retombait sur le plancher dans presque tous les cas :
 // l'écran de résultat affichait alors un chiffre qui ne devait rien aux réponses.
 //
-// Cinq propositions plutôt que trois : à trois, l'écart entre deux pastilles
+// Cinq propositions plutôt que trois : à trois, l'écart entre deux réponses
 // était tel que le chauffeur tapait « Autre » — donc le clavier — pour la
-// plupart des situations réelles. Cinq + « Autre » se posent en grille de 3
-// colonnes sur deux lignes, ce qui agrandit aussi la cible tactile.
+// plupart des situations réelles. Cinq + « Autre » tiennent en six cartes
+// empilées sans que l'écran ait besoin de défiler.
 const HOURS_CHOICES: (number | null)[] = [35, 40, 45, 50, 60, null];
 const GOAL_CHOICES: (number | null)[] = [1500, 2000, 2500, 3000, 3500, null];
 const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
@@ -185,8 +185,15 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   // ── Rendus ────────────────────────────────────────────────────────────────
 
-  const ChipRow = ({
-    choices, value, onPick, unit, zeroLabel, labelFor, subFor, isPercent, wrap, grid,
+  /**
+   * Liste de réponses en cartes pleine largeur, une par ligne. Une grille de
+   * pastilles à 3 colonnes tenait sur moins de place, mais tassait les libellés
+   * traduits et donnait des cibles tactiles étroites — or l'app se remplit
+   * souvent d'une main, à l'arrêt entre deux courses. Une colonne unique lit
+   * mieux et se tape sans viser.
+   */
+  const OptionList = ({
+    choices, value, onPick, unit, zeroLabel, labelFor, subFor, isPercent,
   }: {
     choices: (number | null)[];
     value: number;
@@ -197,27 +204,18 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     /** Légende sous le chiffre — dit à quelle situation réelle il correspond. */
     subFor?: (v: number) => string;
     isPercent?: boolean;
-    /** Grille 2 colonnes (libellés longs : statut). */
-    wrap?: boolean;
-    /** Grille 3 colonnes (6 pastilles : 5 propositions + « Autre »). */
-    grid?: boolean;
   }) => {
-    const onAChip = choices.some(c => c !== null && c === value);
+    const onAnOption = choices.some(c => c !== null && c === value);
     return (
       <>
-        <View style={[styles.chipRow, (wrap || grid) && styles.chipRowWrap]}>
+        <View style={styles.optionList}>
           {choices.map((c, i) => {
             const isOther = c === null;
-            const active = isOther ? !onAChip : c === value;
+            const active = isOther ? !onAnOption : c === value;
             return (
               <TouchableOpacity
                 key={i}
-                style={[
-                  styles.chip,
-                  wrap && styles.chipWrapped,
-                  grid && styles.chipGrid,
-                  active && styles.chipActive,
-                ]}
+                style={[styles.option, active && styles.optionActive]}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
@@ -228,7 +226,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                   onPick(c as number);
                 }}
               >
-                <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>
+                <Text style={[styles.optionTxt, active && styles.optionTxtActive]}>
                   {isOther
                     ? t('onboarding.other')
                     : labelFor
@@ -239,7 +237,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                 </Text>
                 {!isOther && subFor ? (
                   <Text
-                    style={[styles.chipSub, active && styles.chipSubActive]}
+                    style={[styles.optionSub, active && styles.optionSubActive]}
                     numberOfLines={2}
                   >
                     {subFor(c as number)}
@@ -311,12 +309,11 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         );
 
       case 'hours':
-        return <ChipRow grid choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
+        return <OptionList choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
 
       case 'goal':
         return (
-          <ChipRow
-            grid
+          <OptionList
             choices={GOAL_CHOICES}
             value={monthlyGoal}
             onPick={setMonthlyGoal}
@@ -326,8 +323,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
       case 'costs':
         return (
-          <ChipRow
-            grid
+          <OptionList
             choices={COSTS_CHOICES}
             value={fixedCosts}
             onPick={setFixedCosts}
@@ -344,12 +340,11 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
       case 'status':
         return (
-          <ChipRow
+          <OptionList
             choices={STATUS_CHOICES}
             value={socialRate}
             onPick={setSocialRate}
             isPercent
-            wrap
             labelFor={v =>
               v === SOCIAL_RATES.auto_entrepreneur ? t('onboarding.status.auto')
               : v === SOCIAL_RATES.societe ? t('onboarding.status.company')
@@ -534,11 +529,11 @@ const styles = StyleSheet.create({
   // Plus d'air au-dessus du titre qu'en dessous : le regard entre par lui.
   title: {
     color: colors.textMain,
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '900',
     textAlign: 'center',
-    letterSpacing: -0.5,
-    lineHeight: 34,
+    letterSpacing: -0.8,
+    lineHeight: 40,
     marginBottom: 12,
   },
   desc: {
@@ -550,36 +545,32 @@ const styles = StyleSheet.create({
   },
   stepContent: { width: '100%', marginTop: 34 },
 
-  // ── Pastilles de réponse ───────────────────────────────────────────────────
-  chipRow: { flexDirection: 'row', gap: 8 },
-  chipRowWrap: { flexWrap: 'wrap' },
-  chip: {
-    flex: 1,
+  // ── Cartes de réponse ──────────────────────────────────────────────────────
+  optionList: { gap: 10 },
+  option: {
+    minHeight: 64,
+    justifyContent: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 6,
-    borderRadius: 14,
+    paddingHorizontal: 18,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  chipWrapped: { flex: 0, flexBasis: '47%', flexGrow: 1 },
-  // 31 % × 3 + 2 gouttières de 8 px tient dans la largeur utile sur un 375 pt ;
-  // `flexGrow` rattrape le reste et égalise la dernière ligne.
-  chipGrid: { flex: 0, flexBasis: '31%', flexGrow: 1, paddingVertical: 16 },
-  chipActive: { backgroundColor: colors.primary + '1C', borderColor: colors.primary + '70' },
-  chipTxt: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
-  chipTxtActive: { color: colors.primary },
-  chipSub: {
+  // Sélection en aplat plein plutôt qu'en teinte légère : sur fond sombre, un
+  // fond à 11 % d'opacité se distingue mal de l'état par défaut, surtout en
+  // plein soleil dans une voiture.
+  optionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  optionTxt: { color: colors.textMain, fontSize: 17, fontWeight: '700' },
+  optionTxtActive: { color: colors.background },
+  optionSub: {
     color: colors.textDimmed,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 13,
-    marginTop: 4,
+    lineHeight: 17,
+    marginTop: 3,
   },
-  chipSubActive: { color: colors.primary + 'B0' },
+  optionSubActive: { color: colors.background + 'B0' },
 
   draftRow: {
     flexDirection: 'row',
@@ -602,12 +593,17 @@ const styles = StyleSheet.create({
   draftUnit: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
 
   // ── Plateformes ────────────────────────────────────────────────────────────
+  // Même gabarit que les cartes de réponse pour que les six étapes se suivent
+  // sans rupture. L'état actif reste en teinte légère et non en aplat plein :
+  // le choix est multiple ici, et trois lignes vertes d'affilée écraseraient
+  // tout le reste de l'écran.
   platformList: { gap: 10 },
   platformRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 16,
+    minHeight: 64,
+    paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -616,7 +612,7 @@ const styles = StyleSheet.create({
   },
   platformRowActive: { backgroundColor: colors.primary + '14', borderColor: colors.primary + '5A' },
   platformDot: { width: 10, height: 10, borderRadius: 5 },
-  platformLabel: { flex: 1, color: colors.textMuted, fontSize: 16, fontWeight: '700' },
+  platformLabel: { flex: 1, color: colors.textMuted, fontSize: 17, fontWeight: '700' },
   platformLabelActive: { color: colors.textMain },
 
   // ── Carte de résultat ──────────────────────────────────────────────────────

@@ -268,7 +268,9 @@
       "Bash(grep -vE \"^\\\\S+:[0-9]+:\\\\s*//\")",
       "Bash(grep -n \"^#\\\\{1,3\\\\} \" C:/Users/dandu/.claude/skills/impeccable/reference/ios.md)",
       "Bash(npx prettier *)",
-      "WebFetch(domain:striveapp.fr)"
+      "WebFetch(domain:striveapp.fr)",
+      "Read(//c/Users/dandu/Desktop/**)",
+      "Read(//d//**)"
     ]
   },
   "enableAllProjectMcpServers": true,
