@@ -402,14 +402,14 @@
     }
   },
   "preferences": {
-    "title": "Préférences de Trajet",
+    "title": "Préférences",
     "subtitle": "Paramètres d'acceptation des courses.",
     "save": "Enregistrer",
     "tripId": "Identificateur de Course",
     "active": "Actif",
     "enableTripId": "Activer l'identificateur",
     "enableTripIdSub": "Analyser les offres via le raccourci AssistiveTouch",
-    "minimums": "VOS MINIMUMS",
+    "minimums": "Vos minimums",
     "minHr": "Minimum $/h",
     "minKm": "Minimum $/km",
     "thresholdLock": "Personnalise tes seuils avec Strive Plus",
@@ -426,8 +426,8 @@
     "resultModeSub": "Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.",
     "advanced": "Paramètres Avancés",
     "setup": "Relancer la configuration",
-    "identification": "IDENTIFICATION",
-    "options": "OPTIONS",
+    "identification": "Identification",
+    "options": "Options",
     "saveSuccess": "Préférences enregistrées avec succès.",
     "saveError": "Impossible d'enregistrer. Réessayez."
   },

@@ -54,12 +54,9 @@ const HelpScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.textMain} />
+          <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>{t('help.title')}</Text>
-          <Text style={styles.headerSub}>{t('help.subtitle')}</Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>{t('help.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -131,13 +128,16 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12,
+    marginLeft: -10,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
   headerText: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
+  headerTitle: {
+    marginRight: 12,
+    flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
   headerSub: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
 
   scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },

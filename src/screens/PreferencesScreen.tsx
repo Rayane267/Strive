@@ -192,15 +192,16 @@ const PreferencesScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      {/* ── HEADER ── */}
+      {/* Chevron, titre et pastille sur une seule rangée. Le sous-titre
+          « filtres de trajet » disparaît : il paraphrasait le titre sans rien
+          ajouter. */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.textMain} />
+          <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('preferences.title', 'Préférences')}</Text>
-          <Text style={styles.headerSub}>{t('preferences.subtitle', 'Filtres de trajet')}</Text>
-        </View>
+        <Text style={styles.screenTitle} numberOfLines={1}>
+          {t('preferences.title', 'Préférences')}
+        </Text>
         <PlanBadge />
       </View>
 
@@ -210,7 +211,7 @@ const PreferencesScreen = () => {
         {Platform.OS === 'ios' && (
           <>
             <View style={styles.sectionLabel}>
-              <View style={styles.sectionAccent} />
+              
               <Text style={styles.sectionLabelText}>{t('preferences.identification')}</Text>
             </View>
 
@@ -242,8 +243,8 @@ const PreferencesScreen = () => {
             `disabled`), la restriction ne se découvrait donc qu'en essayant
             de les bouger. */}
         <View style={styles.sectionLabel}>
-          <View style={styles.sectionAccent} />
-          <Text style={styles.sectionLabelText}>{t('preferences.minimums', 'SEUILS MINIMUM').toUpperCase()}</Text>
+          
+          <Text style={styles.sectionLabelText}>{t('preferences.minimums', 'Seuils minimum')}</Text>
           {!isPremium && <PlusBadge />}
         </View>
 
@@ -329,7 +330,7 @@ const PreferencesScreen = () => {
 
         {/* ── OPTIONS TRAJET ── */}
         <View style={styles.sectionLabel}>
-          <View style={styles.sectionAccent} />
+          
           <Text style={styles.sectionLabelText}>{t('preferences.options')}</Text>
         </View>
 
@@ -499,56 +500,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
+  // Chevron nu plutôt qu'un carré bordé : le bouton retour n'a pas à peser
+  // autant que le titre qu'il précède.
   backBtn: {
-    width: 38,
-    height: 38,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    marginLeft: -10,
   },
-  headerCenter: { flex: 1, marginHorizontal: 14 },
-  headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
-  planBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+  // Le titre occupe l'espace restant entre le chevron et la pastille, et se
+  // tronque plutôt que de repousser cette dernière hors de l'écran.
+  screenTitle: {
+    flex: 1,
+    color: colors.textMain,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    marginLeft: 4,
+    marginRight: 12,
   },
-  planBadgePlus: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  planBadgeTextPlus: { color: colors.background },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 50 },
 
-  // Section labels
+  // Libellé de section en casse normale : les capitales espacées faisaient lire
+  // une étiquette administrative là où il s'agit d'un simple intertitre. La
+  // barrette d'accent disparaît pour la même raison — elle décorait un texte qui
+  // n'a pas besoin d'être signalé.
   sectionLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     marginBottom: 10,
-    marginTop: 6,
-  },
-  sectionAccent: {
-    width: 3,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
+    marginTop: 18,
   },
   sectionLabelText: {
-    color: colors.textDimmed,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    color: colors.textMuted,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
 
   // Cards

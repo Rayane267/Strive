@@ -402,14 +402,14 @@
     }
   },
   "preferences": {
-    "title": "Trip Preferences",
+    "title": "Preferences",
     "subtitle": "Trip acceptance settings.",
     "save": "Save",
     "tripId": "Trip Identifier",
     "active": "Active",
     "enableTripId": "Enable Trip Identifier",
     "enableTripIdSub": "Analyze offers via the AssistiveTouch shortcut",
-    "minimums": "YOUR MINIMUMS",
+    "minimums": "Your minimums",
     "minHr": "Minimum $/hr",
     "minKm": "Minimum $/km",
     "thresholdLock": "Customize your thresholds with Strive Plus",
@@ -426,8 +426,8 @@
     "resultModeSub": "Show scan result in the Dynamic Island. Off = classic notification.",
     "advanced": "Advanced Settings",
     "setup": "Run Setup Again",
-    "identification": "IDENTIFICATION",
-    "options": "OPTIONS",
+    "identification": "Identification",
+    "options": "Options",
     "saveSuccess": "Preferences saved successfully.",
     "saveError": "Failed to save. Please try again."
   },

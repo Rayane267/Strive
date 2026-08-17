@@ -281,12 +281,9 @@ const AccountInfoScreen = () => {
         {/* Header statique — seul le contenu chargé est en skeleton. */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color={colors.textMain} />
+            <Feather name="chevron-left" size={30} color={colors.primary} />
           </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
-            <Text style={styles.headerSub}>{t('accountInfo.subtitle', 'Informations personnelles')}</Text>
-          </View>
+          <Text style={styles.headerTitle} numberOfLines={1}>{t('profile.account', 'Mon profil')}</Text>
           <View style={styles.planBadge}>
             <Skeleton width={40} height={12} radius={6} />
           </View>
@@ -321,12 +318,9 @@ const AccountInfoScreen = () => {
       {/* ── HEADER ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.textMain} />
+          <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('profile.account', 'Mon profil')}</Text>
-          <Text style={styles.headerSub}>{t('accountInfo.subtitle', 'Informations personnelles')}</Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>{t('profile.account', 'Mon profil')}</Text>
         <PlanBadge />
       </View>
 
@@ -450,8 +444,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    marginLeft: -10,
+    width: 44,
+    height: 44,
     backgroundColor: colors.surface,
     borderRadius: 12,
     justifyContent: 'center',
@@ -460,7 +455,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   headerCenter: { flex: 1, marginHorizontal: 14 },
-  headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
+  headerTitle: {
+    marginRight: 12,
+    flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
   headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
   planBadge: {
     flexDirection: 'row',
