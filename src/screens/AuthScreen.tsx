@@ -4,17 +4,15 @@ import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   StatusBar,
   Platform,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { Toast, useToast } from '../components/Toast';
 import BrandLoader from '../components/BrandLoader';
 import { supabase } from '../services/supabase';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, GoogleSigninButton } from '@react-native-google-signin/google-signin';
 import { sha256 } from 'js-sha256';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
@@ -22,8 +20,15 @@ import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
 import { enforceOAuthSignupQuota, registerOAuthSignup, enforceSignupQuota } from '../utils/deviceId';
 
 let appleAuth: any = null;
+let AppleButton: any = null;
 if (Platform.OS === 'ios') {
-  appleAuth = require('@invertase/react-native-apple-authentication').default;
+  const appleAuthModule = require('@invertase/react-native-apple-authentication');
+  appleAuth = appleAuthModule.default;
+  // Bouton natif ASAuthorizationAppleIDButton : Apple impose ses propres
+  // ressources pour « Sign in with Apple » (HIG), un logo redessiné ou repris
+  // d'une police d'icônes est un motif de rejet. Bonus : il se localise seul
+  // selon la langue du téléphone, donc pas de clé i18n pour son libellé.
+  AppleButton = appleAuthModule.AppleButton;
 }
 
 GoogleSignin.configure({
@@ -182,33 +187,28 @@ const AuthScreen = () => {
           </View>
         ) : (
           <>
-            {/* Google — iOS + Android */}
-            <TouchableOpacity
+            {/* Google — iOS + Android. Bouton natif fourni par le SDK : il porte
+                le logo « G » quadricolore officiel, seule marque autorisée par
+                les règles d'identité de Google. */}
+            <GoogleSigninButton
               style={styles.btnGoogle}
+              size={GoogleSigninButton.Size.Wide}
+              color={GoogleSigninButton.Color.Dark}
               onPress={handleGoogleLogin}
-              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={t('auth.continueGoogle')}
-            >
-              <View style={styles.googleIconWrap}>
-                <FontAwesome name="google" size={17} color="#4285F4" />
-              </View>
-              <Text style={styles.btnGoogleText}>{t('auth.continueGoogle')}</Text>
-            </TouchableOpacity>
+            />
 
             {/* Apple — iOS uniquement : le SDK n'existe pas sur Android, afficher
                 le bouton y mènerait à un bouton mort. */}
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity
+            {Platform.OS === 'ios' && AppleButton && (
+              <AppleButton
                 style={styles.btnApple}
+                buttonStyle={AppleButton.Style.WHITE}
+                buttonType={AppleButton.Type.CONTINUE}
+                cornerRadius={29}
                 onPress={handleAppleLogin}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={t('auth.continueApple')}
-              >
-                <FontAwesome name="apple" size={20} color="#FFFFFF" />
-                <Text style={styles.btnAppleText}>{t('auth.continueApple')}</Text>
-              </TouchableOpacity>
+              />
             )}
           </>
         )}
@@ -268,39 +268,14 @@ const styles = StyleSheet.create({
   loadingWrap: { alignItems: 'center', paddingVertical: 24, gap: 12 },
   loadingText: { color: colors.textMuted, fontSize: 14 },
 
-  // Boutons en pilule : hauteur 58 (au-dessus des 44 pt de cible tactile
-  // minimale, confortable pour un pouce en conduite) et rayon plein.
-  btnGoogle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    height: 58,
-    borderRadius: 29,
-  },
-  googleIconWrap: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnGoogleText: { color: '#3C4043', fontSize: 16, fontWeight: '700' },
-  btnApple: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#000000',
-    height: 58,
-    borderRadius: 29,
-    borderWidth: 1,
-    // #000 sur un fond #0A120E : sans bordure lisible, le bouton se fond dans la
-    // page et on ne voit plus que son texte. Le blanc étant déjà pris par Google,
-    // on garde le noir (autorisé par les règles Apple) et on dessine le contour.
-    borderColor: 'rgba(255,255,255,0.22)',
-  },
-  btnAppleText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  // Les deux boutons sont des vues natives fournies par les SDK : on ne pilote
+  // que leur gabarit (hauteur 58, au-dessus des 44 pt de cible tactile minimale
+  // et confortable pour un pouce en conduite). Couleurs, logo et typo sont
+  // imposés par Apple et Google et ne doivent pas être surchargés.
+  btnGoogle: { width: '100%', height: 58 },
+  // Apple en blanc : le noir se fondait dans le fond #0A120E. Le blanc est
+  // maintenant libre puisque Google occupe la variante sombre.
+  btnApple: { width: '100%', height: 58 },
 
   footer: {
     color: colors.textDimmed,
