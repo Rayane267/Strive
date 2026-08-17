@@ -143,7 +143,7 @@ const TabItem = ({
           <Animated.Text
             style={[
               styles.label, styles.labelOverlay,
-              { color: colors.primary, opacity: activeOpacity },
+              { color: colors.primaryInk, opacity: activeOpacity },
             ]}
             numberOfLines={1}
           >

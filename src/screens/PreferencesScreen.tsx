@@ -322,11 +322,11 @@ const PreferencesScreen = () => {
               activeOpacity={0.85}
               onPress={() => navigation.navigate('SubscriptionScreen')}
             >
-              <Feather name="lock" size={13} color={colors.primary} />
+              <Feather name="lock" size={13} color={colors.primaryInk} />
               <Text style={styles.thresholdLockText}>
                 {t('preferences.thresholdLock', 'Personnalise tes seuils avec Strive Plus')}
               </Text>
-              <Feather name="chevron-right" size={16} color={colors.primary} />
+              <Feather name="chevron-right" size={16} color={colors.primaryInk} />
             </TouchableOpacity>
           )}
         </View>
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   resetOptionTextActive: {
-    color: colors.primary,
+    color: colors.primaryInk,
   },
 
   // Sliders
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,230,118,0.2)',
   },
-  sliderValueText: { color: colors.primary, fontSize: 13, fontWeight: '900' },
+  sliderValueText: { color: colors.primaryInk, fontSize: 13, fontWeight: '900' },
   slider: { width: '100%', height: 40, marginVertical: -4 },
   sliderRange: {
     flexDirection: 'row',
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  thresholdLockText: { flex: 1, color: colors.primary, fontSize: 13, fontWeight: '700' },
+  thresholdLockText: { flex: 1, color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
 
   // Status message
   statusBox: {

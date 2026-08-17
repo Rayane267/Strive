@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderBottomLeftRadius: 4,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  staffLabel: { color: colors.primary, fontSize: 11, fontWeight: '800', marginBottom: 4 },
+  staffLabel: { color: colors.primaryInk, fontSize: 11, fontWeight: '800', marginBottom: 4 },
   bubbleText: { color: colors.textMain, fontSize: 14, lineHeight: 20 },
 
   composer: {

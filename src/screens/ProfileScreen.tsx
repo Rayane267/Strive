@@ -233,7 +233,7 @@ const ProfileScreen = () => {
               {item.title}
             </Text>
             {item.sub ? (
-              <Text style={[styles.menuSub, item.accent && { color: colors.primary }]} numberOfLines={1}>
+              <Text style={[styles.menuSub, item.accent && { color: colors.primaryInk }]} numberOfLines={1}>
                 {item.sub}
               </Text>
             ) : null}
@@ -334,7 +334,7 @@ const ProfileScreen = () => {
               </View>
             </View>
             <View style={styles.earnBadge}>
-              <Feather name="trending-up" size={20} color={colors.primary} />
+              <Feather name="trending-up" size={20} color={colors.primaryInk} />
             </View>
           </View>
         )}
@@ -367,7 +367,7 @@ const ProfileScreen = () => {
                   <Text style={styles.profileUpgradeTitle}>{t('profile.upgradeCardTitle')}</Text>
                   <Text style={styles.profileUpgradeSub}>{t('profile.upgradeCardSub')}</Text>
                 </View>
-                <Feather name="arrow-right" size={18} color={colors.primary} />
+                <Feather name="arrow-right" size={18} color={colors.primaryInk} />
               </View>
             </SafeGradient>
           </TouchableOpacity>
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
   deleteInputValid: {
     borderColor: colors.primary,
     backgroundColor: 'rgba(0,230,118,0.06)',
-    color: colors.primary,
+    color: colors.primaryInk,
   },
 
   // Modal

@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 16,
   },
-  footerLink: { color: colors.primary, fontWeight: '600' },
+  footerLink: { color: colors.primaryInk, fontWeight: '600' },
 });
 
 export default AuthScreen;

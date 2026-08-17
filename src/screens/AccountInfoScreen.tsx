@@ -348,7 +348,7 @@ const AccountInfoScreen = () => {
           {/* ── FORM ── */}
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
-              <Feather name="user" size={15} color={colors.primary} />
+              <Feather name="user" size={15} color={colors.primaryInk} />
               <Text style={styles.formHeaderText}>{t('accountInfo.informations')}</Text>
             </View>
 
@@ -394,7 +394,7 @@ const AccountInfoScreen = () => {
           {/* ── DONNÉES & CONFIDENTIALITÉ ── */}
           <View style={[styles.formCard, { marginTop: 18 }]}>
             <View style={styles.formHeader}>
-              <Feather name="shield" size={15} color={colors.primary} />
+              <Feather name="shield" size={15} color={colors.primaryInk} />
               <Text style={styles.formHeaderText}>{t('accountInfo.privacy', 'DONNÉES & CONFIDENTIALITÉ')}</Text>
             </View>
             <Text style={styles.privacyNote}>

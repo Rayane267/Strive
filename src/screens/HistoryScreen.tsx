@@ -560,7 +560,7 @@ const HistoryScreen = () => {
           <Feather
             name="chevron-down"
             size={13}
-            color={colors.primary}
+            color={colors.primaryInk}
             style={{ marginLeft: 6 }}
           />
         </TouchableOpacity>
@@ -653,7 +653,7 @@ const HistoryScreen = () => {
         >
           <View style={styles.dateBtnLeft}>
             <View style={styles.dateBtnIcon}>
-              <Feather name="calendar" size={16} color={colors.primary} />
+              <Feather name="calendar" size={16} color={colors.primaryInk} />
             </View>
             <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
           </View>
@@ -668,7 +668,7 @@ const HistoryScreen = () => {
           <MaterialCommunityIcons
             name="crown"
             size={16}
-            color={colors.primary}
+            color={colors.primaryInk}
           />
           <Text style={styles.upgradeBannerText}>
             {t(
@@ -676,7 +676,7 @@ const HistoryScreen = () => {
               'Passez Plus pour voir tout votre historique',
             )}
           </Text>
-          <Feather name="chevron-right" size={14} color={colors.primary} />
+          <Feather name="chevron-right" size={14} color={colors.primaryInk} />
         </TouchableOpacity>
       )}
 
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
-  errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  errorRetry: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
 
   // Hero
   heroCard: {
@@ -1129,7 +1129,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   acceptBlock: { alignItems: 'flex-end', flexShrink: 0, maxWidth: 100 },
-  acceptValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },
+  acceptValue: { color: colors.primaryInk, fontSize: 28, fontWeight: '900' },
   acceptLabel: {
     color: colors.textDimmed,
     fontSize: 11,

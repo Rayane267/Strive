@@ -1481,7 +1481,7 @@ const DashboardScreen = () => {
             </Text>
           </View>
           {isSyncing ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
+            <ActivityIndicator size="small" color={colors.primaryInk} style={{ marginRight: 4 }} />
           ) : (
             <TouchableOpacity
               style={[styles.toggleBtn, isOnline && styles.toggleBtnActive]}
@@ -1517,7 +1517,7 @@ const DashboardScreen = () => {
           </View>
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{stats.avgRate}€/h</Text>
+            <Text style={[styles.statValue, { color: colors.primaryInk }]}>{stats.avgRate}€/h</Text>
             <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
           </View>
           <View
@@ -1626,22 +1626,22 @@ const DashboardScreen = () => {
                   <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
                   <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.primaryInk} />
               </View>
               <View style={styles.upgradeCardDivider} />
               <View style={styles.upgradeCardBottom}>
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="zap" size={12} color={colors.primary} />
+                  <Feather name="zap" size={12} color={colors.primaryInk} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '15 scans/jour')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="trending-up" size={12} color={colors.primary} />
+                  <Feather name="trending-up" size={12} color={colors.primaryInk} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', '€/h en direct')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="clock" size={12} color={colors.primary} />
+                  <Feather name="clock" size={12} color={colors.primaryInk} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk3', 'Historique')}</Text>
                 </View>
               </View>
@@ -1688,7 +1688,7 @@ const DashboardScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.confirmCard}>
             <View style={styles.confirmIconRing}>
-              <MaterialCommunityIcons name="cash-check" size={32} color={colors.primary} />
+              <MaterialCommunityIcons name="cash-check" size={32} color={colors.primaryInk} />
             </View>
             <Text style={styles.confirmTitle}>
               {t('dashboard.priceCheck.title', 'Prix correct ?')}
@@ -1911,7 +1911,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
-  liveText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
+  liveText: { color: colors.primaryInk, fontSize: 11, fontWeight: '800' },
 
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
@@ -1929,7 +1929,7 @@ const styles = StyleSheet.create({
   },
   statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
   statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  statCreditBonus: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+  statCreditBonus: { color: colors.primaryInk, fontSize: 15, fontWeight: '800' },
   statIcon: { position: 'absolute', top: 10, right: 10 },
 
 
@@ -1948,7 +1948,7 @@ const styles = StyleSheet.create({
   teaseCard: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14 },
   teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
   teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: 8 },
-  teaseCta: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  teaseCta: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
 
   // UPGRADE CARD (Free tier — premium upsell)
   upgradeCard: {
@@ -2033,7 +2033,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
-  errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  errorRetry: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
 
   // PRICE MODAL
   // Confirm modal (price check)

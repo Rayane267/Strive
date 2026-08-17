@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   barLabelToday: {
-    color: colors.primary,
+    color: colors.primaryInk,
     fontWeight: '800',
   },
   barValue: {

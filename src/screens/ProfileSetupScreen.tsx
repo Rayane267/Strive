@@ -375,7 +375,7 @@ export default function ProfileSetupScreen() {
                   <Text style={styles.dialItemName}>{t(item.nameKey)}</Text>
                   <Text style={styles.dialItemCode}>{item.code}</Text>
                   {item.code === dialCode.code && (
-                    <Feather name="check" size={16} color={colors.primary} />
+                    <Feather name="check" size={16} color={colors.primaryInk} />
                   )}
                 </TouchableOpacity>
               )}
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: 28 },
 
   label: {
-    fontSize: 11, fontWeight: '700', color: colors.primary,
+    fontSize: 11, fontWeight: '700', color: colors.primaryInk,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
   },
 

@@ -102,7 +102,7 @@ const HelpScreen = () => {
 
         <View style={styles.contactCard}>
           <View style={styles.contactIconWrap}>
-            <MaterialCommunityIcons name="headset" size={28} color={colors.primary} />
+            <MaterialCommunityIcons name="headset" size={28} color={colors.primaryInk} />
           </View>
           <Text style={styles.contactDesc}>{t('help.contactDesc')}</Text>
           <TouchableOpacity style={styles.contactBtn} onPress={handleEmail} activeOpacity={0.85}>

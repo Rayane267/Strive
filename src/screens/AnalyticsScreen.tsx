@@ -449,7 +449,7 @@ const AnalyticsScreen = () => {
         </TouchableOpacity>
         <TouchableOpacity style={styles.calMonthBtn} onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}>
           <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
-          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
+          <Feather name="chevron-down" size={13} color={colors.primaryInk} style={{ marginLeft: 6 }} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="chevron-right" size={18} color={colors.textMain} />
@@ -498,7 +498,7 @@ const AnalyticsScreen = () => {
         }} activeOpacity={0.75}>
           <View style={styles.dateBtnLeft}>
             <View style={styles.dateBtnIcon}>
-              <Feather name="calendar" size={16} color={colors.primary} />
+              <Feather name="calendar" size={16} color={colors.primaryInk} />
             </View>
             <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
           </View>
@@ -527,7 +527,7 @@ const AnalyticsScreen = () => {
         ) : isEmpty ? (
           <View style={styles.analyticsEmpty}>
             <View style={styles.analyticsEmptyIcon}>
-              <MaterialCommunityIcons name="chart-line-variant" size={34} color={colors.primary} />
+              <MaterialCommunityIcons name="chart-line-variant" size={34} color={colors.primaryInk} />
             </View>
             <Text style={styles.analyticsEmptyTitle}>{t('analytics.empty.title', 'Aucune donnée pour le moment')}</Text>
             <Text style={styles.analyticsEmptyHint}>
@@ -627,7 +627,7 @@ const AnalyticsScreen = () => {
                 )}
                 <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
-                  <MaterialCommunityIcons name="speedometer" size={22} color={colors.primary} />
+                  <MaterialCommunityIcons name="speedometer" size={22} color={colors.primaryInk} />
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.hourlyRate')}</Text>
@@ -650,7 +650,7 @@ const AnalyticsScreen = () => {
                 )}
                 <View style={styles.kpiShimmer} />
                 <View style={styles.kpiIconWrap}>
-                  <MaterialCommunityIcons name="map-marker-distance" size={22} color={colors.primary} />
+                  <MaterialCommunityIcons name="map-marker-distance" size={22} color={colors.primaryInk} />
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.priceKm')}</Text>
@@ -699,7 +699,7 @@ const AnalyticsScreen = () => {
                 data={hourlyTrend}
                 title={t('analytics.hourlyRate').toUpperCase()}
                 unit="€/h"
-                color={colors.primary}
+                color={colors.primaryInk}
               />
             )}
             {kmTrend.length > 1 && (
@@ -784,12 +784,12 @@ const AnalyticsScreen = () => {
                 onPress={() => navigation.navigate('SubscriptionScreen')}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="crown" size={22} color={colors.primary} />
+                <MaterialCommunityIcons name="crown" size={22} color={colors.primaryInk} />
                 <View style={styles.upsellText}>
                   <Text style={styles.upsellTitle}>{t('analytics.alerts.premiumTitle')}</Text>
                   <Text style={styles.upsellSub}>{t('analytics.alerts.premiumRequired')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.primaryInk} />
               </TouchableOpacity>
             )}
           </>
@@ -887,7 +887,7 @@ const styles = StyleSheet.create({
     padding: 14, marginBottom: 12,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
-  errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  errorRetry: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
   // Loading skeleton
   skeletonWrap: { gap: 14, paddingTop: 4 },
   skeletonTilesRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   },
   bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+  bilanAvoided: { color: colors.primaryInk, fontSize: 14, fontWeight: '700' },
 
   // Date button
   dateBtn: {
@@ -1016,7 +1016,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   profitBadgeTextActive: {
-    color: colors.primary,
+    color: colors.primaryInk,
   },
   fuelDetail: {
     color: 'rgba(255,255,255,0.35)',

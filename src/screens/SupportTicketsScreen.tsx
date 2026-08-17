@@ -50,7 +50,7 @@ const STATUS_META: Record<
     fallback: 'En attente',
   },
   answered: {
-    color: colors.primary,
+    color: colors.primaryInk,
     key: 'support.status.answered',
     fallback: 'Répondu',
   },
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary + '70',
   },
   chipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
-  chipTxtActive: { color: colors.primary },
+  chipTxtActive: { color: colors.primaryInk },
   errRow: {
     flexDirection: 'row',
     alignItems: 'center',

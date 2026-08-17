@@ -92,21 +92,21 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>{t('dashboard.distance')}</Text>
                 <View style={styles.tripMetricItem}>
-                  <MaterialCommunityIcons name="map-marker" size={14} color={colors.primary} />
+                  <MaterialCommunityIcons name="map-marker" size={14} color={colors.primaryInk} />
                   <Text style={styles.tripMetricText}>{distance} km</Text>
                 </View>
               </View>
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>{t('dashboard.time')}</Text>
                 <View style={styles.tripMetricItem}>
-                  <MaterialCommunityIcons name="clock-outline" size={14} color={colors.primary} />
+                  <MaterialCommunityIcons name="clock-outline" size={14} color={colors.primaryInk} />
                   <Text style={styles.tripMetricText}>{Number(ride.duration_min || 0)} min</Text>
                 </View>
               </View>
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>{t('dashboard.kmRate')}</Text>
                 <View style={styles.tripMetricItem}>
-                  <Feather name="navigation" size={13} color={colors.primary} />
+                  <Feather name="navigation" size={13} color={colors.primaryInk} />
                   <Text style={styles.tripMetricText}>{kmRate.toFixed(2)}</Text>
                 </View>
               </View>

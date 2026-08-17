@@ -22,7 +22,7 @@ const ScanButton = React.memo(({ onPress }: ScanButtonProps) => (
       <MaterialCommunityIcons
         name="camera-plus-outline"
         size={30}
-        color={colors.primary}
+        color={colors.primaryInk}
       />
     </View>
   </TouchableOpacity>

@@ -27,7 +27,7 @@ const QualityScoreCard = React.memo(({ score }: Props) => {
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Feather name="award" size={16} color={colors.primary} />
+          <Feather name="award" size={16} color={colors.primaryInk} />
           <Text style={styles.title}>{t('analytics.quality.title', 'Qualité des courses')}</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: qColor + '22' }]}>

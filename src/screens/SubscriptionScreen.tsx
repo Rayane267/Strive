@@ -311,7 +311,7 @@ const SubscriptionScreen = () => {
                 colors={['rgba(0,230,118,0.2)', 'rgba(0,230,118,0.08)']}
                 style={styles.featureIconWrap}
               >
-                <Feather name={f.icon as any} size={16} color={colors.primary} />
+                <Feather name={f.icon as any} size={16} color={colors.primaryInk} />
               </SafeGradient>
               <Text style={styles.featureText}>
                 <Text style={styles.featureHighlight}>{t(f.colorKey)}</Text>
@@ -453,17 +453,17 @@ const SubscriptionScreen = () => {
             {/* ── TRUST ── */}
             <View style={styles.trustRow}>
               <View style={styles.trustPill}>
-                <Feather name="refresh-cw" size={12} color={colors.primary} />
+                <Feather name="refresh-cw" size={12} color={colors.primaryInk} />
                 <Text style={styles.trustText}>{t('subscription.trust.cancel')}</Text>
               </View>
               <View style={styles.trustPill}>
-                <Feather name="shield" size={12} color={colors.primary} />
+                <Feather name="shield" size={12} color={colors.primaryInk} />
                 <Text style={styles.trustText}>
                   {Platform.OS === 'ios' ? t('subscription.trust.secure') : t('subscription.trust.secureAndroid', 'Google Play')}
                 </Text>
               </View>
               <View style={styles.trustPill}>
-                <Feather name="unlock" size={12} color={colors.primary} />
+                <Feather name="unlock" size={12} color={colors.primaryInk} />
                 <Text style={styles.trustText}>{t('subscription.trust.commitment')}</Text>
               </View>
             </View>
@@ -516,7 +516,7 @@ const SubscriptionScreen = () => {
                 style={styles.ctaGradient}
               >
                 {purchasing ? (
-                  <ActivityIndicator color={colors.primary} />
+                  <ActivityIndicator color={colors.primaryInk} />
                 ) : (
                   <>
                     <Text style={styles.ctaText}>{ctaLabel}</Text>
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   },
 
   labelText: {
-    color: colors.primary, fontSize: 11, fontWeight: '900',
+    color: colors.primaryInk, fontSize: 11, fontWeight: '900',
     letterSpacing: 3, marginBottom: 10,
   },
   heroTitle: {
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   featureText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '500', flex: 1, lineHeight: 20 },
-  featureHighlight: { color: colors.primary, fontWeight: '800' },
+  featureHighlight: { color: colors.primaryInk, fontWeight: '800' },
 
   divider: {
     height: 1, marginHorizontal: 32, marginBottom: 22,
@@ -660,14 +660,14 @@ const styles = StyleSheet.create({
   planCardContent: { flex: 1 },
   planCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   planCardTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  planCardTitleMonthly: { color: colors.primary },
+  planCardTitleMonthly: { color: colors.primaryInk },
   planCardTitleActive: { color: colors.textMuted },
   planCardPrice: { color: colors.textMain, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   planCardPriceMonthly: { fontSize: 30 },
   planCardPriceSuffix: { color: colors.textDimmed, fontSize: 13, fontWeight: '600' },
   planCardEquiv: { color: colors.textDimmed, fontSize: 12, marginTop: 2, fontWeight: '500' },
   monthlySubHint: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: '500' },
-  trialFreeLabel: { color: colors.primary, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
+  trialFreeLabel: { color: colors.primaryInk, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   trialThenPrice: { color: colors.textDimmed, fontSize: 13, fontWeight: '600', marginTop: 2 },
   popularBadge: { position: 'absolute', top: -1, right: 16, zIndex: 1 },
   popularBadgeInner: {
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,230,118,0.15)', paddingHorizontal: 8, paddingVertical: 3,
     borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
   },
-  trialPillText: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  trialPillText: { color: colors.primaryInk, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
 
   // ── Active subscriber ──
   activeCard: {

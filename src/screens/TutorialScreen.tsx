@@ -485,11 +485,11 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                   // recompense. Conforme a la regle de palette en tete de fichier.
                   { icon: 'line-scan', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
                   { icon: 'gesture-tap', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
-                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
+                  { icon: 'check-decagram', color: colors.primaryInk, labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
                 ] : [
                   { icon: 'cellphone-screenshot', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
                   { icon: 'gesture-tap-hold', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
-                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
+                  { icon: 'check-decagram', color: colors.primaryInk, labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
                 ]).map((step, i, arr) => (
                   <View key={i} style={styles.qrStepRow}>
                     <View style={styles.qrRail}>
@@ -1151,20 +1151,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
-  presetNameActive: { color: colors.primary },
+  presetNameActive: { color: colors.primaryInk },
   presetValue: {
     color: colors.textMain,
     fontSize: 15,
     fontWeight: '900',
   },
-  presetValueActive: { color: colors.primary },
+  presetValueActive: { color: colors.primaryInk },
   presetSub: {
     color: colors.textDimmed,
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
   },
-  presetSubActive: { color: colors.primary + 'AA' },
+  presetSubActive: { color: colors.primaryInk + 'AA' },
   presetHint: {
     color: colors.textDimmed,
     fontSize: 11,

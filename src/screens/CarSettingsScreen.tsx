@@ -53,7 +53,7 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
           selectTextOnFocus
         />
         {isLoading ? (
-          <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+          <ActivityIndicator size="small" color={colors.primaryInk} style={{ marginLeft: 8 }} />
         ) : (
           <TouchableOpacity onPress={onOpen} style={{ marginLeft: 8 }}>
             <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
@@ -373,7 +373,7 @@ const CarSettingsScreen = () => {
                     <MaterialCommunityIcons
                       name={fuelType === 'electric' ? 'lightning-bolt' : 'gas-station'}
                       size={18}
-                      color={colors.primary}
+                      color={colors.primaryInk}
                     />
                   </View>
                   <View>
@@ -413,7 +413,7 @@ const CarSettingsScreen = () => {
                   <View style={styles.consRow}>
                     <View style={styles.consLeft}>
                       <View style={styles.consIconWrap}>
-                        <MaterialCommunityIcons name="currency-eur" size={18} color={colors.primary} />
+                        <MaterialCommunityIcons name="currency-eur" size={18} color={colors.primaryInk} />
                       </View>
                       <View>
                         <Text style={styles.consTitle}>{t('carSettings.elecPrice', 'Prix de recharge')}</Text>

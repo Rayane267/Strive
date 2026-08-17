@@ -23,7 +23,7 @@ const PlusBadge: React.FC<{ style?: object }> = ({ style }) => {
       accessibilityRole="text"
       accessibilityLabel={t('tier.plusOnly', 'Réservé à Strive Plus')}
     >
-      <Feather name="lock" size={9} color={colors.primary} />
+      <Feather name="lock" size={9} color={colors.primaryInk} />
       <Text style={styles.text}>{t('tier.plusBadge', 'PLUS')}</Text>
     </View>
   );
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,230,118,0.28)',
   },
   text: {
-    color: colors.primary,
+    color: colors.primaryInk,
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 0.8,

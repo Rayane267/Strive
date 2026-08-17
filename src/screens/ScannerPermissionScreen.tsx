@@ -107,7 +107,7 @@ const ScannerPermissionScreen = () => {
         </View>
 
         <View style={styles.body}>
-          <MaterialCommunityIcons name="gesture-double-tap" size={48} color={colors.primary} style={styles.icon} />
+          <MaterialCommunityIcons name="gesture-double-tap" size={48} color={colors.primaryInk} style={styles.icon} />
           <Text style={styles.title}>{t('scanner.iosTitle', 'Scanner via raccourci')}</Text>
           <Text style={styles.subtitle}>
             {t('scanner.iosSubtitle', 'Configurez un raccourci une seule fois — ensuite, double-tapez le dos de votre iPhone pour analyser une offre depuis Uber, Bolt ou Heetch.')}
@@ -128,7 +128,7 @@ const ScannerPermissionScreen = () => {
             </View>
             <TouchableOpacity style={styles.stepBtn} onPress={openShortcutsApp}>
               <Text style={styles.stepBtnText}>{t('scanner.iosOpenShortcuts', 'Ouvrir Raccourcis')}</Text>
-              <Feather name="chevron-right" size={14} color={colors.primary} />
+              <Feather name="chevron-right" size={14} color={colors.primaryInk} />
             </TouchableOpacity>
           </View>
 
@@ -147,7 +147,7 @@ const ScannerPermissionScreen = () => {
             </View>
             <TouchableOpacity style={styles.stepBtn} onPress={openIosAccessibility}>
               <Text style={styles.stepBtnText}>{t('scanner.iosOpenAccessibility', 'Ouvrir Réglages')}</Text>
-              <Feather name="chevron-right" size={14} color={colors.primary} />
+              <Feather name="chevron-right" size={14} color={colors.primaryInk} />
             </TouchableOpacity>
           </View>
 
@@ -165,7 +165,7 @@ const ScannerPermissionScreen = () => {
               </View>
             </View>
             <View style={styles.iosIconWrap}>
-              <MaterialCommunityIcons name="dock-top" size={20} color={colors.primary} />
+              <MaterialCommunityIcons name="dock-top" size={20} color={colors.primaryInk} />
             </View>
           </View>
 
@@ -208,7 +208,7 @@ const ScannerPermissionScreen = () => {
 
       <View style={styles.body}>
 
-        <MaterialCommunityIcons name="line-scan" size={48} color={colors.primary} style={styles.icon} />
+        <MaterialCommunityIcons name="line-scan" size={48} color={colors.primaryInk} style={styles.icon} />
         <Text style={styles.title}>
           {NEEDS_MEDIA_PROJECTION ? t('scanner.threePerms') : t('scanner.twoPerms')}
         </Text>
@@ -217,7 +217,7 @@ const ScannerPermissionScreen = () => {
         {/* Prominent disclosure — requis Google Play pour accessibility service */}
         <View style={styles.disclosureBox}>
           <View style={styles.disclosureHeader}>
-            <Feather name="shield" size={16} color={colors.primary} />
+            <Feather name="shield" size={16} color={colors.primaryInk} />
             <Text style={styles.disclosureTitle}>{t('scanner.disclosureTitle', 'Pourquoi ces permissions ?')}</Text>
           </View>
           <Text style={styles.disclosureBody}>
@@ -250,7 +250,7 @@ const ScannerPermissionScreen = () => {
               onPress={() => scannerService.openOverlayPermissionSettings()}
             >
               <Text style={styles.stepBtnText}>{t('scanner.open')}</Text>
-              <Feather name="chevron-right" size={14} color={colors.primary} />
+              <Feather name="chevron-right" size={14} color={colors.primaryInk} />
             </TouchableOpacity>
           )}
         </View>
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8,
   },
   disclosureTitle: {
-    color: colors.primary, fontSize: 13, fontWeight: '700',
+    color: colors.primaryInk, fontSize: 13, fontWeight: '700',
   },
   disclosureBody: {
     color: colors.textMuted, fontSize: 12, lineHeight: 18,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  stepBtnText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  stepBtnText: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
 
   iosIconWrap: {
     width: 36, height: 36, borderRadius: 18,

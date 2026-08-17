@@ -100,7 +100,7 @@ const ShopScreen = () => {
           <Text style={styles.headerTitle}>{t('shop.title')}</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: tabBarHeight }}>
-          <MaterialCommunityIcons name="storefront-outline" size={72} color={colors.primary} />
+          <MaterialCommunityIcons name="storefront-outline" size={72} color={colors.primaryInk} />
           <Text style={{ color: colors.textMain, fontSize: 22, fontWeight: 'bold', marginTop: 20, textAlign: 'center' }}>
             {t('shop.comingSoonTitle', 'Bientôt disponible')}
           </Text>
@@ -124,7 +124,7 @@ const ShopScreen = () => {
         {/* CREDITS BALANCE */}
         <View style={styles.balanceCard}>
           <View style={styles.balanceLeft}>
-            <MaterialCommunityIcons name="ticket-percent-outline" size={32} color={colors.primary} />
+            <MaterialCommunityIcons name="ticket-percent-outline" size={32} color={colors.primaryInk} />
             <View style={styles.balanceTextWrap}>
               <Text style={styles.balanceLabel}>{t('shop.creditsBalance')}</Text>
               <Text style={styles.balanceValue}>{t('shop.extraBalance', { count: extraCredits })}</Text>
@@ -191,15 +191,15 @@ const ShopScreen = () => {
         {/* HOW IT WORKS */}
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <View style={styles.infoIcon}><Feather name="info" size={16} color={colors.primary} /></View>
+            <View style={styles.infoIcon}><Feather name="info" size={16} color={colors.primaryInk} /></View>
             <Text style={styles.infoText}>{t('shop.info1')}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoIcon}><Feather name="clock" size={16} color={colors.primary} /></View>
+            <View style={styles.infoIcon}><Feather name="clock" size={16} color={colors.primaryInk} /></View>
             <Text style={styles.infoText}>{t('shop.info2')}</Text>
           </View>
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
-            <View style={styles.infoIcon}><Feather name="trending-up" size={16} color={colors.primary} /></View>
+            <View style={styles.infoIcon}><Feather name="trending-up" size={16} color={colors.primaryInk} /></View>
             <Text style={styles.infoText}>{t('shop.info3')}</Text>
           </View>
         </View>
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 10, right: 10,
     backgroundColor: 'rgba(0,230,118,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
-  savingsText: { color: colors.primary, fontSize: 10, fontWeight: 'bold' },
+  savingsText: { color: colors.primaryInk, fontSize: 10, fontWeight: 'bold' },
   packIconWrap: {
     width: 52, height: 52, borderRadius: 14,
     backgroundColor: 'rgba(0,230,118,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 12,

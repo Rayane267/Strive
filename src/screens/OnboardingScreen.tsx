@@ -439,7 +439,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                       <View style={styles.redact} />
                     </View>
                     <Text style={styles.markUnit}>€/h</Text>
-                    <Feather name="lock" size={19} color={colors.primary} />
+                    <Feather name="lock" size={19} color={colors.primaryInk} />
                   </>
                 )}
                 <Text style={styles.markCaption}>{t('onboarding.result.yoursCaption')}</Text>
@@ -502,7 +502,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           accessibilityRole="button"
           accessibilityLabel={t('onboarding.result.plusTitle')}
         >
-          <Feather name="unlock" size={20} color={colors.primary} />
+          <Feather name="unlock" size={20} color={colors.primaryInk} />
           <View style={styles.plusTexts}>
             <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
             {/* Ses propres chiffres, repris tels qu'il vient de les donner :
@@ -514,7 +514,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
               })}
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={colors.primary} />
+          <Feather name="chevron-right" size={20} color={colors.primaryInk} />
         </TouchableOpacity>
       </Animated.View>
     );
@@ -539,7 +539,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             accessibilityRole="button"
             accessibilityLabel={t('common.back', 'Retour')}
           >
-            <Feather name="chevron-left" size={26} color={colors.primary} />
+            <Feather name="chevron-left" size={26} color={colors.primaryInk} />
           </TouchableOpacity>
         )}
 
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
   // les deux seuils eux-mêmes, et ils portent du sens.
   markRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   markValue: {
-    color: colors.primary,
+    color: colors.primaryInk,
     fontSize: 44,
     fontWeight: '900',
     letterSpacing: -1.8,
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
   // Le seuil standard est celui qui s'applique vraiment aujourd'hui : il reste
   // en blanc, couleur du fait acquis. Le vert est réservé à ce qui se débloque.
   markValueStd: { color: colors.textMain },
-  markUnit: { color: colors.primary, fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
+  markUnit: { color: colors.primaryInk, fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
   redactRow: { flexDirection: 'row', gap: 5, alignSelf: 'flex-end', marginBottom: 4 },
   redact: { width: 22, height: 34, borderRadius: 5, backgroundColor: colors.primary + '4D' },
   markCaption: { color: colors.textMuted, fontSize: 14, marginLeft: 2 },
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary + '3A',
   },
   plusTexts: { flex: 1 },
-  plusTitle: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+  plusTitle: { color: colors.primaryInk, fontSize: 15, fontWeight: '800' },
   plusPersonal: { color: colors.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 2 },
 
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
