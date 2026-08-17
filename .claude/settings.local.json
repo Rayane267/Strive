@@ -282,7 +282,9 @@
       "Bash(mkdir -p screenshots/onboarding)",
       "Bash(printf '\\\\n# Captures d ecran locales\\\\nscreenshots/\\\\n')",
       "Bash(sed -i \"s|import App from './App';|import App from './preview';|\" index.js)",
-      "PowerShell($c = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"tue\" } else { \"port libre\" })"
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"tue\" } else { \"port libre\" })",
+      "Bash(grep -roE \"'#[0-9A-Fa-f]{3,8}'\" src/screens src/components src/navigation)",
+      "Bash(sort -t: -k2 -rn)"
     ]
   },
   "enableAllProjectMcpServers": true,

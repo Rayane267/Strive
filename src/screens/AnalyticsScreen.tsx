@@ -614,7 +614,7 @@ const AnalyticsScreen = () => {
               <View style={styles.kpiCard}>
                 {Platform.OS === 'ios' ? (
                   <>
-                    <BlurView style={StyleSheet.absoluteFill} blurType="chromeMaterialDark" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
+                    <BlurView style={StyleSheet.absoluteFill} blurType="light" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (
@@ -637,7 +637,7 @@ const AnalyticsScreen = () => {
               <View style={styles.kpiCard}>
                 {Platform.OS === 'ios' ? (
                   <>
-                    <BlurView style={StyleSheet.absoluteFill} blurType="chromeMaterialDark" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
+                    <BlurView style={StyleSheet.absoluteFill} blurType="light" blurAmount={24} reducedTransparencyFallbackColor={colors.surface} />
                     <View style={[StyleSheet.absoluteFill, styles.kpiGlassTint]} />
                   </>
                 ) : (

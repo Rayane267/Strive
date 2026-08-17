@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="appBackground">#0A120E</color>
-    <!-- Fond de l'adaptive icon (Android 8+). Teinte dark Strive. -->
+    <!-- Doit correspondre à `colors.background` côté JS : sinon l'app flashe en
+         sombre au lancement, avant même que le premier écran soit monté. -->
+    <color name="appBackground">#FFFFFF</color>
+    <!-- Fond de l'adaptive icon (Android 8+). Reste sombre pour l'instant :
+         changer l'icône relève de la marque, pas de la refonte des écrans. -->
     <color name="ic_launcher_background">#0A120E</color>
 </resources>

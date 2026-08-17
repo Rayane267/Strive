@@ -159,7 +159,7 @@ const AuthScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       {/* Identité en haut, actions en bas : le pouce ne remonte pas chercher un

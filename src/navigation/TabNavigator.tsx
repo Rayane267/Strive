@@ -217,7 +217,7 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
       <View style={styles.pill}>
         <BlurView
           style={StyleSheet.absoluteFill}
-          blurType="chromeMaterialDark"
+          blurType="light"
           blurAmount={40}
           reducedTransparencyFallbackColor="rgba(10,20,14,0.92)"
         />

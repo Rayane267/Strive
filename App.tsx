@@ -78,7 +78,7 @@ const AppContent = () => {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <OfflineBanner />
       <NavigationContainer
         ref={navigationRef}

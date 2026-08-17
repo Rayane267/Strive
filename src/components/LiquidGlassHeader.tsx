@@ -29,7 +29,7 @@ const LiquidGlassHeader = ({ title, subtitle, onBack, right }: Props) => {
         <>
           <BlurView
             style={StyleSheet.absoluteFill}
-            blurType="chromeMaterialDark"
+            blurType="light"
             blurAmount={28}
             reducedTransparencyFallbackColor={colors.background}
           />

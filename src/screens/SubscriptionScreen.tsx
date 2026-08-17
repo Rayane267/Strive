@@ -247,7 +247,7 @@ const SubscriptionScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       <TouchableOpacity
         onPress={() => navigation.canGoBack() && navigation.goBack()}

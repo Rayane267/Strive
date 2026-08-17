@@ -1,13 +1,49 @@
 // src/theme/colors.ts
+//
+// Palette « Airy Clean » — voir docs/DESIGN.md, qui fait autorité.
+//
+// Les noms de clés sont hérités du thème sombre : `background`, `surface`,
+// `textMain`… Ils sont conservés tels quels parce que 816 usages en dépendent,
+// et parce qu'ils décrivent un rôle, pas une couleur. Seules les valeurs changent.
 export const colors = {
-  background: '#0A120E',
-  surface: '#15241C',
-  surfaceLight: '#1A2920',
-  primary: '#00E676', // Ton vert fluo
-  danger: '#FF4D4D',
-  textMain: '#FFFFFF',
-  textMuted: '#8F9B96',
-  // #808892 : contraste ≥ 4.5:1 (WCAG AA texte normal) sur background ET surface.
-  // L'ancien #6B7280 tombait à ~3.9:1 (échec AA) pour tout le texte secondaire.
-  textDimmed: '#808892',
+  background: '#FFFFFF',
+  // Gris très léger, nuancé émeraude : sépare les sections sans ajouter de poids
+  // visuel, là où une bordure en aurait ajouté.
+  surface: '#F8FAF9',
+  // Les cartes sont blanches et posées SUR `surface` — l'inverse du thème sombre,
+  // où les surfaces s'éclaircissaient en montant.
+  surfaceLight: '#FFFFFF',
+
+  // Vert néon : uniquement en FOND, avec du texte sombre dessus.
+  primary: '#13EC80',
+  // Vert d'avant-plan : dès que le vert devient du texte ou une icône.
+  // #13EC80 sur blanc plafonne à 1,6:1, très en dessous des 4,5:1 exigés pour du
+  // texte et des 3:1 pour une icône. #006D37 donne 5,6:1 et reste lisible en plein
+  // soleil, ce qui est la condition d'usage réelle de l'app.
+  primaryInk: '#006D37',
+
+  danger: '#BA1A1A',
+
+  textMain: '#08110C',
+  textMuted: '#6B7280',
+  // Même valeur que `textMuted` : sur blanc, descendre plus clair ferait passer le
+  // texte secondaire sous le seuil AA. La hiérarchie se fait désormais par la
+  // taille et la graisse, plus par des gris successifs.
+  textDimmed: '#6B7280',
+
+  // Séparateurs et bordures fines.
+  outline: '#E0E7E2',
 };
+
+/**
+ * Ombre unique du système : diffuse et décalée vers le bas, pour que les cartes
+ * paraissent posées sur la surface plutôt que collées. Un halo sans décalage
+ * n'est que de la décoration.
+ */
+export const shadow = {
+  shadowColor: '#000000',
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.04,
+  shadowRadius: 30,
+  elevation: 3,
+} as const;
