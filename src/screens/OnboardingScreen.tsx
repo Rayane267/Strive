@@ -14,7 +14,7 @@
  * `utils/incomeGoal.deriveThreshold`, qui porte le raisonnement.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -135,6 +135,31 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // vertical. Sortie rapide, entrée en ease-out — c'est ce qui donne
   // l'impression que l'écran répond au doigt plutôt qu'il ne défile.
   const anim = useRef(new Animated.Value(1)).current;
+
+  // ── Révélation du résultat ────────────────────────────────────────────────
+  // Le dernier écran est le seul qui affiche un chiffre produit par les
+  // réponses : il s'écrit en montant depuis zéro plutôt que d'apparaître fait.
+  // C'est le seul endroit de l'onboarding qui mérite qu'on s'y arrête.
+  const reveal = useRef(new Animated.Value(0)).current;
+  const [counted, setCounted] = useState(0);
+
+  useEffect(() => {
+    if (step !== 'result') return;
+    reveal.setValue(0);
+    const id = reveal.addListener(({ value }) => {
+      setCounted(Math.round(value * FREE_THRESHOLDS.hourly));
+    });
+    Animated.timing(reveal, {
+      toValue: 1,
+      duration: 900,
+      delay: 260,
+      easing: Easing.out(Easing.cubic),
+      // Le compteur lit la valeur depuis JS : le pilote natif la rendrait
+      // inaccessible et le chiffre resterait figé à zéro.
+      useNativeDriver: false,
+    }).start();
+    return () => reveal.removeListener(id);
+  }, [step, reveal]);
 
   const go = (next: number) => {
     if (next < 0 || next >= STEPS.length) return;
@@ -402,17 +427,26 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     argumente, pas une phrase de vente. Le chiffre du haut est
                     bien celui qui s'applique au compte gratuit. */}
                 <Text style={styles.tierLabel}>{t('onboarding.result.currentLabel')}</Text>
-                <Text style={styles.tierCurrent}>{FREE_THRESHOLDS.hourly} €/h</Text>
+                <Text style={styles.tierCurrent}>{counted} €/h</Text>
                 <Text style={styles.tierSub}>{t('onboarding.result.currentSub')}</Text>
 
                 <View style={styles.resultDivider} />
 
-                <Text style={styles.tierLabel}>{t('onboarding.result.optimizedLabel')}</Text>
-                <View style={styles.lockedRow}>
-                  <Text style={styles.resultValue}>••</Text>
-                  <Text style={styles.lockedUnit}>€/h</Text>
-                  <Feather name="lock" size={22} color={colors.primary} />
-                </View>
+                {/* Le seuil verrouillé n'arrive qu'une fois le premier chiffre
+                    posé : les deux ensemble se liraient comme un seul bloc, et
+                    l'écart perdrait son effet. */}
+                <Animated.View
+                  style={{
+                    opacity: reveal.interpolate({ inputRange: [0.6, 1], outputRange: [0, 1] }),
+                  }}
+                >
+                  <Text style={styles.tierLabel}>{t('onboarding.result.optimizedLabel')}</Text>
+                  <View style={styles.lockedRow}>
+                    <Text style={styles.resultValue}>••</Text>
+                    <Text style={styles.lockedUnit}>€/h</Text>
+                    <Feather name="lock" size={22} color={colors.primary} />
+                  </View>
+                </Animated.View>
               </>
             )}
 
@@ -461,12 +495,15 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const renderPlusPitch = () => {
     if (step !== 'result' || !derived || isPremium) return null;
     return (
-      <View style={styles.plusCard}>
+      <Animated.View
+        style={[
+          styles.plusCard,
+          { opacity: reveal.interpolate({ inputRange: [0.8, 1], outputRange: [0, 1] }) },
+        ]}
+      >
+        <Feather name="unlock" size={18} color={colors.primary} />
         <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
-        <Text style={styles.plusBody}>
-          {t('onboarding.result.plusBody', { free: FREE_THRESHOLDS.hourly })}
-        </Text>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -716,9 +753,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  // Une ligne, pas un paragraphe : le chiffre masqué juste au-dessus dit déjà
+  // ce qu'il y a à gagner, un texte de vente en dessous ne ferait que le diluer.
   plusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     marginTop: 16,
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 18,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -726,7 +769,6 @@ const styles = StyleSheet.create({
     borderColor: colors.primary + '3A',
   },
   plusTitle: { color: colors.primary, fontSize: 15, fontWeight: '800' },
-  plusBody: { color: colors.textMuted, fontSize: 13.5, lineHeight: 20, marginTop: 6 },
 
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
   // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
