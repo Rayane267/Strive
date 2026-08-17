@@ -859,7 +859,7 @@ const HistoryScreen = () => {
             <MaterialCommunityIcons
               name="line-scan"
               size={16}
-              color={colors.background}
+              color={colors.textMain}
             />
             <Text style={styles.emptyCtaText}>
               {t('history.emptyCta', 'Lancer un scan')}
@@ -1384,7 +1384,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
   },
-  emptyCtaText: { color: colors.background, fontWeight: '700', fontSize: 13 },
+  emptyCtaText: { color: colors.textMain, fontWeight: '700', fontSize: 13 },
   emptyIconWrap: {
     width: 72,
     height: 72,

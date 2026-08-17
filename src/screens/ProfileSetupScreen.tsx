@@ -305,10 +305,10 @@ export default function ProfileSetupScreen() {
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color={colors.background} />
+              <ActivityIndicator color={colors.textMain} />
             ) : (
               <>
-                <Feather name="arrow-right" size={18} color={colors.background} />
+                <Feather name="arrow-right" size={18} color={colors.textMain} />
                 <Text style={styles.buttonText}>{t('profile.setup.submit')}</Text>
               </>
             )}
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
   },
-  buttonText: { color: colors.background, fontSize: 16, fontWeight: '800' },
+  buttonText: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingHorizontal: 20 },

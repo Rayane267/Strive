@@ -1419,18 +1419,14 @@ const DashboardScreen = () => {
         <Animated.View
           style={[
             styles.onlinePill,
-            // Conserve l'ombre renforcée de l'état actif ; le fond et la bordure,
-            // eux, sont repris juste après par les valeurs animées (dernier style
-            // gagnant), avec exactement les mêmes couleurs qu'auparavant.
-            isOnline && styles.onlinePillActive,
+            // Le fond est animé et écrase donc le style de base (dernier style
+            // gagnant) : c'est ici, et pas dans la feuille de styles, que se
+            // décide la couleur réelle de la barre. Elle passe du gris de repos
+            // au vert très clair de l'état en ligne.
             {
               backgroundColor: onlineTint.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['#111E18', '#0D1F17'],
-              }),
-              borderColor: onlineTint.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['rgba(0,230,118,0.15)', 'rgba(0,230,118,0.4)'],
+                outputRange: [colors.surface, '#DFFBEC'],
               }),
             },
           ]}
@@ -1490,7 +1486,7 @@ const DashboardScreen = () => {
               accessibilityRole="button"
               accessibilityLabel={isOnline ? t('dashboard.goOffline') : t('dashboard.goOnline')}
             >
-              <Feather name="power" size={14} color={colors.background} />
+              <Feather name="power" size={14} color={colors.textMain} />
               <Text style={styles.toggleBtnText}>
                 {isOnline ? t('dashboard.goOffline') : t('dashboard.goOnline')}
               </Text>
@@ -1513,12 +1509,12 @@ const DashboardScreen = () => {
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
             <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
             <Text style={styles.statValue}>{stats.earnings}€</Text>
-            <MaterialCommunityIcons name="cash" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <MaterialCommunityIcons name="cash" size={32} color={colors.primary + '40'} style={styles.statIcon} />
           </View>
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
             <Text style={[styles.statValue, { color: colors.primaryInk }]}>{stats.avgRate}€/h</Text>
-            <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <Feather name="trending-up" size={32} color={colors.primary + '40'} style={styles.statIcon} />
           </View>
           <View
             style={styles.statCard}
@@ -1537,7 +1533,7 @@ const DashboardScreen = () => {
                 <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
               )}
             </Text>
-            <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <MaterialCommunityIcons name="qrcode-scan" size={32} color={colors.primary + '40'} style={styles.statIcon} />
           </View>
         </View>
 
@@ -1712,7 +1708,7 @@ const DashboardScreen = () => {
                 onPress={handleConfirmYes}
                 activeOpacity={0.8}
               >
-                <Feather name="check" size={20} color={colors.background} />
+                <Feather name="check" size={20} color={colors.textMain} />
                 <Text style={styles.confirmBtnYesText}>
                   {t('dashboard.priceCheck.yes', 'Oui')}
                 </Text>
@@ -1857,22 +1853,19 @@ const styles = StyleSheet.create({
   },
 
   // ONLINE PILL
+  // Même aplat gris que les tuiles : la barre appartient au même plan que le
+  // reste du contenu. Le halo vert qui l'entourait servait à la détacher d'un
+  // fond noir ; sur blanc il ne fait que salir le contour.
   onlinePill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#111E18',
+    backgroundColor: colors.surface,
     borderRadius: 50, paddingVertical: 8, paddingLeft: 18, paddingRight: 8,
     marginBottom: 22,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
   },
+  // En ligne, la barre se teinte de vert très clair : l'état se lit sans avoir
+  // à relire le texte, et c'est le seul endroit où l'écran change de fond.
   onlinePillActive: {
-    borderColor: 'rgba(0,230,118,0.4)',
-    backgroundColor: '#0D1F17',
-    shadowOpacity: 0.2,
+    backgroundColor: colors.primary + '1F',
   },
   onlineLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // Conteneur à la taille exacte du point : sert d'origine aux anneaux, qui n'en
@@ -1885,21 +1878,23 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
-  onlineDotOff: { backgroundColor: '#3a3a3a' },
+  onlineDotOff: { backgroundColor: colors.textMuted },
   onlineLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   onlineLabelOn: { color: colors.textMain },
   toggleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     backgroundColor: colors.primary,
     paddingVertical: 11, paddingHorizontal: 20, borderRadius: 50,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  toggleBtnActive: { backgroundColor: 'rgba(0,230,118,0.5)', shadowOpacity: 0.2 },
-  toggleBtnText: { color: colors.background, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+  // Hors ligne, le bouton appelle à l'action et reste en vert plein. En ligne,
+  // il ne sert plus qu'à couper : il s'efface en bouton fantôme pour ne pas
+  // rivaliser avec le reste de l'écran.
+  toggleBtnActive: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  toggleBtnText: { color: colors.textMain, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
 
   // SESSION
   sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -1914,20 +1909,18 @@ const styles = StyleSheet.create({
   liveText: { color: colors.primaryInk, fontSize: 11, fontWeight: '800' },
 
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  // Trois tuiles côte à côte : ce sont des conteneurs, pas des cartes flottantes.
+  // Elles se posent donc en aplat gris sur le blanc de la page, sans ombre ni
+  // bordure — sur fond clair, chaque trait ajouté est du bruit, et à trois
+  // exemplaires alignés il devient une grille.
   statCard: {
     flex: 1,
-    backgroundColor: '#111E18',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
   },
-  statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
+  statLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
   statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   statCreditBonus: { color: colors.primaryInk, fontSize: 15, fontWeight: '800' },
   statIcon: { position: 'absolute', top: 10, right: 10 },
@@ -2116,7 +2109,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   confirmBtnYesText: {
-    color: colors.background,
+    color: colors.textMain,
     fontWeight: '800',
     fontSize: 16,
   },
@@ -2207,7 +2200,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalBtnConfirmText: {
-    color: colors.background,
+    color: colors.textMain,
     fontWeight: '800',
     fontSize: 15,
   },

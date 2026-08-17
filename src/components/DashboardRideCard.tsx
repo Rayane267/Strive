@@ -132,7 +132,7 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
                 accessibilityRole="button"
                 accessibilityLabel={t('dashboard.accept', 'Accept')}
               >
-                <Feather name="check" size={18} color={colors.background} />
+                <Feather name="check" size={18} color={colors.textMain} />
                 <Text style={styles.btnAcceptTextGood}>{t('dashboard.accept', 'Accept')}</Text>
               </TouchableOpacity>
             </View>
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5, shadowRadius: 8, elevation: 6,
   },
   ratePillText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  ratePillTextGood: { color: colors.background },
+  ratePillTextGood: { color: colors.textMain },
   ratePillTextMid: { color: '#3A2A00' },
   timeAgoPill: {
     marginLeft: 'auto',
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 10,
   },
-  btnAcceptTextGood: { color: colors.background, fontSize: 16, fontWeight: '800' },
+  btnAcceptTextGood: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
   statusResult: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     paddingVertical: 12, gap: 8,

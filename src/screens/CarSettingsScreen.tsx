@@ -270,7 +270,7 @@ const CarSettingsScreen = () => {
           <Text style={styles.headerSub}>{t('settings.subtitle', 'Informations du véhicule')}</Text>
         </View>
         <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
+          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.textMain} style={{ marginRight: 4 }} />}
           <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
             {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
           </Text>
@@ -452,10 +452,10 @@ const CarSettingsScreen = () => {
               accessibilityState={{ disabled: isSaving || !isDirty }}
             >
               {isSaving ? (
-                <ActivityIndicator color={colors.background} />
+                <ActivityIndicator color={colors.textMain} />
               ) : (
                 <>
-                  <Feather name="check" size={20} color={colors.background} />
+                  <Feather name="check" size={20} color={colors.textMain} />
                   <Text style={styles.saveBtnText}>{t('settings.save', 'Enregistrer')}</Text>
                 </>
               )}
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   },
   planBadgePlus: { backgroundColor: colors.primary, borderColor: colors.primary },
   planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  planBadgeTextPlus: { color: colors.background },
+  planBadgeTextPlus: { color: colors.textMain },
 
   scroll: { paddingHorizontal: 20 },
 
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  proBadgeText: { color: colors.background, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  proBadgeText: { color: colors.textMain, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
   proRow: { flexDirection: 'row', alignItems: 'center' },
   proIconWrap: {
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  saveBtnText: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   saveBtnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
 
   comboboxContainer: { marginBottom: 14 },

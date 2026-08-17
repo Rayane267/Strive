@@ -286,7 +286,7 @@ const ProfileScreen = () => {
 
             {isPlus ? (
               <View style={styles.tierBadgePlus}>
-                <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
+                <MaterialCommunityIcons name="crown" size={12} color={colors.textMain} />
                 <Text style={styles.tierBadgePlusText}>{t('tier.plusBadge')}</Text>
               </View>
             ) : (
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tierBadgePlusText: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1,
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
   },
-  newBadgeText: { color: colors.background, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  newBadgeText: { color: colors.textMain, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
 
   // Language
   langRow: { flexDirection: 'row', gap: 10 },

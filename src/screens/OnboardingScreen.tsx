@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   // plein soleil dans une voiture.
   optionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   optionTxt: { color: colors.textMain, fontSize: 17, fontWeight: '700' },
-  optionTxtActive: { color: colors.background },
+  optionTxtActive: { color: colors.textMain },
   optionSub: {
     color: colors.textDimmed,
     fontSize: 13,
@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 3,
   },
-  optionSubActive: { color: colors.background + 'B0' },
+  optionSubActive: { color: colors.textMain + 'B0' },
 
   draftRow: {
     flexDirection: 'row',
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { backgroundColor: 'rgba(255,255,255,0.12)' },
   ctaTxt: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.2,

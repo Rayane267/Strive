@@ -57,7 +57,7 @@ const SupportTicketDetailScreen = () => {
       <View style={[styles.bubbleRow, isUser ? styles.rowRight : styles.rowLeft]}>
         <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleStaff]}>
           {!isUser && <Text style={styles.staffLabel}>{t('support.staff', 'Support Strive')}</Text>}
-          <Text style={[styles.bubbleText, isUser && { color: colors.background }]}>{item.body}</Text>
+          <Text style={[styles.bubbleText, isUser && { color: colors.textMain }]}>{item.body}</Text>
         </View>
       </View>
     );
@@ -109,8 +109,8 @@ const SupportTicketDetailScreen = () => {
             disabled={sending || !draft.trim()}
             activeOpacity={0.85}
           >
-            {sending ? <ActivityIndicator color={colors.background} size="small" />
-              : <Feather name="send" size={18} color={colors.background} />}
+            {sending ? <ActivityIndicator color={colors.textMain} size="small" />
+              : <Feather name="send" size={18} color={colors.textMain} />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

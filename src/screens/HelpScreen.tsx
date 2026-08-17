@@ -106,7 +106,7 @@ const HelpScreen = () => {
           </View>
           <Text style={styles.contactDesc}>{t('help.contactDesc')}</Text>
           <TouchableOpacity style={styles.contactBtn} onPress={handleEmail} activeOpacity={0.85}>
-            <Feather name="mail" size={16} color={colors.background} />
+            <Feather name="mail" size={16} color={colors.textMain} />
             <Text style={styles.contactBtnText}>{t('help.contactBtn')}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleEmail} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   contactBtnText: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 14,
     fontWeight: '800',
   },

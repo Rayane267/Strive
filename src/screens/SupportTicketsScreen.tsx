@@ -296,7 +296,7 @@ const SupportTicketsScreen = () => {
           onPress={() => setComposeOpen(true)}
           activeOpacity={0.85}
         >
-          <Feather name="plus" size={18} color={colors.background} />
+          <Feather name="plus" size={18} color={colors.textMain} />
           <Text style={styles.newBtnText}>
             {t('support.newTicket', 'Nouveau ticket')}
           </Text>
@@ -473,10 +473,10 @@ const SupportTicketsScreen = () => {
                 activeOpacity={0.85}
               >
                 {sending ? (
-                  <ActivityIndicator color={colors.background} />
+                  <ActivityIndicator color={colors.textMain} />
                 ) : (
                   <>
-                    <Feather name="send" size={16} color={colors.background} />
+                    <Feather name="send" size={16} color={colors.textMain} />
                     <Text style={styles.sendBtnText}>
                       {t('support.send', 'Envoyer')}
                     </Text>
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   newBtnText: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  sendBtnText: { color: colors.background, fontSize: 15, fontWeight: '800' },
+  sendBtnText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
 });
 
 export default SupportTicketsScreen;

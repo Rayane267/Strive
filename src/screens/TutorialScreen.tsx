@@ -568,7 +568,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                 onPress={triggerPrimaryAction}
                 activeOpacity={0.85}
               >
-                <Feather name={iosTrigger === 'homeScreen' ? 'external-link' : 'settings'} size={17} color={colors.background} />
+                <Feather name={iosTrigger === 'homeScreen' ? 'external-link' : 'settings'} size={17} color={colors.textMain} />
                 <Text style={styles.iosBigCtaTxt}>{triggerPrimaryLabel()}</Text>
               </TouchableOpacity>
             </Animated.View>
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   iosBigCtaTxt: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.2,

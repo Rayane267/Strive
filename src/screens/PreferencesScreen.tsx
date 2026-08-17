@@ -201,7 +201,7 @@ const PreferencesScreen = () => {
           <Text style={styles.headerSub}>{t('preferences.subtitle', 'Filtres de trajet')}</Text>
         </View>
         <View style={[styles.planBadge, isPremium && styles.planBadgePlus]}>
-          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.background} style={{ marginRight: 4 }} />}
+          {isPremium && <MaterialCommunityIcons name="crown" size={11} color={colors.textMain} style={{ marginRight: 4 }} />}
           <Text style={[styles.planBadgeText, isPremium && styles.planBadgeTextPlus]}>
             {isPremium ? t('tier.plusBadge') : t('tier.freeBadge')}
           </Text>
@@ -472,10 +472,10 @@ const PreferencesScreen = () => {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color={colors.background} />
+            <ActivityIndicator color={colors.textMain} />
           ) : (
             <>
-              <Feather name="check" size={20} color={colors.background} />
+              <Feather name="check" size={20} color={colors.textMain} />
               <Text style={styles.saveBtnText}>{t('preferences.save', 'Enregistrer')}</Text>
             </>
           )}
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  planBadgeTextPlus: { color: colors.background },
+  planBadgeTextPlus: { color: colors.textMain },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 50 },
 
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   saveBtnText: {
-    color: colors.background,
+    color: colors.textMain,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,

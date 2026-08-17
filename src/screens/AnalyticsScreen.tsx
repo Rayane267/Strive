@@ -539,7 +539,7 @@ const AnalyticsScreen = () => {
               accessibilityRole="button"
               accessibilityLabel={t('history.emptyCta', 'Lancer un scan')}
             >
-              <MaterialCommunityIcons name="line-scan" size={16} color={colors.background} />
+              <MaterialCommunityIcons name="line-scan" size={16} color={colors.textMain} />
               <Text style={styles.analyticsEmptyCtaText}>{t('history.emptyCta', 'Lancer un scan')}</Text>
             </TouchableOpacity>
           </View>
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, marginTop: 8,
   },
-  analyticsEmptyCtaText: { color: colors.background, fontWeight: '800', fontSize: 14 },
+  analyticsEmptyCtaText: { color: colors.textMain, fontWeight: '800', fontSize: 14 },
 
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 20, paddingVertical: 15 },

@@ -126,7 +126,7 @@ const ResetPasswordScreen = () => {
           disabled={loading}
         >
           {loading
-            ? <ActivityIndicator color={colors.background} />
+            ? <ActivityIndicator color={colors.textMain} />
             : <Text style={styles.btnPrimaryText}>{t('auth.resetCtaConfirm', 'Mettre à jour')}</Text>}
         </TouchableOpacity>
       </KeyboardAvoidingView>
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, alignItems: 'center', marginTop: 8,
   },
   btnDisabled: { opacity: 0.6 },
-  btnPrimaryText: { color: colors.background, fontSize: 15, fontWeight: '700' },
+  btnPrimaryText: { color: colors.textMain, fontSize: 15, fontWeight: '700' },
 });
 
 export default ResetPasswordScreen;

@@ -183,7 +183,7 @@ const ScannerPermissionScreen = () => {
             onPress={() => navigation.goBack()}
             activeOpacity={0.85}
           >
-            <Feather name="check" size={20} color={colors.background} />
+            <Feather name="check" size={20} color={colors.textMain} />
             <Text style={styles.startBtnText}>
               {t('scanner.iosActivate', 'J\'ai compris')}
             </Text>
@@ -233,7 +233,7 @@ const ScannerPermissionScreen = () => {
           <View style={styles.stepLeft}>
             <View style={[styles.stepIcon, perms.overlay && styles.stepIconDone]}>
               {perms.overlay
-                ? <Feather name="check" size={18} color={colors.background} />
+                ? <Feather name="check" size={18} color={colors.textMain} />
                 : <Text style={styles.stepNum}>1</Text>
               }
             </View>
@@ -260,7 +260,7 @@ const ScannerPermissionScreen = () => {
           <View style={styles.stepLeft}>
             <View style={[styles.stepIcon, perms.accessibility && styles.stepIconDone]}>
               {perms.accessibility
-                ? <Feather name="check" size={18} color={colors.background} />
+                ? <Feather name="check" size={18} color={colors.textMain} />
                 : <Text style={styles.stepNum}>2</Text>
               }
             </View>
@@ -288,7 +288,7 @@ const ScannerPermissionScreen = () => {
             <View style={styles.stepLeft}>
               <View style={[styles.stepIcon, perms.mediaProjectionGranted && styles.stepIconDone]}>
                 {perms.mediaProjectionGranted
-                  ? <Feather name="check" size={18} color={colors.background} />
+                  ? <Feather name="check" size={18} color={colors.textMain} />
                   : <Text style={styles.stepNum}>3</Text>
                 }
               </View>
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  startBtnText: { color: colors.background, fontSize: 16, fontWeight: '800' },
+  startBtnText: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
 });
 
 export default ScannerPermissionScreen;

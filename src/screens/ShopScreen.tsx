@@ -207,12 +207,12 @@ const ShopScreen = () => {
         {/* UPGRADE BANNER */}
         {tier === 'free' && (
           <TouchableOpacity style={styles.upgradeBanner} onPress={() => navigation.navigate('SubscriptionScreen')} activeOpacity={0.85}>
-            <MaterialCommunityIcons name="crown" size={24} color={colors.background} />
+            <MaterialCommunityIcons name="crown" size={24} color={colors.textMain} />
             <View style={styles.upgradeBannerText}>
               <Text style={styles.upgradeBannerTitle}>{t('shop.upgradeTitle')}</Text>
               <Text style={styles.upgradeBannerSub}>{t('shop.upgradeSubtitle')}</Text>
             </View>
-            <Feather name="chevron-right" size={20} color={colors.background} />
+            <Feather name="chevron-right" size={20} color={colors.textMain} />
           </TouchableOpacity>
         )}
 
@@ -278,12 +278,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,230,118,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 12,
   },
   packQuantity: { color: colors.textMain, fontSize: 36, fontWeight: '900', lineHeight: 40 },
-  packQuantityHighlight: { color: colors.background },
+  packQuantityHighlight: { color: colors.textMain },
   packUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 12 },
   packUnitHighlight: { color: 'rgba(0,0,0,0.7)' },
   packDivider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 12 },
   packPrice: { color: colors.textMain, fontSize: 18, fontWeight: '900' },
-  packPriceHighlight: { color: colors.background },
+  packPriceHighlight: { color: colors.textMain },
 
   infoCard: {
     backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginBottom: 20,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 16, padding: 18, gap: 14, marginBottom: 16,
   },
   upgradeBannerText: { flex: 1 },
-  upgradeBannerTitle: { color: colors.background, fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
+  upgradeBannerTitle: { color: colors.textMain, fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
   upgradeBannerSub: { color: 'rgba(0,0,0,0.6)', fontSize: 12 },
 
   restoreBtn: { alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
