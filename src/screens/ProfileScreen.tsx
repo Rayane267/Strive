@@ -261,17 +261,11 @@ const ProfileScreen = () => {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── PROFILE CARD ── */}
-        <SafeGradient
-          colors={['#0F2D1F', '#0A150E']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.profileCard}
-        >
+        {/* Identité posée à même le fond, sans carte : sur blanc, un conteneur
+            autour de l'avatar et du nom n'ajoute qu'un cadre, alors que le vide
+            suffit à les isoler. */}
+        <View style={styles.profileCard}>
           <View style={styles.profileContent}>
-            {isPlus && <View style={styles.plusGlow} />}
-            <View style={styles.profileShimmer} />
-
             <View style={styles.avatarContainer}>
               <AvatarView
                 avatarId="generic"
@@ -313,7 +307,7 @@ const ProfileScreen = () => {
               </TouchableOpacity>
             )}
           </View>
-        </SafeGradient>
+        </View>
 
         {/* Gains de la semaine, posés entre l'identité et les réglages : c'est
             le seul chiffre que le chauffeur vient chercher ici, et il donne au
@@ -553,46 +547,23 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20 },
 
   // Profile card
-  profileCard: {
-    borderRadius: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
-    overflow: 'hidden',
-  },
-  profileContent: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  profileShimmer: {
-    position: 'absolute',
-    top: 0,
-    left: 24,
-    right: 24,
-    height: 1,
-    backgroundColor: 'rgba(0,230,118,0.32)',
-  },
-  plusGlow: {
-    position: 'absolute',
-    top: -40,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(0,230,118,0.08)',
-  },
-  avatarContainer: { marginBottom: 14 },
+  profileCard: { marginBottom: 32 },
+  profileContent: { paddingTop: 8, alignItems: 'center' },
+  avatarContainer: { marginBottom: 16 },
+  // Le nom porte l'écran : c'est la seule chose qui dit à qui appartient ce
+  // compte, et la maquette lui donne la taille d'un titre, pas d'un libellé.
   userName: {
     color: colors.textMain,
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '800',
+    letterSpacing: -0.6,
     textAlign: 'center',
   },
   userEmail: {
-    color: colors.textDimmed,
-    fontSize: 12,
+    color: colors.textMuted,
+    fontSize: 17,
     marginTop: 4,
-    marginBottom: 14,
+    marginBottom: 18,
   },
   tierBadgePlus: {
     flexDirection: 'row',

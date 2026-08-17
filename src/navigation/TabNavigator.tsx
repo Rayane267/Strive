@@ -47,7 +47,11 @@ const INDICATOR_INSET_V = 5;
 // Horizontal padding between indicator edge and tab cell edge
 const INDICATOR_INSET_H = 4;
 
-const INACTIVE_TINT = 'rgba(255,255,255,0.42)';
+// Gris neutre : sur une barre claire, un blanc translucide disparaissait.
+const INACTIVE_TINT = colors.textMuted;
+// L'onglet actif est posé sur la pilule verte pleine — son icône et son libellé
+// doivent donc être sombres, pas verts.
+const ACTIVE_TINT = colors.textMain;
 
 // Ressort du déplacement : arrivée franche, sans rebond — c'est l'étirement du
 // verre qui porte la matière, pas un dépassement de position.
@@ -130,7 +134,7 @@ const TabItem = ({
             {TAB_ICONS[route]?.(INACTIVE_TINT, 22)}
           </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, { opacity: activeOpacity }]}>
-            {TAB_ICONS[route]?.(colors.primary, 22)}
+            {TAB_ICONS[route]?.(ACTIVE_TINT, 22)}
           </Animated.View>
         </View>
         <View>
@@ -143,7 +147,7 @@ const TabItem = ({
           <Animated.Text
             style={[
               styles.label, styles.labelOverlay,
-              { color: colors.primaryInk, opacity: activeOpacity },
+              { color: ACTIVE_TINT, opacity: activeOpacity },
             ]}
             numberOfLines={1}
           >
@@ -253,7 +257,7 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
                 style={StyleSheet.absoluteFill}
                 blurType="light"
                 blurAmount={12}
-                reducedTransparencyFallbackColor="rgba(255,255,255,0.15)"
+                reducedTransparencyFallbackColor="rgba(255,255,255,0.9)"
               />
               <View style={[StyleSheet.absoluteFill, styles.indicatorTint]} />
             </Animated.View>
@@ -303,7 +307,7 @@ const AndroidTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) =>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const focused = state.index === index;
-        const iconColor = focused ? colors.primary : 'rgba(255,255,255,0.42)';
+        const iconColor = focused ? ACTIVE_TINT : INACTIVE_TINT;
         const label = (options.tabBarLabel as string) ?? route.name;
 
         const onPress = () => {
@@ -403,30 +407,32 @@ const styles = StyleSheet.create({
     borderRadius: PILL_HEIGHT / 2,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: colors.outline,
+    // Ombre diffuse et décalée du système : la barre paraît posée sur le
+    // contenu, pas collée dessus.
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 24,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 30,
+    elevation: 12,
   },
 
   tintOverlay: {
-    backgroundColor: 'rgba(8, 22, 14, 0.35)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
 
   androidBg: {
-    backgroundColor: 'rgba(8, 22, 14, 0.94)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
   },
 
+  // Le liseré du haut marquait le bord d'un verre sombre. Sur une barre claire,
+  // il n'a plus rien à souligner.
   shimmer: {
     position: 'absolute',
     top: 0,
     left: 28,
     right: 28,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 1,
+    height: 0,
   },
 
   row: {
@@ -436,24 +442,19 @@ const styles = StyleSheet.create({
   },
 
   // The single sliding glass pill indicator
+  // Pilule verte pleine sous l'onglet actif, comme la maquette. Le halo vert qui
+  // l'entourait était un effet de thème sombre : sur blanc il ne produit qu'un
+  // flou sale autour du bord.
   indicator: {
     position: 'absolute',
     top: INDICATOR_INSET_V,
     bottom: INDICATOR_INSET_V,
     borderRadius: (PILL_HEIGHT - INDICATOR_INSET_V * 2) / 2,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 230, 118, 0.35)',
-    // subtle green glow
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
   },
 
-  // Green tint on top of the nested blur
   indicatorTint: {
-    backgroundColor: 'rgba(0, 230, 118, 0.13)',
+    backgroundColor: colors.primary,
   },
 
   item: {
@@ -489,7 +490,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: colors.outline,
     paddingTop: 8,
   },
   androidItem: {
