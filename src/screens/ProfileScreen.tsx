@@ -11,7 +11,6 @@ import {
   Linking,
   Alert,
   Platform,
-  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -21,6 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
+import Toggle from '../components/Toggle';
 import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
@@ -233,13 +233,8 @@ const ProfileScreen = () => {
       sub: t('preferences.subtitle'),
       onPress: () => navigation.navigate('Preferences'),
     },
-    ...(isPlus ? [{
-      icon: 'crown-outline',
-      iconLib: 'mc' as const,
-      title: t('subscription.manage', 'Gérer mon abonnement'),
-      sub: t('profile.subscriptionSubActive', 'Annuler, changer de formule...'),
-      onPress: () => navigation.navigate('SubscriptionScreen'),
-    }] : []),
+    // « Gérer mon abonnement » a rejoint la section Abonnement, où il figurait
+    // en double.
   ];
 
   const resourceItems: MenuItem[] = [
@@ -269,7 +264,8 @@ const ProfileScreen = () => {
   ];
 
   const renderIcon = (item: MenuItem) => {
-    const color = item.accent ? colors.primary : colors.textMuted;
+    // Encre sombre : l'icône est posée sur une tuile verte pleine.
+    const color = colors.background;
     if (item.iconLib === 'feather') {
       return <Feather name={item.icon as any} size={20} color={color} />;
     }
@@ -290,7 +286,10 @@ const ProfileScreen = () => {
           accessibilityRole={item.toggle ? 'switch' : 'button'}
           accessibilityLabel={item.title}
         >
-          <View style={[styles.menuIconWrap, item.accent && styles.menuIconWrapAccent]}>
+          {/* Toutes les tuiles sont désormais en vert plein : la variante
+              « accent », qui n'était qu'une teinte à 10 %, ferait paraître la
+              ligne mise en avant plus pâle que les autres. */}
+          <View style={styles.menuIconWrap}>
             {renderIcon(item)}
           </View>
           <View style={styles.menuText}>
@@ -306,12 +305,10 @@ const ProfileScreen = () => {
           {item.plusLocked && <PlusBadge style={styles.menuPlusBadge} />}
           {item.value ? <Text style={styles.menuValue}>{item.value}</Text> : null}
           {item.toggle ? (
-            <Switch
+            <Toggle
               value={item.toggle.value}
               onValueChange={item.toggle.onChange}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={item.toggle.value ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
+              accessibilityLabel={item.title}
             />
           ) : item.badge ? (
             <View style={styles.newBadge}>
@@ -838,14 +835,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
+  // Tuiles en aplat plein, comme la référence : le gris à 4 % d'opacité les
+  // rendait presque invisibles, et une liste de quinze lignes sans repère
+  // coloré se parcourt uniquement au texte.
   menuIconWrap: {
-    width: 38,
-    height: 38,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   menuIconWrapAccent: {
     backgroundColor: 'rgba(0,230,118,0.1)',
