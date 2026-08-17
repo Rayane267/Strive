@@ -11,6 +11,7 @@ import {
   Linking,
   Alert,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -21,7 +22,10 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
+import { registerPushToken, unregisterPushToken } from '../services/notificationService';
+import { restorePurchases } from '../services/iapService';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
@@ -34,18 +38,23 @@ type MenuItem = {
   iconLib?: 'feather' | 'mc';
   title: string;
   sub?: string;
-  onPress: () => void;
+  /** Une ligne porte soit une navigation, soit un interrupteur, jamais les deux. */
+  onPress?: () => void;
   badge?: string;
   accent?: boolean;
   /** Réservé à Strive Plus : affiche la pastille avant l'entrée dans l'écran. */
   plusLocked?: boolean;
+  /** Valeur courante affichée à droite, avant le chevron. */
+  value?: string;
+  /** Interrupteur à droite : la ligne cesse alors d'être navigable. */
+  toggle?: { value: boolean; onChange: (v: boolean) => void };
 };
 
 const ProfileScreen = () => {
   const navigation = useNavigation<any>();
   const { t, i18n } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -79,6 +88,58 @@ const ProfileScreen = () => {
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // Notifications : l'état affiché est la présence d'un jeton enregistré, pas un
+  // drapeau local — c'est le jeton qui décide si le serveur peut joindre
+  // l'appareil, donc c'est lui qui fait foi.
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@strive_fcm_token').then(v => setPushEnabled(!!v));
+  }, []);
+
+  const togglePush = async (next: boolean) => {
+    setPushEnabled(next);
+    hapticLight();
+    if (!user?.id) return;
+    try {
+      if (next) await registerPushToken(user.id);
+      else await unregisterPushToken(user.id);
+      // `registerPushToken` sort sans rien faire si la permission système est
+      // refusée : on relit donc le jeton plutôt que de croire l'interrupteur.
+      const token = await AsyncStorage.getItem('@strive_fcm_token');
+      setPushEnabled(!!token);
+    } catch {
+      setPushEnabled(!next);
+    }
+  };
+
+  // Restauration : obligatoire côté App Store, et seul recours d'un abonné que
+  // l'app croit gratuit — après une réinstallation ou un changement d'appareil.
+  const [restoring, setRestoring] = useState(false);
+
+  const handleRestore = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    hapticLight();
+    try {
+      const tierFound = await restorePurchases(user?.id);
+      if (tierFound) await refreshProfile?.();
+      Alert.alert(
+        t('common.success', 'Succès'),
+        tierFound
+          ? t('subscription.restoreSuccess', 'Achats restaurés !')
+          : t('subscription.restoreNone', 'Aucun achat à restaurer.'),
+      );
+    } catch {
+      Alert.alert(
+        t('common.error', 'Erreur'),
+        t('subscription.restoreFail', 'Impossible de restaurer les achats.'),
+      );
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const changeLanguage = (lang: string) => {
     if (lang === i18n.language) return;
@@ -222,8 +283,11 @@ const ProfileScreen = () => {
           key={i}
           style={[styles.menuRow, i < items.length - 1 && styles.menuRowDivider]}
           onPress={item.onPress}
+          // Une ligne à interrupteur n'est pas tapable dans son ensemble : le
+          // doigt qui vise le libellé ne doit pas basculer le réglage.
+          disabled={!item.onPress}
           activeOpacity={0.7}
-          accessibilityRole="button"
+          accessibilityRole={item.toggle ? 'switch' : 'button'}
           accessibilityLabel={item.title}
         >
           <View style={[styles.menuIconWrap, item.accent && styles.menuIconWrapAccent]}>
@@ -240,7 +304,16 @@ const ProfileScreen = () => {
                 — seul l'affichage est supprimé. */}
           </View>
           {item.plusLocked && <PlusBadge style={styles.menuPlusBadge} />}
-          {item.badge ? (
+          {item.value ? <Text style={styles.menuValue}>{item.value}</Text> : null}
+          {item.toggle ? (
+            <Switch
+              value={item.toggle.value}
+              onValueChange={item.toggle.onChange}
+              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
+              thumbColor={item.toggle.value ? colors.primary : colors.textDimmed}
+              ios_backgroundColor="rgba(255,255,255,0.08)"
+            />
+          ) : item.badge ? (
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>{item.badge}</Text>
             </View>
@@ -371,39 +444,81 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         )}
 
-        {/* ── RESOURCES SECTION ── */}
-        <Text style={[styles.sectionTitle, !isPlus ? {} : { marginTop: 22 }]}>{t('profile.resources')}</Text>
+        {/* Les deux boutons drapeau laissent place à une ligne de réglage
+            classique, avec la langue courante affichée à droite. Deux langues
+            seulement : le tap bascule directement plutôt que d'ouvrir une liste
+            de deux entrées. */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.settings', 'Réglages')}</Text>
+        {renderMenuGroup([
+          {
+            icon: 'translate',
+            iconLib: 'mc',
+            title: t('preferences.language', 'Langue'),
+            value: i18n.language === 'fr' ? 'Français' : 'English',
+            onPress: () => changeLanguage(i18n.language === 'fr' ? 'en' : 'fr'),
+          },
+          {
+            icon: 'bell',
+            iconLib: 'feather',
+            title: t('preferences.push', 'Notifications push'),
+            toggle: { value: pushEnabled, onChange: togglePush },
+          },
+        ])}
+
+        {/* Abonnement : « Passer à Strive Plus » n'apparaît qu'aux comptes
+            gratuits, « Gérer » qu'aux abonnés — proposer les deux ferait douter
+            de son propre statut. « Restaurer » reste dans les deux cas : c'est
+            une exigence de l'App Store, et c'est aussi le recours d'un abonné
+            que l'app croit gratuit. */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.subscription', 'Abonnement')}</Text>
+        {renderMenuGroup([
+          ...(isPlus ? [{
+            icon: 'crown-outline',
+            iconLib: 'mc' as const,
+            title: t('subscription.manage', 'Gérer mon abonnement'),
+            onPress: () => navigation.navigate('SubscriptionScreen'),
+          }] : [{
+            icon: 'crown-outline',
+            iconLib: 'mc' as const,
+            title: t('profile.upgradeLink', 'Passer à Strive Plus'),
+            accent: true,
+            onPress: () => navigation.navigate('SubscriptionScreen'),
+          }]),
+          {
+            icon: 'refresh-ccw',
+            iconLib: 'feather' as const,
+            title: t('subscription.restore', 'Restaurer les achats'),
+            onPress: handleRestore,
+          },
+        ])}
+
+        {/* ── SUPPORT ── */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.supportSection', 'Support')}</Text>
         {renderMenuGroup(resourceItems)}
 
-        {/* ── LANGUAGE SECTION ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.language')}</Text>
-        <View style={styles.langRow}>
-          <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
-            onPress={() => changeLanguage('fr')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Français"
-            accessibilityState={{ selected: i18n.language === 'fr' }}
-          >
-            <Text style={styles.langFlag}>🇫🇷</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'fr' && styles.langBtnTextActive]}>Français</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
-            onPress={() => changeLanguage('en')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="English"
-            accessibilityState={{ selected: i18n.language === 'en' }}
-          >
-            <Text style={styles.langFlag}>🇬🇧</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Légal : deux liens qu'Apple exige d'atteindre depuis l'app, et qui
+            étaient relégués en minuscules tout en bas de l'écran. */}
+        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.legal', 'Légal')}</Text>
+        {renderMenuGroup([
+          {
+            icon: 'file-text',
+            iconLib: 'feather',
+            title: t('profile.terms', 'Conditions d\'utilisation'),
+            onPress: () => Linking.openURL('https://striveapp.fr/terms'),
+          },
+          {
+            icon: 'shield',
+            iconLib: 'feather',
+            title: t('profile.privacy', 'Politique de confidentialité'),
+            onPress: () => Linking.openURL('https://striveapp.fr/privacy'),
+          },
+        ])}
 
-        {/* ── DANGER ZONE ── */}
-        <View style={[styles.dangerGroup, { marginTop: 22 }]}>
+        <Text style={[styles.sectionTitle, styles.dangerSectionTitle, { marginTop: 22 }]}>
+          {t('profile.session', 'Session')}
+        </Text>
+
+        <View style={styles.dangerGroup}>
           <TouchableOpacity
             style={[styles.menuRow, styles.menuRowDivider]}
             onPress={() => setIsLogoutModalVisible(true)}
@@ -443,16 +558,9 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* ── FOOTER ── */}
-        <View style={styles.legalLinksRow}>
-          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/privacy')}>
-            <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
-          </TouchableOpacity>
-          <Text style={styles.legalSep}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/terms')}>
-            <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Les deux liens légaux ont rejoint leur propre section : ils étaient
+            relégués ici en minuscules, alors qu'Apple exige de pouvoir les
+            atteindre depuis l'app. Ne reste que la version. */}
         <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
       </ScrollView>
 
@@ -754,6 +862,7 @@ const styles = StyleSheet.create({
   menuText: { flex: 1 },
   menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
+  menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: 6 },
   menuPlusBadge: { marginRight: 8 },
   newBadge: {
     backgroundColor: colors.primary,

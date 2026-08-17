@@ -114,8 +114,8 @@
       "errorMessage": "Type \"DELETE\" to confirm.",
       "errorGeneric": "Unable to delete. Please retry or contact support."
     },
-    "privacy": "Privacy",
-    "terms": "Terms",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use",
     "setup": {
       "title": "Create your profile",
       "subtitle": "This information is used to personalise your Strive experience.",
@@ -150,7 +150,12 @@
       }
     },
     "deleteAccountSub": "This cannot be undone",
-    "weekEarnings": "This week's earnings"
+    "weekEarnings": "This week's earnings",
+    "settings": "Settings",
+    "subscription": "Subscription",
+    "supportSection": "Support",
+    "legal": "Legal",
+    "session": "Session"
   },
   "scanner": {
     "title": "Set up scanner",
@@ -429,7 +434,10 @@
     "identification": "Identification",
     "options": "Options",
     "saveSuccess": "Preferences saved successfully.",
-    "saveError": "Failed to save. Please try again."
+    "saveError": "Failed to save. Please try again.",
+    "language": "Language",
+    "push": "Push notifications",
+    "pushSub": "Scan alerts, reminders and recaps"
   },
   "upgrade": {
     "title": "Upgrade to Pro",

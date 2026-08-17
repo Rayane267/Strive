@@ -193,3 +193,26 @@ async function getMessagingApi(): Promise<{
     return null;
   }
 }
+
+/**
+ * Coupe les notifications push pour ce compte.
+ *
+ * Le jeton est effacé côté serveur ET dans le cache local. Effacer seulement le
+ * cache laisserait le serveur continuer d'émettre vers un appareil qui n'en veut
+ * plus ; n'effacer que la base ferait croire au prochain démarrage que le jeton
+ * est déjà enregistré — `registerPushToken` sort tôt quand le cache correspond.
+ *
+ * La permission système n'est pas révoquée : seul le réglage iOS/Android le peut.
+ * On cesse simplement d'être joignable.
+ */
+export async function unregisterPushToken(userId: string): Promise<void> {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ fcm_token: null })
+      .eq('id', userId);
+    await AsyncStorage.removeItem(FCM_TOKEN_KEY);
+  } catch (e) {
+    __DEV__ && console.warn('[NOTIF] unregisterPushToken error:', e);
+  }
+}

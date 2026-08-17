@@ -114,8 +114,8 @@
       "errorMessage": "Tapez \"SUPPRIMER\" pour confirmer.",
       "errorGeneric": "Suppression impossible. Réessayez ou contactez le support."
     },
-    "privacy": "Confidentialité",
-    "terms": "CGU",
+    "privacy": "Politique de confidentialité",
+    "terms": "Conditions d'utilisation",
     "setup": {
       "title": "Créer votre profil",
       "subtitle": "Ces informations permettent de personnaliser votre expérience Strive.",
@@ -150,7 +150,12 @@
       }
     },
     "deleteAccountSub": "Action irréversible",
-    "weekEarnings": "Gains de la semaine"
+    "weekEarnings": "Gains de la semaine",
+    "settings": "Réglages",
+    "subscription": "Abonnement",
+    "supportSection": "Support",
+    "legal": "Légal",
+    "session": "Session"
   },
   "scanner": {
     "title": "Configurer le scanner",
@@ -429,7 +434,10 @@
     "identification": "Identification",
     "options": "Options",
     "saveSuccess": "Préférences enregistrées avec succès.",
-    "saveError": "Impossible d'enregistrer. Réessayez."
+    "saveError": "Impossible d'enregistrer. Réessayez.",
+    "language": "Langue",
+    "push": "Notifications push",
+    "pushSub": "Alertes de scan, rappels et récapitulatifs"
   },
   "upgrade": {
     "title": "Passer en Pro",
