@@ -1005,11 +1005,11 @@
       "statNet": "Net visé",
       "fromGoal": "Calculé depuis votre objectif, vos heures et vos charges. Strive marquera à refuser toute course en dessous.",
       "floored": "Votre objectif est atteignable en dessous — nous gardons ce seuil, car une course moins payée vous coûte de l'argent une fois l'usure et les charges comptées.",
-      "plusTitle": "Débloquez votre seuil avec Strive Plus",
-      "plusBody": "Calculé depuis vos heures, vos charges et votre objectif. Appliqué à chaque course scannée.",
+      "plusTitle": "Débloquez votre seuil",
       "currentLabel": "Votre seuil actuel",
       "currentSub": "Standard, identique pour tous",
-      "optimizedLabel": "Votre seuil optimisé"
+      "optimizedLabel": "Votre seuil optimisé",
+      "plusPersonal": "{{goal}} net en {{hours}} h par mois, ça se paie à un tarif précis."
     }
   }
 }

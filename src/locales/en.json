@@ -1005,11 +1005,11 @@
       "statNet": "Target net",
       "fromGoal": "Computed from your target, your hours and your costs. Strive will mark any ride below it as SKIP.",
       "floored": "Your target is reachable below this — we keep this rate, because a ride paying less costs you money once wear and contributions are counted.",
-      "plusTitle": "Unlock your threshold with Strive Plus",
-      "plusBody": "Worked out from your hours, costs and target. Applied to every ride you scan.",
+      "plusTitle": "Unlock your threshold",
       "currentLabel": "Your current threshold",
       "currentSub": "Standard, the same for everyone",
-      "optimizedLabel": "Your optimised threshold"
+      "optimizedLabel": "Your optimised threshold",
+      "plusPersonal": "{{goal}} net over {{hours}} h a month comes at a precise rate."
     }
   }
 }

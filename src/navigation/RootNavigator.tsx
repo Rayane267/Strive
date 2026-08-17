@@ -5,6 +5,7 @@ import SplashScreen from '../components/SplashScreen';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuth } from '../context/AuthContext';
+import { getEffectivePlanTier } from '../services/subscriptionService';
 import { useTranslation } from 'react-i18next';
 import { withErrorBoundary } from '../components/ErrorBoundary';
 
@@ -141,6 +142,13 @@ const RootNavigator = () => {
                     // Les seuils viennent d'être écrits en base : on rafraîchit le
                     // profil pour que le Dashboard et le natif les voient tout de suite.
                     refreshProfile?.();
+                    // Le paywall s'ouvre dans la foulée, tant que le seuil
+                    // verrouillé est encore présent à l'esprit. Le tutoriel vient
+                    // ensuite : c'est le seul moment du parcours où le chauffeur
+                    // a une raison précise de s'abonner plutôt qu'une promesse.
+                    if (getEffectivePlanTier(profile) === 'free') {
+                      props.navigation.navigate('SubscriptionScreen');
+                    }
                   }}
                 />
               )}

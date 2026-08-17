@@ -214,7 +214,10 @@ const AuthScreen = () => {
                 accessibilityLabel={t('auth.continueApple')}
               >
                 <Image
-                  source={require('../assets/icons/apple/png/apple-Logo-only_-_White@3x.png')}
+                  // Copie sans suffixe de densité : Metro lit « @3x » comme une
+                  // variante et cherche alors un fichier de base qui n'existe
+                  // pas dans le kit Apple, d'où un échec de résolution au bundle.
+                  source={require('../assets/icons/apple-logo-white.png')}
                   style={styles.appleIcon}
                   resizeMode="contain"
                 />

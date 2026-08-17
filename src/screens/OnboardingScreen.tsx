@@ -496,13 +496,32 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     if (step !== 'result' || !derived || isPremium) return null;
     return (
       <Animated.View
-        style={[
-          styles.plusCard,
-          { opacity: reveal.interpolate({ inputRange: [0.8, 1], outputRange: [0, 1] }) },
-        ]}
+        style={{ opacity: reveal.interpolate({ inputRange: [0.8, 1], outputRange: [0, 1] }) }}
       >
-        <Feather name="unlock" size={18} color={colors.primary} />
-        <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
+        <TouchableOpacity
+          style={styles.plusCard}
+          activeOpacity={0.85}
+          onPress={() => {
+            hapticLight();
+            navigation.navigate('SubscriptionScreen');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('onboarding.result.plusTitle')}
+        >
+          <Feather name="unlock" size={20} color={colors.primary} />
+          <View style={styles.plusTexts}>
+            <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
+            {/* Ses propres chiffres, repris tels qu'il vient de les donner :
+                c'est ce qui distingue cette ligne d'un encart promotionnel. */}
+            <Text style={styles.plusPersonal}>
+              {t('onboarding.result.plusPersonal', {
+                goal: formatEuros(monthlyGoal ?? 0),
+                hours: derived.monthlyHours,
+              })}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.primary} />
+        </TouchableOpacity>
       </Animated.View>
     );
   };
@@ -758,17 +777,18 @@ const styles = StyleSheet.create({
   plusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+    gap: 12,
     marginTop: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: colors.primary + '3A',
   },
+  plusTexts: { flex: 1 },
   plusTitle: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+  plusPersonal: { color: colors.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 2 },
 
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
   // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
