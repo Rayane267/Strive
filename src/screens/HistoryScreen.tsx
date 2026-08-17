@@ -491,7 +491,7 @@ const HistoryScreen = () => {
     const marks: any = {};
     const edge = colors.primary;
     const edgeText = '#06140C';
-    const mid = 'rgba(0,230,118,0.20)';
+    const mid = colors.primary + '33';
     const midText = colors.textMain;
     if (selectionStep === 1 && tempStart) {
       marks[tempStart] = {
@@ -751,7 +751,7 @@ const HistoryScreen = () => {
             </View>
             <View style={styles.heroStatDiv} />
             <View style={styles.heroStat}>
-              <Text style={[styles.heroStatVal, { color: '#00E676' }]}>
+              <Text style={[styles.heroStatVal, { color: colors.primaryInk }]}>
                 {accepted}
               </Text>
               <Text style={styles.heroStatLbl} numberOfLines={2}>
@@ -806,7 +806,7 @@ const HistoryScreen = () => {
                   style={[
                     styles.filterDot,
                     {
-                      backgroundColor: f === 'accepted' ? '#00E676' : '#FF5252',
+                      backgroundColor: f === 'accepted' ? colors.primary : colors.danger,
                     },
                   ]}
                 />
@@ -1050,7 +1050,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: 'rgba(0,230,118,0.1)',
+    backgroundColor: colors.primary + '1A',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1066,12 +1066,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(0,230,118,0.06)',
+    backgroundColor: colors.primary + '14',
     borderRadius: 12,
     padding: 12,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.15)',
+    borderColor: colors.primary + '40',
   },
   upgradeBannerText: {
     flex: 1,
@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    borderColor: colors.primary + '33',
     overflow: 'hidden',
     backgroundColor: '#0A150E',
   },
@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
   acceptBar: {
     width: 72,
     height: 4,
-    backgroundColor: 'rgba(0,230,118,0.15)',
+    backgroundColor: colors.primary + '26',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1186,8 +1186,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   filterTabActiveAccepted: {
-    backgroundColor: 'rgba(0,230,118,0.1)',
-    borderColor: 'rgba(0,230,118,0.3)',
+    backgroundColor: colors.primary + '1A',
+    borderColor: colors.primaryInk,
   },
   filterTabActiveDeclined: {
     backgroundColor: 'rgba(255,82,82,0.1)',
@@ -1196,7 +1196,7 @@ const styles = StyleSheet.create({
   filterDot: { width: 6, height: 6, borderRadius: 3 },
   filterTabText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   filterTabTextActive: { color: colors.textMain },
-  filterTabTextActiveAccepted: { color: '#00E676' },
+  filterTabTextActiveAccepted: { color: colors.primaryInk },
   filterTabTextActiveDeclined: { color: '#FF5252' },
 
   // Ride card
@@ -1339,8 +1339,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusBadgeAccepted: {
-    backgroundColor: 'rgba(0,230,118,0.08)',
-    borderColor: 'rgba(0,230,118,0.22)',
+    backgroundColor: colors.primary + '14',
+    borderColor: colors.primary + '4D',
   },
   statusBadgeDeclined: {
     backgroundColor: 'rgba(255,82,82,0.07)',
@@ -1394,7 +1394,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    borderColor: colors.primary + '33',
   },
   emptyTitle: { color: colors.textMuted, fontSize: 14 },
 
@@ -1487,9 +1487,9 @@ const styles = StyleSheet.create({
   calMonthBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,230,118,0.08)',
+    backgroundColor: colors.primary + '14',
     borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
+    borderColor: colors.primary + '40',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,

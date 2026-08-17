@@ -51,6 +51,7 @@ import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import ScreenGradient from '../components/ScreenGradient';
+import OrbitRing from '../components/OrbitRing';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 import {
@@ -1406,21 +1407,23 @@ const DashboardScreen = () => {
             <MaterialCommunityIcons name="tune-vertical" size={21} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.planPill}
-            onPress={() => navigation.navigate('SubscriptionScreen')}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
-          >
-            <Image
-              source={require('../assets/strive-logo.png')}
-              style={styles.planPillLogo}
-            />
-            <Text style={styles.planPillText}>
-              {tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
-            </Text>
-          </TouchableOpacity>
+          <OrbitRing>
+            <TouchableOpacity
+              style={styles.planPill}
+              onPress={() => navigation.navigate('SubscriptionScreen')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+            >
+              <Image
+                source={require('../assets/strive-logo.png')}
+                style={styles.planPillLogo}
+              />
+              <Text style={styles.planPillText}>
+                {tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+              </Text>
+            </TouchableOpacity>
+          </OrbitRing>
 
           {/* Même place, même rôle — le scan — mais l'affordance diffère : sur
               Android on l'allume et l'éteint, sur iOS il passe par l'extension
@@ -1435,7 +1438,7 @@ const DashboardScreen = () => {
             >
               <MaterialCommunityIcons
                 name="line-scan"
-                size={20}
+                size={21}
                 color="#FFFFFF"
               />
             </TouchableOpacity>
@@ -1905,7 +1908,10 @@ const styles = StyleSheet.create({
   headerBtn: {
     position: 'absolute',
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.textMuted,
+    // Gris médian : l'outline du système disparaissait sur le fond teinté, et
+    // textMuted, prévu pour du texte, faisait deux pastilles trop lourdes en
+    // haut d'écran.
+    backgroundColor: '#8E9297',
     justifyContent: 'center', alignItems: 'center',
   },
   headerBtnLeft: { left: 0 },
