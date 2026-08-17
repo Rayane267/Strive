@@ -1389,21 +1389,31 @@ const DashboardScreen = () => {
         }
       >
 
-        {/* ── HEADER ── */}
+        {/* En-tête en deux temps, comme la référence : une rangée de contrôles
+            où le logo ne sert plus d'étiquette mais de pastille de plan, puis le
+            nom de l'écran en très gros. Le logo et le sous-titre « tableau de
+            bord en direct » disaient au chauffeur où il était dans une app qu'il
+            vient d'ouvrir lui-même — le titre le dit mieux et en un mot. */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.planPill}
+            onPress={() => navigation.navigate('SubscriptionScreen')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+          >
             <Image
               source={require('../assets/strive-logo.png')}
-              style={styles.appIconImg}
+              style={styles.planPillLogo}
             />
-            <View>
-              <Text style={styles.appTitle}>Strive</Text>
-              <Text style={styles.appSubtitle}>{t('dashboard.subtitle')}</Text>
-            </View>
-          </View>
+            <Text style={styles.planPillText}>
+              {tier !== 'free' ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+            </Text>
+          </TouchableOpacity>
+
           {Platform.OS === 'android' && (
             <TouchableOpacity
-              style={[styles.settingsBtn, scannerActive && { backgroundColor: 'rgba(0,230,118,0.15)', borderColor: colors.primary }]}
+              style={[styles.settingsBtn, scannerActive && styles.settingsBtnActive]}
               onPress={handleToggleScanner}
               accessibilityRole="button"
               accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
@@ -1416,6 +1426,8 @@ const DashboardScreen = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        <Text style={styles.screenTitle}>{t('dashboard.home', 'Accueil')}</Text>
 
         {/* ── ONLINE TOGGLE ── */}
         <Animated.View
@@ -1820,34 +1832,56 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16, paddingTop: 6 },
 
   // HEADER
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  appIconImg: {
-    width: 42, height: 42, borderRadius: 12,
+  // La pastille est centrée quoi qu'il arrive, et le bouton de scan est posé en
+  // absolu à droite. Une simple rangée `space-between` la décalerait selon que
+  // ce bouton est présent ou non — il ne l'est que sur Android.
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  appIconWrap: {
-    width: 46, height: 46, borderRadius: 13,
-    backgroundColor: 'rgba(0,230,118,0.15)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.35)',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  appTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  appSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
-  settingsBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.surface,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+
+  // Pastille de plan : le logo n'étiquette plus l'écran, il porte le statut de
+  // l'abonnement et mène au paywall. Blanche et posée en relief sur le fond
+  // teinté, c'est le seul élément de la rangée qui appelle le doigt.
+  planPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.background,
+    paddingLeft: 6,
+    paddingRight: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  planPillLogo: { width: 30, height: 30, borderRadius: 15 },
+  planPillText: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+
+  // Le nom de l'écran en très gros : c'est lui qui situe, pas un logo.
+  screenTitle: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    marginBottom: 20,
+  },
+  settingsBtn: {
+    position: 'absolute',
+    right: 0,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.background,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.outline,
+  },
+  settingsBtnActive: {
+    backgroundColor: colors.primary + '26',
+    borderColor: colors.primaryInk,
   },
 
   // ONLINE PILL

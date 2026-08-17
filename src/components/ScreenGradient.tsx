@@ -14,14 +14,14 @@ import { colors } from '../theme/colors';
  * La teinte est concentrée dans le premier tiers : plus bas, elle passerait
  * derrière les cartes grises et brouillerait la séparation des plans.
  */
-const TOP = '#E6F7EE';
+const TOP = '#CFEEDD';
 
 const ScreenGradient = () => (
   <SafeGradient
     colors={[TOP, colors.background]}
     start={{ x: 0.5, y: 0 }}
     end={{ x: 0.5, y: 1 }}
-    locations={[0, 0.38]}
+    locations={[0, 0.42]}
     style={StyleSheet.absoluteFill}
     pointerEvents="none"
   />

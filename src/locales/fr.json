@@ -275,7 +275,8 @@
     "liveActivityPermission": {
       "title": "Activités en direct",
       "message": "Pour afficher le résultat des scans en temps réel, activez les Activités en direct dans Réglages → Strive."
-    }
+    },
+    "home": "Accueil"
   },
   "shop": {
     "title": "Boutique",
@@ -933,11 +934,12 @@
   },
   "tier": {
     "free": "Free",
-    "freeBadge": "GRATUIT",
+    "freeBadge": "Free",
     "plus": "★ Plus",
     "plusBadge": "PLUS",
     "premiumBadge": "PREMIUM",
-    "plusOnly": "Réservé à Strive Plus"
+    "plusOnly": "Réservé à Strive Plus",
+    "plusName": "Plus"
   },
   "countries": {
     "fr": "France",
