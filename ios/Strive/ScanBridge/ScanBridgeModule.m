@@ -40,9 +40,13 @@ RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
 // écrite en base. Sans lui, l'entrée est rejouée à chaque relève.
 RCT_EXTERN_METHOD(ackScan:(NSString *)qid)
 
+RCT_EXTERN_METHOD(drainRideDecisions)
+
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 
 RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
+
+RCT_EXTERN_METHOD(clearLiveActivityResult:(nonnull NSNumber *)scanTs)
 
 RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 

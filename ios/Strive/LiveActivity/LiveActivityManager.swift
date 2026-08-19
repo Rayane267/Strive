@@ -1,7 +1,6 @@
 import Foundation
 import ActivityKit
 import UIKit
-import UserNotifications
 
 #if canImport(Sentry)
 import Sentry
@@ -17,7 +16,7 @@ final class LiveActivityManager {
   //
   // Ce singleton est touché depuis QUATRE contextes d'exécution concurrents :
   //   • la queue de module React Native (bridge JS : start/update/stop/KPI),
-  //   • le main thread (`autoDismiss` → showRecap/backToIdle, didBecomeActive),
+  //   • le main thread (`autoDismiss` → backToIdle, didBecomeActive),
   //   • un thread de fond arbitraire (AnalyzeRideIntent appelle update() depuis
   //     le callback de ScanProcessor),
   //   • les `Task` de `observeState`.
@@ -53,27 +52,9 @@ final class LiveActivityManager {
     set { stateLock.lock(); _stateObserverTask = newValue; stateLock.unlock() }
   }
 
-  /// App hôte au premier plan ? Renseigné par `ScanBridgeModule` (cible app), et
-  /// NON lu depuis `UIApplication.shared` : ce fichier est aussi compilé dans la
-  /// cible StriveShareExtension, où cette API est interdite par Apple — l'archive
-  /// échouait avec « 'shared' is unavailable in application extensions ».
-  /// Reste `false` dans l'extension, ce qui est la bonne réponse : une extension
-  /// n'est jamais l'app au premier plan et ne peut pas créer d'activité.
-  private var _hostAppIsActive = false
-  var hostAppIsActive: Bool {
-    stateLock.lock(); defer { stateLock.unlock() }
-    return _hostAppIsActive
-  }
-
-  func setHostAppActive(_ active: Bool) {
-    stateLock.lock()
-    _hostAppIsActive = active
-    stateLock.unlock()
-  }
-
   private static let appGroupId = "group.com.striveapp.app"
-  /// Dernier état de session connu (KPI du jour + ancre du timer), rejoué par
-  /// `ensureRunning()` quand la carte doit être recréée.
+  /// Dernier état de session connu (KPI du jour + ancre du timer), rejoué quand
+  /// iOS a retiré la carte alors que la session continue.
   private static let sessionSnapshotKey = "laSessionSnapshot"
 
   /// Résout la langue UI (fr/en) : préférence poussée par l'app via l'App Group
@@ -137,9 +118,8 @@ final class LiveActivityManager {
     let existing = Activity<StriveActivityAttributes>.activities
     if !existing.isEmpty {
       log("ending \(existing.count) existing activity(ies)")
-      // Couper l'observer AVANT de terminer : sinon la fin de l'activité qu'on
-      // remplace nous-mêmes rappelle `ensureRunning()` en pleine création et
-      // deux `Activity.request()` se marchent dessus.
+      // Couper l'observer avant de terminer la carte explicitement : cette
+      // branche ne sert qu'au démarrage volontaire d'une nouvelle session.
       stateObserverTask?.cancel()
       stateObserverTask = nil
       for activity in existing {
@@ -178,13 +158,6 @@ final class LiveActivityManager {
         pushType: nil
       )
       log("OK id=\(current?.id ?? "nil")")
-      // `Activity.request()` n'aboutit QUE si l'app est au premier plan : sa
-      // réussite est donc une preuve d'état, qui rattrape le cas où la
-      // notification `didBecomeActive` a précédé la création du module natif.
-      setHostAppActive(true)
-      // Une carte tourne de nouveau : le message « carte fermée » est caduc.
-      UNUserNotificationCenter.current()
-        .removeDeliveredNotifications(withIdentifiers: ["strive-la-closed"])
       observeState()
       saveSessionSnapshot(state)
       return true
@@ -209,25 +182,20 @@ final class LiveActivityManager {
     d.set(snap, forKey: Self.sessionSnapshotKey)
   }
 
-  /// Ré-arme la carte de session si elle a disparu alors que le chauffeur est
-  /// toujours en ligne. Le chauffeur n'a rien balayé : iOS termine une Live
-  /// Activity de lui-même (limite de durée ~8 h, pression mémoire, remplacement),
-  /// et jusqu'ici PLUS RIEN ne la relançait avant un passage hors ligne/en ligne
-  /// ou un démarrage à froid de l'app. Or sans carte vivante, un scan lancé
-  /// depuis le raccourci ne peut rien afficher — `Activity.request()` échoue en
-  /// arrière-plan — et le verdict retombait sur une simple notification.
-  ///
-  /// À n'appeler qu'avec l'app au premier plan : c'est le seul moment où
-  /// `Activity.request()` est autorisé.
+  /// Réarme uniquement l'affichage d'une session encore active. Une fermeture
+  /// par iOS ne ferme jamais la session métier : seul le Dashboard peut le faire.
+  /// Cette méthode est appelée quand Strive revient au premier plan, jamais à la
+  /// réception d'un scan en arrière-plan.
   @discardableResult
   func ensureRunning() -> Bool {
-    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return false }
-    guard d.bool(forKey: "sessionOnline") else { return false }
+    guard let d = UserDefaults(suiteName: Self.appGroupId), d.bool(forKey: "sessionOnline") else {
+      return false
+    }
     let prefOn = d.object(forKey: "useLiveActivity") == nil ? true : d.bool(forKey: "useLiveActivity")
-    guard prefOn, ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-    guard liveActivity() == nil else { return false }
+    guard prefOn, ActivityAuthorizationInfo().areActivitiesEnabled, liveActivity() == nil else {
+      return false
+    }
     let snap = d.dictionary(forKey: Self.sessionSnapshotKey) ?? [:]
-    log("ensureRunning — session en ligne sans carte vivante, ré-armement")
     return start(
       platform: "IDLE",
       todayEarnings: (snap["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
@@ -302,193 +270,13 @@ final class LiveActivityManager {
         // passer hors ligne. Fermer ici coupait le service en plein travail.
         log("LA \(state) — session laissée en ligne")
         current = nil
-        // Si l'app est au premier plan à cet instant, on recrée la carte tout
-        // de suite : c'est la seule fenêtre où `Activity.request()` passe, et
-        // sans carte le prochain scan par raccourci retombe sur une notif.
-        await MainActor.run {
-          if self.hostAppIsActive {
-            self.ensureRunning()
-          } else {
-            // App pas au premier plan : impossible de ré-armer maintenant. On
-            // prévient, sinon le chauffeur voit sa carte disparaître sans savoir
-            // ni si sa session tient, ni que ses prochains scans vont retomber
-            // en notification tant qu'il n'aura pas rouvert l'app.
-            self.notifyCardClosed()
-          }
-        }
         break
       }
     }
   }
 
-  /// Notifie la disparition de la carte pendant une session en cours. Deux gardes
-  /// contre le faux positif : appelée uniquement app hors premier plan (sinon la
-  /// carte est ré-armée dans la seconde, rien à signaler), et seulement si la
-  /// session est en ligne — hors session, plus rien ne dépend de la carte.
-  /// Sans son : c'est un message d'état, pas un verdict de course, et iOS peut
-  /// terminer la carte en pleine nuit (limite de durée ~8 h).
-  private func notifyCardClosed() {
-    guard let d = UserDefaults(suiteName: Self.appGroupId), d.bool(forKey: "sessionOnline") else { return }
-    let content = UNMutableNotificationContent()
-    content.title = "Strive"
-    content.body = localizedString(
-      fr: "Carte fermée — votre session reste active. Vos prochains scans arriveront en notification jusqu'à la réouverture de l'app.",
-      en: "Card closed — your session is still active. Your next scans will arrive as notifications until you reopen the app."
-    )
-    content.sound = nil
-    // `.passive` : message d'état, pas un verdict. Il ne doit ni sonner, ni
-    // allumer l'écran, ni traverser une Concentration — il attend sagement dans
-    // le centre de notifications.
-    content.interruptionLevel = .passive
-    // Identifiant fixe : une carte qui meurt plusieurs fois ne doit pas empiler
-    // plusieurs fois le même message.
-    let request = UNNotificationRequest(identifier: "strive-la-closed", content: content, trigger: nil)
-    UNUserNotificationCenter.current().add(request)
-  }
-
-  /// Dernière tentative de carte neuve. Sert à borner la casse quand le
-  /// chauffeur enchaîne les scans : recréer l'activité à chaque offre en pleine
-  /// heure de pointe ferait tomber iOS en throttling, et on perdrait alors le
-  /// punch-through pour tout le monde plutôt que pour un scan.
-  ///
-  /// Sous le même verrou que `current` : un scan par raccourci et un scan par
-  /// la Share Extension peuvent viser cette valeur depuis deux threads.
-  private var _lastFreshResultAt: Date?
-  private var lastFreshResultAt: Date? {
-    get { stateLock.lock(); defer { stateLock.unlock() }; return _lastFreshResultAt }
-    set { stateLock.lock(); _lastFreshResultAt = newValue; stateLock.unlock() }
-  }
-
-  /// Présente le résultat comme une activité NEUVE plutôt que comme une mise à
-  /// jour de la carte de session.
-  ///
-  /// Pourquoi c'est nécessaire. Une même Live Activity porte ici deux rôles :
-  /// la carte de SESSION (persistante — KPI du jour, timer) et l'ALERTE de
-  /// résultat (événementielle). iOS ne les distingue pas, mais il distingue
-  /// très nettement `Activity.request()` de `activity.update()` : une activité
-  /// qui APPARAÎT prend le Dynamic Island, une activité qui se MET À JOUR ne le
-  /// reprend pas à ce qui l'occupe déjà — un appel en cours, l'activité d'une
-  /// autre app. Le résultat était alors bien à jour mais replié en `minimal`,
-  /// et il fallait toucher l'île pour le lire.
-  ///
-  /// C'est ce qui a régressé avec `ensureRunning()` : avant lui la carte de
-  /// session mourait souvent sans être relancée, donc un scan tombait sur la
-  /// branche `start()` et créait une activité neuve — d'où le comportement
-  /// « ça s'affiche quoi qu'il arrive ». Depuis, une carte est toujours vivante
-  /// et le résultat n'était plus qu'une mise à jour. `ensureRunning()` reste :
-  /// il corrige un vrai problème, on lui retire seulement son effet de bord.
-  ///
-  /// ORDRE CRITIQUE : on demande la nouvelle carte AVANT de retirer l'ancienne.
-  /// L'inverse (terminer puis demander) laisse le chauffeur sans aucune carte
-  /// quand la requête est refusée — et elle peut l'être pour des raisons hors
-  /// de notre contrôle : process en arrière-plan, throttling iOS, Live
-  /// Activities désactivées entre-temps. Ici un refus ne coûte rien : rien n'a
-  /// été détruit, l'appelant enchaîne sur la mise à jour classique.
-  ///
-  /// On ne branche PAS en dur selon le chemin d'appel (Share Extension vs
-  /// raccourci). `AnalyzeRideIntent` est compilé dans le target principal, il
-  /// n'y a donc pas de bundle id pour les séparer — et surtout un raccourci
-  /// déclenché app au premier plan a parfaitement le droit de créer une
-  /// activité. Tenter et laisser iOS trancher s'adapte à l'état réel.
-  private func presentFreshResult(
-    platform: String,
-    fare: Double,
-    hourlyRate: Double,
-    kmRate: Double,
-    distanceKm: Double,
-    durationMin: Int,
-    verdictLevel: Int,
-    scanTs: Double
-  ) -> Bool {
-    guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-    if let last = lastFreshResultAt, Date().timeIntervalSince(last) < 8 {
-      log("fresh result throttled (<8s) — mise à jour classique")
-      return false
-    }
-
-    // État de session à reporter : celui de la carte vivante, sinon
-    // l'instantané App Group. Sans ça la carte neuve repartirait à 0 € / 0 km
-    // et le timer de session serait remis à zéro.
-    let prev = liveActivity()?.content.state
-    let snap = UserDefaults(suiteName: Self.appGroupId)?
-      .dictionary(forKey: Self.sessionSnapshotKey) ?? [:]
-    let state = StriveActivityAttributes.State(
-      platform: platform,
-      fare: fare,
-      hourlyRate: hourlyRate,
-      kmRate: kmRate,
-      distanceKm: distanceKm,
-      durationMin: durationMin,
-      verdictLevel: verdictLevel,
-      todayEarnings: prev?.todayEarnings ?? (snap["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
-      todayHourlyRate: prev?.todayHourlyRate ?? (snap["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
-      todayKm: prev?.todayKm ?? (snap["todayKm"] as? NSNumber)?.doubleValue ?? 0,
-      onlineMinutes: prev?.onlineMinutes ?? (snap["onlineMinutes"] as? NSNumber)?.intValue ?? 0,
-      scanTs: scanTs > 0 ? scanTs : nil,
-      sessionStartEpoch: prev?.sessionStartEpoch ?? (snap["sessionStartEpoch"] as? NSNumber)?.doubleValue
-    )
-
-    let previous = Activity<StriveActivityAttributes>.activities
-
-    // Couper l'observateur AVANT : la fin des anciennes cartes, plus bas, le
-    // ferait rappeler `ensureRunning()` en pleine création — deux
-    // `Activity.request()` concurrents. Même précaution que dans `start()`.
-    stateObserverTask?.cancel()
-    stateObserverTask = nil
-
-    let fresh: Activity<StriveActivityAttributes>
-    do {
-      let content = ActivityContent(
-        state: state,
-        staleDate: Date().addingTimeInterval(20),
-        relevanceScore: 100
-      )
-      fresh = try Activity.request(
-        attributes: StriveActivityAttributes(),
-        content: content,
-        pushType: nil
-      )
-      log("fresh result activity id=\(fresh.id)")
-    } catch {
-      // Refus : l'ancienne carte est INTACTE, on n'a rien terminé. On remet
-      // l'observateur en place et on laisse l'appelant faire une mise à jour.
-      log("fresh result refused: \(error.localizedDescription) — repli sur update()")
-      observeState()
-      return false
-    }
-
-    lastFreshResultAt = Date()
-    current = fresh
-    // Seulement maintenant : retirer les anciennes. Il existe un bref instant à
-    // deux activités (l'île les partage en leading/trailing) — c'est le prix de
-    // l'ordre ci-dessus, et il vaut mieux que le trou inverse.
-    for old in previous where old.id != fresh.id {
-      Task { await old.end(nil, dismissalPolicy: .immediate) }
-    }
-    // Une requête réussie prouve que l'app est au premier plan.
-    setHostAppActive(true)
-    UNUserNotificationCenter.current()
-      .removeDeliveredNotifications(withIdentifiers: ["strive-la-closed"])
-    observeState()
-    saveSessionSnapshot(state)
-    return true
-  }
-
-  /// Programme le retour à la carte de récap. Extrait pour que les deux chemins
-  /// de présentation (carte neuve et mise à jour) partagent exactement la même
-  /// durée de vie du résultat.
-  private func scheduleRecap() {
-    autoDismiss?.cancel()
-    let work = DispatchWorkItem { [weak self] in self?.showRecap() }
-    autoDismiss = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
-  }
-
-  /// - Returns: `false` quand rien n'a pu être affiché — typiquement un appel
-  ///   depuis l'AppIntent alors qu'aucune activité ne tourne : `Activity.request()`
-  ///   exige que l'app soit au premier plan (hors push-to-start), et le raccourci
-  ///   s'exécute en arrière-plan. L'appelant DOIT alors se rabattre sur une
-  ///   notification, sinon le scan aboutit sans que rien ne s'affiche.
+  /// - Returns: `false` si la carte de session n'est pas active. L'appelant
+  ///   doit alors envoyer la notification de résultat.
   @discardableResult
   func update(
     platform: String,
@@ -501,49 +289,12 @@ final class LiveActivityManager {
     scanTs: Double = 0
   ) -> Bool {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
-
-    // Carte NEUVE d'abord. iOS ne traite pas de la même façon une activité qui
-    // apparaît et une activité qui se met à jour : la première prend le Dynamic
-    // Island, la seconde ne le reprend pas à ce qui l'occupe (appel en cours,
-    // activité d'une autre app). Voir `presentFreshResult`. En cas de refus on
-    // enchaîne sur le chemin historique ci-dessous, qui n'a rien perdu.
-    if presentFreshResult(
-      platform: platform, fare: fare, hourlyRate: hourlyRate, kmRate: kmRate,
-      distanceKm: distanceKm, durationMin: durationMin,
-      verdictLevel: verdictLevel, scanTs: scanTs
-    ) {
-      scheduleRecap()
-      return true
-    }
-
-    guard let activity = liveActivity() else {
-      log("no activity — auto-starting then updating for banner")
-      let started = start(
-        platform: platform,
-        fare: fare,
-        hourlyRate: hourlyRate,
-        kmRate: kmRate,
-        distanceKm: distanceKm,
-        durationMin: durationMin,
-        verdictLevel: verdictLevel,
-        scanTs: scanTs
-      )
-      guard started, let newActivity = current else { return false }
-      let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
-      let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
-      let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
-      let alert = AlertConfiguration(
-          title: LocalizedStringResource(stringLiteral: alertTitle),
-          body: LocalizedStringResource(stringLiteral: alertBody),
-          sound: .default
-      )
-      let content = ActivityContent(state: newActivity.content.state, staleDate: Date().addingTimeInterval(20), relevanceScore: 100)
-      // La carte vient d'être créée : si l'alerte ne passe pas, le résultat est
-      // perdu → on rend `false` pour que l'appelant notifie.
-      guard applyUpdate(newActivity, content: content, alert: alert) else { return false }
-      scheduleRecap()
-      return true
-    }
+    // Un scan met toujours à jour la carte de session existante. Il ne la crée
+    // ni ne la remplace : une création depuis le raccourci est fragile et casse
+    // la continuité des KPI. `ensureRunning()` la réarme au prochain premier plan.
+    guard let activity = liveActivity() else { return false }
+    autoDismiss?.cancel()
+    autoDismiss = nil
     let prev = activity.content.state
     let state = StriveActivityAttributes.State(
       platform: platform,
@@ -560,7 +311,7 @@ final class LiveActivityManager {
       scanTs: scanTs > 0 ? scanTs : nil,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(20), relevanceScore: 100)
+    let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 100)
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
@@ -573,50 +324,15 @@ final class LiveActivityManager {
       log("update NOT delivered on \(activity.id) — caller must notify")
       return false
     }
-    log("updated \(activity.id), dismiss in 20s")
-
-    scheduleRecap()
+    log("updated \(activity.id), waiting for ride decision")
     return true
-  }
-
-  /// Étape intermédiaire entre la carte résultat et le dashboard de session :
-  /// pendant 20 s on ne garde que le prix de la course et le €/km, pour laisser
-  /// le temps de les relire une fois la carte complète disparue. Sans montant à
-  /// rappeler (erreur, état vide), on saute directement à l'idle.
-  func showRecap() {
-    guard let activity = liveActivity() else { return }
-    let prev = activity.content.state
-    guard prev.fare > 0 else { backToIdle(); return }
-    log("showRecap fare=\(prev.fare) km=\(prev.kmRate)")
-
-    let recap = StriveActivityAttributes.State(
-      platform: "RECAP",
-      fare: prev.fare,
-      hourlyRate: prev.hourlyRate,
-      kmRate: prev.kmRate,
-      distanceKm: 0, durationMin: 0,
-      verdictLevel: prev.verdictLevel,
-      todayEarnings: prev.todayEarnings,
-      todayHourlyRate: prev.todayHourlyRate,
-      todayKm: prev.todayKm,
-      onlineMinutes: prev.onlineMinutes,
-      sessionStartEpoch: prev.sessionStartEpoch
-    )
-    let content = ActivityContent(state: recap, staleDate: Date().addingTimeInterval(20), relevanceScore: 50)
-    Task { await activity.update(content) }
-
-    autoDismiss?.cancel()
-    let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
-    autoDismiss = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
   }
 
   func backToIdle() {
     guard let activity = liveActivity() else { return }
     log("backToIdle")
     // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
-    // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base
-    // (auto-dismiss 20 s, tap bouton, commande vocale).
+    // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base.
     let prev = activity.content.state
     let idle = StriveActivityAttributes.State(
       platform: "IDLE",
@@ -630,6 +346,14 @@ final class LiveActivityManager {
     )
     let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
     Task { await activity.update(content) }
+  }
+
+  /// Efface le verdict seulement s'il est encore celui de la course décidée.
+  /// Une ancienne course acceptée/refusée dans le Dashboard ne doit pas masquer
+  /// le scan plus récent qui attend encore sa décision.
+  func clearResult(scanTs: Double) {
+    guard let activity = liveActivity(), activity.content.state.scanTs == scanTs else { return }
+    backToIdle()
   }
 
   /// - Returns: `false` si aucune activité n'est en cours — l'erreur n'a donc été
@@ -681,12 +405,9 @@ final class LiveActivityManager {
   ) {
     guard let activity = liveActivity() else { return }
     let prev = activity.content.state
-    // Un résultat de scan est à l'écran (auto-dismiss en attente) : NE PAS
-    // l'écraser avec le dashboard IDLE — le JS pousse ses KPI quelques secondes
-    // après le scan et volait la place du verdict avant la fin des 20 s.
-    // On rafraîchit seulement les KPI du jour, le verdict reste affiché ;
-    // backToIdle() reprendra ces KPI à l'expiration du timer.
-    let resultShowing = autoDismiss != nil
+    // Tant que la dernière course attend une décision, le dashboard ne doit pas
+    // écraser son verdict. `RideDecisionIntent` efface `scanTs` en revenant aux KPI.
+    let resultShowing = prev.scanTs != nil
       && prev.platform != "IDLE" && prev.platform != "ERROR"
     log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate) resultShowing=\(resultShowing)")
     let state = StriveActivityAttributes.State(
@@ -706,7 +427,7 @@ final class LiveActivityManager {
     )
     let content = ActivityContent(
       state: state,
-      staleDate: Date().addingTimeInterval(resultShowing ? 20 : 3600 * 8),
+      staleDate: Date().addingTimeInterval(3600 * 8),
       relevanceScore: resultShowing ? 100 : 50
     )
     Task { await activity.update(content) }

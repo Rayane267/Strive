@@ -176,9 +176,15 @@ checkPermissions: async () => {
     return emitter.addListener('onScanFailed', cb);
   },
 
+  // On s'abonne PUIS on draine, comme sur Android. Le natif purge la clé App
+  // Group avant d'émettre : une décision drainée alors que ce listener n'est pas
+  // encore posé est perdue définitivement, et la course reste « en attente de
+  // décision » bien que le chauffeur ait tapé le bouton de la Live Activity.
   onRideDecision: (cb: (decision: RideDecision) => void) => {
     if (!emitter) return undefined;
-    return emitter.addListener('onRideDecision', cb);
+    const sub = emitter.addListener('onRideDecision', cb);
+    ScanBridge.drainRideDecisions?.();
+    return sub;
   },
 
   onPermissionDenied: (cb: () => void) => {

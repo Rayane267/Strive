@@ -115,7 +115,7 @@ struct RideDecisionIntent: LiveActivityIntent {
     // 1) Retour à l'état de base + incrément KPI immédiat (gains/km/€h), sans JS.
     if #available(iOS 16.2, *) {
       let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
-      await revertLiveActivityToIdle(addFare: add.fare, addKm: add.km)
+      await revertLiveActivityToIdle(scanTs: scanTs, addFare: add.fare, addKm: add.km)
     }
     // 2) Persistance pour la réconciliation JS (vérité Supabase).
     appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
@@ -181,9 +181,12 @@ func appendRideDecision(scanTs: Double, accepted: Bool, appGroupId: String) {
 /// (`sessionStartEpoch`). Met la carte à jour IMMÉDIATEMENT, app fermée incluse —
 /// le petit dashboard du lock screen devient live sans réouverture de l'app.
 @available(iOS 16.2, *)
-func revertLiveActivityToIdle(addFare: Double, addKm: Double) async {
+func revertLiveActivityToIdle(scanTs: Double, addFare: Double, addKm: Double) async {
   for activity in Activity<StriveActivityAttributes>.activities {
     let prev = activity.content.state
+    // Une décision issue d'une ancienne notification ne doit pas effacer la
+    // dernière offre, qui a remplacé son affichage dans l'île.
+    guard prev.scanTs == scanTs else { continue }
     let newEarnings = prev.todayEarnings + addFare
     let newKm = prev.todayKm + addKm
     var newRate = prev.todayHourlyRate

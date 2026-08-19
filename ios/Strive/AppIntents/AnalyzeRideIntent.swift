@@ -43,32 +43,19 @@ private final class OnceContinuation {
 ///
 /// L'intent tourne en arrière-plan — l'utilisateur configure son raccourci :
 ///   "Prendre une capture d'écran" → "Analyser une course avec Strive"
-/// `LiveActivityIntent` et non `AppIntent` — c'est ce qui décide si le verdict
-/// s'impose ou non dans le Dynamic Island.
+/// `LiveActivityIntent` et non `AppIntent` : ce protocole existe pour accorder à
+/// un intent le droit de piloter des Live Activities sans passer au premier
+/// plan, ce dont on a besoin ici (`openAppWhenRun = false`, volontaire — cf.
+/// AppDelegate : le chauffeur ne doit pas perdre de vue l'offre Uber).
+/// `RideDecisionIntent` s'en sert déjà pour mettre à jour la carte depuis
+/// l'arrière-plan.
 ///
-/// iOS ne présente pas de la même façon une activité qui APPARAÎT et une qui se
-/// MET À JOUR : `Activity.request()` prend l'île quoi qu'elle affiche, y compris
-/// un appel en cours ; `activity.update()` ne la reprend jamais. Or créer une
-/// activité exige un contexte au premier plan, et cet intent tourne en
-/// arrière-plan (`openAppWhenRun = false`, volontaire — cf. AppDelegate : le
-/// chauffeur ne doit pas perdre de vue l'offre Uber).
+/// Le résultat met à jour la carte de session existante avec une alerte
+/// ActivityKit. La carte est créée au démarrage de session ou réarmée lorsque
+/// Strive revient au premier plan ; un scan ne la crée ni ne la remplace.
 ///
-/// Jusqu'au 17/08 le scan partait de la Share Extension, qui EST au premier plan
-/// quand son panneau est ouvert : la requête y aboutissait et la carte passait
-/// par-dessus tout. Ce chemin a été débranché au profit du bouton Action, et le
-/// verdict s'est mis à ne plus être qu'une mise à jour — visible seulement en
-/// `minimal`, à déplier à la main.
-///
-/// `LiveActivityIntent` existe précisément pour accorder à un intent le droit de
-/// piloter des Live Activities sans passer au premier plan. `RideDecisionIntent`
-/// s'en sert déjà pour METTRE À JOUR la carte depuis l'arrière-plan.
-///
-/// ⚠️ À VÉRIFIER SUR APPAREIL : que ce protocole autorise aussi la CRÉATION
-/// (`Activity.request()`), et pas seulement la mise à jour. Si oui, on récupère
-/// le comportement d'avant en gardant le bouton Action. Si non, il reste à
-/// réactiver le scan par la Share Extension — la seule route dont on sait avec
-/// certitude qu'elle donne ce résultat. Le repli est déjà en place : en cas de
-/// refus, `presentFreshResult` rend `false` sans rien avoir détruit.
+/// Depuis l'arrière-plan, `Activity.request()` est interdit : si aucune carte ne
+/// tourne, `update()` rend `false` et on notifie (voir plus bas).
 @available(iOS 16.2, *)
 struct AnalyzeRideIntent: LiveActivityIntent {
 
@@ -748,7 +735,7 @@ private func tagLastScannedRide(accepted: Bool) async -> Bool {
   // (helpers partagés avec le bouton Live Activity).
   if #available(iOS 16.2, *) {
     let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
-    await revertLiveActivityToIdle(addFare: add.fare, addKm: add.km)
+    await revertLiveActivityToIdle(scanTs: scanTs, addFare: add.fare, addKm: add.km)
   }
   appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
   return true

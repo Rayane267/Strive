@@ -925,6 +925,10 @@ const DashboardScreen = () => {
 
   const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
+    const scanTs = ridesRef.current.find(r => r.id === id)?.scan_ts;
+    if (Platform.OS === 'ios' && scanTs && ScanBridge?.clearLiveActivityResult) {
+      ScanBridge.clearLiveActivityResult(scanTs);
+    }
     setRides(prev => {
       const updated = prev.map(r => (r.id === id ? { ...r, status: newStatus } : r));
       if (newStatus === 'ACCEPTED') {

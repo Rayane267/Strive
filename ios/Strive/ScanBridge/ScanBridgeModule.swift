@@ -134,16 +134,6 @@ class ScanBridgeModule: RCTEventEmitter {
     // L'état premier plan est POUSSÉ vers LiveActivityManager depuis ici : ce
     // manager est aussi compilé dans la Share Extension, où `UIApplication.shared`
     // est interdit (l'archive échoue). Cette cible-ci est l'app, elle a le droit.
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(appDidEnterBackground),
-      name: UIApplication.didEnterBackgroundNotification,
-      object: nil
-    )
-  }
-
-  @objc private func appDidEnterBackground() {
-    if #available(iOS 16.2, *) { LiveActivityManager.shared.setHostAppActive(false) }
   }
 
   deinit {
@@ -153,20 +143,15 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   @objc private func appDidBecomeActive() {
-    // À jour AVANT ensureRunning() : c'est cette valeur que consulte l'observateur
-    // d'état de la carte pour choisir entre ré-armer et notifier.
-    if #available(iOS 16.2, *) { LiveActivityManager.shared.setHostAppActive(true) }
+    // Une carte supprimée par iOS n'éteint jamais la session. On la réarme ici,
+    // au premier plan, avant de traiter les résultats éventuellement en attente.
+    if #available(iOS 16.2, *) { LiveActivityManager.shared.ensureRunning() }
     // Sur iOS le scan passe toujours par la Share Extension → on traite les
     // résultats en attente à chaque retour au premier plan, que startScanner()
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
     drainAndEmitRideDecisions()
     drainAndEmitScanFailures()
-    // Carte de session disparue sans geste du chauffeur (iOS la termine seul :
-    // limite de durée, pression mémoire) ? On la recrée MAINTENANT, seul moment
-    // où `Activity.request()` est autorisé. Sans ça, tous les scans suivants
-    // lancés depuis le raccourci retombaient sur une notification.
-    if #available(iOS 16.2, *) { LiveActivityManager.shared.ensureRunning() }
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -261,6 +246,25 @@ class ScanBridgeModule: RCTEventEmitter {
           let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     else { return }
     persistPendingResults(queued.filter { ($0["qid"] as? String) != qid }, defaults)
+  }
+
+  /// Rejoue les décisions Accepter/Refuser en attente, à la demande du JS.
+  ///
+  /// Nécessaire parce que `drainAndEmitRideDecisions()` PURGE la clé App Group
+  /// avant d'émettre : l'événement part vers le pont, et si aucun handler
+  /// `onRideDecision` n'est encore attaché à cet instant, la décision est perdue
+  /// définitivement — la course reste « en attente de décision » alors que le
+  /// chauffeur a bien tapé le bouton.
+  ///
+  /// Le cas se produit parce que `hasListeners` passe à `true` dès le PREMIER
+  /// listener du module, quel que soit l'événement : `appDidBecomeActive()` peut
+  /// donc draîner avant que le Dashboard n'ait posé le sien, qui arrive dans son
+  /// propre `useEffect`. D'où le « des fois ».
+  ///
+  /// Android expose déjà exactement ça (`ScanBridgeModule.kt:292`) et son bridge
+  /// JS s'abonne PUIS draine. iOS n'avait pas l'équivalent.
+  @objc func drainRideDecisions() {
+    drainAndEmitRideDecisions()
   }
 
   /// Émet un résultat vers le JS et, si demandé, rafraîchit la Live Activity.
@@ -532,6 +536,12 @@ class ScanBridgeModule: RCTEventEmitter {
         todayKm: (payload["todayKm"] as? NSNumber)?.doubleValue ?? 0,
         onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0
       )
+    }
+  }
+
+  @objc func clearLiveActivityResult(_ scanTs: NSNumber) {
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.clearResult(scanTs: scanTs.doubleValue)
     }
   }
 
