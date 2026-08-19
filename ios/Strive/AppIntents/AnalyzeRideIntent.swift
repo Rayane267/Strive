@@ -481,7 +481,14 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// localement) OU flag JS — indépendant du JS suspendu pendant le scan.
   private var isQuotaReached: Bool {
     guard let d = UserDefaults(suiteName: appGroupId) else { return false }
-    if d.bool(forKey: "scanQuotaReached") { return true }
+    // Drapeau du JS, honoré UNIQUEMENT s'il date d'aujourd'hui. Il porte les
+    // crédits achetés, que le compteur ignore, donc on le garde — mais non daté
+    // il survivait à la nuit : au lendemain d'une journée à 3/3, le compteur
+    // repartait bien à zéro et le scan était quand même refusé.
+    if d.bool(forKey: "scanQuotaReached"),
+       d.integer(forKey: "scanQuotaReachedDay") == Self.currentQuotaDay(d) {
+      return true
+    }
     // Le compteur App Group vaut pour TOUS les tiers : `plan_limits` donne
     // free = 3 ET plus = 15. Exempter les non-free laissait un abonné Plus
     // franchir sa limite app fermée — chaque scan au-delà s'affichait

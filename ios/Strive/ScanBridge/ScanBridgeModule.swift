@@ -485,6 +485,16 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func setQuotaReached(_ reached: Bool, isFree: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
+      // DATÉ, sinon le drapeau survit à la nuit. Le compteur, lui, est déjà
+      // borné par `scanCountDay` : au reset il repart à zéro et le chauffeur
+      // récupère ses scans. Le drapeau, non daté, restait à `true` depuis la
+      // veille — l'app affichait « 2/3 » (recalculé depuis la base) pendant que
+      // le scan par raccourci était refusé pour quota atteint.
+      //
+      // On ne peut pas se contenter du compteur : le drapeau porte une
+      // information qu'il n'a pas, les crédits achetés (`canScan` = limite −
+      // scans + crédits). D'où la date plutôt que la suppression.
+      defaults.set(Self.currentQuotaDay(defaults), forKey: "scanQuotaReachedDay")
       // Réserve le teaser verrouillé (vendre Plus) aux comptes free : un abonné
       // Plus hors quota voit "reviens demain", pas un upsell Plus.
       defaults.set(isFree, forKey: "isFreeTier")
@@ -537,6 +547,19 @@ class ScanBridgeModule: RCTEventEmitter {
         onlineMinutes: (payload["onlineMinutes"] as? NSNumber)?.intValue ?? 0
       )
     }
+  }
+
+  /// ⚠️ TEMPORAIRE — à retirer avec `traceDecision`. Rend la trace des appuis
+  /// sur les boutons de la Live Activity, que le Profil affiche en pied de page.
+  @objc func getDecisionTrace(_ resolve: @escaping RCTPromiseResolveBlock,
+                              rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let d = UserDefaults(suiteName: Self.appGroupId)
+    resolve(d?.string(forKey: "decisionTrace") ?? "")
+  }
+
+  /// ⚠️ TEMPORAIRE — vide la trace, pour repartir d'un essai propre.
+  @objc func clearDecisionTrace() {
+    UserDefaults(suiteName: Self.appGroupId)?.removeObject(forKey: "decisionTrace")
   }
 
   @objc func clearLiveActivityResult(_ scanTs: NSNumber) {

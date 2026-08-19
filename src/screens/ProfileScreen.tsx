@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   View,
@@ -12,12 +12,13 @@ import {
   Alert,
   Platform,
   Image,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
@@ -118,6 +119,20 @@ const ProfileScreen = () => {
 
   const [langSheetVisible, setLangSheetVisible] = useState(false);
   const [subSheetVisible, setSubSheetVisible] = useState(false);
+
+  // ⚠️ TEMPORAIRE — trace des appuis sur les boutons de la Live Activity.
+  // Relue à chaque affichage du Profil : l'intent tourne dans un autre process,
+  // il n'émet rien vers le JS, l'App Group est le seul canal. À retirer avec
+  // `traceDecision` côté natif.
+  const [decisionTrace, setDecisionTrace] = useState('');
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'ios') return;
+      NativeModules.ScanBridge?.getDecisionTrace?.()
+        .then((v: string) => setDecisionTrace(v ?? ''))
+        .catch(() => {});
+    }, []),
+  );
 
   // La restauration est passée dans ManageSubscriptionSheet, qui en affiche le
   // résultat dans la feuille elle-même. Une alerte système chassait la feuille
@@ -540,6 +555,21 @@ const ProfileScreen = () => {
             relégués ici en minuscules, alors qu'Apple exige de pouvoir les
             atteindre depuis l'app. Ne reste que la version. */}
         <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
+
+        {/* ⚠️ TEMPORAIRE — diagnostic des boutons de la Live Activity.
+            À retirer avec `traceDecision` côté natif une fois la panne comprise.
+            Un appui long efface la trace pour repartir d'un essai propre. */}
+        {Platform.OS === 'ios' && !!decisionTrace && (
+          <TouchableOpacity
+            onLongPress={() => {
+              NativeModules.ScanBridge?.clearDecisionTrace?.();
+              setDecisionTrace('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.traceText}>{decisionTrace.trim()}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
@@ -904,6 +934,15 @@ const styles = StyleSheet.create({
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
   versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
+  // ⚠️ TEMPORAIRE — trace de diagnostic, à retirer avec `traceDecision`.
+  traceText: {
+    textAlign: 'center',
+    color: colors.textDimmed,
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 16,
+  },
 
   deleteInput: {
     width: '100%',

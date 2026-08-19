@@ -352,7 +352,11 @@ final class LiveActivityManager {
   /// Une ancienne course acceptée/refusée dans le Dashboard ne doit pas masquer
   /// le scan plus récent qui attend encore sa décision.
   func clearResult(scanTs: Double) {
-    guard let activity = liveActivity(), activity.content.state.scanTs == scanTs else { return }
+    // Tolérance et non `==` : ce `scanTs` a fait l'aller-retour jusqu'au JS
+    // (pont React Native, puis `scan_ts` en base) avant de revenir ici. Voir
+    // `scanTsMatches`.
+    guard let activity = liveActivity(),
+          scanTsMatches(activity.content.state.scanTs, scanTs) else { return }
     backToIdle()
   }
 

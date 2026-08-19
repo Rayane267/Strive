@@ -441,8 +441,14 @@ class ShareViewController: UIViewController {
     }
     // Quota appliqué CÔTÉ NATIF (compteur App Group) → ne dépend pas du JS, qui
     // est suspendu pendant un scan via l'extension. On bloque si le compteur
-    // natif atteint la limite OU si le flag JS le dit (ceinture + bretelles).
-    if isScanQuotaReached() || defaults?.bool(forKey: "scanQuotaReached") == true {
+    // natif atteint la limite OU si le drapeau JS le dit — ce dernier seulement
+    // s'il date d'aujourd'hui. Non daté, il survivait à la nuit et refusait les
+    // scans du lendemain alors que le compteur, lui, était bien reparti à zéro.
+    let flagIsToday = defaults.map {
+      $0.bool(forKey: "scanQuotaReached")
+        && $0.integer(forKey: "scanQuotaReachedDay") == Self.currentQuotaDay($0)
+    } ?? false
+    if isScanQuotaReached() || flagIsToday {
       showQuotaReached()
       return
     }

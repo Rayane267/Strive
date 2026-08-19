@@ -108,22 +108,75 @@ struct RideDecisionIntent: LiveActivityIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    guard scanTs > 0 else { return .result() }
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
+
+    // ⚠️ TRACE TEMPORAIRE — à retirer une fois la panne des boutons comprise.
+    //
+    // « J'appuie, rien ne se passe » a deux causes indiscernables de l'extérieur :
+    // soit iOS n'exécute pas l'intent du tout, soit il l'exécute et quelque
+    // chose le bloque plus bas. Pas de `NSLog` : le poste de travail est sous
+    // Windows, donc personne ne lira Console.app. La trace passe par l'App
+    // Group, et le pied de page du Profil l'affiche.
+    traceDecision("perform scanTs=\(scanTs) accepted=\(accepted ? 1 : 0)", appGroupId)
+
+    guard scanTs > 0 else {
+      traceDecision("STOP — scanTs nul", appGroupId)
+      return .result()
+    }
 
     // 1) Retour à l'état de base + incrément KPI immédiat (gains/km/€h), sans JS.
     if #available(iOS 16.2, *) {
       let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
       await revertLiveActivityToIdle(scanTs: scanTs, addFare: add.fare, addKm: add.km)
+      traceDecision("carte remise a idle", appGroupId)
     }
     // 2) Persistance pour la réconciliation JS (vérité Supabase).
     appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
+    traceDecision("decision ecrite", appGroupId)
     return .result()
   }
 }
 
+// MARK: - Trace de décision (TEMPORAIRE)
+
+/// ⚠️ À RETIRER une fois la panne des boutons de la Live Activity comprise.
+///
+/// Empile les étapes de `RideDecisionIntent.perform()` dans l'App Group, que le
+/// pied de page du Profil affiche. C'est le seul canal d'observation disponible :
+/// l'intent tourne dans un process qui n'est ni l'app ni le JS, et le poste de
+/// développement est sous Windows — donc pas de Console.app pour lire `NSLog`.
+///
+/// Bornée aux 400 derniers caractères : une trace qui grossit sans fin dans un
+/// conteneur partagé entre trois process n'a rien à faire sur l'appareil d'un
+/// chauffeur, même temporairement.
+func traceDecision(_ step: String, _ appGroupId: String) {
+  guard let d = UserDefaults(suiteName: appGroupId) else { return }
+  let fmt = DateFormatter()
+  fmt.dateFormat = "HH:mm:ss"
+  var trace = d.string(forKey: "decisionTrace") ?? ""
+  trace += "[\(fmt.string(from: Date()))] \(step)\n"
+  if trace.count > 400 { trace = String(trace.suffix(400)) }
+  d.set(trace, forKey: "decisionTrace")
+}
+
 // MARK: - Helpers partagés (boutons Live Activity + commandes vocales)
+
+/// Deux `scanTs` désignent-ils le même scan ?
+///
+/// Toujours passer par ici plutôt que par `==`. Ces horodatages traversent
+/// plusieurs encodages — paramètres d'AppIntent, JSON de l'App Group,
+/// `userInfo` de notification — et chacun peut rogner les derniers chiffres
+/// d'un `Double` à 17 chiffres significatifs. L'égalité stricte échoue alors de
+/// façon intermittente, sans rien signaler.
+///
+/// Tolérance à la milliseconde : deux scans sont sérialisés par `ScanProcessor`
+/// et séparés d'au moins trois secondes (anti double-tap), aucun risque de
+/// confusion.
+func scanTsMatches(_ a: Double?, _ b: Double) -> Bool {
+  guard let a = a else { return false }
+  return abs(a - b) < 0.001
+}
 
 /// Tarif/distance de la DERNIÈRE course scannée, pour incrémenter les KPI de la
 /// Live Activity côté natif sans attendre le JS.
@@ -186,7 +239,14 @@ func revertLiveActivityToIdle(scanTs: Double, addFare: Double, addKm: Double) as
     let prev = activity.content.state
     // Une décision issue d'une ancienne notification ne doit pas effacer la
     // dernière offre, qui a remplacé son affichage dans l'île.
-    guard prev.scanTs == scanTs else { continue }
+    //
+    // Comparaison À TOLÉRANCE, jamais `==`. `scanTs` vaut
+    // `Date().timeIntervalSince1970`, soit ~17 chiffres significatifs, et il
+    // fait un aller-retour par l'encodage des paramètres d'AppIntent quand le
+    // chauffeur tape le bouton. Un seul chiffre perdu au passage et l'égalité
+    // stricte échouait : la carte restait figée sur le verdict, sans erreur ni
+    // log. La milliseconde suffit très largement à distinguer deux scans.
+    guard scanTsMatches(prev.scanTs, scanTs) else { continue }
     let newEarnings = prev.todayEarnings + addFare
     let newKm = prev.todayKm + addKm
     var newRate = prev.todayHourlyRate

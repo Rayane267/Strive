@@ -48,6 +48,12 @@ RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
 
 RCT_EXTERN_METHOD(clearLiveActivityResult:(nonnull NSNumber *)scanTs)
 
+// ⚠️ TEMPORAIRE — diagnostic des boutons de la Live Activity.
+RCT_EXTERN_METHOD(getDecisionTrace:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearDecisionTrace)
+
 RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 
 RCT_EXTERN_METHOD(setAppLanguage:(NSString *)lang)
