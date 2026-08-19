@@ -189,49 +189,78 @@ class ScanBridgeModule: RCTEventEmitter {
 
   private var lastProcessedTimestamp: Double = 0
 
+  /// Relève du journal de scans. Rien n'est effacé ici : une entrée n'est retirée
+  /// que par `ackScan`, quand le JS a confirmé l'écriture en base. Tant qu'un scan
+  /// n'est pas acquitté, il est ré-émis à chaque retour au premier plan.
+  ///
+  /// L'ancienne version purgeait AVANT d'émettre : tout scan que le JS recevait
+  /// sans parvenir à l'écrire (réseau coupé, crash, quota) disparaissait. Le rejeu
+  /// est sans risque depuis l'index unique (user_id, scan_ts) —
+  /// 20260817_rides_scan_ts_unique.sql écarte les doublons côté base.
   private func handleShareExtensionResult() {
     guard hasListeners else { return }
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
 
-    // File d'attente d'abord : elle contient tous les scans empilés depuis la
-    // dernière relève. On la vide en entier, un événement par course.
+    var queued: [[String: Any]] = []
     if let data = defaults.data(forKey: Self.pendingResultsKey),
-       let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-       !queued.isEmpty {
-      defaults.removeObject(forKey: Self.pendingResultsKey)
-      // Les clés historiques portent le dernier élément de la file : on les
-      // purge ici pour ne pas ré-émettre le même scan par le chemin ci-dessous.
-      defaults.removeObject(forKey: Self.scanResultKey)
-      let queuedMax = queued.compactMap { ($0["scanTs"] as? NSNumber)?.doubleValue }.max()
-      lastProcessedTimestamp = max(lastProcessedTimestamp,
-                                   queuedMax ?? defaults.double(forKey: Self.scanTimestampKey))
-      defaults.removeObject(forKey: Self.scanTimestampKey)
-
-      for (idx, result) in queued.enumerated() {
-        // Seul le dernier scan a vocation à s'afficher en Live Activity.
-        emitScanResult(result, refreshLiveActivity: idx == queued.count - 1)
-      }
-      return
+       let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+      queued = arr
     }
 
+    // Chemin historique (clé unique, un seul résultat) : on le replie dans le
+    // journal au lieu de l'émettre à part, pour n'avoir qu'un seul mécanisme.
     let timestamp = defaults.double(forKey: Self.scanTimestampKey)
-    guard timestamp > lastProcessedTimestamp else { return }
-    lastProcessedTimestamp = timestamp
-
-    guard let jsonData = defaults.data(forKey: Self.scanResultKey),
-          let result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-    else {
-      sendEvent(withName: "onScanFailed", body: nil)
-      return
+    if timestamp > lastProcessedTimestamp {
+      lastProcessedTimestamp = timestamp
+      if let jsonData = defaults.data(forKey: Self.scanResultKey),
+         var result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+        if result["scanTs"] == nil { result["scanTs"] = timestamp }
+        queued.append(result)
+        defaults.removeObject(forKey: Self.scanResultKey)
+        defaults.removeObject(forKey: Self.scanTimestampKey)
+      } else if queued.isEmpty {
+        // Horodatage avancé sans résultat exploitable = scan cassé.
+        defaults.removeObject(forKey: Self.scanTimestampKey)
+        sendEvent(withName: "onScanFailed", body: nil)
+        return
+      }
     }
 
-    // Nettoyer après lecture
-    defaults.removeObject(forKey: Self.scanResultKey)
-    defaults.removeObject(forKey: Self.scanTimestampKey)
+    guard !queued.isEmpty else { return }
 
-    var withTs = result
-    if withTs["scanTs"] == nil { withTs["scanTs"] = timestamp }
-    emitScanResult(withTs, refreshLiveActivity: true)
+    // `qid` : clé d'accusé de réception. Attribuée ici (et non à l'écriture) pour
+    // que l'AppIntent et la Share Extension n'aient pas à la connaître. On
+    // PERSISTE avant d'émettre — sans ça un ack porterait sur un qid inconnu.
+    // `scanTs` ne peut pas servir de clé : il vaut 0 sur les chemins anciens.
+    for i in queued.indices where queued[i]["qid"] == nil {
+      queued[i]["qid"] = UUID().uuidString
+    }
+    persistPendingResults(queued, defaults)
+
+    for (idx, result) in queued.enumerated() {
+      // Seul le dernier scan a vocation à s'afficher en Live Activity.
+      emitScanResult(result, refreshLiveActivity: idx == queued.count - 1)
+    }
+  }
+
+  private func persistPendingResults(_ results: [[String: Any]], _ defaults: UserDefaults) {
+    if results.isEmpty {
+      defaults.removeObject(forKey: Self.pendingResultsKey)
+      return
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: results) else { return }
+    defaults.set(data, forKey: Self.pendingResultsKey)
+  }
+
+  /// Accusé de réception : la course est en base (ou définitivement refusée).
+  /// Seul mécanisme qui retire une entrée du journal — il n'y a plus de
+  /// suppression au bout de N tentatives, donc plus de course perdue en silence.
+  @objc func ackScan(_ qid: String) {
+    guard !qid.isEmpty, let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    guard let data = defaults.data(forKey: Self.pendingResultsKey),
+          let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return }
+    persistPendingResults(queued.filter { ($0["qid"] as? String) != qid }, defaults)
   }
 
   /// Émet un résultat vers le JS et, si demandé, rafraîchit la Live Activity.

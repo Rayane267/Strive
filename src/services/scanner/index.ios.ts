@@ -120,6 +120,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setQuotaReached(reached, isFree);
   },
 
+  ackScan: (qid: string) => {
+    ScanBridge?.ackScan?.(qid);
+  },
+
   setScanQuota: (countToday: number, limit: number, resetHour: number) => {
     ScanBridge?.setScanQuota?.(countToday, limit, resetHour);
   },

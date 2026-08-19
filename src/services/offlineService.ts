@@ -8,7 +8,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { Ride } from '../types/database';
-import { notifySyncDropped } from './localNotifications';
 
 const CACHE_VERSION = 1;
 const CACHE_VERSION_KEY = '@strive_cache_version';
@@ -129,115 +128,69 @@ export async function getLastSyncTime(): Promise<string | null> {
   }
 }
 
-/**
- * Queue une ride créée hors-ligne pour sync ultérieur.
- * Les rides sont ajoutées au cache local et marquées pour upload.
- */
-const MAX_QUEUE_SIZE = 100;
-const MAX_RETRY_COUNT = 5;
-const RETRY_KEY = '@strive_offline_retries';
+// ─── File d'écriture (SUPPRIMÉE) ────────────────────────────────────────────────
+//
+// `queueOfflineRide` / `syncOfflineQueue` n'existent plus. Les courses qui
+// n'atteignent pas Supabase restent désormais dans le JOURNAL NATIF des scans
+// (App Group iOS / SharedPreferences Android), retiré entrée par entrée via
+// `scannerService.ackScan(qid)` une fois l'écriture confirmée.
+//
+// Pourquoi cette file a disparu :
+//   • elle supprimait la course au bout de 5 tentatives — un refus permanent
+//     (quota dépassé) épuisait le compteur et détruisait la donnée ;
+//   • elle rejouait des courses sans la date du scan, qui atterrissaient au
+//     mauvais jour ;
+//   • second chemin d'écriture en parallèle du chemin natif, d'où des doublons
+//     et un verrou anti-concurrence pour les contenir.
+//
+// Ce fichier ne garde que le cache de LECTURE (consultation hors-ligne).
 
-export async function queueOfflineRide(ride: Omit<Ride, 'id'>): Promise<void> {
-  try {
-    const QUEUE_KEY = '@strive_offline_queue';
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
-    const queue: Omit<Ride, 'id'>[] = raw ? JSON.parse(raw) : [];
-    if (queue.length >= MAX_QUEUE_SIZE) {
-      Sentry.addBreadcrumb({ category: 'offline', message: `Queue full (${MAX_QUEUE_SIZE}), dropping oldest`, level: 'warning' });
-      queue.shift();
-    }
-    queue.push(ride);
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  } catch {
-    // Silent fail — cache is best-effort
-  }
-}
+const LEGACY_QUEUE_KEY = '@strive_offline_queue';
+const LEGACY_RETRY_KEY = '@strive_offline_retries';
 
 /**
- * Verrou module-level : `syncOfflineQueue` est déclenché par plusieurs sources
- * indépendantes (post-scan dans DashboardScreen, retour réseau, mount et
- * foreground dans useOfflineSync). Sans ce verrou, deux flushs concurrents
- * lisent la MÊME queue avant que l'un réécrive, et uploadent chacun les mêmes
- * rides → doublons en DB (2-3 lignes identiques). On coalesce : tant qu'un sync
- * tourne, les appels concurrents attendent et réutilisent son résultat.
+ * Reprise unique de l'ancienne file : sur les téléphones déjà installés, des
+ * courses y dorment encore. Sans ce drain elles seraient orphelines pour
+ * toujours. Chaque course est renvoyée ; celles qui passent sont retirées, les
+ * autres restent pour la prochaine tentative — jamais supprimées.
+ *
+ * À retirer une fois le parc migré (quelques semaines après la mise en ligne).
  */
-let syncInFlight: Promise<number> | null = null;
-
-/**
- * Synchronise les rides en queue vers Supabase.
- * Retourne le nombre de rides synchronisées.
- */
-export function syncOfflineQueue(
+export async function drainLegacyOfflineQueue(
   uploadFn: (ride: Omit<Ride, 'id'>) => Promise<void>,
 ): Promise<number> {
-  if (syncInFlight) return syncInFlight;
-  syncInFlight = runSyncOfflineQueue(uploadFn).finally(() => {
-    syncInFlight = null;
-  });
-  return syncInFlight;
-}
-
-async function runSyncOfflineQueue(
-  uploadFn: (ride: Omit<Ride, 'id'>) => Promise<void>,
-): Promise<number> {
-  const QUEUE_KEY = '@strive_offline_queue';
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
+    const raw = await AsyncStorage.getItem(LEGACY_QUEUE_KEY);
     if (!raw) return 0;
-
     const queue: Omit<Ride, 'id'>[] = JSON.parse(raw);
-    if (queue.length === 0) return 0;
-
-    // Load retry counts
-    const retryRaw = await AsyncStorage.getItem(RETRY_KEY);
-    const retries: Record<number, number> = retryRaw ? JSON.parse(retryRaw) : {};
+    if (queue.length === 0) {
+      await AsyncStorage.multiRemove([LEGACY_QUEUE_KEY, LEGACY_RETRY_KEY]);
+      return 0;
+    }
 
     let synced = 0;
-    let dropped = 0;
     const failed: Omit<Ride, 'id'>[] = [];
-    const newRetries: Record<number, number> = {};
-
-    for (let i = 0; i < queue.length; i++) {
-      const ride = queue[i];
-      const retryCount = retries[i] ?? 0;
-
-      // Drop rides that failed too many times
-      if (retryCount >= MAX_RETRY_COUNT) {
-        dropped++;
-        Sentry.captureMessage(`Offline ride dropped after ${MAX_RETRY_COUNT} retries`, {
-          level: 'warning',
-          tags: { flow: 'offline_sync' },
-          extra: { platform: ride.platform, fare: ride.fare_estimated },
-        });
-        continue;
-      }
-
+    for (const ride of queue) {
       try {
         await uploadFn(ride);
         synced++;
       } catch {
-        // L'index ré-écrit doit correspondre à la position de la ride dans le
-        // tableau `failed` (qui devient le nouveau `queue`), pas à `failed.length`
-        // au moment du push (qui pointe sur l'élément suivant).
-        const newIndex = failed.length;
         failed.push(ride);
-        newRetries[newIndex] = retryCount + 1;
       }
     }
 
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
-    await AsyncStorage.setItem(RETRY_KEY, JSON.stringify(newRetries));
-
+    if (failed.length === 0) {
+      await AsyncStorage.multiRemove([LEGACY_QUEUE_KEY, LEGACY_RETRY_KEY]);
+    } else {
+      await AsyncStorage.setItem(LEGACY_QUEUE_KEY, JSON.stringify(failed));
+    }
     if (synced > 0) {
-      Sentry.addBreadcrumb({ category: 'offline', message: `Synced ${synced} ride(s), ${failed.length} remaining`, level: 'info' });
+      Sentry.addBreadcrumb({
+        category: 'offline',
+        message: `Legacy queue: ${synced} ride(s) recovered, ${failed.length} remaining`,
+        level: 'info',
+      });
     }
-
-    // L'utilisateur doit savoir que des revenus manquent — sinon il découvre
-    // des courses absentes de ses stats sans explication.
-    if (dropped > 0) {
-      notifySyncDropped(dropped);
-    }
-
     return synced;
   } catch {
     return 0;
@@ -249,7 +202,12 @@ async function runSyncOfflineQueue(
  */
 export async function clearOfflineCache(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([...Object.values(KEYS), '@strive_offline_queue', RETRY_KEY, CACHE_VERSION_KEY]);
+    await AsyncStorage.multiRemove([
+      ...Object.values(KEYS),
+      LEGACY_QUEUE_KEY,
+      LEGACY_RETRY_KEY,
+      CACHE_VERSION_KEY,
+    ]);
     _versionChecked = false;
   } catch {
     // Silent fail

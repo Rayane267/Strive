@@ -436,13 +436,16 @@ struct AnalyzeRideIntent: AppIntent {
   /// Quota appliqué côté natif (compteur App Group poussé par le JS + incrémenté
   /// localement) OU flag JS — indépendant du JS suspendu pendant le scan.
   private var isQuotaReached: Bool {
-    let d = UserDefaults(suiteName: appGroupId)
-    if d?.bool(forKey: "scanQuotaReached") == true { return true }
-    let isFree = (d?.object(forKey: "isFreeTier") as? Bool) ?? true
-    guard isFree else { return false }
-    let limit = d?.integer(forKey: "scanQuotaLimit") ?? 0
-    if limit <= 0 { return false }
-    guard let d = d else { return false }
+    guard let d = UserDefaults(suiteName: appGroupId) else { return false }
+    if d.bool(forKey: "scanQuotaReached") { return true }
+    // Le compteur App Group vaut pour TOUS les tiers : `plan_limits` donne
+    // free = 3 ET plus = 15. Exempter les non-free laissait un abonné Plus
+    // franchir sa limite app fermée — chaque scan au-delà s'affichait
+    // normalement, puis `enforce_scan_quota` refusait l'insertion, la course
+    // partait en file offline et finissait jetée après MAX_RETRY_COUNT.
+    // `isFreeTier` ne sert qu'à choisir le message (teaser Plus vs « demain »).
+    let limit = d.integer(forKey: "scanQuotaLimit")
+    if limit <= 0 { return false }   // -1 = premium (illimité)
     return Self.scanCountForToday(d) >= limit
   }
 
@@ -562,6 +565,31 @@ struct AnalyzeRideIntent: AppIntent {
     }
   }
 
+  /// Repousse d'1h le rappel « Session inactive ». Il est planifié côté JS au
+  /// passage en ligne et re-planifié à chaque scan traité par le JS — or un scan
+  /// fait par le bouton Action / Siri arrive dans la file App Group sans que
+  /// l'app tourne : le chauffeur recevait la notif en pleine tournée. Identifiant
+  /// et délai alignés sur `localNotifications.ts`.
+  private func rescheduleInactivityReminder(defaults: UserDefaults) {
+    guard defaults.bool(forKey: "sessionOnline") else { return }
+    let center = UNUserNotificationCenter.current()
+    center.removePendingNotificationRequests(withIdentifiers: ["inactivity"])
+    let content = UNMutableNotificationContent()
+    content.title = localizedString("notif.inactivity.title",
+                                    fr: "Session inactive", en: "Inactive session")
+    content.body = localizedString(
+      "notif.inactivity.body",
+      fr: "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session.",
+      en: "You haven't scanned in 1 hour. Consider ending your session."
+    )
+    content.sound = .default
+    center.add(UNNotificationRequest(
+      identifier: "inactivity",
+      content: content,
+      trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)
+    ))
+  }
+
   /// `done` : appelé une fois l'écriture en base terminée (ou abandonnée). Le
   /// dépôt dans l'App Group, lui, est fait immédiatement et sans condition.
   private func saveResultForMainApp(
@@ -599,6 +627,7 @@ struct AnalyzeRideIntent: AppIntent {
     }
 
     enqueueScanResult(body, defaults: defaults)
+    rescheduleInactivityReminder(defaults: defaults)
 
     // Jumelle minimale de `lastScanResult`, que le drain de l'app NE purge PAS :
     // c'est elle qui alimente l'incrément KPI du bouton ✅ / des commandes Siri
@@ -621,14 +650,12 @@ struct AnalyzeRideIntent: AppIntent {
       )
     }
 
-    // Enregistrement en base, maintenant que le dépôt App Group est fait : si la
-    // requête échoue ou que le process meurt avant, la file rattrape à
-    // l'ouverture, et l'index unique sur `scan_ts` interdit le doublon.
-    // `markQueuedResultSaved` marque l'entrée de la file ET `lastScanResult`.
-    RideUploader.upload(result, scanTs: scanTs) { saved in
-      if saved { RideUploader.markQueuedResultSaved(scanTs: scanTs) }
-      done()
-    }
+    // Écriture immédiate en session de fond, maintenant que le dépôt App Group
+    // est fait. Elle retourne tout de suite : le transfert est confié au démon
+    // système et survit à la fin de l'intent. Si elle échoue (ou n'a pas de
+    // credential valide), le drain de l'outbox rattrape à l'ouverture de l'app.
+    RideUploader.upload(result, scanTs: scanTs)
+    done()
   }
 }
 

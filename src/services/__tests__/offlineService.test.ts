@@ -11,8 +11,7 @@ import {
   cachePreferences,
   getCachedPreferences,
   clearOfflineCache,
-  queueOfflineRide,
-  syncOfflineQueue,
+  drainLegacyOfflineQueue,
   getLastSyncTime,
 } from '../offlineService';
 
@@ -105,7 +104,15 @@ describe('offlineService — preferences', () => {
   });
 });
 
-describe('offlineService — offline queue', () => {
+// L'ancienne file d'écriture a été remplacée par le journal natif des scans
+// (ack explicite). Ne subsiste que la reprise unique de ce qui dormait encore
+// dans `@strive_offline_queue` sur les téléphones déjà installés.
+//
+// Le test supprimé « drops rides after 5 failed retries » encodait précisément
+// la perte de données qu'on vient d'éliminer : une course refusée 5 fois était
+// effacée. Il n'y a plus de compteur de tentatives, donc plus de suppression.
+describe('offlineService — reprise de l\'ancienne file', () => {
+  const QUEUE = '@strive_offline_queue';
   const mockRide = {
     user_id: 'u1',
     platform: 'BOLT' as const,
@@ -119,99 +126,56 @@ describe('offlineService — offline queue', () => {
     created_at: '2026-04-08T14:00:00Z',
   };
 
-  it('queues a ride for offline sync', async () => {
-    await queueOfflineRide(mockRide);
-    const raw = mockStorage['@strive_offline_queue'];
-    const queue = JSON.parse(raw);
-    expect(queue).toHaveLength(1);
-    expect(queue[0].platform).toBe('BOLT');
-  });
+  const seed = (rides: unknown[]) => {
+    mockStorage[QUEUE] = JSON.stringify(rides);
+  };
 
-  it('queues multiple rides', async () => {
-    await queueOfflineRide(mockRide);
-    await queueOfflineRide({ ...mockRide, platform: 'UBER' as const });
-    const raw = mockStorage['@strive_offline_queue'];
-    const queue = JSON.parse(raw);
-    expect(queue).toHaveLength(2);
-  });
-
-  it('syncs queued rides successfully', async () => {
-    await queueOfflineRide(mockRide);
-    await queueOfflineRide({ ...mockRide, platform: 'UBER' as const });
+  it('remonte les courses et vide la clé quand tout passe', async () => {
+    seed([mockRide, { ...mockRide, platform: 'UBER' as const }]);
 
     const uploadFn = jest.fn().mockResolvedValue(undefined);
-    const synced = await syncOfflineQueue(uploadFn);
+    const synced = await drainLegacyOfflineQueue(uploadFn);
 
     expect(synced).toBe(2);
     expect(uploadFn).toHaveBeenCalledTimes(2);
-    // Queue should be empty
-    const raw = mockStorage['@strive_offline_queue'];
-    expect(JSON.parse(raw)).toHaveLength(0);
+    expect(mockStorage[QUEUE]).toBeUndefined();
   });
 
-  it('keeps failed rides in queue', async () => {
-    await queueOfflineRide(mockRide);
-    await queueOfflineRide({ ...mockRide, platform: 'UBER' as const });
+  it('conserve les courses en échec au lieu de les supprimer', async () => {
+    seed([mockRide, { ...mockRide, platform: 'UBER' as const }]);
 
     let callCount = 0;
     const uploadFn = jest.fn().mockImplementation(() => {
       callCount++;
-      if (callCount === 1) return Promise.resolve();
-      return Promise.reject(new Error('network error'));
+      return callCount === 1
+        ? Promise.resolve()
+        : Promise.reject(new Error('network error'));
     });
 
-    const synced = await syncOfflineQueue(uploadFn);
+    const synced = await drainLegacyOfflineQueue(uploadFn);
 
     expect(synced).toBe(1);
-    const raw = mockStorage['@strive_offline_queue'];
-    const remaining = JSON.parse(raw);
+    const remaining = JSON.parse(mockStorage[QUEUE]);
     expect(remaining).toHaveLength(1);
     expect(remaining[0].platform).toBe('UBER');
   });
 
-  it('returns 0 when queue is empty', async () => {
-    const uploadFn = jest.fn();
-    const synced = await syncOfflineQueue(uploadFn);
-    expect(synced).toBe(0);
-    expect(uploadFn).not.toHaveBeenCalled();
-  });
-
-  it('caps queue at 100 rides, dropping oldest', async () => {
-    // Fill queue to 100
-    for (let i = 0; i < 100; i++) {
-      await queueOfflineRide({ ...mockRide, fare_estimated: i });
-    }
-    const rawBefore = mockStorage['@strive_offline_queue'];
-    expect(JSON.parse(rawBefore)).toHaveLength(100);
-
-    // Add one more — should drop the oldest (fare_estimated: 0)
-    await queueOfflineRide({ ...mockRide, fare_estimated: 999 });
-    const rawAfter = mockStorage['@strive_offline_queue'];
-    const queue = JSON.parse(rawAfter);
-    expect(queue).toHaveLength(100);
-    expect(queue[0].fare_estimated).toBe(1); // oldest (0) was dropped
-    expect(queue[99].fare_estimated).toBe(999);
-  });
-
-  it('drops rides after 5 failed retries', async () => {
-    await queueOfflineRide(mockRide);
-
+  it('ne supprime jamais une course, même après des échecs répétés', async () => {
+    seed([mockRide]);
     const alwaysFail = jest.fn().mockRejectedValue(new Error('fail'));
 
-    // Simulate 5 sync attempts that all fail
-    for (let i = 0; i < 5; i++) {
-      await syncOfflineQueue(alwaysFail);
+    for (let i = 0; i < 10; i++) {
+      await drainLegacyOfflineQueue(alwaysFail);
     }
 
-    // 6th attempt: ride should be dropped (not retried)
-    alwaysFail.mockClear();
-    const synced = await syncOfflineQueue(alwaysFail);
-    expect(synced).toBe(0);
-    expect(alwaysFail).not.toHaveBeenCalled();
+    expect(JSON.parse(mockStorage[QUEUE])).toHaveLength(1);
+  });
 
-    // Queue should be empty
-    const raw = mockStorage['@strive_offline_queue'];
-    expect(JSON.parse(raw)).toHaveLength(0);
+  it('rend 0 sans rien appeler quand il n\'y a pas d\'ancienne file', async () => {
+    const uploadFn = jest.fn();
+    const synced = await drainLegacyOfflineQueue(uploadFn);
+    expect(synced).toBe(0);
+    expect(uploadFn).not.toHaveBeenCalled();
   });
 });
 

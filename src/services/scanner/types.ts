@@ -26,10 +26,11 @@ export interface ScanResult {
   /** Horodatage du scan (epoch s) — clé de corrélation avec la décision
    *  Accepter/Refuser tapée sur la notification iOS. */
   scanTs?: number;
-  /** iOS : la course a déjà été écrite en base par le process de scan (Share
-   *  Extension / raccourci) au moment du scan. L'app n'a donc plus qu'à
-   *  rafraîchir sa liste — surtout pas à ré-insérer. */
-  savedRemotely?: boolean;
+  /** Identifiant de l'entrée dans le journal natif des scans. À renvoyer via
+   *  `ackScan(qid)` une fois la course confirmée en base : c'est le seul moyen
+   *  de retirer l'entrée. Sans accusé, le scan est rejoué à la prochaine relève
+   *  — c'est ce qui garantit qu'aucune course ne se perd. */
+  qid?: string;
 }
 
 /** Décision Accepter/Refuser émise par une action de notification iOS. */
@@ -103,6 +104,12 @@ export interface ScannerService {
    *  (scan via extension/bulle = JS suspendu) en situant correctement la
    *  frontière de journée. `limit <= 0` = illimité. */
   setScanQuota(countToday: number, limit: number, resetHour: number): void;
+
+  /** Acquitte un scan du journal natif : la course est en base, ou refusée
+   *  définitivement. Tant qu'un scan n'est pas acquitté il est ré-émis à chaque
+   *  relève — remplace l'ancienne file hors-ligne AsyncStorage, qui supprimait
+   *  la course au bout de 5 tentatives. */
+  ackScan(qid: string): void;
   /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
    *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
    *  → un scan déclenché alors que désactivé est refusé avec un message. */

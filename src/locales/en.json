@@ -936,9 +936,14 @@
       "title": "Quota reached",
       "body": "You've used all your scans today. Resets in {{time}}."
     },
+    "rideRejected": {
+      "title": "Ride not saved",
+      "bodyQuota": "Daily quota exceeded: this ride could not be added to your stats.",
+      "bodyOther": "This ride was rejected on save. Contact support if it happens again."
+    },
     "sessionClosed": {
       "title": "Session closed",
-      "body": "Your session was closed after 1 hour of inactivity."
+      "body": "Your session was closed after 2 hours without a scan."
     },
     "syncDropped": {
       "title": "Sync incomplete",

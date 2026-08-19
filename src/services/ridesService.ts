@@ -46,9 +46,10 @@ export async function createRide(params: {
    */
   scanTs?: number | null;
   /**
-   * `null` quand le trigger `aa_skip_duplicate_ride` a écarté l'insertion : la
-   * course identique a déjà été enregistrée dans les 90 s. Ce n'est PAS une
-   * erreur — l'appelant doit traiter ce cas comme un succès sans rien créer.
+   * `null` quand le trigger `aa_skip_duplicate_ride` a écarté l'insertion : une
+   * course portant DÉJÀ ce `scan_ts` existe, autrement dit c'est un rejeu du
+   * même scan. Ce n'est PAS une erreur — l'appelant doit traiter ce cas comme un
+   * succès sans rien créer, et acquitter l'entrée du carnet natif.
    */
 }): Promise<Ride | null> {
   const { data, error } = await supabase
@@ -81,7 +82,7 @@ export async function createRide(params: {
     // `maybeSingle` et pas `single` : le trigger anti-doublon annule l'insert
     // en rendant NULL, donc zéro ligne revient. `single` répondait PGRST116,
     // que l'appelant prenait pour une panne réseau et remettait la course en
-    // file offline — d'où le doublon recréé plus tard, hors fenêtre de 90 s.
+    // file — d'où le doublon recréé plus tard.
     .maybeSingle();
 
   // 23505 = l'index unique (user_id, scan_ts) a refusé l'insertion : la course

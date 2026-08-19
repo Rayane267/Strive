@@ -58,9 +58,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // où le process se fait déjà tuer par iOS (« Strive a quitté inopinément »
     // remonté par Raccourcis) : y rajouter le pont ne ferait qu'aggraver.
     //
-    // Ce qui avait motivé un retour en arrière ici — la course enregistrée dès le
-    // scan, et non à l'ouverture de l'app — est désormais assuré sans le pont :
-    // `RideUploader` écrit directement dans Supabase depuis le process de scan.
+    // Ce qui avait motivé un retour en arrière ici — la course enregistrée dès
+    // le scan, et non à l'ouverture de l'app — est assuré sans le pont :
+    // `RideUploader` confie l'écriture à une session URLSession de FOND, que le
+    // démon système mène à terme même ce process mort.
+    //
+    // Et si elle échoue, rien n'est perdu : la course reste dans
+    // `pendingScanResults` (App Group), drainée à la prochaine ouverture. Une
+    // entrée ne quitte la file que sur `ackScan`, et elle porte `scanTs`, dont
+    // `createRide` dérive `created_at` — la course atterrit au jour du scan,
+    // pas au jour du drain.
     //
     // Les autres lancements en arrière-plan sont dans le même cas : les actions
     // « Accepter / Refuser » d'une notification écrivent dans l'App Group en Swift,
@@ -149,6 +156,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
     Messaging.messaging().apnsToken = deviceToken
+  }
+
+  // MARK: - Session de fond (écriture immédiate des courses)
+
+  /// iOS relance l'app en arrière-plan quand une session de fond a fini ses
+  /// transferts alors que le process qui les avait lancés (Share Extension,
+  /// raccourci) était mort.
+  ///
+  /// On n'a rien à faire de ces événements : `RideUploader` n'exploite aucune
+  /// complétion, la réconciliation passe par le drain de l'outbox. Mais le
+  /// handler doit exister et son completion doit être appelé — sans quoi iOS
+  /// considère l'app en faute et peut la tuer, voire suspendre la session.
+  func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    NSLog("[Strive] session de fond terminée — %@", identifier)
+    completionHandler()
   }
 }
 

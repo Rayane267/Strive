@@ -370,40 +370,103 @@ final class ScanProcessor {
 
 // MARK: - Enregistrement immédiat de la course
 
-/// Écrit la course dans Supabase AU MOMENT DU SCAN, depuis le process qui l'a
-/// analysée (Share Extension ou raccourci) — sans attendre l'ouverture de l'app.
+/// Délégué minimal de la session de fond.
 ///
-/// Jusqu'ici le résultat n'était que déposé dans l'App Group : les courses
-/// n'apparaissaient en base qu'à la prochaine ouverture, toutes d'un coup, et
-/// chaque garde du JS qui refusait un élément de la file le perdait
-/// DÉFINITIVEMENT (la file est purgée à l'émission).
-///
-/// La file `pendingScanResults` reste écrite dans tous les cas : elle sert
-/// désormais de simple filet pour ce qui n'a pas pu partir ici (hors réseau,
-/// JWT expiré, process tué avant la réponse). Le rejeu ne peut pas dupliquer :
-/// `scan_ts` est unique par utilisateur (cf. 20260817_rides_scan_ts_unique.sql).
-///
-/// Auth : exactement le même matériel que l'appel Gemini de l'extension (anon
-/// key + JWT user déposés dans l'App Group par le bridge) — donc aucune
-/// nouvelle contrainte de fraîcheur de session par rapport à l'existant.
-enum RideUploader {
+/// Une session de fond EXIGE un délégué — les variantes à completion handler
+/// lèvent une exception. Mais on n'a rien à faire du résultat : la
+/// réconciliation passe par l'outbox (cf. `RideUploader`). On se contente de
+/// retirer le fichier de corps, que le démon système a fini de lire.
+private final class RideUploadDelegate: NSObject, URLSessionDataDelegate {
+  static let shared = RideUploadDelegate()
 
-  private static let session: URLSession = {
-    let cfg = URLSessionConfiguration.ephemeral
-    cfg.timeoutIntervalForRequest = 8
-    cfg.timeoutIntervalForResource = 10
-    // Hors réseau on échoue tout de suite : la file App Group prend le relais.
-    cfg.waitsForConnectivity = false
-    return URLSession(configuration: cfg)
-  }()
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    if let path = task.taskDescription {
+      try? FileManager.default.removeItem(atPath: path)
+    }
+    if let error = error {
+      NSLog("[Strive:Ride] upload de fond KO — %@", error.localizedDescription)
+    } else if let http = task.response as? HTTPURLResponse,
+              !(200...299).contains(http.statusCode), http.statusCode != 409 {
+      // 409 = même (user_id, scan_ts) déjà en base : la course EST enregistrée.
+      NSLog("[Strive:Ride] upload de fond refusé — HTTP %d", http.statusCode)
+    }
+  }
+}
+
+/// Écrit la course dans Supabase AU MOMENT DU SCAN, depuis le process qui l'a
+/// analysée (Share Extension ou raccourci).
+///
+/// Ce que cet envoi N'EST PAS : la garantie de non-perte. Celle-ci tient
+/// entièrement à l'outbox `pendingScanResults` — une entrée n'en sort que sur
+/// `ackScan`, une fois la course confirmée en base. L'envoi ci-dessous ne fait
+/// que raccourcir le délai, et son échec n'a aucune conséquence.
+///
+/// La version précédente échouait précisément dans le cas d'usage dominant.
+/// Les deux causes, et ce qui les corrige :
+///
+///  • `URLSessionConfiguration.ephemeral` + `waitsForConnectivity = false` : la
+///    requête mourait avec le process (le chauffeur referme le panneau de
+///    partage pendant l'appel réseau) et abandonnait dès la première zone
+///    blanche. On passe en session de FOND : le démon système porte le
+///    transfert, attend le réseau et réessaie — extension tuée ou non.
+///
+///  • Le JWT lu dans l'App Group est déposé par le JS au dernier passage au
+///    premier plan. Il est donc périmé dès que l'app n'a pas tourné depuis
+///    l'expiration de l'access token — c'est-à-dire presque toujours, l'usage
+///    visé étant le scan app fermée. Voir `currentCredential` : c'est le SEUL
+///    point à changer pour passer à un jeton d'appareil frappé côté serveur.
+///
+/// Aucune complétion n'est exploitée : le drain de l'outbox à l'ouverture de
+/// l'app retombera sur le doublon, qu'il traite comme un succès. Rien ne
+/// circule entre les process — c'est ce qui a permis de supprimer le drapeau
+/// `savedRemotely` et sa comptabilité.
+enum RideUploader {
 
   private static var appGroupId: String {
     (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
   }
 
-  /// `sub` du JWT Supabase = id de l'utilisateur. Évite de plomber un réglage de
-  /// plus dans l'App Group pour une valeur que le jeton porte déjà.
+  /// UNE session de fond par process. Deux sessions ne peuvent pas partager un
+  /// identifiant ; l'app et l'extension ayant des bundle id distincts, la
+  /// collision entre les deux écrivains est impossible par construction.
+  private static let session: URLSession = {
+    let id = (Bundle.main.bundleIdentifier ?? "com.striveapp.app") + ".ride-upload"
+    let cfg = URLSessionConfiguration.background(withIdentifier: id)
+    // Obligatoire pour une session de fond lancée depuis une app extension :
+    // c'est le répertoire où le démon lit le corps et dépose la réponse.
+    cfg.sharedContainerIdentifier = appGroupId
+    // `true` laisserait iOS choisir « un bon moment » (charge, wifi) — ce qui
+    // peut vouloir dire des heures. La course doit partir dès que le réseau est là.
+    cfg.isDiscretionary = false
+    // Sans ça les événements de fin de transfert seraient perdus quand
+    // l'extension est morte, et le transfert lui-même peut rester suspendu.
+    cfg.sessionSendsLaunchEvents = true
+    return URLSession(configuration: cfg, delegate: RideUploadDelegate.shared, delegateQueue: nil)
+  }()
+
+  /// Point d'entrée UNIQUE du credential.
+  ///
+  /// Aujourd'hui : le JWT déposé par l'app dans l'App Group. Sa durée de vie
+  /// est celle de l'access token Supabase (réglage `JWT expiry` du projet) —
+  /// c'est elle, et non ce code, qui détermine combien de temps un chauffeur
+  /// peut scanner sans rouvrir l'app.
+  ///
+  /// Si la télémétrie montre des drains trop tardifs, la suite est un jeton
+  /// d'appareil frappé par une edge function et rangé en Keychain : seule cette
+  /// fonction change, le reste du fichier est indépendant de ce choix. La piste
+  /// du refresh token a été écartée — Supabase fait tourner les refresh tokens
+  /// à l'usage, et deux process qui rafraîchissent en même temps peuvent
+  /// invalider la session, donc déconnecter le chauffeur en pleine tournée.
+  private static func currentCredential(_ defaults: UserDefaults) -> (jwt: String, uid: String)? {
+    guard let jwt = defaults.string(forKey: "supabaseUserJwt"), !jwt.isEmpty,
+          let uid = userId(fromJwt: jwt)
+    else { return nil }
+    return (jwt, uid)
+  }
+
+  /// `sub` du JWT Supabase = id de l'utilisateur. Évite de plomber un réglage
+  /// de plus dans l'App Group pour une valeur que le jeton porte déjà.
   private static func userId(fromJwt jwt: String) -> String? {
     let parts = jwt.split(separator: ".")
     guard parts.count >= 2 else { return nil }
@@ -417,32 +480,57 @@ enum RideUploader {
     return json["sub"] as? String
   }
 
-  /// Enregistre la course. `completion(true)` = la course est en base (insérée,
-  /// ou déjà présente via l'index unique) → l'entrée de la file peut être
-  /// marquée `savedRemotely`.
-  static func upload(
-    _ final: ScanProcessor.FinalResult,
-    scanTs: Double,
-    completion: @escaping (Bool) -> Void
-  ) {
-    let defaults = UserDefaults(suiteName: appGroupId)
-    guard let restUrl = defaults?.string(forKey: "supabaseRestUrl"), !restUrl.isEmpty,
-          let anonKey = defaults?.string(forKey: "geminiSupabaseKey"), !anonKey.isEmpty,
-          let jwt = defaults?.string(forKey: "supabaseUserJwt"), !jwt.isEmpty,
-          let uid = userId(fromJwt: jwt),
-          let url = URL(string: "\(restUrl)/rest/v1/rides")
-    else { completion(false); return }
+  /// Répertoire des corps de requête, dans le container partagé (exigé par la
+  /// session de fond lancée depuis une extension).
+  private static func bodyDirectory() -> URL? {
+    guard let container = FileManager.default
+      .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
+    else { return nil }
+    let dir = container.appendingPathComponent("ride-uploads", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }
+
+  /// Retire les corps de plus de 24 h. Le délégué nettoie le cas nominal ;
+  /// ceux-ci sont les orphelins des transferts dont le process est mort avant
+  /// la complétion. Sans ce balayage ils s'accumuleraient indéfiniment.
+  private static func sweepStaleBodies(_ dir: URL) {
+    guard let files = try? FileManager.default.contentsOfDirectory(
+      at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+    ) else { return }
+    let cutoff = Date().addingTimeInterval(-86_400)
+    for f in files {
+      let modified = (try? f.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate
+      if let modified = modified, modified < cutoff {
+        try? FileManager.default.removeItem(at: f)
+      }
+    }
+  }
+
+  /// Programme l'écriture de la course. Retourne immédiatement : le transfert
+  /// est confié au démon système et survit à la mort de ce process.
+  static func upload(_ final: ScanProcessor.FinalResult, scanTs: Double) {
+    guard let defaults = UserDefaults(suiteName: appGroupId),
+          let restUrl = defaults.string(forKey: "supabaseRestUrl"), !restUrl.isEmpty,
+          let anonKey = defaults.string(forKey: "geminiSupabaseKey"), !anonKey.isEmpty,
+          let cred = currentCredential(defaults),
+          let url = URL(string: "\(restUrl)/rest/v1/rides"),
+          let dir = bodyDirectory()
+    else { return }
+
+    sweepStaleBodies(dir)
 
     // Carburant figé au moment du scan, comme côté JS. `fuelCostPerKm` est
     // poussé pré-calculé par l'app (conso × prix du jour) ; 0 = non renseigné,
     // on laisse alors les colonnes à NULL plutôt que d'écrire un faux zéro.
-    let fuelCostPerKm = defaults?.double(forKey: "fuelCostPerKm") ?? 0
+    let fuelCostPerKm = defaults.double(forKey: "fuelCostPerKm")
     let fuelCost: Double? = fuelCostPerKm > 0
       ? (fuelCostPerKm * final.totalDistanceKm * 100).rounded() / 100
       : nil
 
     var body: [String: Any] = [
-      "user_id": uid,
+      "user_id": cred.uid,
       // Même normalisation que `createRide` côté JS : la colonne n'accepte pas
       // UNKNOWN.
       "platform": final.scan.platform == .UNKNOWN ? "UBER" : final.scan.platform.rawValue,
@@ -454,10 +542,9 @@ enum RideUploader {
       "hourly_rate": final.hourlyRate,
       "km_rate": final.kmRate,
       "scan_ts": scanTs,
-      // Heure du SCAN, pas de l'insertion. Le défaut `now()` était juste tant que
-      // le JS insérait dans la foulée ; il ne l'est plus quand une course part
-      // d'ici (ou est rejouée depuis la file) — dix courses d'une matinée
-      // s'affichaient toutes « à l'instant » à l'ouverture de l'app.
+      // Heure du SCAN, pas de l'insertion — c'est la même règle que
+      // `createRide` côté JS, et c'est ce qui fait atterrir la course au jour
+      // où elle a été scannée quel que soit le chemin qui l'écrit.
       "created_at": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: scanTs)),
     ]
     if let fuelCost = fuelCost {
@@ -471,62 +558,27 @@ enum RideUploader {
       body["destination_address"] = d
     }
 
-    guard let payload = try? JSONSerialization.data(withJSONObject: body) else {
-      completion(false); return
-    }
+    guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return }
+
+    // Une session de fond n'accepte QUE `uploadTask(with:fromFile:)` — ni
+    // `dataTask`, ni un corps en mémoire. Le fichier doit survivre au process :
+    // il vit dans le container partagé, et le délégué le retire à la fin.
+    let file = dir.appendingPathComponent("\(Int(scanTs * 1000)).json")
+    guard (try? payload.write(to: file, options: .atomic)) != nil else { return }
 
     var req = URLRequest(url: url)
     req.httpMethod = "POST"
     req.setValue(anonKey, forHTTPHeaderField: "apikey")
-    req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+    req.setValue("Bearer \(cred.jwt)", forHTTPHeaderField: "Authorization")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    // Rien à relire ici : l'app rechargera la liste depuis la base.
+    // Rien à relire : l'app rechargera la liste depuis la base.
     req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-    req.httpBody = payload
 
-    session.dataTask(with: req) { _, response, error in
-      guard error == nil, let http = response as? HTTPURLResponse else {
-        NSLog("[Strive:Ride] upload KO — %@", error?.localizedDescription ?? "no response")
-        completion(false); return
-      }
-      // 409 = même (user_id, scan_ts) déjà en base : la course EST enregistrée,
-      // c'est donc un succès (rejeu de la file, ou double appel du pipeline).
-      let ok = (200...299).contains(http.statusCode) || http.statusCode == 409
-      if !ok { NSLog("[Strive:Ride] upload refusé — HTTP %d", http.statusCode) }
-      completion(ok)
-    }.resume()
+    let task = session.uploadTask(with: req, fromFile: file)
+    // Sert au délégué à retrouver le corps à supprimer.
+    task.taskDescription = file.path
+    task.resume()
   }
-
-  /// Marque l'entrée `scanTs` de la file comme déjà enregistrée : au prochain
-  /// démarrage, l'app se contente de rafraîchir sa liste depuis la base au lieu
-  /// de ré-insérer. Si le process meurt avant, l'entrée reste « à insérer » — et
-  /// l'index unique absorbe le doublon.
-  static func markQueuedResultSaved(scanTs: Double) {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
-          let data = defaults.data(forKey: "pendingScanResults"),
-          var queue = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-    else { return }
-    var touched = false
-    for i in queue.indices where (queue[i]["scanTs"] as? NSNumber)?.doubleValue == scanTs {
-      queue[i]["savedRemotely"] = true
-      touched = true
-    }
-    guard touched, let out = try? JSONSerialization.data(withJSONObject: queue) else { return }
-    defaults.set(out, forKey: "pendingScanResults")
-
-    // `lastScanResult` (case historique) doit porter le même marqueur : c'est
-    // elle que lit un build antérieur à la file, et elle sert de repli si la
-    // file a été rognée par son plafond.
-    if let lastData = defaults.data(forKey: "lastScanResult"),
-       var last = try? JSONSerialization.jsonObject(with: lastData) as? [String: Any],
-       (last["scanTs"] as? NSNumber)?.doubleValue == scanTs {
-      last["savedRemotely"] = true
-      if let outLast = try? JSONSerialization.data(withJSONObject: last) {
-        defaults.set(outLast, forKey: "lastScanResult")
-      }
-    }
-  }
-
 }
 
 /// Garantit qu'un callback n'est invoqué qu'UNE seule fois (thread-safe) et

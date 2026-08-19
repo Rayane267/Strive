@@ -295,7 +295,12 @@ class FloatingBubbleService : Service() {
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
         // on n'attend pas que le JS (suspendu pendant un scan) mette le flag à jour.
-        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
+        // Le compteur vaut pour TOUS les tiers : plan_limits donne free = 3 ET
+        // plus = 15. L'ancien `isFreeTier &&` exemptait les abonnés Plus, qui
+        // franchissaient donc leur limite app fermée — le serveur refusait ensuite
+        // l'insertion et la course était perdue. `isFreeTier` ne sert plus qu'à
+        // choisir l'écran affiché (teaser Plus vs « revenez demain »).
+        val quotaByCount = scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             ScanBridgeModule.emitScanFailure(this, "quota_reached")
             showQuotaReachedState()

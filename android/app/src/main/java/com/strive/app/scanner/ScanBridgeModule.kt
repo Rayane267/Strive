@@ -312,12 +312,15 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         val prefs = reactContext.applicationContext
             .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
         val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
-        // Purge d'abord : si l'émission relance un crash, on ne rejoue pas la
-        // même course en boucle au prochain démarrage.
-        prefs.edit().remove(SCANS_KEY).apply()
+        // AUCUNE purge ici : on n'efface qu'entrée par entrée, sur `ackScan`, une
+        // fois la course confirmée en base. Purger avant émission perdait tout scan
+        // que le JS recevait sans parvenir à l'écrire (réseau coupé, crash).
+        // Le rejeu est sans risque : l'index unique (user_id, scan_ts) écarte les
+        // doublons côté base.
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             emit("onScanResult", Arguments.createMap().apply {
+                putString("qid", o.optString("qid"))
                 putString("platform", o.optString("platform", "UNKNOWN"))
                 putDouble("fare", o.optDouble("fare", 0.0))
                 putDouble("distanceKm", o.optDouble("distanceKm", 0.0))
@@ -333,6 +336,16 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 if (o.isNull("scanTs")) putNull("scanTs") else putDouble("scanTs", o.optDouble("scanTs"))
             })
         }
+    }
+
+    /** Accusé de réception d'un scan : la course est en base (ou définitivement
+     *  refusée). Seul mécanisme qui retire une entrée du journal — il n'y a plus
+     *  de suppression au bout de N tentatives, donc plus de course détruite en
+     *  silence. Tant que le JS n'acquitte pas, l'entrée est rejouée. */
+    @ReactMethod
+    fun ackScan(qid: String) {
+        if (qid.isEmpty()) return
+        removeBufferedScan(reactContext.applicationContext, qid)
     }
 
     /** Vidange du buffer d'échecs vers le JS — appelée à l'abonnement
@@ -419,12 +432,18 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             })
         }
 
-        /** Buffer des scans non remis au JS (survit à un process RN mort). */
+        /** Journal durable des scans. Contient TOUT scan produit, remis au JS ou
+         *  non, et n'est purgé qu'entrée par entrée via `ackScan` — une fois la
+         *  course confirmée en base. C'est la seule file de l'app : la file
+         *  hors-ligne AsyncStorage (`@strive_offline_queue`) a été supprimée avec
+         *  elle. Survit à un process RN mort, à un crash pendant l'émission et à
+         *  une panne Supabase. */
         const val SCANS_PREFS = "strive_pending_scans"
         const val SCANS_KEY = "pending"
-        /** Au-delà, c'est que l'app n'a pas tourné depuis longtemps — on garde les
-         *  plus récents plutôt que de laisser enfler indéfiniment. Mirror iOS. */
-        private const val SCANS_MAX = 20
+        /** Plafond de sécurité : au-delà, l'app n'a pas tourné depuis très
+         *  longtemps. On garde les plus récents. Large, parce qu'une entrée n'est
+         *  retirée que sur accusé de réception — pas au bout de N tentatives. */
+        private const val SCANS_MAX = 200
 
         fun emitScanResult(
             ctx: Context,
@@ -461,28 +480,42 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // Accepter/Refuser (DashboardScreen mappe scanTs → ride id). Mirror iOS.
                 if (scanTs > 0) putDouble("scanTs", scanTs) else putNull("scanTs")
             }
-            // Bufferisation UNIQUEMENT si le JS n'a pas pu recevoir l'événement
-            // (process RN mort alors que le foreground service tourne encore).
-            // Contrairement aux décisions Accepter/Refuser, rejouer un scan n'est
-            // pas idempotent : bufferiser systématiquement créerait une course en
-            // double à chaque ré-abonnement. Mirror iOS (pendingScanResults).
-            if (!emit("onScanResult", map)) bufferScanResult(ctx, result, screenHeight, scanTs)
+            // On journalise TOUJOURS avant d'émettre, puis on n'efface que sur
+            // accusé de réception (`ackScan`) une fois la course en base.
+            //
+            // L'ancien code ne bufferisait que si l'émission échouait, au motif que
+            // « rejouer un scan n'est pas idempotent ». Ce n'est plus vrai depuis
+            // l'index unique (user_id, scan_ts) — 20260817_rides_scan_ts_unique.sql :
+            // un rejeu est refusé par la base (23505) et traité comme un succès
+            // sans doublon. Émettre sans journaliser perdait la course dès que le
+            // JS recevait l'événement puis échouait à l'écrire (réseau, crash).
+            val qid = bufferScanResult(ctx, result, screenHeight, scanTs)
+            map.putString("qid", qid)
+            emit("onScanResult", map)
         }
 
-        /** Empile un scan que le JS n'a pas reçu. `imageBase64` et `debugBlocks`
-         *  sont volontairement omis : le screenshot est de la PII et pèse des Mo,
-         *  hors de propos dans SharedPreferences. À la relève le résultat est déjà
-         *  final (OCR + TomTom faits), le fallback Gemini côté JS est inutile. */
+        /** Journalise un scan et rend son identifiant de file (`qid`), la clé que
+         *  le JS renverra dans `ackScan` une fois la course confirmée en base.
+         *
+         *  `qid` plutôt que `scanTs` : `scanTs` peut valoir 0 (chemins anciens) et
+         *  ne permettrait alors pas d'identifier l'entrée à retirer.
+         *
+         *  `imageBase64` et `debugBlocks` sont volontairement omis : le screenshot
+         *  est de la PII et pèse des Mo, hors de propos dans SharedPreferences. À
+         *  la relève le résultat est déjà final (OCR + TomTom faits), le fallback
+         *  Gemini côté JS est inutile. */
         private fun bufferScanResult(
             ctx: Context,
             result: OcrParser.ScanResult,
             screenHeight: Int,
             scanTs: Double,
-        ) {
+        ): String {
+            val qid = java.util.UUID.randomUUID().toString()
             val prefs = ctx.applicationContext
                 .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
             val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
             arr.put(JSONObject().apply {
+                put("qid", qid)
                 put("platform", result.platform.name)
                 put("fare", result.fare)
                 put("distanceKm", result.distanceKm)
@@ -500,6 +533,23 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 }
             } else arr
             prefs.edit().putString(SCANS_KEY, trimmed.toString()).apply()
+            return qid
+        }
+
+        /** Retire une entrée du journal — appelé par le JS via `ackScan` une fois
+         *  la course écrite en base (ou refusée définitivement). Tant qu'aucun
+         *  accusé n'arrive, l'entrée est rejouée à chaque relève : c'est ce qui
+         *  garantit qu'un scan ne peut plus se perdre. */
+        private fun removeBufferedScan(ctx: Context, qid: String) {
+            val prefs = ctx.applicationContext
+                .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+            val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { return }
+            val out = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("qid") != qid) out.put(o)
+            }
+            prefs.edit().putString(SCANS_KEY, out.toString()).apply()
         }
 
         // ─── Trace des échecs ────────────────────────────────────────────────

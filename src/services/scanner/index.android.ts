@@ -46,6 +46,7 @@ export const scannerService: ScannerService = {
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
+  ackScan: (qid: string) => ScanBridge.ackScan?.(qid),
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
   setScannerEnabled: () => {},
 

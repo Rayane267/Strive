@@ -3,6 +3,7 @@ import Social
 import MobileCoreServices
 import UniformTypeIdentifiers
 import Vision
+import UserNotifications
 
 /// Share Extension — reçoit un screenshot depuis le Share Sheet et analyse la course VTC.
 /// Équivalent iOS de FloatingBubbleService.kt + StriveAccessibilityService.kt d'Android.
@@ -675,6 +676,30 @@ class ShareViewController: UIViewController {
     }
   }
 
+  /// Repousse d'1h le rappel « Session inactive ». Il est planifié côté JS au
+  /// passage en ligne et re-planifié à chaque scan traité par le JS — or un scan
+  /// fait depuis la Share Extension arrive dans la file App Group sans que l'app
+  /// tourne : le chauffeur recevait la notif en pleine tournée. Identifiant et
+  /// délai alignés sur `localNotifications.ts`. Doit rester aligné avec
+  /// AnalyzeRideIntent.rescheduleInactivityReminder.
+  private func rescheduleInactivityReminder(defaults: UserDefaults) {
+    guard defaults.bool(forKey: "sessionOnline") else { return }
+    let center = UNUserNotificationCenter.current()
+    center.removePendingNotificationRequests(withIdentifiers: ["inactivity"])
+    let content = UNMutableNotificationContent()
+    content.title = localizedString(fr: "Session inactive", en: "Inactive session")
+    content.body = localizedString(
+      fr: "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session.",
+      en: "You haven't scanned in 1 hour. Consider ending your session."
+    )
+    content.sound = .default
+    center.add(UNNotificationRequest(
+      identifier: "inactivity",
+      content: content,
+      trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)
+    ))
+  }
+
   /// Sauve le résultat pour que l'app principale puisse le picker au foreground.
   private func saveSharedResult(_ final: ScanProcessor.FinalResult) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
@@ -715,14 +740,15 @@ class ShareViewController: UIViewController {
     let scanTs = Date().timeIntervalSince1970
     body["scanTs"] = scanTs
     enqueueScanResult(body, defaults: defaults)
+    rescheduleInactivityReminder(defaults: defaults)
 
-    // Enregistrement IMMÉDIAT en base : la course ne dépend plus de la prochaine
-    // ouverture de l'app. La file ci-dessus reste écrite d'abord — si l'utilisateur
-    // referme le panneau avant la réponse réseau, le process meurt et c'est elle
-    // qui rattrape (l'index unique sur scan_ts empêche tout doublon).
-    RideUploader.upload(final, scanTs: scanTs) { saved in
-      if saved { RideUploader.markQueuedResultSaved(scanTs: scanTs) }
-    }
+    // Écriture immédiate, en session de FOND : le démon système porte le
+    // transfert même si le chauffeur referme le panneau dans la seconde, et
+    // attend le réseau au lieu d'abandonner. L'outbox ci-dessus reste écrite
+    // d'abord et reste LA garantie — cet envoi ne fait que raccourcir le délai,
+    // et son échec est sans conséquence (le drain rattrape, l'index unique sur
+    // `scan_ts` interdit le doublon).
+    RideUploader.upload(final, scanTs: scanTs)
 
     // Jumelle minimale que le drain de l'app NE purge PAS — source de l'incrément
     // KPI natif du bouton ✅ / des commandes Siri (cf. lastScannedFareKm).

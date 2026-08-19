@@ -46,7 +46,7 @@ import { logScanFailure, rememberLastFailure } from '../services/scanFailureServ
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
+import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
@@ -59,6 +59,7 @@ import {
   resetInactivityReminder,
   scheduleQuotaResetNotification,
   notifyQuotaReached,
+  notifyRideRejected,
   notifySessionClosed,
   scheduleWeeklyRecap,
   cancelWeeklyRecap,
@@ -492,8 +493,10 @@ const DashboardScreen = () => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
       // Démarrage à froid : le natif vide sa file de scans (bouton Action, Share
       // Extension) DÈS que le JS s'abonne — donc avant que la restauration de
-      // session ait répondu. Tout `return` pris ici perd la course
-      // DÉFINITIVEMENT : l'App Group est purgé au moment de l'émission.
+      // session ait répondu. Un `return` pris ici ne perd plus la course : le
+      // journal natif la garde jusqu'à `ackScan`. En revanche tout chemin qui
+      // ABANDONNE volontairement une course doit acquitter, sinon elle est
+      // rejouée à chaque relève sans jamais pouvoir aboutir.
       await awaitSessionRestored();
       // …et l'id user est relu APRÈS l'attente, jamais capturé à l'abonnement :
       // il valait encore `undefined` sur un démarrage à froid, et la file
@@ -530,24 +533,23 @@ const DashboardScreen = () => {
         lastScanTsRef.current = now;
       }
 
-      // Course déjà écrite en base par le process de scan (`RideUploader`) : on
-      // s'arrête ici. Tout ce qui suit — rattrapage Gemini, recalcul, écriture —
-      // referait sur une capture périmée un travail déjà fait au moment du scan,
-      // et rappellerait Gemini à chaque ouverture pour rien. La base fait foi :
-      // on recharge la liste, une seule fois pour toute la file.
-      if ((nativeResult as any).savedRemotely) {
-        __DEV__ && console.info('[SCAN] déjà enregistrée par le natif — refresh');
-        // La télémétrie reste alimentée : elle ne dépend que de ce que le natif
-        // a lu, pas du chemin JS qu'on vient de court-circuiter.
-        logScanEvent({
-          platform: nativeResult.platform,
-          addressesFound: (nativeResult.pickupAddress ? 1 : 0) + (nativeResult.destinationAddress ? 1 : 0),
-          geminiFallback: false,
-          durationSource: (nativeResult.durationMin && nativeResult.durationMin > 0) ? 'reported' : 'estimated',
-          verdict: (nativeResult as any).verdictLevel ?? 0,
-          fareBucket: fareBucket(nativeResult.fare),
-        });
-        scheduleRefreshRef.current();
+      // Course déjà en base — cas NOMINAL depuis que `RideUploader` écrit en
+      // session de fond dès le scan. On coupe court : tout ce qui suit
+      // (rattrapage Gemini, recalcul, insert) referait sur une capture périmée
+      // un travail déjà fait, et rappellerait Gemini pour rien.
+      //
+      // La liste en mémoire suffit, sans requête ajoutée : `fetchData` tourne
+      // au focus ET à chaque retour au premier plan, donc juste avant le drain.
+      // Quand elle n'a pas encore répondu, on retombe simplement sur le chemin
+      // complet — l'insert ressortira en doublon, qui est traité comme un
+      // succès. C'est ce qui remplace l'ancien drapeau `savedRemotely` : plus
+      // rien à faire circuler entre les process, et ça vaut quel que soit le
+      // chemin qui a écrit la course.
+      if (scanTs > 0 && ridesRef.current.some(r => r.scan_ts === scanTs)) {
+        __DEV__ && console.info('[SCAN] déjà en base — acquittée sans retraitement');
+        if (nativeResult.qid) {
+          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        }
         return;
       }
 
@@ -622,6 +624,10 @@ const DashboardScreen = () => {
       // l'erreur en LA sans rien sauvegarder. Garde silencieuse de sécurité.
       if (!result.pickupAddress?.trim() || !result.destinationAddress?.trim()) {
         __DEV__ && console.warn('[Scanner] adresses incomplètes — course ignorée (silencieux)');
+        // Abandon volontaire : rejouer donnerait le même verdict. On acquitte.
+        if (nativeResult.qid) {
+          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        }
         return;
       }
 
@@ -653,6 +659,10 @@ const DashboardScreen = () => {
         || hourlyRate <= 0 || hourlyRate > 1000) {
         __DEV__ && console.warn('[Scanner] valeurs aberrantes rejetées', { hourlyRate, kmRate, totalDistance, totalDuration });
         hapticError();
+        // Abandon volontaire : les mêmes valeurs seraient rejetées au rejeu.
+        if (nativeResult.qid) {
+          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        }
         return;
       }
 
@@ -756,8 +766,18 @@ const DashboardScreen = () => {
         // sinon la course existe en base sans apparaître à l'écran.
         if (!newRide) {
           __DEV__ && console.warn('[SCAN] déjà en base — refresh de la liste');
+          // Déjà en base = objectif atteint : on acquitte, sinon le journal
+          // rejouerait ce scan à chaque relève sans jamais pouvoir se vider.
+          if (nativeResult.qid) {
+            try { scannerService.ackScan(nativeResult.qid); } catch {}
+          }
           scheduleRefreshRef.current();
           return;
+        }
+        // La course est en base : le journal natif peut lâcher son entrée. Tout
+        // ce qui n'atteint pas cette ligne reste journalisé et sera rejoué.
+        if (nativeResult.qid) {
+          try { scannerService.ackScan(nativeResult.qid); } catch {}
         }
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
@@ -772,49 +792,42 @@ const DashboardScreen = () => {
             applyRideDecisionRef.current(nativeResult.scanTs, buffered);
           }
         }
-        // Trigger flush queue offline : si des rides sont coincés, on profite
-        // que le réseau marche pour les vider maintenant.
-        syncOfflineQueue(async (queuedRide) => {
-          await createRide({
-            userId,
-            platform: queuedRide.platform,
-            fare: queuedRide.fare_estimated,
-            distanceKm: queuedRide.distance_km,
-            durationMin: queuedRide.duration_min,
-            hourlyRate: queuedRide.hourly_rate,
-            kmRate: queuedRide.km_rate,
-            fuelCost: queuedRide.fuel_cost,
-            netProfit: queuedRide.net_profit,
-            pickupAddress: queuedRide.pickup_address,
-            destinationAddress: queuedRide.destination_address,
-            // Une course passée par la file offline garde sa clé de scan :
-            // sinon un ✅ tapé sur la carte ne la retrouverait jamais.
-            scanTs: queuedRide.scan_ts ?? null,
-          });
-        }).catch(() => {});
       } catch (e) {
-        __DEV__ && console.warn('[SCAN] createRide KO — queue offline', e);
-        await queueOfflineRide({
-          user_id: userId,
-          platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
-          status: 'PENDING',
-          fare_estimated: result.fare,
-          fare_final: null,
-          distance_km: totalDistance,
-          duration_min: totalDuration,
-          hourly_rate: hourlyRate,
-          km_rate: kmRate,
-          fuel_cost: fuelCost,
-          net_profit: netProfit,
-          scan_ts: scanTs || null,
-          pickup_address: result.pickupAddress ?? null,
-          destination_address: result.destinationAddress ?? null,
-          // Heure du SCAN : la file offline peut n'être vidée que bien plus tard.
-          created_at: new Date((scanTs || Date.now() / 1000) * 1000).toISOString(),
-        });
-        // Affiche localement pour retour utilisateur (ID temporaire)
+        // Deux familles d'échec, deux traitements opposés :
+        //
+        //  • Refus DÉFINITIF du serveur (quota dépassé, validation). Rejouer ne
+        //    peut pas marcher. On acquitte pour ne pas rejouer à l'infini, et on
+        //    le dit au chauffeur — c'est de l'argent qu'il ne verra pas dans ses
+        //    stats. L'ancien code réessayait 5 fois puis SUPPRIMAIT la course.
+        //  • Panne passagère (réseau). On n'acquitte SURTOUT pas : l'entrée reste
+        //    dans le journal natif et sera rejouée à la prochaine relève.
+        const code = (e as { code?: string })?.code;
+        const permanent = code === 'P0001' || (!!code && /^(22|23|42)/.test(code));
+
+        if (permanent) {
+          __DEV__ && console.warn('[SCAN] refus définitif du serveur', code, e);
+          Sentry.captureException(e, {
+            tags: { flow: 'ride_insert_rejected', code: code ?? 'unknown' },
+            extra: { fare: result.fare, distanceKm: totalDistance, scanTs },
+          });
+          if (nativeResult.qid) {
+            try { scannerService.ackScan(nativeResult.qid); } catch {}
+          }
+          notifyRideRejected(code === 'P0001' ? 'quota' : 'other');
+          return;
+        }
+
+        __DEV__ && console.warn('[SCAN] écriture KO — course conservée au journal', e);
+        // Le scan redevient rejouable. `processedScanTsRef` empêche de traiter
+        // deux fois la même émission ; sans cette libération il empêchait AUSSI
+        // le rejeu légitime d'un scan que le journal vient de conserver — la
+        // course serait ré-émise à chaque relève et refusée à chaque fois, sans
+        // jamais atteindre la base tant que le JS ne redémarre pas.
+        processedScanTsRef.current = processedScanTsRef.current.filter(ts => ts !== scanTs);
+        // Affichage optimiste : la course est en sécurité dans le journal natif,
+        // on la montre tout de suite. L'ID temporaire est remplacé au rejeu.
         setRides(prev => [{
-          id: `offline-${Date.now()}`,
+          id: `pending-${scanTs || Date.now()}`,
           user_id: userId,
           platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
           status: 'PENDING',
@@ -828,7 +841,10 @@ const DashboardScreen = () => {
           net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
-          created_at: new Date().toISOString(),
+          // Heure du SCAN, pas de l'affichage : le rejeu écrira la même valeur
+          // (createRide dérive created_at de scanTs). Sans ça la ligne sautait
+          // de jour entre l'affichage optimiste et le rafraîchissement.
+          created_at: new Date((scanTs || Date.now() / 1000) * 1000).toISOString(),
         }, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
       }

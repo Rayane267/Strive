@@ -163,6 +163,21 @@ export function cancelWeeklyRecap() {
   cancelNative('weekly-recap');
 }
 
+/**
+ * Le serveur a refusé la course DÉFINITIVEMENT (quota dépassé, validation) —
+ * rejouer ne servirait à rien. Le chauffeur doit le savoir : c'est un revenu qui
+ * n'apparaîtra pas dans ses stats. Auparavant la course était réessayée 5 fois
+ * puis supprimée sans qu'il puisse faire le lien avec quoi que ce soit.
+ */
+export function notifyRideRejected(reason: 'quota' | 'other') {
+  scheduleNative(
+    'ride-rejected',
+    i18n.t('notifications.rideRejected.title'),
+    i18n.t(`notifications.rideRejected.${reason === 'quota' ? 'bodyQuota' : 'bodyOther'}`),
+    0,
+  );
+}
+
 export function notifySessionClosed() {
   scheduleNative(
     'session-closed',

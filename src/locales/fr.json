@@ -936,9 +936,14 @@
       "title": "Quota atteint",
       "body": "Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans {{time}}."
     },
+    "rideRejected": {
+      "title": "Course non enregistrée",
+      "bodyQuota": "Quota journalier dépassé : cette course n'a pas pu être ajoutée à vos statistiques.",
+      "bodyOther": "Cette course a été refusée à l'enregistrement. Contactez le support si cela se reproduit."
+    },
     "sessionClosed": {
       "title": "Session fermée",
-      "body": "Votre session a été fermée après 1h d'inactivité."
+      "body": "Votre session a été fermée après 2h sans scan."
     },
     "syncDropped": {
       "title": "Synchronisation incomplète",

@@ -36,6 +36,10 @@ RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
                   limit:(nonnull NSNumber *)limit
                   resetHour:(nonnull NSNumber *)resetHour)
 
+// Accusé de réception d'un scan : retire l'entrée du journal une fois la course
+// écrite en base. Sans lui, l'entrée est rejouée à chaque relève.
+RCT_EXTERN_METHOD(ackScan:(NSString *)qid)
+
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 
 RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
