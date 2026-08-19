@@ -103,6 +103,27 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   }
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    // Déconnecté : on n'engage RIEN — ni Vision, ni TomTom, ni Gemini, ni Live
+    // Activity. Sans compte il n'y a pas de destinataire pour la course : elle
+    // ne peut pas être écrite (aucun credential), et afficher un verdict
+    // laisserait croire qu'elle a été enregistrée.
+    //
+    // Le JWT fait foi plutôt que `sessionOnline` : c'est LUI que le logout
+    // purge (AuthContext), alors que la session de travail reste sur sa dernière
+    // valeur et vaut donc encore `true` après une déconnexion.
+    //
+    // Pas de `logFailure` ici : `scan_failures` est écrit sous l'identité du
+    // chauffeur, qu'on n'a précisément pas. Le vocabulaire de `log_scan_failure`
+    // n'a de toute façon pas de motif pour ce cas, et le ranger sous
+    // `session_off` confondrait « pas connecté » et « pas en service ».
+    guard isSignedIn else {
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString("notif.signedOut", fr: "Connectez-vous à Strive pour analyser vos courses.", en: "Sign in to Strive to analyse your rides.")
+      )
+      return .result(value: "signed_out")
+    }
+
     guard isScannerEnabled else {
       sendLocalNotification(
         title: "Strive",
@@ -453,6 +474,16 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// Dans ce cas on bascule sur une notification (résultat + échec).
   private var liveActivityReady: Bool {
     useLiveActivity && ActivityAuthorizationInfo().areActivitiesEnabled
+  }
+
+  /// Chauffeur connecté ? Le JWT déposé dans l'App Group est le seul signal
+  /// d'authentification dont ce process dispose, et le logout le vide
+  /// explicitement (`setSupabaseUserJwt('')`). Sa présence ne garantit pas
+  /// qu'il soit encore valide — ce n'est pas le sujet ici : on veut seulement
+  /// distinguer « un compte existe » de « personne n'est connecté ».
+  private var isSignedIn: Bool {
+    guard let d = UserDefaults(suiteName: appGroupId) else { return false }
+    return !(d.string(forKey: "supabaseUserJwt") ?? "").isEmpty
   }
 
   private var appGroupId: String {
