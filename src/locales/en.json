@@ -804,16 +804,16 @@
       }
     },
     "feat": {
-      "scan": "Instant scan",
-      "scanText": "analysis per ride in 2 seconds",
-      "hourly": "Hourly rate €/h",
-      "hourlyText": "live on every offer",
-      "traffic": "Real-time traffic",
-      "trafficText": "drive time based on live congestion, not straight-line guesses",
-      "filter": "Smart filter",
-      "filterText": "spots unprofitable rides",
-      "threshold": "Custom thresholds",
-      "thresholdText": "your min €/h, Strive does the sorting"
+      "scan": "15 scans a day",
+      "scanText": "instead of 3 — enough to cover a full day's shift.",
+      "threshold": "Your floor, not ours",
+      "thresholdText": "you set the €/h at which a ride is worth taking.",
+      "fuel": "Net, not gross",
+      "fuelText": "your model's real fuel consumption deducted on every ride, not an average.",
+      "history": "Your whole week",
+      "historyText": "7 days of history to spot your genuinely profitable days, not just today.",
+      "traffic": "Based on live traffic, not straight-line —",
+      "trafficText": "stop accepting rides that end up stuck in traffic."
     },
     "yearlyAccess": "YEARLY ACCESS",
     "monthlyAccess": "MONTHLY ACCESS",
@@ -877,8 +877,8 @@
     "rows": {
       "scans": {
         "label": "Daily scans",
-        "free": "1 / day",
-        "plus": "Unlimited"
+        "free": "3 / day",
+        "plus": "15 / day"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -896,7 +896,7 @@
       "history": {
         "label": "Ride history",
         "free": "Today only",
-        "plus": "Unlimited"
+        "plus": "7 days"
       },
       "hourly": {
         "label": "Hourly rate €/h",

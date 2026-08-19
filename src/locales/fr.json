@@ -54,7 +54,7 @@
       "facebookTitle": "Erreur Facebook",
       "rateLimit": "Trop de tentatives. Réessayez dans quelques minutes.",
       "deviceSignupLimit": "Trop de comptes créés avec ce téléphone. Veuillez réessayer ultérieurement.",
-      "accountExistsOtherProvider": "Un compte Strive existe déjà avec cette adresse email. Reconnecte-toi avec la méthode utilisée la première fois — Google ou Apple.",
+      "accountExistsOtherProvider": "Un compte Strive existe déjà avec cette adresse email. Reconnectez-vous avec la méthode utilisée la première fois — Google ou Apple.",
       "signupFailed": "Impossible de créer le compte. Réessaie dans un instant.",
       "passwordMismatch": "Les mots de passe ne correspondent pas",
       "resetTitle": "Réinitialisation",
@@ -101,7 +101,7 @@
     "licensePlaceholder": "Ex: 123456789",
     "logoutModal": {
       "title": "Déconnexion",
-      "message": "Es-tu sûr de vouloir te déconnecter de ton compte ?",
+      "message": "Êtes-vous sûr de vouloir vous déconnecter de votre compte ?",
       "cancel": "Annuler",
       "confirm": "Me déconnecter"
     },
@@ -259,17 +259,17 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que tu refuses. 15 scans/jour pour ne plus rouler à perte.",
+      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 15 scans/jour pour ne plus rouler à perte.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € sous ton objectif cette semaine",
+      "lossTitle": "≈ {{eur}} € sous votre objectif cette semaine",
       "lossSub": "≈ {{eur}} €/mois à ce rythme",
       "cta": "Repère chaque course sous-payée → Strive Plus",
       "prideTitle_one": "💪 {{count}} course non rentable évitée cette semaine",
       "prideTitle_other": "💪 {{count}} courses non rentables évitées cette semaine",
-      "prideCta": "Vois ton bilan complet avec Plus"
+      "prideCta": "Voir votre bilan complet avec Plus"
     },
     "upgradeCard": {
       "title": "Arrête de rouler à perte",
@@ -309,7 +309,7 @@
     "title": "Mes Statistiques",
     "weeklyBilan": {
       "title": "Bilan de la semaine",
-      "loss": "≈ {{eur}} € sous ton objectif cette semaine",
+      "loss": "≈ {{eur}} € sous votre objectif cette semaine",
       "avoided_one": "💪 {{count}} course non rentable évitée",
       "avoided_other": "💪 {{count}} courses non rentables évitées"
     },
@@ -326,7 +326,7 @@
     "loading": "Chargement des données…",
     "empty": {
       "title": "Aucune donnée pour le moment",
-      "hint": "Scanne ta première course pour voir tes revenus, ton taux horaire et tes tendances ici."
+      "hint": "Scannez votre première course pour voir vos revenus, votre taux horaire et vos tendances ici."
     },
     "calendar": {
       "selectDate": "Sélectionnez une date",
@@ -418,7 +418,7 @@
     "minimums": "Vos minimums",
     "minHr": "Minimum $/h",
     "minKm": "Minimum $/km",
-    "thresholdLock": "Personnalise tes seuils avec Strive Plus",
+    "thresholdLock": "Personnalisez vos seuils avec Strive Plus",
     "dayReset": "Reset de la journée",
     "dayResetSub": "Heure à laquelle vos stats du jour se réinitialisent",
     "dayReset4am": "Reset à 4h du matin",
@@ -625,8 +625,8 @@
       "desc": "Le résultat de l'analyse s'affiche dans la Dynamic Island en haut de l'écran. Si vous supprimez la notification sur l'écran verrouillé, le résultat disparaît aussi."
     },
     "tagRides": {
-      "title": "Indique tes courses",
-      "desc": "Pour que Strive calcule tes vrais gains et ton €/h, indique chaque course prise ou refusée — sinon tes stats restent vides.\n\n• Dynamic Island : tape ✅ Prise ou ❌ Refusée sur la carte\n• Mains libres : « Dis Siri, Strive course prise » (ou « course refusée »)\n• Sans Dynamic Island : tire la notification vers le bas pour afficher les boutons"
+      "title": "Indiquez vos courses",
+      "desc": "Pour que Strive calcule vos vrais gains et votre €/h, indiquez chaque course prise ou refusée — sinon vos stats restent vides.\n\n• Dynamic Island : tapez ✅ Prise ou ❌ Refusée sur la carte\n• Mains libres : « Dis Siri, Strive course prise » (ou « course refusée »)\n• Sans Dynamic Island : tirez la notification vers le bas pour afficher les boutons"
     },
     "step4": {
       "title": "Suivez vos performances",
@@ -691,17 +691,17 @@
   "support": {
     "title": "Mes tickets",
     "subtitle": "Support Strive",
-    "menuSub": "Contacter le support, suivre tes demandes",
+    "menuSub": "Contacter le support, suivre vos demandes",
     "empty": "Aucun ticket pour l'instant",
-    "emptyHint": "Une question, un souci ? Ouvre un ticket, on te répond vite.",
+    "emptyHint": "Une question, un souci ? Ouvrez un ticket, on vous répond vite.",
     "newTicket": "Nouveau ticket",
     "subjectLabel": "Sujet",
     "subjectPlaceholder": "Ex : Problème de scan",
     "messageLabel": "Message",
-    "messagePlaceholder": "Décris ta demande en détail…",
+    "messagePlaceholder": "Décrivez votre demande en détail…",
     "send": "Envoyer",
     "staff": "Support Strive",
-    "replyPlaceholder": "Écris ta réponse…",
+    "replyPlaceholder": "Écrivez votre réponse…",
     "status": {
       "open": "En attente",
       "answered": "Répondu",
@@ -783,42 +783,42 @@
   },
   "subscription": {
     "label": "STRIVE PLUS",
-    "heroTitle": "Sache.\nDécide. Gagne.",
-    "heroSub": "Toutes les courses ne se valent pas. Avec Strive Plus, sois sûr avant d'accepter.",
+    "heroTitle": "Sachez.\nDécidez. Gagnez.",
+    "heroSub": "Toutes les courses ne se valent pas. Avec Strive Plus, vous savez avant d'accepter.",
     "values": {
       "scan": {
         "title": "Scan en 2 secondes",
-        "sub": "Capture l'offre → verdict instantané sur ton écran."
+        "sub": "Capturez l'offre → verdict instantané sur votre écran."
       },
       "hourly": {
         "title": "€/h en direct",
-        "sub": "Vois ton taux horaire réel sur chaque course."
+        "sub": "Voyez votre taux horaire réel sur chaque course."
       },
       "filter": {
         "title": "Refuse les pièges",
-        "sub": "Sache quelles courses te font perdre du temps."
+        "sub": "Sachez quelles courses vous font perdre du temps."
       },
       "threshold": {
-        "title": "Ton seuil, tes règles",
-        "sub": "Définis ton €/h minimum, Strive fait le tri."
+        "title": "Votre seuil, vos règles",
+        "sub": "Définissez votre €/h minimum, Strive fait le tri."
       }
     },
     "feat": {
-      "scan": "Scan instantané",
-      "scanText": "d'analyse par course en 2 secondes",
-      "hourly": "Taux horaire €/h",
-      "hourlyText": "en direct sur chaque offre",
-      "traffic": "Trafic en temps réel",
-      "trafficText": "temps de trajet calculé avec les embouteillages, pas à vol d'oiseau",
-      "filter": "Filtre intelligent",
-      "filterText": "repère les courses non rentables",
-      "threshold": "Seuils personnalisés",
-      "thresholdText": "ton €/h minimum, Strive fait le tri"
+      "scan": "15 scans par jour",
+      "scanText": "au lieu de 3 — de quoi tenir une journée complète de service.",
+      "threshold": "Votre seuil, pas le nôtre",
+      "thresholdText": "vous fixez le €/h à partir duquel une course vaut le coup.",
+      "fuel": "Le net, pas le brut",
+      "fuelText": "le carburant de votre modèle déduit à chaque course, pas une moyenne.",
+      "history": "Votre semaine entière",
+      "historyText": "7 jours d’historique pour repérer vos vrais jours rentables, pas seulement aujourd’hui.",
+      "traffic": "Basé sur le trafic en temps réel, pas vol d’oiseau —",
+      "trafficText": "n’acceptez plus une course qui finira dans les embouteillages."
     },
     "yearlyAccess": "ABONNEMENT ANNUEL",
     "monthlyAccess": "ABONNEMENT MENSUEL",
     "heroTitleActive": "Strive Plus actif",
-    "heroSubActive": "Tu profites de tous les avantages. Gère ton abonnement ci-dessous.",
+    "heroSubActive": "Vous profitez de tous les avantages. Gérez votre abonnement ci-dessous.",
     "activeTitle": "Abonnement actif",
     "activeSub": "Formule {{plan}}",
     "manage": "Gérer mon abonnement",
@@ -839,13 +839,13 @@
     "faq": {
       "title": "Questions fréquentes",
       "q1": "Comment fonctionne l'essai gratuit de 7 jours ?",
-      "a1": "Les 7 premiers jours sont 100% gratuits. Tu peux annuler à tout moment depuis Réglages iOS avant la fin de la période — tu ne seras pas facturé. Sinon, l'abonnement se renouvelle automatiquement au tarif normal.",
+      "a1": "Les 7 premiers jours sont 100% gratuits. Vous pouvez annuler à tout moment depuis Réglages iOS avant la fin de la période — vous ne serez pas facturé. Sinon, l'abonnement se renouvelle automatiquement au tarif normal.",
       "q2": "Puis-je annuler à tout moment ?",
       "a2": "Oui. En 1 clic depuis Réglages iOS → Apple ID → Abonnements. Pas de question, pas de friction, pas d'engagement.",
       "q3": "Strive marche avec quelles apps de course ?",
       "a3": "Uber, Bolt, Heetch et toutes les apps VTC qui affichent l'offre de course à l'écran. Strive scanne n'importe quelle capture pour en extraire le prix, la distance et le temps.",
       "q4": "Mes données sont-elles privées ?",
-      "a4": "Tout est chiffré et stocké de manière sécurisée. Aucune donnée vendue, aucune publicité, aucun tracking tiers. Tu peux supprimer ton compte à tout moment depuis l'app."
+      "a4": "Tout est chiffré et stocké de manière sécurisée. Aucune donnée vendue, aucune publicité, aucun tracking tiers. Vous pouvez supprimer votre compte à tout moment depuis l’app."
     },
     "freeHeader": "Gratuit",
     "plusHeader": "Plus",
@@ -869,16 +869,16 @@
     "privacy": "Confidentialité",
     "errorTitle": "Erreur",
     "errorMsg": "Impossible de finaliser l'abonnement. Réessayez.",
-    "alreadyOwnedMsg": "Cet abonnement est encore actif sur ton compte Apple. Touche « Restaurer les achats » pour retrouver ton accès.",
-    "receiptInUseMsg": "Cet achat Apple est déjà lié à un autre compte Strive. Connecte-toi avec ce compte, ou touche « Restaurer les achats ».",
-    "storeProblemMsg": "L'App Store n'a pas répondu. Vérifie ta connexion et réessaie.",
+    "alreadyOwnedMsg": "Cet abonnement est encore actif sur votre compte Apple. Touchez « Restaurer les achats » pour retrouver votre accès.",
+    "receiptInUseMsg": "Cet achat Apple est déjà lié à un autre compte Strive. Connectez-vous avec ce compte, ou touchez « Restaurer les achats ».",
+    "storeProblemMsg": "L'App Store n'a pas répondu. Vérifiez votre connexion et réessayez.",
     "pendingTitle": "Achat en attente",
-    "pendingMsg": "L'App Store doit encore valider le paiement. Ton accès s'ouvrira dès la confirmation.",
+    "pendingMsg": "L'App Store doit encore valider le paiement. Votre accès s'ouvrira dès la confirmation.",
     "rows": {
       "scans": {
         "label": "Scans journaliers",
-        "free": "1 / jour",
-        "plus": "Illimités"
+        "free": "3 / jour",
+        "plus": "15 / jour"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -896,7 +896,7 @@
       "history": {
         "label": "Historique courses",
         "free": "Auj. seul.",
-        "plus": "Illimité"
+        "plus": "7 jours"
       },
       "hourly": {
         "label": "Taux horaire €/h",
@@ -950,9 +950,9 @@
       "body": "{{count}} course(s) scannée(s) hors-ligne n'ont pas pu être enregistrées. Vérifiez votre historique."
     },
     "weeklyRecap": {
-      "title": "📊 Ton bilan de la semaine",
-      "body": "Viens voir combien tu pourrais gagner de plus avec Strive.",
-      "bodyLoss": "≈ {{eur}} € sous ton objectif cette semaine. Vois comment éviter ça."
+      "title": "📊 Votre bilan de la semaine",
+      "body": "Venez voir combien vous pourriez gagner de plus avec Strive.",
+      "bodyLoss": "≈ {{eur}} € sous votre objectif cette semaine. Voyez comment éviter ça."
     }
   },
   "tier": {
