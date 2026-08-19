@@ -1542,7 +1542,11 @@ const DashboardScreen = () => {
                 ]}
               />
             </View>
-            <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}>
+            <Text
+              style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}
+              numberOfLines={1}
+              minimumFontScale={0.85}
+            >
               {isOnline
                 ? `${t('dashboard.online')}  ·  ${formatDuration(todayOnlineBaseSeconds + sessionSeconds)}`
                 : t('dashboard.offline')}
@@ -1685,9 +1689,10 @@ const DashboardScreen = () => {
             >
               <View style={styles.upgradeCardGlow} />
               <View style={styles.upgradeCardTop}>
-                <View style={styles.upgradeCardBadge}>
-                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
-                </View>
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.upgradeCardBadge}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
                   <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
@@ -1943,6 +1948,7 @@ const styles = StyleSheet.create({
   // ONLINE PILL
   onlinePill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    gap: 10,
     backgroundColor: colors.surface,
     borderRadius: 50, paddingVertical: 8, paddingLeft: 18, paddingRight: 8,
     marginBottom: 22,
@@ -1958,7 +1964,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1F17',
     shadowOpacity: 0.2,
   },
-  onlineLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onlineLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   // Conteneur à la taille exacte du point : sert d'origine aux anneaux, qui n'en
   // sortent que par l'échelle et restent donc centrés dessus.
   onlineDotWrap: { width: 9, height: 9, alignItems: 'center', justifyContent: 'center' },
@@ -1970,12 +1976,13 @@ const styles = StyleSheet.create({
   },
   onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   onlineDotOff: { backgroundColor: '#3a3a3a' },
-  onlineLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
+  onlineLabel: { flexShrink: 1, color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   onlineLabelOn: { color: colors.textMain },
   toggleBtn: {
+    flexShrink: 0,
     flexDirection: 'row', alignItems: 'center', gap: 7,
     backgroundColor: colors.primary,
-    paddingVertical: 11, paddingHorizontal: 20, borderRadius: 50,
+    paddingVertical: 11, paddingHorizontal: 16, borderRadius: 50,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
@@ -2057,8 +2064,6 @@ const styles = StyleSheet.create({
   },
   upgradeCardBadge: {
     width: 36, height: 36, borderRadius: 12,
-    backgroundColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
       android: { elevation: 6 },

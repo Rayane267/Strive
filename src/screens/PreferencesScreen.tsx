@@ -315,15 +315,20 @@ const PreferencesScreen = () => {
 
           {!isPremium && (
             <TouchableOpacity
-              style={styles.thresholdLockCta}
+              style={styles.thresholdUnlockCard}
               activeOpacity={0.85}
               onPress={() => navigation.navigate('SubscriptionScreen')}
             >
-              <Feather name="lock" size={13} color={colors.primary} />
-              <Text style={styles.thresholdLockText}>
-                {t('preferences.thresholdLock', 'Personnalise tes seuils avec Strive Plus')}
-              </Text>
-              <Feather name="chevron-right" size={16} color={colors.primary} />
+              <View style={styles.thresholdUnlockIcon}>
+                <MaterialCommunityIcons name="tune-vertical" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.thresholdUnlockTextBlock}>
+                <PlusBadge />
+                <Text style={styles.thresholdUnlockText}>
+                  {t('preferences.thresholdLock', 'Personnalise tes seuils avec Strive Plus')}
+                </Text>
+              </View>
+              <Feather name="arrow-up-right" size={18} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -660,16 +665,33 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sliderRangeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
-  thresholdLockCta: {
+  thresholdUnlockCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginTop: 14,
-    paddingTop: 14,
+    padding: 12,
+    gap: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15,189,105,0.10)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(15,189,105,0.28)',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderRightColor: 'rgba(15,189,105,0.28)',
+    borderBottomColor: 'rgba(15,189,105,0.28)',
+    borderLeftColor: 'rgba(15,189,105,0.28)',
   },
-  thresholdLockText: { flex: 1, color: colors.primary, fontSize: 13, fontWeight: '700' },
+  thresholdUnlockIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15,189,105,0.16)',
+  },
+  thresholdUnlockTextBlock: { flex: 1, gap: 6 },
+  thresholdUnlockText: { color: colors.textMain, fontSize: 13, fontWeight: '800', lineHeight: 18 },
 
   // Status message
   statusBox: {

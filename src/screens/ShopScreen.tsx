@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Toast, useToast } from '../components/Toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -207,7 +208,10 @@ const ShopScreen = () => {
         {/* UPGRADE BANNER */}
         {tier === 'free' && (
           <TouchableOpacity style={styles.upgradeBanner} onPress={() => navigation.navigate('SubscriptionScreen')} activeOpacity={0.85}>
-            <MaterialCommunityIcons name="crown" size={24} color={colors.background} />
+            <Image
+              source={require('../assets/strive-logo.png')}
+              style={styles.upgradeBannerLogo}
+            />
             <View style={styles.upgradeBannerText}>
               <Text style={styles.upgradeBannerTitle}>{t('shop.upgradeTitle')}</Text>
               <Text style={styles.upgradeBannerSub}>{t('shop.upgradeSubtitle')}</Text>
@@ -301,6 +305,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.primary, borderRadius: 16, padding: 18, gap: 14, marginBottom: 16,
   },
+  upgradeBannerLogo: { width: 28, height: 28, borderRadius: 14 },
   upgradeBannerText: { flex: 1 },
   upgradeBannerTitle: { color: colors.background, fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
   upgradeBannerSub: { color: 'rgba(0,0,0,0.6)', fontSize: 12 },

@@ -13,6 +13,7 @@ import {
   Platform,
   Animated,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
@@ -784,7 +785,10 @@ const AnalyticsScreen = () => {
                 onPress={() => navigation.navigate('SubscriptionScreen')}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="crown" size={22} color={colors.primary} />
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.upsellLogo}
+                />
                 <View style={styles.upsellText}>
                   <Text style={styles.upsellTitle}>{t('analytics.alerts.premiumTitle')}</Text>
                   <Text style={styles.upsellSub}>{t('analytics.alerts.premiumRequired')}</Text>
@@ -1135,6 +1139,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,230,118,0.18)',
     marginBottom: 8,
   },
+  upsellLogo: { width: 24, height: 24, borderRadius: 12 },
   upsellText: { flex: 1 },
   upsellTitle: { color: colors.textMain, fontSize: 14, fontWeight: 'bold', marginBottom: 3 },
   upsellSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },

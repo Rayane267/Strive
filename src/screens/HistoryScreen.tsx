@@ -17,6 +17,7 @@ import {
   Modal,
   Pressable,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -665,10 +666,9 @@ const HistoryScreen = () => {
           onPress={() => navigation.navigate('SubscriptionScreen')}
           activeOpacity={0.85}
         >
-          <MaterialCommunityIcons
-            name="crown"
-            size={16}
-            color={colors.primary}
+          <Image
+            source={require('../assets/strive-logo.png')}
+            style={styles.upgradeBannerLogo}
           />
           <Text style={styles.upgradeBannerText}>
             {t(
@@ -1073,6 +1073,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,230,118,0.15)',
   },
+  upgradeBannerLogo: { width: 18, height: 18, borderRadius: 9 },
   upgradeBannerText: {
     flex: 1,
     color: colors.textMuted,

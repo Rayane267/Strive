@@ -11,6 +11,7 @@ import {
   Linking,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -351,7 +352,10 @@ const ProfileScreen = () => {
                   end={{ x: 1, y: 0 }}
                   style={styles.upgradeBtn}
                 >
-                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
+                  <Image
+                    source={require('../assets/strive-logo.png')}
+                    style={styles.upgradeBtnLogo}
+                  />
                   <Text style={styles.upgradeBtnText}>{t('profile.upgradeLink')}</Text>
                 </SafeGradient>
               </TouchableOpacity>
@@ -401,12 +405,13 @@ const ProfileScreen = () => {
             >
               <View style={styles.profileUpgradeGlow} />
               <View style={styles.profileUpgradeRow}>
-                <SafeGradient
-                  colors={['#A4FF6B', '#00FF8C', colors.primary]}
-                  style={styles.profileUpgradeIconWrap}
-                >
-                  <MaterialCommunityIcons name="crown" size={18} color="#062318" />
-                </SafeGradient>
+                {/* Logo Strive plutôt qu'une couronne : c'est un passage à
+                    Strive Plus, pas à un rang. La marque dit ce qu'on achète,
+                    la couronne ne disait que « premium » en générique. */}
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.profileUpgradeLogo}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.profileUpgradeTitle}>{t('profile.upgradeCardTitle')}</Text>
                   <Text style={styles.profileUpgradeSub}>{t('profile.upgradeCardSub')}</Text>
@@ -729,14 +734,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
   profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  profileUpgradeIconWrap: {
+  // Le halo vert est conservé : il détachait la tuile du dégradé sombre de la
+  // carte, et le logo en a autant besoin que la couronne.
+  profileUpgradeLogo: {
     width: 42, height: 42, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
       android: { elevation: 6 },
     }),
   },
+  upgradeBtnLogo: { width: 16, height: 16, borderRadius: 8 },
   profileUpgradeTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
   profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
 
@@ -828,8 +835,12 @@ const styles = StyleSheet.create({
   menuIconWrap: {
     width: 40,
     height: 40,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
+    // `primarySoft` et non `primary` : quinze tuiles pleines alignées en
+    // colonne, le vert fluo saturait la page et tirait l'œil avant les
+    // intitulés. Un cran plus sombre suffit à calmer l'ensemble sans changer
+    // la teinte de marque.
+    backgroundColor: colors.primarySoft,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,

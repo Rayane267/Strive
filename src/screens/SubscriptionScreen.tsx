@@ -15,6 +15,7 @@ import {
   Easing,
   Linking,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -46,12 +47,32 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 type Cycle = 'monthly' | 'yearly';
 
+/// Ce que Plus AJOUTE — et rien d'autre.
+///
+/// Les cinq lignes précédentes vendaient le scan, le €/h en direct, le trafic
+/// TomTom et le filtre de rentabilité : quatre choses qu'un compte gratuit a
+/// déjà. Un paywall qui énumère ce que le chauffeur possède déjà ne lui donne
+/// aucune raison de payer, et lui apprend surtout qu'il n'a rien à gagner.
+///
+/// Chaque ligne ci-dessous correspond à une restriction réelle du gratuit :
+///   • 3 scans/jour contre 15        (plan_limits, subscriptionService.ts)
+///   • seuils verrouillés aux défauts (4e04a19)
+///   • carburant forcé à off          (PreferencesScreen)
+///   • réglages véhicule verrouillés  (plusLocked sur CarSettings)
+///   • analytics sur 1 jour contre 7  (analyticsRangeDays)
+///
+/// EXCEPTION ASSUMÉE — la ligne « trafic réel » : le calcul TomTom n'est PAS
+/// réservé à Plus (`setTomTomApiKey` est poussé sans test de palier, et
+/// `include_pickup` est ON par défaut pour tous). Elle est là parce que c'est
+/// l'argument produit le plus parlant, et elle est formulée sans affirmer
+/// d'exclusivité. Si le taux de remboursement monte, c'est la première à
+/// remettre en cause — le gratuit dispose déjà de ce qu'elle décrit.
 const FEATURES = [
-  { icon: 'zap',         colorKey: 'subscription.feat.scan',      textKey: 'subscription.feat.scanText' },
-  { icon: 'trending-up', colorKey: 'subscription.feat.hourly',    textKey: 'subscription.feat.hourlyText' },
-  { icon: 'navigation',  colorKey: 'subscription.feat.traffic',   textKey: 'subscription.feat.trafficText' },
-  { icon: 'x-octagon',   colorKey: 'subscription.feat.filter',    textKey: 'subscription.feat.filterText' },
-  { icon: 'target',      colorKey: 'subscription.feat.threshold', textKey: 'subscription.feat.thresholdText' },
+  { icon: 'zap',        colorKey: 'subscription.feat.scan',      textKey: 'subscription.feat.scanText' },
+  { icon: 'target',     colorKey: 'subscription.feat.threshold', textKey: 'subscription.feat.thresholdText' },
+  { icon: 'navigation', colorKey: 'subscription.feat.traffic',   textKey: 'subscription.feat.trafficText' },
+  { icon: 'droplet',    colorKey: 'subscription.feat.fuel',      textKey: 'subscription.feat.fuelText' },
+  { icon: 'calendar',   colorKey: 'subscription.feat.history',   textKey: 'subscription.feat.historyText' },
 ] as const;
 
 const FAQ_ITEMS = [1, 2, 3, 4] as const;
@@ -284,13 +305,17 @@ const SubscriptionScreen = () => {
             ))}
           </Animated.View>
 
-          {/* Crown icon with animated glow ring */}
+          {/* Logo Strive dans l'anneau lumineux, à la place de la couronne : ce
+              qu'on vend est Strive Plus, pas un rang. La couronne était le
+              symbole générique du « premium » et ne renvoyait à rien du
+              produit. L'anneau animé est conservé — c'est lui qui fait l'accroche. */}
           <View style={styles.crownRow}>
             <View style={styles.crownOuter}>
               <Animated.View style={[styles.crownGlowRing, { opacity: glowAnim }]} />
-              <SafeGradient colors={['#00FF8C', '#00E676', '#00B85A']} style={styles.crownBadge}>
-                <MaterialCommunityIcons name="crown" size={26} color="#000" />
-              </SafeGradient>
+              <Image
+                source={require('../assets/strive-logo.png')}
+                style={styles.crownBadge}
+              />
             </View>
           </View>
 
