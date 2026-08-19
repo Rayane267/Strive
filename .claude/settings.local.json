@@ -282,7 +282,13 @@
       "Bash(mkdir -p screenshots/onboarding)",
       "Bash(printf '\\\\n# Captures d ecran locales\\\\nscreenshots/\\\\n')",
       "Bash(sed -i \"s|import App from './App';|import App from './preview';|\" index.js)",
-      "PowerShell($c = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"tue\" } else { \"port libre\" })"
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"tue\" } else { \"port libre\" })",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json 2>&1 | Select-Object -First 40)",
+      "PowerShell(npx eslint src/services/offlineService.ts src/hooks/useOfflineSync.ts src/screens/DashboardScreen.tsx src/services/localNotifications.ts src/services/scanner 2>&1 | Select-Object -Last 30)",
+      "PowerShell(foreach \\($f in @\\('supabase/migrations/20260727_skip_duplicate_ride.sql','supabase/migrations/20260811_quota_day_window_restore.sql','supabase/migrations/20260816_rides_scan_ts.sql','supabase/migrations/20260817_rides_scan_ts_unique.sql'\\)\\) { $l = git log --diff-filter=A --date=short --pretty='%h %ad' -- $f; Write-Output \"$l  <-  $f\" })",
+      "Artifact",
+      "Bash(sort -k2)",
+      "Bash(grep -v \"^ios/.*savedRemotely.*//\")"
     ]
   },
   "enableAllProjectMcpServers": true,
