@@ -43,8 +43,34 @@ private final class OnceContinuation {
 ///
 /// L'intent tourne en arrière-plan — l'utilisateur configure son raccourci :
 ///   "Prendre une capture d'écran" → "Analyser une course avec Strive"
+/// `LiveActivityIntent` et non `AppIntent` — c'est ce qui décide si le verdict
+/// s'impose ou non dans le Dynamic Island.
+///
+/// iOS ne présente pas de la même façon une activité qui APPARAÎT et une qui se
+/// MET À JOUR : `Activity.request()` prend l'île quoi qu'elle affiche, y compris
+/// un appel en cours ; `activity.update()` ne la reprend jamais. Or créer une
+/// activité exige un contexte au premier plan, et cet intent tourne en
+/// arrière-plan (`openAppWhenRun = false`, volontaire — cf. AppDelegate : le
+/// chauffeur ne doit pas perdre de vue l'offre Uber).
+///
+/// Jusqu'au 17/08 le scan partait de la Share Extension, qui EST au premier plan
+/// quand son panneau est ouvert : la requête y aboutissait et la carte passait
+/// par-dessus tout. Ce chemin a été débranché au profit du bouton Action, et le
+/// verdict s'est mis à ne plus être qu'une mise à jour — visible seulement en
+/// `minimal`, à déplier à la main.
+///
+/// `LiveActivityIntent` existe précisément pour accorder à un intent le droit de
+/// piloter des Live Activities sans passer au premier plan. `RideDecisionIntent`
+/// s'en sert déjà pour METTRE À JOUR la carte depuis l'arrière-plan.
+///
+/// ⚠️ À VÉRIFIER SUR APPAREIL : que ce protocole autorise aussi la CRÉATION
+/// (`Activity.request()`), et pas seulement la mise à jour. Si oui, on récupère
+/// le comportement d'avant en gardant le bouton Action. Si non, il reste à
+/// réactiver le scan par la Share Extension — la seule route dont on sait avec
+/// certitude qu'elle donne ce résultat. Le repli est déjà en place : en cas de
+/// refus, `presentFreshResult` rend `false` sans rien avoir détruit.
 @available(iOS 16.2, *)
-struct AnalyzeRideIntent: AppIntent {
+struct AnalyzeRideIntent: LiveActivityIntent {
 
   static var title: LocalizedStringResource = "Analyser une offre de course"
   static var description = IntentDescription(

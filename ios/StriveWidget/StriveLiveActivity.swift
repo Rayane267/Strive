@@ -173,12 +173,20 @@ struct StriveLiveActivity: Widget {
             .minimumScaleFactor(0.6)
         }
       } minimal: {
+        // `minimal` est la SEULE surface visible quand autre chose occupe le
+        // Dynamic Island — un appel en cours au premier chef. Dans ce cas iOS ne
+        // déplie pas l'activité de lui-même : ce cercle de ~20 pt est tout ce
+        // que le chauffeur reçoit, et c'est là que le verdict doit atterrir.
+        //
+        // Un glyphe teinté sur fond noir n'y suffit pas : trait fin, faible
+        // surface colorée, illisible du coin de l'œil au volant ou en plein
+        // soleil — il fallait toucher l'île pour lire. Une PASTILLE PLEINE
+        // inverse le rapport : la couleur occupe tout le disque et se lit en
+        // vision périphérique, le glyphe en négatif reste là pour ceux qui ne
+        // distinguent pas rouge et vert.
         if isError {
-          Image(systemName: "xmark.circle.fill")
-            .foregroundColor(errorRed)
-        } else if isRecap {
-          Image(systemName: verdictIcon(context.state.verdictLevel))
-            .foregroundColor(verdictColor(context.state.verdictLevel))
+          Image(systemName: "xmark")
+            .verdictPill(errorRed)
         } else if isIdle {
           Image("StriveLogo")
             .resizable()
@@ -190,10 +198,11 @@ struct StriveLiveActivity: Widget {
             .tint(.white)
         } else if isLocked {
           Image(systemName: "lock.fill")
-            .foregroundColor(lockGreen)
+            .verdictPill(lockGreen)
         } else {
+          // Résultat ET récap : même rendu. Le récap reste un verdict à lire.
           Image(systemName: verdictIcon(context.state.verdictLevel))
-            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .verdictPill(verdictColor(context.state.verdictLevel))
         }
       }
       .keylineTint(isError ? errorRed : isRecap ? verdictColor(context.state.verdictLevel) : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
@@ -630,6 +639,23 @@ private func verdictColor(_ level: Int) -> Color {
   case 2: return Color(red: 0.0, green: 0.78, blue: 0.32)
   case 1: return Color(red: 1.0, green: 0.60, blue: 0.0)
   default: return Color(red: 0.94, green: 0.27, blue: 0.27)
+  }
+}
+
+/// Pastille pleine pour la présentation `minimal` du Dynamic Island.
+///
+/// La couleur porte l'information, pas le trait : c'est le seul rendu qui reste
+/// lisible en vision périphérique dans un disque de ~20 pt. Le glyphe est
+/// conservé en négatif — un chauffeur daltonien ne doit pas dépendre de la
+/// teinte pour distinguer un refus d'une acceptation.
+@available(iOS 16.2, *)
+private extension Image {
+  func verdictPill(_ color: Color) -> some View {
+    self
+      .font(.system(size: 11, weight: .black))
+      .foregroundColor(.black)
+      .frame(width: 20, height: 20)
+      .background(Circle().fill(color))
   }
 }
 

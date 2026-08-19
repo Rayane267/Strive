@@ -346,6 +346,144 @@ final class LiveActivityManager {
     UNUserNotificationCenter.current().add(request)
   }
 
+  /// Dernière tentative de carte neuve. Sert à borner la casse quand le
+  /// chauffeur enchaîne les scans : recréer l'activité à chaque offre en pleine
+  /// heure de pointe ferait tomber iOS en throttling, et on perdrait alors le
+  /// punch-through pour tout le monde plutôt que pour un scan.
+  ///
+  /// Sous le même verrou que `current` : un scan par raccourci et un scan par
+  /// la Share Extension peuvent viser cette valeur depuis deux threads.
+  private var _lastFreshResultAt: Date?
+  private var lastFreshResultAt: Date? {
+    get { stateLock.lock(); defer { stateLock.unlock() }; return _lastFreshResultAt }
+    set { stateLock.lock(); _lastFreshResultAt = newValue; stateLock.unlock() }
+  }
+
+  /// Présente le résultat comme une activité NEUVE plutôt que comme une mise à
+  /// jour de la carte de session.
+  ///
+  /// Pourquoi c'est nécessaire. Une même Live Activity porte ici deux rôles :
+  /// la carte de SESSION (persistante — KPI du jour, timer) et l'ALERTE de
+  /// résultat (événementielle). iOS ne les distingue pas, mais il distingue
+  /// très nettement `Activity.request()` de `activity.update()` : une activité
+  /// qui APPARAÎT prend le Dynamic Island, une activité qui se MET À JOUR ne le
+  /// reprend pas à ce qui l'occupe déjà — un appel en cours, l'activité d'une
+  /// autre app. Le résultat était alors bien à jour mais replié en `minimal`,
+  /// et il fallait toucher l'île pour le lire.
+  ///
+  /// C'est ce qui a régressé avec `ensureRunning()` : avant lui la carte de
+  /// session mourait souvent sans être relancée, donc un scan tombait sur la
+  /// branche `start()` et créait une activité neuve — d'où le comportement
+  /// « ça s'affiche quoi qu'il arrive ». Depuis, une carte est toujours vivante
+  /// et le résultat n'était plus qu'une mise à jour. `ensureRunning()` reste :
+  /// il corrige un vrai problème, on lui retire seulement son effet de bord.
+  ///
+  /// ORDRE CRITIQUE : on demande la nouvelle carte AVANT de retirer l'ancienne.
+  /// L'inverse (terminer puis demander) laisse le chauffeur sans aucune carte
+  /// quand la requête est refusée — et elle peut l'être pour des raisons hors
+  /// de notre contrôle : process en arrière-plan, throttling iOS, Live
+  /// Activities désactivées entre-temps. Ici un refus ne coûte rien : rien n'a
+  /// été détruit, l'appelant enchaîne sur la mise à jour classique.
+  ///
+  /// On ne branche PAS en dur selon le chemin d'appel (Share Extension vs
+  /// raccourci). `AnalyzeRideIntent` est compilé dans le target principal, il
+  /// n'y a donc pas de bundle id pour les séparer — et surtout un raccourci
+  /// déclenché app au premier plan a parfaitement le droit de créer une
+  /// activité. Tenter et laisser iOS trancher s'adapte à l'état réel.
+  private func presentFreshResult(
+    platform: String,
+    fare: Double,
+    hourlyRate: Double,
+    kmRate: Double,
+    distanceKm: Double,
+    durationMin: Int,
+    verdictLevel: Int,
+    scanTs: Double
+  ) -> Bool {
+    guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
+    if let last = lastFreshResultAt, Date().timeIntervalSince(last) < 8 {
+      log("fresh result throttled (<8s) — mise à jour classique")
+      return false
+    }
+
+    // État de session à reporter : celui de la carte vivante, sinon
+    // l'instantané App Group. Sans ça la carte neuve repartirait à 0 € / 0 km
+    // et le timer de session serait remis à zéro.
+    let prev = liveActivity()?.content.state
+    let snap = UserDefaults(suiteName: Self.appGroupId)?
+      .dictionary(forKey: Self.sessionSnapshotKey) ?? [:]
+    let state = StriveActivityAttributes.State(
+      platform: platform,
+      fare: fare,
+      hourlyRate: hourlyRate,
+      kmRate: kmRate,
+      distanceKm: distanceKm,
+      durationMin: durationMin,
+      verdictLevel: verdictLevel,
+      todayEarnings: prev?.todayEarnings ?? (snap["todayEarnings"] as? NSNumber)?.doubleValue ?? 0,
+      todayHourlyRate: prev?.todayHourlyRate ?? (snap["todayHourlyRate"] as? NSNumber)?.doubleValue ?? 0,
+      todayKm: prev?.todayKm ?? (snap["todayKm"] as? NSNumber)?.doubleValue ?? 0,
+      onlineMinutes: prev?.onlineMinutes ?? (snap["onlineMinutes"] as? NSNumber)?.intValue ?? 0,
+      scanTs: scanTs > 0 ? scanTs : nil,
+      sessionStartEpoch: prev?.sessionStartEpoch ?? (snap["sessionStartEpoch"] as? NSNumber)?.doubleValue
+    )
+
+    let previous = Activity<StriveActivityAttributes>.activities
+
+    // Couper l'observateur AVANT : la fin des anciennes cartes, plus bas, le
+    // ferait rappeler `ensureRunning()` en pleine création — deux
+    // `Activity.request()` concurrents. Même précaution que dans `start()`.
+    stateObserverTask?.cancel()
+    stateObserverTask = nil
+
+    let fresh: Activity<StriveActivityAttributes>
+    do {
+      let content = ActivityContent(
+        state: state,
+        staleDate: Date().addingTimeInterval(20),
+        relevanceScore: 100
+      )
+      fresh = try Activity.request(
+        attributes: StriveActivityAttributes(),
+        content: content,
+        pushType: nil
+      )
+      log("fresh result activity id=\(fresh.id)")
+    } catch {
+      // Refus : l'ancienne carte est INTACTE, on n'a rien terminé. On remet
+      // l'observateur en place et on laisse l'appelant faire une mise à jour.
+      log("fresh result refused: \(error.localizedDescription) — repli sur update()")
+      observeState()
+      return false
+    }
+
+    lastFreshResultAt = Date()
+    current = fresh
+    // Seulement maintenant : retirer les anciennes. Il existe un bref instant à
+    // deux activités (l'île les partage en leading/trailing) — c'est le prix de
+    // l'ordre ci-dessus, et il vaut mieux que le trou inverse.
+    for old in previous where old.id != fresh.id {
+      Task { await old.end(nil, dismissalPolicy: .immediate) }
+    }
+    // Une requête réussie prouve que l'app est au premier plan.
+    setHostAppActive(true)
+    UNUserNotificationCenter.current()
+      .removeDeliveredNotifications(withIdentifiers: ["strive-la-closed"])
+    observeState()
+    saveSessionSnapshot(state)
+    return true
+  }
+
+  /// Programme le retour à la carte de récap. Extrait pour que les deux chemins
+  /// de présentation (carte neuve et mise à jour) partagent exactement la même
+  /// durée de vie du résultat.
+  private func scheduleRecap() {
+    autoDismiss?.cancel()
+    let work = DispatchWorkItem { [weak self] in self?.showRecap() }
+    autoDismiss = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+  }
+
   /// - Returns: `false` quand rien n'a pu être affiché — typiquement un appel
   ///   depuis l'AppIntent alors qu'aucune activité ne tourne : `Activity.request()`
   ///   exige que l'app soit au premier plan (hors push-to-start), et le raccourci
@@ -363,6 +501,21 @@ final class LiveActivityManager {
     scanTs: Double = 0
   ) -> Bool {
     log("update(\(platform)) fare=\(fare) hr=\(hourlyRate)")
+
+    // Carte NEUVE d'abord. iOS ne traite pas de la même façon une activité qui
+    // apparaît et une activité qui se met à jour : la première prend le Dynamic
+    // Island, la seconde ne le reprend pas à ce qui l'occupe (appel en cours,
+    // activité d'une autre app). Voir `presentFreshResult`. En cas de refus on
+    // enchaîne sur le chemin historique ci-dessous, qui n'a rien perdu.
+    if presentFreshResult(
+      platform: platform, fare: fare, hourlyRate: hourlyRate, kmRate: kmRate,
+      distanceKm: distanceKm, durationMin: durationMin,
+      verdictLevel: verdictLevel, scanTs: scanTs
+    ) {
+      scheduleRecap()
+      return true
+    }
+
     guard let activity = liveActivity() else {
       log("no activity — auto-starting then updating for banner")
       let started = start(
@@ -388,10 +541,7 @@ final class LiveActivityManager {
       // La carte vient d'être créée : si l'alerte ne passe pas, le résultat est
       // perdu → on rend `false` pour que l'appelant notifie.
       guard applyUpdate(newActivity, content: content, alert: alert) else { return false }
-      autoDismiss?.cancel()
-      let work = DispatchWorkItem { [weak self] in self?.showRecap() }
-      autoDismiss = work
-      DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+      scheduleRecap()
       return true
     }
     let prev = activity.content.state
@@ -425,10 +575,7 @@ final class LiveActivityManager {
     }
     log("updated \(activity.id), dismiss in 20s")
 
-    autoDismiss?.cancel()
-    let work = DispatchWorkItem { [weak self] in self?.showRecap() }
-    autoDismiss = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+    scheduleRecap()
     return true
   }
 
