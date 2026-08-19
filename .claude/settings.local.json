@@ -288,7 +288,16 @@
       "PowerShell(foreach \\($f in @\\('supabase/migrations/20260727_skip_duplicate_ride.sql','supabase/migrations/20260811_quota_day_window_restore.sql','supabase/migrations/20260816_rides_scan_ts.sql','supabase/migrations/20260817_rides_scan_ts_unique.sql'\\)\\) { $l = git log --diff-filter=A --date=short --pretty='%h %ad' -- $f; Write-Output \"$l  <-  $f\" })",
       "Artifact",
       "Bash(sort -k2)",
-      "Bash(grep -v \"^ios/.*savedRemotely.*//\")"
+      "Bash(grep -v \"^ios/.*savedRemotely.*//\")",
+      "PowerShell(adb shell *)",
+      "PowerShell(Set-Content *)",
+      "Bash(sed -i '504,518d' ios/Strive/LiveActivity/LiveActivityManager.swift)",
+      "Bash(sed -i '349,476d' ios/Strive/LiveActivity/LiveActivityManager.swift)",
+      "WebFetch(domain:wwdcnotes.com)",
+      "WebFetch(domain:alicinaroglu.dev)",
+      "Bash(git diff *)",
+      "Bash(head -4 /tmp/dash.patch)",
+      "Bash(sed -n '5,15p' /tmp/dash.patch)"
     ]
   },
   "enableAllProjectMcpServers": true,
