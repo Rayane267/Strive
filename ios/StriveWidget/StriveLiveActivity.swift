@@ -51,7 +51,19 @@ struct StriveLiveActivity: Widget {
               .font(.system(size: 16, weight: .bold))
               .foregroundColor(lockGreen)
               .padding(.leading, 6)
-          } else if !isIdle {
+          } else if isIdle {
+            // Logo, faute de quoi la région reste vide — et une région vide en
+            // présentation ÉTENDUE donne un grand rectangle noir. C'est ce qui se
+            // produisait pendant les deux secondes de repli après une décision,
+            // et à chaque appui long sur l'île en session au repos : les quatre
+            // régions excluaient `isIdle`, donc iOS n'avait rien à dessiner.
+            Image("StriveLogo")
+              .resizable()
+              .aspectRatio(contentMode: .fill)
+              .frame(width: 26, height: 26)
+              .clipShape(RoundedRectangle(cornerRadius: 7))
+              .padding(.leading, 6)
+          } else {
             Text(context.state.platform.capitalized)
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
@@ -59,7 +71,23 @@ struct StriveLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          if !isScanning && !isIdle && !isError && !isLocked {
+          if isIdle && !isScanning && !isError && !isLocked {
+            // Timer de session, rafraîchi par iOS sans réveiller l'app — même
+            // mécanique que sur l'écran verrouillé.
+            Group {
+              if let epoch = context.state.sessionStartEpoch {
+                Text(Date(timeIntervalSince1970: epoch), style: .timer)
+                  .monospacedDigit()
+                  .multilineTextAlignment(.trailing)
+                  .frame(maxWidth: 58, alignment: .trailing)
+              } else {
+                Text(formatOnlineTime(context.state.onlineMinutes))
+              }
+            }
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.45))
+            .padding(.trailing, 6)
+          } else if !isScanning && !isError && !isLocked {
             KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
               .padding(.trailing, 6)
           }
@@ -82,7 +110,13 @@ struct StriveLiveActivity: Widget {
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
               KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
             }
-          } else if !isIdle {
+          } else if isIdle {
+            // Le libellé de session porte la région centrale ; les chiffres sont
+            // en dessous, dans la région basse, où ils ont la largeur.
+            Text(laString(fr: "Session en cours", en: "Session running"))
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundColor(.white.opacity(0.45))
+          } else {
             HStack(spacing: 10) {
               HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
@@ -100,7 +134,14 @@ struct StriveLiveActivity: Widget {
               .font(.system(size: 12, weight: .medium))
               .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
-          } else if !isScanning && !isIdle {
+          } else if isIdle && !isScanning {
+            // Gains du jour, €/h, km. Mêmes chiffres que l'écran verrouillé mais
+            // PAS la même mise en forme : ici une ligne, là-bas trois colonnes.
+            // Voir `SessionDashboard`.
+            SessionDashboard(state: context.state)
+              .padding(.horizontal, 6)
+              .padding(.top, 2)
+          } else if !isScanning {
             VStack(spacing: 4) {
               RouteRow(
                 distanceKm: context.state.distanceKm,
@@ -318,7 +359,7 @@ private struct LockScreenView: View {
     } else {
       // ── Idle / analyse en cours / erreur : résumé de session (le compteur de
       // durée tourne seul, rafraîchi par iOS sans réveiller l'app). ──
-      let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
+      let accent = laAccent
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
 
       VStack(spacing: 0) {
@@ -434,6 +475,11 @@ private func formatOnlineTime(_ minutes: Int) -> String {
   return h > 0 ? String(format: "%dh%02d", h, m) : "\(m)min"
 }
 
+/// Vert d'accent du widget. Remonté au niveau du fichier : il était déclaré en
+/// local dans `LockScreenView` et une seconde copie allait apparaître dans le
+/// tableau de bord de l'îlot — deux valeurs à maintenir en phase pour rien.
+let laAccent = Color(red: 0.0, green: 0.9, blue: 0.46)
+
 // MARK: - KPI Composants
 
 @available(iOS 16.2, *)
@@ -462,6 +508,52 @@ private struct KpiDivider: View {
     Rectangle()
       .fill(.white.opacity(0.15))
       .frame(width: 1, height: 28)
+  }
+}
+
+/// Tableau de bord de session pour la présentation ÉTENDUE en état IDLE.
+///
+/// Sans lui, les quatre régions de l'étendue étaient vides dès que l'activité
+/// repassait au repos, et iOS dessinait un grand rectangle noir — visible deux
+/// secondes après chaque décision, et en permanence sur un appui long.
+///
+/// EN UNE LIGNE, et non en colonnes comme sur l'écran verrouillé. Les deux
+/// surfaces n'ont pas la même forme : le lock screen est haut, il peut empiler
+/// un grand nombre au-dessus d'un libellé ; la région basse de l'îlot est une
+/// bande large et plate. Y plaquer trois colonnes écrase les chiffres pour loger
+/// des libellés qui, de toute façon, ne se lisent plus à cette taille.
+///
+/// D'où l'unité COLLÉE au nombre (`24€/h`, `86.4km`) plutôt qu'en légende : elle
+/// occupe la largeur, qui est disponible, au lieu de la hauteur, qui ne l'est
+/// pas. Un seul niveau de lecture, de gauche à droite.
+@available(iOS 16.2, *)
+private struct SessionDashboard: View {
+  let state: StriveActivityAttributes.ContentState
+
+  private var dot: some View {
+    Text("·")
+      .font(.system(size: 15, weight: .bold))
+      .foregroundColor(.white.opacity(0.25))
+  }
+
+  var body: some View {
+    HStack(spacing: 8) {
+      // Les gains portent la ligne : c'est le seul chiffre que le chauffeur
+      // vient chercher, les deux autres le qualifient.
+      Text(String(format: "%.0f€", state.todayEarnings))
+        .font(.system(size: 17, weight: .heavy))
+        .foregroundColor(.white)
+      dot
+      Text(String(format: "%.0f€/h", state.todayHourlyRate))
+        .font(.system(size: 15, weight: .bold))
+        .foregroundColor(laAccent)
+      dot
+      Text(String(format: "%.0fkm", state.todayKm))
+        .font(.system(size: 15, weight: .bold))
+        .foregroundColor(.white.opacity(0.55))
+    }
+    .lineLimit(1)
+    .minimumScaleFactor(0.7)
   }
 }
 
