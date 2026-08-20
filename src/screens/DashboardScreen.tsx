@@ -2094,6 +2094,11 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: 24,
     gap: 12,
+    // Même liseré que `scanLimitCard`, son équivalent en taille et en rôle.
+    // C'était le seul grand bloc de l'écran sans contour : posé sur le fond, il
+    // flottait sans arête pendant que tuiles et pastilles en avaient une.
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   waitingTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700', textAlign: 'center' },
   waitingSubtitle: {

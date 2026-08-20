@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   View,
@@ -12,13 +12,14 @@ import {
   Alert,
   Platform,
   Image,
-  NativeModules,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
@@ -35,6 +36,39 @@ import AvatarView from '../components/AvatarView';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
+
+/// Taille des icônes de menu. 22 et non 20 : posées à nu, sans tuile pour les
+/// soutenir, deux pixels de plus suffisent à leur redonner du poids face à un
+/// intitulé blanc en gras. Sur un glyphe en trait fin, c'est beaucoup.
+const ICON_SIZE = 22;
+
+/// Largeur de la bande lumineuse qui traverse la carte d'identité.
+///
+/// 90 : essayé à 160, la nappe couvrait un tiers de la carte et se lisait comme
+/// deux reflets au lieu d'un. Assez large pour que le dégradé ait la place de
+/// monter puis redescendre, assez étroite pour rester une seule bande.
+const SHINE_WIDTH = 90;
+
+/// Inclinaison de la bande, en degrés. ROTATION et non cisaillement.
+///
+/// Le cisaillement (`skewX`) a été essayé à −20, −30 puis −70° : le reflet
+/// restait visuellement vertical. Un cisaillement ne fait pas pivoter la bande,
+/// il décale chaque ligne horizontalement — plus l'angle monte, plus le dégradé
+/// s'étire et se dilue, jusqu'à ne laisser qu'un lavis flou. La rotation, elle,
+/// fait vraiment tourner la bande : l'inclinaison se voit, et l'épaisseur du
+/// reflet reste constante quel que soit l'angle.
+///
+/// Positif = penché en `/` : la rotation est horaire, le haut part à droite.
+/// 12° seulement : sur une nappe large, une forte inclinaison écrase les lobes
+/// contre les bords de la carte et on ne voit plus qu'un coin éclairé.
+const SHINE_ROTATE_DEG = 12;
+
+/// Une bande tournée dépasse du cadre. Elle est donc dessinée bien plus haute
+/// que la carte, et ce débord vertical se traduit en débord HORIZONTAL une fois
+/// tournée : `sin(θ) × hauteur`. Sans l'intégrer à la course, le reflet
+/// apparaîtrait ou disparaîtrait en plein milieu de la carte.
+const shineOverhang = (height: number) =>
+  Math.abs(Math.sin((SHINE_ROTATE_DEG * Math.PI) / 180)) * height;
 
 type MenuItem = {
   icon: string;
@@ -120,19 +154,45 @@ const ProfileScreen = () => {
   const [langSheetVisible, setLangSheetVisible] = useState(false);
   const [subSheetVisible, setSubSheetVisible] = useState(false);
 
-  // ⚠️ TEMPORAIRE — trace des appuis sur les boutons de la Live Activity.
-  // Relue à chaque affichage du Profil : l'intent tourne dans un autre process,
-  // il n'émet rien vers le JS, l'App Group est le seul canal. À retirer avec
-  // `traceDecision` côté natif.
-  const [decisionTrace, setDecisionTrace] = useState('');
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'ios') return;
-      NativeModules.ScanBridge?.getDecisionTrace?.()
-        .then((v: string) => setDecisionTrace(v ?? ''))
-        .catch(() => {});
-    }, []),
-  );
+  // ── Balayage lumineux de la carte d'identité ──────────────────────────────
+  //
+  // Largeur MESURÉE plutôt que déduite de `Dimensions` : la carte vit dans un
+  // ScrollView avec ses propres marges, et une largeur devinée décalerait le
+  // reflet — visible dès qu'il termine sa course avant ou après le bord.
+  const [cardWidth, setCardWidth] = useState(0);
+  const [cardHeight, setCardHeight] = useState(0);
+  const shine = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (cardWidth === 0) return;
+    // Une pause entre deux passages : en boucle continue, le reflet devient un
+    // clignotement qu'on remarque au lieu d'un éclat qu'on aperçoit.
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shine, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(3800),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [cardWidth, shine]);
+
+  // Hauteur de la bande : le double de la carte. Une bande tournée dont la
+  // hauteur égale celle de la carte laisserait deux coins vides aux extrémités
+  // de sa course.
+  const shineHeight = cardHeight * 2;
+  // La course intègre le débord de l'inclinaison : le reflet entre et sort par
+  // les bords, jamais au milieu de la carte.
+  const overhang = shineOverhang(shineHeight);
+  const shineTranslate = shine.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-(SHINE_WIDTH + overhang), cardWidth + SHINE_WIDTH + overhang],
+  });
 
   // La restauration est passée dans ManageSubscriptionSheet, qui en affiche le
   // résultat dans la feuille elle-même. Une alerte système chassait la feuille
@@ -240,8 +300,8 @@ const ProfileScreen = () => {
       accent: true,
     },
     {
-      icon: 'help-circle',
-      iconLib: 'feather',
+      icon: 'help-circle-outline',
+      iconLib: 'mc',
       title: t('profile.help'),
       sub: t('profile.helpSub'),
       onPress: () => navigation.navigate('Help'),
@@ -256,12 +316,23 @@ const ProfileScreen = () => {
   ];
 
   const renderIcon = (item: MenuItem) => {
-    // Encre sombre : l'icône est posée sur une tuile verte pleine.
-    const color = colors.background;
+    // Gris de la même valeur que le chevron : l'icône et la flèche encadrent le
+    // libellé sans lui disputer l'attention. C'est ce que fait le build blanc —
+    // icônes nues, gris moyen — transposé en sombre : là-bas gris foncé sur
+    // blanc, ici gris clair sur noir, même écart de contraste.
+    //
+    // Seule la ligne d'accent passe au vert. Une couleur qui ne sert qu'une fois
+    // par écran désigne ; répétée sur quinze lignes, elle ne désigne plus rien.
+    //
+    // Gris ÉCLAIRCI (`textMain` à 70 %) et non `textMuted` : sur blanc, un trait
+    // fin gris moyen tient parce que le fond réfléchit ; sur `#15241C` il
+    // s'efface, surtout à côté d'un intitulé blanc en gras. Le contraste brut
+    // était pourtant correct — c'est le rapport à son voisin qui comptait.
+    const color = item.accent ? colors.primary : 'rgba(255,255,255,0.7)';
     if (item.iconLib === 'feather') {
-      return <Feather name={item.icon as any} size={20} color={color} />;
+      return <Feather name={item.icon as any} size={ICON_SIZE} color={color} />;
     }
-    return <MaterialCommunityIcons name={item.icon as any} size={20} color={color} />;
+    return <MaterialCommunityIcons name={item.icon as any} size={ICON_SIZE} color={color} />;
   };
 
   const renderMenuGroup = (items: MenuItem[]) => (
@@ -278,12 +349,15 @@ const ProfileScreen = () => {
           accessibilityRole={item.toggle ? 'switch' : 'button'}
           accessibilityLabel={item.title}
         >
-          {/* Toutes les tuiles sont désormais en vert plein : la variante
-              « accent », qui n'était qu'une teinte à 10 %, ferait paraître la
-              ligne mise en avant plus pâle que les autres. */}
-          <View style={styles.menuIconWrap}>
-            {renderIcon(item)}
-          </View>
+          {/* Dégradé plutôt qu'aplat. Quinze tuiles rigoureusement identiques
+              alignées en colonne se lisent comme une trame, pas comme des
+              repères : c'est plat, et l'œil glisse. Le dégradé diagonal donne
+              du volume à chacune sans toucher à la saturation d'ensemble —
+              c'est le relief qui manquait, pas la couleur.
+
+              La variante « accent » n'existe plus : à 10 % d'opacité elle
+              rendait la ligne mise en avant PLUS pâle que les autres. */}
+          <View style={styles.menuIconWrap}>{renderIcon(item)}</View>
           <View style={styles.menuText}>
             <Text style={[styles.menuTitle, item.accent && { color: colors.textMain }]} numberOfLines={1}>
               {item.title}
@@ -330,7 +404,12 @@ const ProfileScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.profileCard}
+          onLayout={e => {
+            setCardWidth(e.nativeEvent.layout.width);
+            setCardHeight(e.nativeEvent.layout.height);
+          }}
         >
+
           <View style={styles.profileContent}>
             {isPlus && <View style={styles.plusGlow} />}
             <View style={styles.profileShimmer} />
@@ -376,6 +455,46 @@ const ProfileScreen = () => {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Reflet qui traverse la carte. Incliné, sinon on ne lit qu'une barre
+              verticale qui glisse ; l'inclinaison est ce qui le fait passer pour
+              une lumière plutôt que pour un élément d'interface.
+              `pointerEvents="none"` : il couvre le bouton Plus, et rien de
+              décoratif ne doit intercepter un tap. */}
+          {cardWidth > 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.shine,
+                {
+                  height: shineHeight,
+                  top: -(shineHeight - cardHeight) / 2,
+                  transform: [{ translateX: shineTranslate }],
+                },
+              ]}
+            >
+              {/* La rotation est portée par une vue INTERNE et statique. Dans le
+                  même tableau de transformations que le `translateX` animé, le
+                  pilote natif refuse la propriété et retombe en JS — le balayage
+                  saccade dès que la liste défile. */}
+              <View style={styles.shineSkew}>
+                <SafeGradient
+                  // UN SEUL lobe. La version à deux lobes séparés d'un creux
+                  // avait été essayée pour imiter un satiné : à l'écran elle se
+                  // lisait comme deux reflets distincts qui traversent ensemble,
+                  // pas comme une surface polie.
+                  colors={[
+                    'rgba(255,255,255,0)',
+                    'rgba(255,255,255,0.10)',
+                    'rgba(255,255,255,0)',
+                  ]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            </Animated.View>
+          )}
         </SafeGradient>
 
         {/* Gains de la semaine, posés entre l'identité et les réglages : c'est
@@ -451,8 +570,8 @@ const ProfileScreen = () => {
             onPress: () => setLangSheetVisible(true),
           },
           {
-            icon: 'bell',
-            iconLib: 'feather',
+            icon: 'bell-outline',
+            iconLib: 'mc',
             title: t('preferences.push', 'Notifications push'),
             toggle: { value: pushEnabled, onChange: togglePush },
           },
@@ -478,8 +597,8 @@ const ProfileScreen = () => {
             onPress: () => navigation.navigate('SubscriptionScreen'),
           }]),
           {
-            icon: 'refresh-ccw',
-            iconLib: 'feather' as const,
+            icon: 'restore',
+            iconLib: 'mc' as const,
             title: t('subscription.restore', 'Restaurer les achats'),
             onPress: () => setSubSheetVisible(true),
           },
@@ -494,14 +613,14 @@ const ProfileScreen = () => {
         <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.legal', 'Légal')}</Text>
         {renderMenuGroup([
           {
-            icon: 'file-text',
-            iconLib: 'feather',
+            icon: 'file-document-outline',
+            iconLib: 'mc',
             title: t('profile.terms', 'Conditions d\'utilisation'),
             onPress: () => Linking.openURL('https://striveapp.fr/terms'),
           },
           {
-            icon: 'shield',
-            iconLib: 'feather',
+            icon: 'shield-lock-outline',
+            iconLib: 'mc',
             title: t('profile.privacy', 'Politique de confidentialité'),
             onPress: () => Linking.openURL('https://striveapp.fr/privacy'),
           },
@@ -556,20 +675,6 @@ const ProfileScreen = () => {
             atteindre depuis l'app. Ne reste que la version. */}
         <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
 
-        {/* ⚠️ TEMPORAIRE — diagnostic des boutons de la Live Activity.
-            À retirer avec `traceDecision` côté natif une fois la panne comprise.
-            Un appui long efface la trace pour repartir d'un essai propre. */}
-        {Platform.OS === 'ios' && !!decisionTrace && (
-          <TouchableOpacity
-            onLongPress={() => {
-              NativeModules.ScanBridge?.clearDecisionTrace?.();
-              setDecisionTrace('');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.traceText}>{decisionTrace.trim()}</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
@@ -696,6 +801,17 @@ const styles = StyleSheet.create({
     right: 24,
     height: 1,
     backgroundColor: 'rgba(0,230,118,0.32)',
+  },
+  // Bande du reflet. `height` et `top` sont calculés au rendu depuis la hauteur
+  // mesurée de la carte — ils ne peuvent pas vivre dans une feuille statique.
+  shine: {
+    position: 'absolute',
+    left: 0,
+    width: SHINE_WIDTH,
+  },
+  shineSkew: {
+    flex: 1,
+    transform: [{ rotate: `${SHINE_ROTATE_DEG}deg` }],
   },
   plusGlow: {
     position: 'absolute',
@@ -862,21 +978,23 @@ const styles = StyleSheet.create({
   // Tuiles en aplat plein, comme la référence : le gris à 4 % d'opacité les
   // rendait presque invisibles, et une liste de quinze lignes sans repère
   // coloré se parcourt uniquement au texte.
+  // Le dégradé va de `primary` (haut gauche) à `primarySoft` (bas droite) : le
+  // vert vif n'occupe donc qu'un coin au lieu de toute la surface, ce qui laisse
+  // la colonne calme tout en donnant du relief. Un aplat de `primary` sur les
+  // quinze tuiles refaisait le mur fluo qui passait devant les intitulés.
+  //
+  // La lueur verte, discrète et diffuse, détache la tuile du fond de carte au
+  // lieu de la laisser collée dessus. C'est elle qui fait la différence entre
+  // « posé » et « imprimé ».
+  // Aucun fond : l'icône se pose directement sur la ligne. Le conteneur ne sert
+  // plus qu'à réserver une largeur constante pour que la colonne d'icônes reste
+  // alignée quelle que soit la forme du glyphe.
   menuIconWrap: {
     width: 40,
     height: 40,
-    // `primarySoft` et non `primary` : quinze tuiles pleines alignées en
-    // colonne, le vert fluo saturait la page et tirait l'œil avant les
-    // intitulés. Un cran plus sombre suffit à calmer l'ensemble sans changer
-    // la teinte de marque.
-    backgroundColor: colors.primarySoft,
-    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
-  },
-  menuIconWrapAccent: {
-    backgroundColor: 'rgba(0,230,118,0.1)',
   },
   menuIconWrapDanger: {
     width: 38,
@@ -888,6 +1006,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   menuText: { flex: 1 },
+  // 15/700, comme partout ailleurs dans l'app : `toggleTitle` de Preferences est
+  // en 14/700, les autres titres de ligne en 15/700 ou 800. Les métriques des
+  // Réglages iOS (17 pt, graisse normale) avaient été essayées et écartées —
+  // elles faisaient du Profil le seul écran hors convention.
+  //
+  // Aucune `fontFamily` n'est posée nulle part dans le projet : le rendu est
+  // déjà San Francisco sur iOS et Roboto sur Android.
   menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
   menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: 6 },
@@ -934,15 +1059,6 @@ const styles = StyleSheet.create({
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
   versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
-  // ⚠️ TEMPORAIRE — trace de diagnostic, à retirer avec `traceDecision`.
-  traceText: {
-    textAlign: 'center',
-    color: colors.textDimmed,
-    fontSize: 10,
-    lineHeight: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginBottom: 16,
-  },
 
   deleteInput: {
     width: '100%',
