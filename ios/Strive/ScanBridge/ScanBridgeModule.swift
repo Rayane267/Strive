@@ -549,19 +549,6 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
-  /// ⚠️ TEMPORAIRE — à retirer avec `traceDecision`. Rend la trace des appuis
-  /// sur les boutons de la Live Activity, que le Profil affiche en pied de page.
-  @objc func getDecisionTrace(_ resolve: @escaping RCTPromiseResolveBlock,
-                              rejecter reject: @escaping RCTPromiseRejectBlock) {
-    let d = UserDefaults(suiteName: Self.appGroupId)
-    resolve(d?.string(forKey: "decisionTrace") ?? "")
-  }
-
-  /// ⚠️ TEMPORAIRE — vide la trace, pour repartir d'un essai propre.
-  @objc func clearDecisionTrace() {
-    UserDefaults(suiteName: Self.appGroupId)?.removeObject(forKey: "decisionTrace")
-  }
-
   @objc func clearLiveActivityResult(_ scanTs: NSNumber) {
     if #available(iOS 16.2, *) {
       LiveActivityManager.shared.clearResult(scanTs: scanTs.doubleValue)
