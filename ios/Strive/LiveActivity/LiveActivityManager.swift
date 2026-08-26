@@ -320,8 +320,21 @@ final class LiveActivityManager {
     guard UserDefaults(suiteName: Self.appGroupId)?.bool(forKey: "sessionOnline") == true else {
       return nil
     }
-    // 1,5 s au plus, largement sous le budget de l'AppIntent (watchdog à 25 s).
-    for _ in 0..<6 {
+    // 3 s au plus, toujours très loin du watchdog de l'AppIntent (25 s).
+    //
+    // C'était 1,5 s. Le cas qui débordait : le PREMIER scan après le passage en
+    // ligne, quand le chauffeur bascule directement sur son application VTC.
+    // Strive n'a alors pas eu une seconde au premier plan, iOS l'évince, et le
+    // raccourci relance le process À FROID — ActivityKit doit rejoindre le
+    // démon système avant que `Activity.activities` se peuple, et ça n'entre pas
+    // toujours dans une seconde et demie. Les scans suivants trouvent le process
+    // chaud, d'où le « des fois ».
+    //
+    // Le coût du doublement est nul quand il n'y a rien à attendre : la garde
+    // `sessionOnline` juste au-dessus sort immédiatement si aucune session n'est
+    // ouverte. On n'attend donc que dans le cas où une carte est réellement à
+    // l'écran, et le repli notification n'est retardé que là.
+    for _ in 0..<12 {
       Thread.sleep(forTimeInterval: 0.25)
       if let live = liveActivity() {
         log("live activity apparue après attente")

@@ -1117,6 +1117,11 @@ const DashboardScreen = () => {
   useEffect(() => { applyRideDecisionRef.current = applyRideDecision; }, [applyRideDecision]);
   useEffect(() => { ridesRef.current = rides; }, [rides]);
 
+  // « La journée a-t-elle été lue au moins une fois ? » Levé par `fetchData`
+  // après `setRides`, jamais avant. Voir l'effet de poussée des KPI ci-dessous :
+  // sans lui, la liste VIDE du montage était poussée comme un vrai zéro.
+  const dayLoadedRef = useRef(false);
+
   // Les KPI de la carte suivent la BASE, et plus seulement les décisions prises
   // dans l'app.
   //
@@ -1134,6 +1139,18 @@ const DashboardScreen = () => {
   // résultat affiché.
   useEffect(() => {
     if (!ScanBridge?.updateSessionKPI) return;
+    // RIEN tant que la journée n'a pas été lue. `rides` vaut `[]` au montage —
+    // état initial, pas résultat — et cet effet poussait donc 0 € / 0 km / 0 min
+    // sur la carte à chaque fois que le Dashboard se montait, avant même que
+    // `fetchData` ait répondu. Le chauffeur voyait ses gains tomber à zéro puis
+    // revenir une seconde plus tard ; et si la lecture échouait — réseau coupé,
+    // session expirée — ils y RESTAIENT. Le zéro était même recopié dans le
+    // snapshot de session (`updateSessionKPI` le sauvegarde), donc une carte
+    // recréée par iOS repartait de zéro elle aussi.
+    //
+    // Après une lecture réussie, un vrai zéro se pousse normalement : c'est le
+    // début de journée, et il est alors exact.
+    if (!dayLoadedRef.current) return;
     const accepted = rides.filter(r => r.status === 'ACCEPTED');
     const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
     const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
@@ -1529,6 +1546,9 @@ const DashboardScreen = () => {
         scans: usedScans,
       });
       setRides(ridesData);
+      // La journée est lue : les KPI poussés à partir de maintenant portent des
+      // chiffres, plus l'état initial de la liste.
+      dayLoadedRef.current = true;
       cacheRides(ridesData); // Cache pour mode hors-ligne
 
       // ── Décisions Prise/Refusée en attente ──────────────────────────────
