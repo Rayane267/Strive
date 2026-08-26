@@ -297,7 +297,17 @@
       "WebFetch(domain:alicinaroglu.dev)",
       "Bash(git diff *)",
       "Bash(head -4 /tmp/dash.patch)",
-      "Bash(sed -n '5,15p' /tmp/dash.patch)"
+      "Bash(sed -n '5,15p' /tmp/dash.patch)",
+      "Bash(cd *)",
+      "Bash(grep -v \"^+    //\")",
+      "Bash(grep -n \"do \\\\$\\\\$\" -B 14 -A 16 supabase/migrations/20260820_quota_counter_survives_deletion.sql)",
+      "Bash(awk '/REPRISE DE L/,0' supabase/migrations/20260820_quota_counter_survives_deletion.sql)",
+      "Bash(grep -vE \"^\\\\+\\\\s*//|^\\\\-\\\\s*//|^\\\\+\\\\s*///|^\\\\-\\\\s*///\")",
+      "Bash(grep -vE \"^[+-]\\\\s*//\")",
+      "Bash(awk '/create or replace function public.enforce_scan_quota/,/^\\\\$\\\\$;/' supabase/migrations/20260811_quota_day_window_restore.sql)",
+      "Bash(grep -vE \"^\\\\+\\\\s*//\")",
+      "Bash(grep -v \"^ios/Strive/Scanner/ScanProcessor.swift:5[0-9][0-9]:.*//\")",
+      "Bash(sed -i 's/        if \\(nativeResult\\\\.rideId\\) {\\\\n/X/' src/screens/DashboardScreen.tsx)"
     ]
   },
   "enableAllProjectMcpServers": true,
