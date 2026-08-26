@@ -307,7 +307,10 @@
       "Bash(awk '/create or replace function public.enforce_scan_quota/,/^\\\\$\\\\$;/' supabase/migrations/20260811_quota_day_window_restore.sql)",
       "Bash(grep -vE \"^\\\\+\\\\s*//\")",
       "Bash(grep -v \"^ios/Strive/Scanner/ScanProcessor.swift:5[0-9][0-9]:.*//\")",
-      "Bash(sed -i 's/        if \\(nativeResult\\\\.rideId\\) {\\\\n/X/' src/screens/DashboardScreen.tsx)"
+      "Bash(sed -i 's/        if \\(nativeResult\\\\.rideId\\) {\\\\n/X/' src/screens/DashboardScreen.tsx)",
+      "Bash(echo *)",
+      "Bash(grep -rlE \"eyJ[A-Za-z0-9_-]{40,}\" supabase/functions/)",
+      "Bash(grep -v \"^\\\\s*//\")"
     ]
   },
   "enableAllProjectMcpServers": true,
