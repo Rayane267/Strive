@@ -934,7 +934,8 @@
     },
     "quotaReached": {
       "title": "Quota reached",
-      "body": "You've used all your scans today. Resets in {{time}}."
+      "body": "You've used all your scans today. Resets in {{time}}.",
+      "bodyFree": "You've used today's scans. Go Plus for {{scans}} scans a day — resets in {{time}}."
     },
     "rideRejected": {
       "title": "Ride not saved",

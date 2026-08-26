@@ -934,7 +934,8 @@
     },
     "quotaReached": {
       "title": "Quota atteint",
-      "body": "Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans {{time}}."
+      "body": "Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans {{time}}.",
+      "bodyFree": "Vous avez utilisé vos scans du jour. Passez à Plus pour {{scans}} scans par jour — rechargement dans {{time}}."
     },
     "rideRejected": {
       "title": "Course non enregistrée",

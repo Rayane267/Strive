@@ -1,0 +1,74 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- L'identifiant de la course est frappé AU SCAN, par le client
+-- ═══════════════════════════════════════════════════════════════════════════
+-- CE QUI CHANGE. `rides.id` n'est plus tiré par le serveur à l'insertion : le
+-- process qui analyse l'écran (Share Extension, raccourci, bulle Android) frappe
+-- un UUID au moment du scan et le porte partout — payload App Group, Live
+-- Activity, boutons Prise/Refusée, colonne `id`. Une course a désormais UNE
+-- identité, connue avant même d'exister en base.
+--
+-- POURQUOI. Elle en avait trois : `scan_ts` (un double comparé à 1 ms près),
+-- `qid` (la clé du journal natif) et `id` (l'uuid serveur). Aucune n'était
+-- connue de tous les acteurs au bon moment, d'où tout l'appareillage qu'on
+-- retire ici — et, côté app, la corrélation d'une décision à une course par
+-- proximité de `created_at`, qui pouvait désigner la mauvaise.
+--
+-- CE QUE ÇA REND POSSIBLE. L'insertion devient idempotente sur la clé primaire :
+-- `on conflict (id) do nothing`. Le rejeu d'un scan par le journal natif est
+-- alors sans effet par construction — plus besoin de deviner, côté serveur, si
+-- deux insertions désignent la même course.
+--
+-- CE QUI NE CHANGE PAS. `scan_ts` reste, comme donnée : c'est l'heure du scan,
+-- et c'est d'elle que `created_at` est dérivé — la course atterrit au jour où
+-- elle a été scannée, pas au jour où le journal natif a réussi à l'écrire.
+--
+-- À APPLIQUER AVEC 20260822_scan_quota_on_profile.sql. Cette migration retire le
+-- trigger anti-doublon ; tant que le quota reste en BEFORE INSERT, un rejeu du
+-- journal natif exécute encore la vérification et peut lever P0001 sur une
+-- course déjà en base. La suivante fait passer le quota en AFTER INSERT, où un
+-- rejeu ne déclenche plus rien. Les deux vont ensemble.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── Trigger anti-doublon ────────────────────────────────────────────────────
+-- Il écartait un insert ressemblant à un autre : même user, même plateforme,
+-- mêmes chiffres, dans une fenêtre de 90 s. Une heuristique, avec ses deux
+-- erreurs — laisser passer un vrai doublon décalé, et refuser deux offres
+-- réellement distinctes aux mêmes chiffres (fréquent : mêmes tarifs, même
+-- distance sur un axe donné). La clé primaire ne se trompe ni dans un sens ni
+-- dans l'autre.
+drop trigger if exists aa_skip_duplicate_ride on public.rides;
+drop function if exists public.skip_duplicate_ride();
+
+-- ── Ce qui RESTE, et pourquoi : rides_user_scan_ts_uq ───────────────────────
+-- L'index unique (user_id, scan_ts) de 20260817 n'est pas supprimé.
+--
+-- Deux raisons, et aucune n'est l'ancienne. D'abord la transition : un journal
+-- natif peut contenir, au moment de la mise à jour, des entrées écrites par le
+-- build précédent — sans `id`, donc sans idempotence sur la clé primaire. Sans
+-- cet index, leur rejeu créerait un doublon. Ensuite le régime permanent : deux
+-- process écrivent la course (le natif dès le scan, l'app à la relève) et cet
+-- index est ce qui garantit qu'un scan reste une course même si l'un des deux
+-- perd son `id`. Il ne coûte rien — deux offres distinctes n'ont jamais le même
+-- `scan_ts`, il est à la microseconde — et `createRide` traite son 23505 comme
+-- un succès sans création, exactement comme le conflit d'`id`.
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- VÉRIFICATIONS POST-MIGRATION
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1. Le même id inséré deux fois ne crée qu'une ligne, et ne lève pas :
+--      insert into rides (id, user_id, platform, status, fare_estimated,
+--                         distance_km, duration_min, hourly_rate, km_rate, scan_ts)
+--      values ('11111111-1111-1111-1111-111111111111', auth.uid(), 'UBER',
+--              'PENDING', 20, 10, 15, 80, 2, 1755000000)
+--      on conflict (id) do nothing;
+--    → rejouer la même commande : 0 ligne insérée, aucune erreur.
+--
+-- 2. Deux offres distinctes aux mêmes chiffres passent toutes les deux (ids et
+--    `scan_ts` différents) — ce que le trigger supprimé refusait.
+--
+-- 3. Le quota reste appliqué : un 4e scan d'un compte free doit toujours lever
+--    P0001 `daily_scan_quota_exceeded`.
+--
+-- 4. Le rejeu ne consomme pas de quota : réinsérer une course déjà présente au
+--    registre (même user_id, même scan_ts) passe sans incrémenter
+--      select count(*) from scan_ledger where user_id = auth.uid();

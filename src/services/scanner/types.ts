@@ -23,19 +23,31 @@ export interface ScanResult {
   debugBlocks?: string;
   /** Hauteur de l'image OCR (px) — nécessaire pour rejouer un cas en fixture. */
   screenHeight?: number;
-  /** Horodatage du scan (epoch s) — clé de corrélation avec la décision
-   *  Accepter/Refuser tapée sur la notification iOS. */
+  /** Horodatage du scan (epoch s). Donnée, plus clé : il date la course (jour
+   *  d'affectation, registre de quota) mais n'identifie plus rien. */
   scanTs?: number;
-  /** Identifiant de l'entrée dans le journal natif des scans. À renvoyer via
-   *  `ackScan(qid)` une fois la course confirmée en base : c'est le seul moyen
-   *  de retirer l'entrée. Sans accusé, le scan est rejoué à la prochaine relève
-   *  — c'est ce qui garantit qu'aucune course ne se perd. */
-  qid?: string;
+  /**
+   * Identité de la course, frappée par le natif AU MOMENT DU SCAN. C'est la clé
+   * primaire en base (`rides.id`), l'entrée du journal natif, et ce que
+   * renvoient les boutons Prise/Refusée.
+   *
+   * Une seule valeur pour les trois, et connue avant l'insertion : c'est ce qui
+   * rend l'écriture idempotente (`on conflict (id) do nothing`) et permet
+   * d'appliquer une décision par simple `update … where id = rideId`, sans
+   * jamais avoir à retrouver la course.
+   *
+   * Optionnel pour une raison de transition : un bundle JS récent peut tourner
+   * sur un binaire natif antérieur, ou trouver dans le journal des entrées
+   * écrites avant la mise à jour. Absent → l'id est laissé au serveur, comme
+   * avant (`ridesService.createRide`).
+   */
+  rideId?: string;
 }
 
-/** Décision Accepter/Refuser émise par une action de notification iOS. */
+/** Décision Prise/Refusée tapée hors de l'app : bouton de la Live Activity,
+ *  action de notification, commande vocale. */
 export interface RideDecision {
-  scanTs: number;
+  rideId: string;
   status: 'ACCEPTED' | 'DECLINED';
 }
 
@@ -105,11 +117,26 @@ export interface ScannerService {
    *  frontière de journée. `limit <= 0` = illimité. */
   setScanQuota(countToday: number, limit: number, resetHour: number): void;
 
-  /** Acquitte un scan du journal natif : la course est en base, ou refusée
-   *  définitivement. Tant qu'un scan n'est pas acquitté il est ré-émis à chaque
-   *  relève — remplace l'ancienne file hors-ligne AsyncStorage, qui supprimait
-   *  la course au bout de 5 tentatives. */
-  ackScan(qid: string): void;
+  /** Acquitte un scan du journal natif : la course est en base. Tant qu'un scan
+   *  n'est pas acquitté il est ré-émis à chaque relève — c'est ce qui garantit
+   *  qu'aucune course ne se perd. */
+  ackScan(rideId: string): void;
+  /** Les décisions Prise/Refusée en attente (boutons Live Activity, actions de
+   *  notification, commandes vocales). Lecture seule : rien n'est retiré ici.
+   *  Le Dashboard les demande quand il peut les écrire en base. */
+  getPendingRideDecisions(): Promise<RideDecision[]>;
+  /** Retire une décision de la file, une fois le statut écrit en base. Non
+   *  acquittée = conservée, et retentée à la prochaine synchro. */
+  ackRideDecision(rideId: string): void;
+  /** Met une décision prise DANS l'app dans cette même file, quand son écriture
+   *  en base n'a pas abouti — course pas encore insérée, réseau coupé, session
+   *  expirée. Elle y attend le prochain drain, comme celles tapées sur la carte
+   *  ou la notification. Dédoublonné sur `rideId` côté natif. */
+  queueRideDecision(rideId: string, status: 'ACCEPTED' | 'DECLINED'): void;
+  /** Efface le verdict affiché sur la Live Activity / la notification de
+   *  résultat, quand la décision a été prise DANS l'app. Sans effet si la carte
+   *  montre déjà une autre course. */
+  clearRideResult(rideId: string): void;
   /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
    *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
    *  → un scan déclenché alors que désactivé est refusé avec un message. */
@@ -136,9 +163,6 @@ export interface ScannerService {
   onScanFailure(
     cb: (f: { reason: string; surface: string; platform?: string | null; detail?: string | null; occurredAt?: number | null }) => void,
   ): { remove: () => void } | undefined;
-  /** Écoute les décisions Accepter/Refuser tapées sur la notification (iOS).
-   *  Android : non implémenté (no-op). */
-  onRideDecision(cb: (decision: RideDecision) => void): { remove: () => void } | undefined;
   /** Écoute le refus de permission */
   onPermissionDenied(cb: () => void): { remove: () => void } | undefined;
 }

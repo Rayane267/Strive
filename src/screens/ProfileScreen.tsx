@@ -13,6 +13,7 @@ import {
   Platform,
   Image,
   Animated,
+  NativeModules,
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,9 +34,9 @@ import { registerPushToken, unregisterPushToken } from '../services/notification
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
-import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
+import { getEffectivePlanTier } from '../services/subscriptionService';
 
 /// Taille des icônes de menu. 22 et non 20 : posées à nu, sans tuile pour les
 /// soutenir, deux pixels de plus suffisent à leur redonner du poids face à un
@@ -97,8 +98,17 @@ const ProfileScreen = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const tier = profile?.subscription_tier?.toLowerCase();
-  const isPlus = tier === 'plus' || tier === 'pro' || tier === 'premium';
+  // Palier EFFECTIF, comme les onze autres écrans. Le profil lisait
+  // `subscription_tier` brut, donc sans contrôle d'expiration ni de période de
+  // grâce : un abonnement expiré affichait encore la pastille Plus et masquait
+  // la carte d'upsell, pendant que le Dashboard appliquait déjà le quota free.
+  // L'écran qui parle de l'abonnement était le seul à en ignorer la validité.
+  //
+  // Ça retire aussi la règle `'pro' → premium` dupliquée ici : elle vit dans
+  // `getPlanTier`, et c'est cette duplication qui avait laissé la dérive
+  // s'installer.
+  const tier = getEffectivePlanTier(profile);
+  const isPlus = tier !== 'free';
 
   // Gains des 7 derniers jours : seules les courses acceptées comptent, une
   // course refusée n'a rapporté rien. `null` tant que la requête n'a pas
@@ -204,6 +214,58 @@ const ProfileScreen = () => {
 
   const confirmLogout = async () => {
     setIsLogoutModalVisible(false);
+
+    // Fermer la session de travail AVANT de déconnecter. La déconnexion ne
+    // faisait que couper l'authentification, laissant derrière elle une session
+    // ouverte et `is_online` à `true`.
+    //
+    // Ce n'est pas cosmétique : `online_sessions` sans `end_at` est compté comme
+    // « en cours » et sa durée se calcule en `maintenant − start_at`
+    // (DashboardScreen et AnalyticsScreen). Une session laissée ouverte gonfle
+    // donc indéfiniment, et comme le taux horaire vaut gains ÷ heures, il
+    // s'effondre vers zéro. Le chauffeur retrouve à la reconnexion un €/h faux
+    // et une durée de service absurde.
+    //
+    // ORDRE OBLIGATOIRE : les deux écritures Supabase passent par la RLS, donc
+    // exigent le jeton. Après `signOut()` elles seraient refusées en silence.
+    if (user?.id) {
+      try {
+        const nowIso = new Date().toISOString();
+        const { data: open } = await supabase
+          .from('online_sessions')
+          .select('id, start_at')
+          .eq('user_id', user.id)
+          .is('end_at', null);
+
+        for (const s of open ?? []) {
+          const elapsed = Math.max(
+            0,
+            Math.floor((Date.now() - new Date(s.start_at).getTime()) / 1000),
+          );
+          await supabase
+            .from('online_sessions')
+            .update({ end_at: nowIso, duration_seconds: elapsed })
+            .eq('id', s.id);
+        }
+
+        await supabase.from('profiles').update({ is_online: false }).eq('id', user.id);
+      } catch (e) {
+        // Un échec ici ne doit pas retenir le chauffeur qui veut se déconnecter.
+        // La session restera ouverte, ce qui est le comportement d'avant.
+        __DEV__ && console.log('close session on logout failed:', e);
+      }
+    }
+
+    // Le natif garde ses propres traces : le drapeau `sessionOnline` de l'App
+    // Group commande le scan par raccourci, et la Live Activity survivrait à la
+    // déconnexion — jusqu'à afficher les KPI de l'ancien chauffeur si un autre
+    // compte se connecte sur le même appareil.
+    try {
+      const { ScanBridge } = NativeModules;
+      ScanBridge?.setSessionOnline?.(false);
+      if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+    } catch {}
+
     try {
       await GoogleSignin.signOut();
     } catch (e) {
@@ -670,11 +732,11 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Les deux liens légaux ont rejoint leur propre section : ils étaient
-            relégués ici en minuscules, alors qu'Apple exige de pouvoir les
-            atteindre depuis l'app. Ne reste que la version. */}
-        <Text style={styles.versionText}>{APP_VERSION_LABEL}</Text>
-
+        {/* Les liens légaux ont rejoint leur propre section, et la version n'est
+            plus affichée ici. Elle reste jointe automatiquement aux demandes de
+            support (`supportService`, `HelpScreen`) et aux traces de scan : le
+            besoin réel — savoir sur quel build tourne un chauffeur qui signale
+            un problème — est couvert sans occuper le pied de page. */}
       </ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
@@ -1058,7 +1120,6 @@ const styles = StyleSheet.create({
   },
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
-  versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
 
   deleteInput: {
     width: '100%',

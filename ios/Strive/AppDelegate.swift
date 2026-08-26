@@ -65,14 +65,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     //
     // Et si elle échoue, rien n'est perdu : la course reste dans
     // `pendingScanResults` (App Group), drainée à la prochaine ouverture. Une
-    // entrée ne quitte la file que sur `ackScan`, et elle porte `scanTs`, dont
-    // `createRide` dérive `created_at` — la course atterrit au jour du scan,
-    // pas au jour du drain.
+    // entrée ne quitte la file que sur `ackScan`, et elle porte l'`id` frappé au
+    // scan — le rejeu réinsère donc la MÊME course, écartée sur la clé primaire,
+    // et son `scanTs` la fait atterrir au jour du scan, pas au jour du drain.
     //
     // Les autres lancements en arrière-plan sont dans le même cas : les actions
     // « Accepter / Refuser » d'une notification écrivent dans l'App Group en Swift,
-    // et `ScanBridge.drainAndEmitRideDecisions()` relève la file au prochain
-    // passage au premier plan. Aucun `setBackgroundMessageHandler` n'existe côté
+    // et `ScanBridge.getPendingRideDecisions()` relève la file à la prochaine
+    // synchro du Dashboard. Aucun `setBackgroundMessageHandler` n'existe côté
     // JS, donc aucune notification silencieuse n'a besoin du pont.
     //
     // Le pont démarre au premier passage au premier plan.
@@ -196,7 +196,6 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   private static let scanCategoryId = "STRIVE_SCAN_RESULT"
   private static let acceptActionId = "STRIVE_ACCEPT"
   private static let declineActionId = "STRIVE_DECLINE"
-  private static let decisionsKey = "pendingRideDecisions"
 
   private func registerScanResultCategory() {
     // Anglais uniquement si l'app est réglée en anglais, français sinon — même
@@ -239,32 +238,19 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   ) {
     let action = response.actionIdentifier
     if action == Self.acceptActionId || action == Self.declineActionId,
-       let ts = (response.notification.request.content.userInfo["scanTs"] as? NSNumber)?.doubleValue,
-       ts > 0 {
-      appendRideDecision(scanTs: ts, status: action == Self.acceptActionId ? "ACCEPTED" : "DECLINED")
+       let rideId = response.notification.request.content.userInfo["rideId"] as? String,
+       !rideId.isEmpty {
+      // Le helper partagé avec les boutons de la Live Activity et les commandes
+      // vocales (StriveActivityAttributes.swift) : une seule écriture, un seul
+      // format. L'app viendra chercher la décision (`getPendingRideDecisions`)
+      // quand elle sera en état de l'appliquer.
+      appendRideDecision(
+        rideId: rideId,
+        accepted: action == Self.acceptActionId,
+        appGroupId: Self.appGroupId
+      )
     }
     completionHandler()
-  }
-
-  /// Empile la décision dans l'App Group (survit au cold start) puis notifie
-  /// l'app via Darwin → ScanBridge la draine et l'émet au JS.
-  private func appendRideDecision(scanTs: Double, status: String) {
-    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
-    var arr: [[String: Any]] = []
-    if let data = defaults.data(forKey: Self.decisionsKey),
-       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-      arr = existing
-    }
-    arr.append(["scanTs": scanTs, "status": status])
-    if let data = try? JSONSerialization.data(withJSONObject: arr) {
-      defaults.set(data, forKey: Self.decisionsKey)
-    }
-    let center = CFNotificationCenterGetDarwinNotifyCenter()
-    CFNotificationCenterPostNotification(
-      center,
-      CFNotificationName("com.striveapp.app.rideDecision" as CFString),
-      nil, nil, true
-    )
   }
 }
 

@@ -2,12 +2,16 @@ import * as Sentry from '@sentry/react-native';
 import { supabase } from './supabase';
 import { Profile } from '../types/database';
 
-// Projection explicite : évite d'exfiltrer fcm_token, email_normalized, daily_scans_count,
+// Projection explicite : évite d'exfiltrer fcm_token, email_normalized,
 // last_reset_date, timezone — colonnes serveur non utilisées par l'UI.
 const PROFILE_COLUMNS =
   'id, first_name, last_name, email, phone, birth_date, avatar_url, is_online, ' +
   'subscription_tier, subscription_status, subscription_expires_at, ' +
   'subscription_product_id, extra_scan_credits, ' +
+  // Le quota tel que le serveur l'applique. En lecture seule (le trigger
+  // `check_scan_quota` en est le seul écrivain) : l'exposer ne risque rien et
+  // évite au client de recalculer un substitut à partir des courses.
+  'daily_scans_count, daily_scans_day, ' +
   'car_make, car_model, car_year, car_reg, fuel_type, avg_cons, elec_price';
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {

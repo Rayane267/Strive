@@ -15,7 +15,7 @@
  */
 
 import { NativeModules, NativeEventEmitter } from 'react-native';
-import { ScannerService, ScanResult, RideDecision } from './types';
+import { ScannerService, ScanResult } from './types';
 
 const { ScanBridge } = NativeModules;
 const emitter = ScanBridge ? new NativeEventEmitter(ScanBridge) : null;
@@ -120,8 +120,28 @@ export const scannerService: ScannerService = {
     ScanBridge?.setQuotaReached(reached, isFree);
   },
 
-  ackScan: (qid: string) => {
-    ScanBridge?.ackScan?.(qid);
+  getPendingRideDecisions: async () => {
+    try {
+      return (await ScanBridge?.getPendingRideDecisions?.()) ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  ackRideDecision: (rideId: string) => {
+    ScanBridge?.ackRideDecision?.(rideId);
+  },
+
+  queueRideDecision: (rideId: string, status: 'ACCEPTED' | 'DECLINED') => {
+    ScanBridge?.queueRideDecision?.(rideId, status === 'ACCEPTED');
+  },
+
+  ackScan: (rideId: string) => {
+    ScanBridge?.ackScan?.(rideId);
+  },
+
+  clearRideResult: (rideId: string) => {
+    ScanBridge?.clearLiveActivityResult?.(rideId);
   },
 
   setScanQuota: (countToday: number, limit: number, resetHour: number) => {
@@ -174,17 +194,6 @@ checkPermissions: async () => {
   onScanFailed: (cb: () => void) => {
     if (!emitter) return undefined;
     return emitter.addListener('onScanFailed', cb);
-  },
-
-  // On s'abonne PUIS on draine, comme sur Android. Le natif purge la clé App
-  // Group avant d'émettre : une décision drainée alors que ce listener n'est pas
-  // encore posé est perdue définitivement, et la course reste « en attente de
-  // décision » bien que le chauffeur ait tapé le bouton de la Live Activity.
-  onRideDecision: (cb: (decision: RideDecision) => void) => {
-    if (!emitter) return undefined;
-    const sub = emitter.addListener('onRideDecision', cb);
-    ScanBridge.drainRideDecisions?.();
-    return sub;
   },
 
   onPermissionDenied: (cb: () => void) => {

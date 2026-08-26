@@ -31,11 +31,15 @@ public struct StriveActivityAttributes: ActivityAttributes {
     public let todayKm: Double
     public let onlineMinutes: Int
 
-    /// Horodatage du scan (epoch s) — corrèle les boutons Accepter/Refuser de la
-    /// Live Activity (iOS 17+) à la course. Optionnel → décodage tolérant des
-    /// activités déjà en cours lors d'une mise à jour de l'app. nil/0 = pas de
-    /// course taguable (états idle / scanning / error).
-    public let scanTs: Double?
+    /// Identité de la course affichée — frappée au scan, portée jusqu'ici, et
+    /// renvoyée telle quelle par les boutons Prise/Refusée (iOS 17+). C'est ce
+    /// qui permet à un tap sur le lock screen de désigner la course sans que
+    /// personne ait à la retrouver.
+    ///
+    /// Optionnel → décodage tolérant des activités déjà en cours lors d'une
+    /// mise à jour de l'app. nil = pas de course taguable (idle / scanning /
+    /// error), et donc pas de boutons.
+    public let rideId: String?
 
     /// Epoch (s) « de référence » pour la durée de session du JOUR : posé à
     /// `débutSession - tempsEnLigneDéjàCumuléAujourdhui`. La Live Activity affiche
@@ -55,7 +59,7 @@ public struct StriveActivityAttributes: ActivityAttributes {
       todayHourlyRate: Double = 0,
       todayKm: Double = 0,
       onlineMinutes: Int = 0,
-      scanTs: Double? = nil,
+      rideId: String? = nil,
       sessionStartEpoch: Double? = nil
     ) {
       self.platform = platform
@@ -69,7 +73,7 @@ public struct StriveActivityAttributes: ActivityAttributes {
       self.todayHourlyRate = todayHourlyRate
       self.todayKm = todayKm
       self.onlineMinutes = onlineMinutes
-      self.scanTs = scanTs
+      self.rideId = rideId
       self.sessionStartEpoch = sessionStartEpoch
     }
   }
@@ -87,8 +91,9 @@ public struct StriveActivityAttributes: ActivityAttributes {
 // MARK: - Boutons interactifs de la Live Activity (iOS 17+)
 
 /// Intent déclenché par les boutons ✅/❌ de la Dynamic Island / Live Activity.
-/// Écrit la décision dans l'App Group (même file que les actions de notification)
-/// puis poste une notification Darwin → l'app draine et réconcilie côté JS.
+/// Écrit la décision dans l'App Group — même file que les actions de
+/// notification et que les commandes vocales. L'app la lit à sa prochaine
+/// synchro du Dashboard et l'écrit en base.
 ///
 /// Défini dans CE fichier (partagé Strive + StriveWidget) pour être disponible
 /// aux deux process — le bouton est rendu par le widget, l'intent s'exécute côté app.
@@ -98,12 +103,12 @@ struct RideDecisionIntent: LiveActivityIntent {
   static var isDiscoverable: Bool = false
   static var openAppWhenRun: Bool = false
 
-  @Parameter(title: "scanTs") var scanTs: Double
+  @Parameter(title: "rideId") var rideId: String
   @Parameter(title: "accepted") var accepted: Bool
 
   init() {}
-  init(scanTs: Double, accepted: Bool) {
-    self.scanTs = scanTs
+  init(rideId: String, accepted: Bool) {
+    self.rideId = rideId
     self.accepted = accepted
   }
 
@@ -111,36 +116,32 @@ struct RideDecisionIntent: LiveActivityIntent {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
 
-    guard scanTs > 0 else { return .result() }
+    guard !rideId.isEmpty else { return .result() }
 
-    // 1) Retour à l'état de base + incrément KPI immédiat (gains/km/€h), sans JS.
+    // 1) PERSISTANCE D'ABORD, et c'est un ordre, pas une préférence de style.
+    //
+    // Cet `await` peut ne jamais rendre la main : iOS lance l'app en arrière-plan
+    // pour exécuter l'intent, et peut la suspendre pendant `activity.update`.
+    // Tout ce qui suivait l'await disparaissait alors avec le process — la
+    // décision n'était jamais écrite, le JS n'avait rien à réconcilier, et la
+    // carte n'avait pas bougé non plus. Le tap ne laissait aucune trace, nulle
+    // part : « des fois je clique et rien ne se passe ».
+    //
+    // L'écriture App Group, elle, est synchrone et tient en microsecondes. En la
+    // passant devant, le pire cas devient « la carte ne bouge pas mais la course
+    // est bien taguée à la réouverture », au lieu d'une décision perdue.
+    appendRideDecision(rideId: rideId, accepted: accepted, appGroupId: appGroupId)
+
+    // 2) Retour à l'état de base + incrément KPI immédiat (gains/km/€h), sans JS.
     if #available(iOS 16.2, *) {
       let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
-      await revertLiveActivityToIdle(scanTs: scanTs, addFare: add.fare, addKm: add.km)
+      await revertLiveActivityToIdle(rideId: rideId, addFare: add.fare, addKm: add.km)
     }
-    // 2) Persistance pour la réconciliation JS (vérité Supabase).
-    appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
     return .result()
   }
 }
 
 // MARK: - Helpers partagés (boutons Live Activity + commandes vocales)
-
-/// Deux `scanTs` désignent-ils le même scan ?
-///
-/// Toujours passer par ici plutôt que par `==`. Ces horodatages traversent
-/// plusieurs encodages — paramètres d'AppIntent, JSON de l'App Group,
-/// `userInfo` de notification — et chacun peut rogner les derniers chiffres
-/// d'un `Double` à 17 chiffres significatifs. L'égalité stricte échoue alors de
-/// façon intermittente, sans rien signaler.
-///
-/// Tolérance à la milliseconde : deux scans sont sérialisés par `ScanProcessor`
-/// et séparés d'au moins trois secondes (anti double-tap), aucun risque de
-/// confusion.
-func scanTsMatches(_ a: Double?, _ b: Double) -> Bool {
-  guard let a = a else { return false }
-  return abs(a - b) < 0.001
-}
 
 /// Tarif/distance de la DERNIÈRE course scannée, pour incrémenter les KPI de la
 /// Live Activity côté natif sans attendre le JS.
@@ -156,6 +157,7 @@ func scanTsMatches(_ a: Double?, _ b: Double) -> Bool {
 /// active), cohérent avec ce que la carte montre — `lastScanResult.fare` est
 /// brut et faisait monter les gains en brut sous un affichage net.
 func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {
+  // (la clé porte aussi `rideId`, lu séparément par `tagLastScannedRide`)
   guard let defaults = UserDefaults(suiteName: appGroupId) else { return (0, 0) }
   if let entry = defaults.dictionary(forKey: "lastTaggableRide") {
     let fare = (entry["fare"] as? NSNumber)?.doubleValue ?? 0
@@ -172,25 +174,52 @@ func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {
   return (fare, km)
 }
 
-/// Empile la décision Accepter/Refuser (App Group) + notifie l'app (Darwin) →
-/// réconciliation JS (Supabase = source de vérité, corrige l'optimiste natif).
-func appendRideDecision(scanTs: Double, accepted: Bool, appGroupId: String) {
-  guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+/// Recopie les KPI de session dans l'App Group (`laSessionSnapshot`).
+///
+/// C'est la SEULE copie qui survit à la mort de la carte : quand iOS la retire
+/// alors que la session continue, `LiveActivityManager.ensureRunning()` la
+/// recrée à partir de là. Une mise à jour de la carte qui ne passe pas par ici
+/// est donc oubliée dès que la carte disparaît — c'était le cas du bouton ✅,
+/// qui incrémentait les gains à l'écran et les laissait revenir à leur valeur
+/// d'avant si la carte était recréée entre-temps.
+///
+/// Fonction libre, et pas la méthode du manager : `revertLiveActivityToIdle`
+/// tourne aussi dans des contextes où `LiveActivityManager` n'est pas compilé.
+/// Le manager, lui, délègue ici — un seul écrivain, une seule forme.
+@available(iOS 16.2, *)
+func saveLiveActivitySessionSnapshot(_ s: StriveActivityAttributes.ContentState) {
+  let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+    ?? "group.com.striveapp.app"
+  guard let d = UserDefaults(suiteName: appGroupId) else { return }
+  var snap: [String: Any] = [
+    "todayEarnings": s.todayEarnings,
+    "todayHourlyRate": s.todayHourlyRate,
+    "todayKm": s.todayKm,
+    "onlineMinutes": s.onlineMinutes,
+  ]
+  if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
+  d.set(snap, forKey: "laSessionSnapshot")
+}
+
+/// Empile la décision Accepter/Refuser dans l'App Group. Rien d'autre : l'app
+/// vient la chercher (`getPendingRideDecisions`) au moment où elle peut l'écrire
+/// en base, et l'acquitte alors. Supabase reste la source de vérité et corrige
+/// l'optimiste natif affiché sur la carte.
+func appendRideDecision(rideId: String, accepted: Bool, appGroupId: String) {
+  guard !rideId.isEmpty, let defaults = UserDefaults(suiteName: appGroupId) else { return }
   var arr: [[String: Any]] = []
   if let data = defaults.data(forKey: "pendingRideDecisions"),
      let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
     arr = existing
   }
-  arr.append(["scanTs": scanTs, "status": accepted ? "ACCEPTED" : "DECLINED"])
+  // Une seule décision par course, la dernière : deux taps successifs sur la
+  // même carte ne doivent pas laisser deux entrées à appliquer dans l'ordre où
+  // elles sortent de la file.
+  arr.removeAll { ($0["rideId"] as? String) == rideId }
+  arr.append(["rideId": rideId, "status": accepted ? "ACCEPTED" : "DECLINED"])
   if let data = try? JSONSerialization.data(withJSONObject: arr) {
     defaults.set(data, forKey: "pendingRideDecisions")
   }
-  let center = CFNotificationCenterGetDarwinNotifyCenter()
-  CFNotificationCenterPostNotification(
-    center,
-    CFNotificationName("com.striveapp.app.rideDecision" as CFString),
-    nil, nil, true
-  )
 }
 
 /// Repasse la Live Activity à l'état de base (résumé de session) en ajoutant
@@ -198,19 +227,29 @@ func appendRideDecision(scanTs: Double, accepted: Bool, appGroupId: String) {
 /// (`sessionStartEpoch`). Met la carte à jour IMMÉDIATEMENT, app fermée incluse —
 /// le petit dashboard du lock screen devient live sans réouverture de l'app.
 @available(iOS 16.2, *)
-func revertLiveActivityToIdle(scanTs: Double, addFare: Double, addKm: Double) async {
+func revertLiveActivityToIdle(rideId: String, addFare: Double, addKm: Double) async {
   for activity in Activity<StriveActivityAttributes>.activities {
     let prev = activity.content.state
-    // Une décision issue d'une ancienne notification ne doit pas effacer la
-    // dernière offre, qui a remplacé son affichage dans l'île.
+    // On n'écarte QUE ce que la garde doit protéger : une AUTRE offre, qui a
+    // déjà remplacé l'affichage et ne doit pas être effacée par une décision
+    // portant sur la précédente. La carte n'en montre qu'une à la fois, et la
+    // plus récente écrase toujours celle d'avant — un id différent est donc
+    // exactement « une offre plus récente ».
     //
-    // Comparaison À TOLÉRANCE, jamais `==`. `scanTs` vaut
-    // `Date().timeIntervalSince1970`, soit ~17 chiffres significatifs, et il
-    // fait un aller-retour par l'encodage des paramètres d'AppIntent quand le
-    // chauffeur tape le bouton. Un seul chiffre perdu au passage et l'égalité
-    // stricte échouait : la carte restait figée sur le verdict, sans erreur ni
-    // log. La milliseconde suffit très largement à distinguer deux scans.
-    guard scanTsMatches(prev.scanTs, scanTs) else { continue }
+    // Une carte sans `rideId` (idle, ou état pas encore synchronisé quand iOS
+    // lance l'app en arrière-plan pour cet intent) n'a rien à protéger : on
+    // passe. C'était le cas qui laissait la carte figée sur son verdict alors
+    // que la décision partait bien vers le JS — « des fois ça met à jour, des
+    // fois non ».
+    //
+    // Ce qui a disparu avec `scanTs` : une comparaison de `Double` à 17
+    // chiffres significatifs, tolérante à la milliseconde parce que la valeur
+    // se faisait rogner par les encodages successifs (paramètres d'AppIntent,
+    // JSON App Group, `userInfo` de notification). Une chaîne traverse tout
+    // sans perte.
+    if let prevId = prev.rideId, prevId != rideId {
+      continue
+    }
     let newEarnings = prev.todayEarnings + addFare
     let newKm = prev.todayKm + addKm
     var newRate = prev.todayHourlyRate
@@ -226,6 +265,10 @@ func revertLiveActivityToIdle(scanTs: Double, addFare: Double, addKm: Double) as
       onlineMinutes: prev.onlineMinutes,
       sessionStartEpoch: prev.sessionStartEpoch
     )
+    // AVANT l'await : ce process peut être suspendu pendant `activity.update`,
+    // et tout ce qui suit disparaît alors avec lui. Même ordre que dans
+    // `RideDecisionIntent.perform`, pour la même raison.
+    saveLiveActivitySessionSnapshot(idle)
     await activity.update(
       ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
     )

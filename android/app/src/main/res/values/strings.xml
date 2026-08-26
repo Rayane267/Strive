@@ -11,4 +11,8 @@
   <string name="scanner_notif_online">en ligne</string>
   <string name="scanner_ride_accept">✅ Course prise</string>
   <string name="scanner_ride_decline">❌ Refusée</string>
+  <string name="scanner_quota_reached">Quota atteint</string>
+  <!-- Free bloqué : la pastille porte la sortie, et un tap ouvre l\'app. Sans
+       chiffre — la limite Plus vit dans plan_limits, modifiable en base. -->
+  <string name="scanner_quota_reached_free">Quota atteint · Passez à Plus</string>
 </resources>

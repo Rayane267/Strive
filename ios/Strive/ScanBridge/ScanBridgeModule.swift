@@ -62,7 +62,7 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onRideDecision", "onScanFailure"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onScanFailure"]
   }
 
   static let rideDecisionsKey = "pendingRideDecisions"
@@ -76,7 +76,6 @@ class ScanBridgeModule: RCTEventEmitter {
     // était tuée a pu rater la notification Darwin. Dès que le JS s'abonne, on
     // flush ce qui est en attente dans l'App Group (garde timestamp anti-doublon).
     handleShareExtensionResult()
-    drainAndEmitRideDecisions()
     drainAndEmitScanFailures()
   }
 
@@ -102,23 +101,6 @@ class ScanBridgeModule: RCTEventEmitter {
         }
       },
       "com.striveapp.app.scanResult" as CFString,
-      nil,
-      .deliverImmediately
-    )
-
-    // Décisions Accepter/Refuser tapées sur la notif de scan (AppDelegate les
-    // empile dans l'App Group puis poste cette notification Darwin).
-    CFNotificationCenterAddObserver(
-      center,
-      observer,
-      { _, observer, _, _, _ in
-        guard let observer = observer else { return }
-        let module = Unmanaged<ScanBridgeModule>.fromOpaque(observer).takeUnretainedValue()
-        DispatchQueue.main.async {
-          module.drainAndEmitRideDecisions()
-        }
-      },
-      "com.striveapp.app.rideDecision" as CFString,
       nil,
       .deliverImmediately
     )
@@ -150,7 +132,6 @@ class ScanBridgeModule: RCTEventEmitter {
     // résultats en attente à chaque retour au premier plan, que startScanner()
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
-    drainAndEmitRideDecisions()
     drainAndEmitScanFailures()
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
@@ -164,7 +145,7 @@ class ScanBridgeModule: RCTEventEmitter {
           distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
           durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
           verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
-          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
+          rideId: (payload["rideId"] as? String) ?? ""
         )
       }
     }
@@ -213,12 +194,18 @@ class ScanBridgeModule: RCTEventEmitter {
 
     guard !queued.isEmpty else { return }
 
-    // `qid` : clé d'accusé de réception. Attribuée ici (et non à l'écriture) pour
-    // que l'AppIntent et la Share Extension n'aient pas à la connaître. On
-    // PERSISTE avant d'émettre — sans ça un ack porterait sur un qid inconnu.
-    // `scanTs` ne peut pas servir de clé : il vaut 0 sur les chemins anciens.
-    for i in queued.indices where queued[i]["qid"] == nil {
-      queued[i]["qid"] = UUID().uuidString
+    // `rideId` est normalement frappé AU SCAN, par le process qui a analysé
+    // l'écran — c'est ce qui en fait l'identité de la course, et pas seulement
+    // une clé de file. Le rattrapage ci-dessous ne concerne que les entrées
+    // héritées, écrites par un build antérieur et pas encore relevées : sans id
+    // elles ne pourraient jamais être acquittées, donc seraient rejouées sans
+    // fin. Un id attribué ici peut désigner une course DÉJÀ écrite en base sous
+    // un autre id (RideUploader) ; l'index unique sur `scan_ts` écarte alors
+    // l'insertion, que `createRide` traite comme un succès.
+    //
+    // On PERSISTE avant d'émettre — sans ça un ack porterait sur un id inconnu.
+    for i in queued.indices where queued[i]["rideId"] == nil {
+      queued[i]["rideId"] = UUID().uuidString
     }
     persistPendingResults(queued, defaults)
 
@@ -240,31 +227,41 @@ class ScanBridgeModule: RCTEventEmitter {
   /// Accusé de réception : la course est en base (ou définitivement refusée).
   /// Seul mécanisme qui retire une entrée du journal — il n'y a plus de
   /// suppression au bout de N tentatives, donc plus de course perdue en silence.
-  @objc func ackScan(_ qid: String) {
-    guard !qid.isEmpty, let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+  @objc func ackScan(_ rideId: String) {
+    guard !rideId.isEmpty, let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
     guard let data = defaults.data(forKey: Self.pendingResultsKey),
           let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     else { return }
-    persistPendingResults(queued.filter { ($0["qid"] as? String) != qid }, defaults)
+    persistPendingResults(queued.filter { ($0["rideId"] as? String) != rideId }, defaults)
   }
 
-  /// Rejoue les décisions Accepter/Refuser en attente, à la demande du JS.
+  /// Les décisions Prise/Refusée en attente, telles quelles.
   ///
-  /// Nécessaire parce que `drainAndEmitRideDecisions()` PURGE la clé App Group
-  /// avant d'émettre : l'événement part vers le pont, et si aucun handler
-  /// `onRideDecision` n'est encore attaché à cet instant, la décision est perdue
-  /// définitivement — la course reste « en attente de décision » alors que le
-  /// chauffeur a bien tapé le bouton.
+  /// LECTURE PURE : rien n'est émis, rien n'est effacé. Le JS les demande quand
+  /// il est prêt — session ouverte, liste des courses chargée — les applique,
+  /// puis retire chacune par `ackRideDecision`.
   ///
-  /// Le cas se produit parce que `hasListeners` passe à `true` dès le PREMIER
-  /// listener du module, quel que soit l'événement : `appDidBecomeActive()` peut
-  /// donc draîner avant que le Dashboard n'ait posé le sien, qui arrive dans son
-  /// propre `useEffect`. D'où le « des fois ».
-  ///
-  /// Android expose déjà exactement ça (`ScanBridgeModule.kt:292`) et son bridge
-  /// JS s'abonne PUIS draine. iOS n'avait pas l'équivalent.
-  @objc func drainRideDecisions() {
-    drainAndEmitRideDecisions()
+  /// C'est ce qui a remplacé l'émission d'événements. Un événement arrive quand
+  /// le natif le décide, c'est-à-dire souvent avant que le JS puisse s'en
+  /// servir : il fallait alors un tampon côté JS, un accusé de réception pour ne
+  /// pas le perdre, et des relances pour le rejouer. Quatre mécanismes pour
+  /// compenser un seul problème de calendrier. En laissant le JS venir chercher,
+  /// le problème n'existe plus.
+  @objc func getPendingRideDecisions(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+          let data = defaults.data(forKey: Self.rideDecisionsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { resolve([]); return }
+    let out = arr.compactMap { d -> [String: Any]? in
+      guard let rideId = d["rideId"] as? String, !rideId.isEmpty,
+            let status = d["status"] as? String,
+            status == "ACCEPTED" || status == "DECLINED" else { return nil }
+      return ["rideId": rideId, "status": status]
+    }
+    resolve(out)
   }
 
   /// Émet un résultat vers le JS et, si demandé, rafraîchit la Live Activity.
@@ -315,7 +312,7 @@ class ScanBridgeModule: RCTEventEmitter {
           distanceKm: distKm,
           durationMin: durMin,
           verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
-          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
+          rideId: (payload["rideId"] as? String) ?? ""
         )
       }
 
@@ -327,21 +324,39 @@ class ScanBridgeModule: RCTEventEmitter {
     sendEvent(withName: "onScanResult", body: result)
   }
 
-  /// Vide la file des décisions Accepter/Refuser (App Group) et les émet au JS,
-  /// qui les applique à la course correspondante (par scanTs). No-op si le JS
-  /// n'écoute pas encore — startObserving() rappelle ce drain à l'abonnement.
-  func drainAndEmitRideDecisions() {
-    guard hasListeners else { return }
-    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+  /// Empile une décision prise DANS l'app, quand son écriture en base n'a pas
+  /// abouti — le plus souvent parce que la course n'y est pas encore : elle a
+  /// été scannée app suspendue, et le journal natif ne l'a pas encore fait
+  /// insérer. Sans ça, ce choix-là était le seul à ne pas être conservé, alors
+  /// que ceux tapés sur la carte ou la notification vivent dans cette file
+  /// jusqu'à ce qu'ils aboutissent.
+  ///
+  /// Même helper, même format, même dédoublonnage sur `rideId` que les boutons
+  /// de la Live Activity : le prochain drain la rejoue, et l'acquitte au succès.
+  @objc func queueRideDecision(_ rideId: String, accepted: Bool) {
+    guard !rideId.isEmpty else { return }
+    appendRideDecision(rideId: rideId, accepted: accepted, appGroupId: Self.appGroupId)
+  }
+
+  /// Accusé de réception d'une décision : le statut est écrit en base, l'entrée
+  /// peut sortir de la file. Seul mécanisme qui l'en retire.
+  ///
+  /// Une décision non acquittée sera ré-émise au prochain retour au premier plan
+  /// — c'est voulu : mieux vaut la rejouer que la perdre.
+  @objc func ackRideDecision(_ rideId: String) {
+    guard !rideId.isEmpty,
+          let defaults = UserDefaults(suiteName: Self.appGroupId),
           let data = defaults.data(forKey: Self.rideDecisionsKey),
-          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-          !arr.isEmpty else { return }
-    defaults.removeObject(forKey: Self.rideDecisionsKey)
-    for d in arr {
-      guard let ts = (d["scanTs"] as? NSNumber)?.doubleValue, ts > 0,
-            let status = d["status"] as? String,
-            status == "ACCEPTED" || status == "DECLINED" else { continue }
-      sendEvent(withName: "onRideDecision", body: ["scanTs": ts, "status": status])
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return }
+    // Comparaison stricte, enfin : une chaîne traverse le pont React Native sans
+    // se faire rogner, là où l'ancien `scanTs` (un `Double` à 17 chiffres)
+    // imposait une tolérance à la milliseconde.
+    let kept = arr.filter { ($0["rideId"] as? String) != rideId }
+    if kept.isEmpty {
+      defaults.removeObject(forKey: Self.rideDecisionsKey)
+    } else if let out = try? JSONSerialization.data(withJSONObject: kept) {
+      defaults.set(out, forKey: Self.rideDecisionsKey)
     }
   }
 
@@ -513,21 +528,42 @@ class ScanBridgeModule: RCTEventEmitter {
     // besoin pour situer la frontière de journée (0h ou 4h).
     defaults.set(resetHour.intValue, forKey: "quotaResetHour")
 
-    // Réconciliation NON destructive : un scan fait dans la Share Extension
-    // (app fermée) n'insère pas de ride en DB tant que l'app n'est pas rouverte
-    // → `countToday` (compte DB) SOUS-ESTIME les scans réels du jour. Si on
-    // écrasait bêtement, on rabaisserait le compteur natif → quota rendu à tort.
-    // Donc : même jour → on garde le max(natif, DB) ; nouveau jour → on fait
-    // confiance au compte DB (reset).
+    // Réconciliation. Le natif compte les résultats PRÉSENTÉS, le JS compte les
+    // courses présentes en base — et entre les deux il y a le journal
+    // `pendingScanResults`, qui retient un scan tant que l'app ne l'a pas inséré
+    // puis acquitté. Les deux nombres divergent donc légitimement.
+    //
+    // C'est le JOURNAL qui dit lequel fait autorité :
+    //
+    //  • journal NON VIDE → des scans attendent leur insertion, le compte DB
+    //    sous-estime. On garde `max(natif, DB)`, sinon on rendrait des scans
+    //    indûment à un chauffeur qui a scanné app fermée.
+    //
+    //  • journal VIDE → plus rien en attente, la base sait tout, elle fait foi.
+    //    Sans cette branche le `max` était un cliquet : une fois le compteur
+    //    natif monté, aucune valeur JS ne pouvait le redescendre avant le reset
+    //    du lendemain. Le chauffeur lisait « 0/3 » sur son Dashboard pendant que
+    //    le scan était refusé pour quota atteint — c'est exactement ce bug.
     let today = Self.currentQuotaDay(defaults)
     let storedDay = defaults.integer(forKey: "scanCountDay")
-    if storedDay != today {
+    let hasPending = !Self.pendingScanResults(defaults).isEmpty
+
+    if storedDay != today || !hasPending {
       defaults.set(today, forKey: "scanCountDay")
       defaults.set(countToday.intValue, forKey: "scanCountToday")
     } else {
       let current = defaults.integer(forKey: "scanCountToday")
       defaults.set(max(current, countToday.intValue), forKey: "scanCountToday")
     }
+  }
+
+  /// Scans en attente d'insertion en base. Lecture seule : c'est `ackScan` qui
+  /// retire une entrée, et lui seul.
+  private static func pendingScanResults(_ d: UserDefaults) -> [[String: Any]] {
+    guard let data = d.data(forKey: pendingResultsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return [] }
+    return arr
   }
 
   /// Active/désactive le scanner (toggle "Trip ID actif", iOS). Lu par la Share
@@ -549,9 +585,9 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
-  @objc func clearLiveActivityResult(_ scanTs: NSNumber) {
+  @objc func clearLiveActivityResult(_ rideId: String) {
     if #available(iOS 16.2, *) {
-      LiveActivityManager.shared.clearResult(scanTs: scanTs.doubleValue)
+      LiveActivityManager.shared.clearResult(rideId: rideId)
     }
   }
 

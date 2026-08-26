@@ -21,6 +21,16 @@ export interface Profile {
   subscription_expires_at?: string | null;   // ISO timestamptz
   subscription_product_id?: string | null;
   extra_scan_credits: number;
+  /** Scans consommés dans la journée de travail en cours. Écrit UNIQUEMENT par
+   *  le trigger `check_scan_quota`, et en lecture seule côté client — c'est la
+   *  valeur sur laquelle le serveur applique le quota, donc celle que l'écran
+   *  doit afficher. */
+  daily_scans_count?: number | null;
+  /** Borne de la journée à laquelle se rapporte `daily_scans_count` (TZ du
+   *  chauffeur + `day_reset_hour`). Si elle est antérieure au début de la
+   *  journée courante, le compteur est périmé et vaut 0 — c'est ce qui remplace
+   *  une remise à zéro planifiée. */
+  daily_scans_day?: string | null;   // ISO timestamptz
   /** Fuseau IANA du téléphone (ex. "Europe/Paris") — sert au reset du quota à
    *  minuit local. Synchronisé depuis le Dashboard, uniquement s'il a changé. */
   timezone?: string | null;

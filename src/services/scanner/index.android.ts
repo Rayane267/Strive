@@ -46,7 +46,22 @@ export const scannerService: ScannerService = {
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
-  ackScan: (qid: string) => ScanBridge.ackScan?.(qid),
+  ackScan: (rideId: string) => ScanBridge.ackScan?.(rideId),
+
+  getPendingRideDecisions: async () => {
+    try {
+      return (await ScanBridge.getPendingRideDecisions?.()) ?? [];
+    } catch {
+      return [];
+    }
+  },
+  ackRideDecision: (rideId: string) => ScanBridge.ackRideDecision?.(rideId),
+  queueRideDecision: (rideId: string, status: 'ACCEPTED' | 'DECLINED') =>
+    ScanBridge.queueRideDecision?.(rideId, status === 'ACCEPTED'),
+  // Retire la notification de résultat quand la décision a été prise dans
+  // l'app : elle restait sinon affichée avec ses boutons, sur une course déjà
+  // tranchée. Pendant de `clearLiveActivityResult` côté iOS.
+  clearRideResult: (rideId: string) => ScanBridge.clearRideResult?.(rideId),
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
   setScannerEnabled: () => {},
 
@@ -58,7 +73,7 @@ export const scannerService: ScannerService = {
 
   requestMediaProjectionPermission: () => ScanBridge.requestMediaProjectionPermission(),
 
-  // Même schéma que onRideDecision : on s'abonne PUIS on draine le buffer natif
+  // On s'abonne PUIS on draine le buffer natif
   // (scans effectués par la bulle pendant que le process RN était mort) → ils
   // atteignent le listener fraîchement posé au lieu d'être perdus.
   onScanResult: (cb: (result: ScanResult) => void) => {
@@ -81,11 +96,6 @@ export const scannerService: ScannerService = {
   // Décisions Accepter/Refuser tapées sur la notification de résultat. On
   // s'abonne PUIS on draine le buffer natif (décisions prises pendant que le JS
   // n'écoutait pas / process mort) → elles atteignent le listener fraîchement posé.
-  onRideDecision: (cb: (decision: { scanTs: number; status: 'ACCEPTED' | 'DECLINED' }) => void) => {
-    const sub = emitter.addListener('onRideDecision', cb);
-    ScanBridge.drainRideDecisions?.();
-    return sub;
-  },
 
   onPermissionDenied: (cb: () => void) =>
     emitter.addListener('onPermissionDenied', cb),

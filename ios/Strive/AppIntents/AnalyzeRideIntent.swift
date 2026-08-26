@@ -129,9 +129,33 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     }
 
     guard !isQuotaReached else {
+      // Un free a une porte de sortie qui existe, elle : l'abonnement. On la lui
+      // montre au seul moment où elle est vraie ET utile — il vient de buter sur
+      // sa limite, sur une course qu'il ne pourra pas évaluer.
+      //
+      // Toujours pas de mention des CRÉDITS, en revanche : la boutique n'est pas
+      // ouverte (`shop.comingSoonSub` — « la boutique de crédits sera bientôt
+      // accessible »). Renvoyer vers un achat impossible depuis une
+      // notification, c'est promettre une porte qui n'existe pas.
+      //
+      // Et pas de chiffre : ce process ne connaît que la limite du tier COURANT
+      // (`scanQuotaLimit`), pas celle de Plus, et `plan_limits` est modifiable en
+      // base. Annoncer « 15 » d'ici, c'est risquer d'annoncer faux. La
+      // notification côté app, elle, a la vraie valeur et la donne.
+      let isFree = (UserDefaults(suiteName: appGroupId)?.object(forKey: "isFreeTier") as? Bool) ?? true
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.quota", fr: "Quota journalier atteint — revenez demain ou achetez des crédits.", en: "Daily quota reached — come back tomorrow or buy credits.")
+        body: isFree
+          ? localizedString(
+              "notif.quotaFree",
+              fr: "Quota journalier atteint — passez à Plus pour continuer à scanner aujourd'hui.",
+              en: "Daily quota reached — go Plus to keep scanning today."
+            )
+          : localizedString(
+              "notif.quota",
+              fr: "Quota journalier atteint — revenez demain.",
+              en: "Daily quota reached — come back tomorrow."
+            )
       )
       logFailure("quota_reached")
       return .result(value: "quota_reached")
@@ -252,7 +276,13 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   }
 
   /// Affiche le résultat (Live Activity ou notif) + l'enregistre pour l'app.
-  /// scanTs : clé de corrélation course ↔ décision (lastScanTimestamp + userInfo).
+  ///
+  /// `rideId` est frappé ICI, avant tout affichage et toute écriture : c'est
+  /// l'identité de la course. Il part avec la carte (boutons Prise/Refusée),
+  /// avec la notification de repli (`userInfo`), dans le journal App Group, et
+  /// jusqu'à `rides.id`. Une seule valeur pour tout le trajet — c'est ce qui
+  /// permet à un tap sur le lock screen de désigner la course sans que rien
+  /// n'ait à la retrouver. `scanTs`, lui, ne fait plus que la dater.
   ///
   /// `done` est appelé quand TOUT est écrit, écriture en base comprise : c'est ce
   /// qui maintient le process en vie le temps de la requête. Aucun thread n'est
@@ -265,6 +295,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // Verrou anti double-appui libéré dès qu'on a un résultat à montrer.
     ScanProcessor.markScanFinished()
     let scanTs = Date().timeIntervalSince1970
+    let rideId = UUID().uuidString
     // liveActivityReady (et pas useLiveActivity) : si la LA est coupée dans les
     // réglages, on tombe sur la notification résultat (avec Accepter/Refuser)
     // au lieu d'un affichage qui échouerait en silence.
@@ -279,7 +310,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         platform: result.scan.platform.rawValue, fare: result.displayFare,
         hourlyRate: result.hourlyRate, kmRate: result.kmRate,
         distanceKm: result.totalDistanceKm, durationMin: result.totalDurationMin,
-        verdictLevel: result.verdictLevel, scanTs: scanTs
+        verdictLevel: result.verdictLevel, rideId: rideId
       )
     }
     if !shown {
@@ -294,8 +325,20 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       // Les confondre remplissait `scan_failures` de faux positifs et masquait
       // les (b). Pas de motif dédié au cas (a) : le vocabulaire de `log_scan_failure`
       // est fermé, tout motif inconnu retombe sur 'other' et brouille les agrégats.
-      if liveActivityReady, !Activity<StriveActivityAttributes>.activities.isEmpty {
-        logFailure("la_start_failed")
+      //
+      // Le cas (a) est désormais tracé LUI AUSSI, sous le même motif mais avec un
+      // `detail` qui l'en distingue. Raison : on n'atteint cette ligne que si la
+      // session est en ligne (garde de `perform`), et une session en ligne SANS
+      // carte n'est pas si anodine — c'est la signature du process relancé à
+      // froid, que `waitForLiveActivity` vient couvrir. Sans cette trace, ce cas
+      // n'apparaissait nulle part : ni carte, ni ligne en base.
+      if liveActivityReady {
+        logFailure(
+          "la_start_failed",
+          detail: Activity<StriveActivityAttributes>.activities.isEmpty
+            ? "no_card_session_online"
+            : "update_refused"
+        )
       }
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
       var body = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
@@ -313,7 +356,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       sendLocalNotification(
         title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
         body: body,
-        category: "STRIVE_SCAN_RESULT", scanTs: scanTs,
+        category: "STRIVE_SCAN_RESULT", rideId: rideId,
         // Le repli notification est justement le chemin emprunté quand la carte
         // n'a rien pu afficher : s'il est silencé par la Concentration, le
         // chauffeur ne reçoit alors STRICTEMENT rien de son scan.
@@ -326,7 +369,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
       result.scan.platform.rawValue, result.scan.fare, result.hourlyRate, result.kmRate
     )
-    saveResultForMainApp(result, scanTs: scanTs) { done(summary) }
+    saveResultForMainApp(result, rideId: rideId, scanTs: scanTs) { done(summary) }
   }
 
   /// « Scan échoué » : affiché DANS la Live Activity (ou notif si LA désactivée).
@@ -495,6 +538,10 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // normalement, puis `enforce_scan_quota` refusait l'insertion, la course
     // partait en file offline et finissait jetée après MAX_RETRY_COUNT.
     // `isFreeTier` ne sert qu'à choisir le message (teaser Plus vs « demain »).
+    //
+    // `scanQuotaLimit` est la limite EFFECTIVE poussée par le JS : celle du plan
+    // PLUS les crédits achetés. Ce calcul ne connaît pas les crédits, et sans
+    // eux il bloquait un chauffeur qui venait d'en acheter.
     let limit = d.integer(forKey: "scanQuotaLimit")
     if limit <= 0 { return false }   // -1 = premium (illimité)
     return Self.scanCountForToday(d) >= limit
@@ -549,7 +596,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     title: String,
     body: String,
     category: String? = nil,
-    scanTs: Double? = nil,
+    rideId: String? = nil,
     code: ScanErrorCode? = nil,
     level: UNNotificationInterruptionLevel = .active
   ) {
@@ -559,9 +606,10 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     content.sound = .default
     content.interruptionLevel = level
     // Boutons Accepter/Refuser : la catégorie STRIVE_SCAN_RESULT est enregistrée
-    // par l'app principale (AppDelegate). scanTs corrèle la décision à la course.
+    // par l'app principale (AppDelegate). `rideId` DÉSIGNE la course — il n'y a
+    // plus rien à corréler à la réception.
     if let category = category { content.categoryIdentifier = category }
-    if let scanTs = scanTs { content.userInfo = ["scanTs": scanTs] }
+    if let rideId = rideId { content.userInfo = ["rideId": rideId] }
     let request = UNNotificationRequest(identifier: "strive-scan-\(UUID().uuidString)", content: content, trigger: nil)
     UNUserNotificationCenter.current().add(request)
   }
@@ -645,6 +693,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// dépôt dans l'App Group, lui, est fait immédiatement et sans condition.
   private func saveResultForMainApp(
     _ result: ScanProcessor.FinalResult,
+    rideId: String,
     scanTs: Double,
     done: @escaping () -> Void
   ) {
@@ -661,6 +710,9 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       "kmRate": result.kmRate,
       "verdictLevel": result.verdictLevel,
       "scanTs": scanTs,
+      // Identité de la course. Portée par le payload lui-même : dans la file,
+      // chaque entrée doit être auto-suffisante.
+      "rideId": rideId,
       // Tarif d'AFFICHAGE (net de carburant si l'option est active). `fare`
       // reste brut : c'est lui qui est enregistré en base.
       "displayFare": result.displayFare,
@@ -685,7 +737,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // (cf. lastScannedFareKm). Montant affiché (net de carburant si l'option est
     // active) pour rester cohérent avec ce que la carte montre.
     defaults.set(
-      ["scanTs": scanTs, "fare": result.displayFare, "km": result.totalDistanceKm],
+      ["rideId": rideId, "fare": result.displayFare, "km": result.totalDistanceKm],
       forKey: "lastTaggableRide"
     )
 
@@ -705,14 +757,14 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // est fait. Elle retourne tout de suite : le transfert est confié au démon
     // système et survit à la fin de l'intent. Si elle échoue (ou n'a pas de
     // credential valide), le drain de l'outbox rattrape à l'ouverture de l'app.
-    RideUploader.upload(result, scanTs: scanTs)
+    RideUploader.upload(result, rideId: rideId, scanTs: scanTs)
     done()
   }
 }
 
 // MARK: - Commandes vocales « course prise / refusée » (Siri, mains libres)
 
-/// Écrit la décision pour la DERNIÈRE course scannée (`lastScanTimestamp`) dans
+/// Écrit la décision pour la DERNIÈRE course scannée (`lastTaggableRide`) dans
 /// l'App Group, prévient l'app (Darwin) pour la réconciliation JS, et fait
 /// disparaître la carte résultat de la Live Activity. Mains libres → la seule
 /// interaction réellement sûre en conduisant. Retourne false si aucune course récente.
@@ -730,21 +782,26 @@ private func tagLastScannedRide(accepted: Bool) async -> Bool {
   let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
     ?? "group.com.striveapp.app"
   guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
-  // `lastTaggableRide` d'abord : `lastScanTimestamp` est purgé par le drain de
-  // l'app (handleShareExtensionResult), si bien qu'après une simple ouverture de
-  // Strive, Siri répondait « aucune course récente à marquer » sur une course
-  // tout juste scannée. La clé jumelle, elle, survit à la relève.
-  let scanTs = (defaults.dictionary(forKey: "lastTaggableRide")?["scanTs"] as? NSNumber)?.doubleValue
-    ?? defaults.double(forKey: "lastScanTimestamp")
-  guard scanTs > 0 else { return false }
+  // `lastTaggableRide` et pas la file des scans : celle-ci est vidée entrée par
+  // entrée dès que la course est en base, si bien qu'après une simple ouverture
+  // de Strive, Siri répondait « aucune course récente à marquer » sur une course
+  // tout juste scannée. Cette clé, elle, survit à la relève — elle n'est
+  // réécrite qu'au scan suivant.
+  guard let rideId = defaults.dictionary(forKey: "lastTaggableRide")?["rideId"] as? String,
+        !rideId.isEmpty
+  else { return false }
+
+  // Persistance AVANT l'await, même raison que dans `RideDecisionIntent` : ce
+  // process peut être suspendu pendant `activity.update`, et ce qui suit l'await
+  // ne s'exécute alors jamais. La décision passe donc en premier.
+  appendRideDecision(rideId: rideId, accepted: accepted, appGroupId: appGroupId)
 
   // Incrément KPI du jour + retour à l'état de base, IMMÉDIAT et sans JS
   // (helpers partagés avec le bouton Live Activity).
   if #available(iOS 16.2, *) {
     let add = accepted ? lastScannedFareKm(appGroupId: appGroupId) : (fare: 0.0, km: 0.0)
-    await revertLiveActivityToIdle(scanTs: scanTs, addFare: add.fare, addKm: add.km)
+    await revertLiveActivityToIdle(rideId: rideId, addFare: add.fare, addKm: add.km)
   }
-  appendRideDecision(scanTs: scanTs, accepted: accepted, appGroupId: appGroupId)
   return true
 }
 

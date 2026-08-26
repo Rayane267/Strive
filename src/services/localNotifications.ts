@@ -115,7 +115,17 @@ export async function scheduleQuotaResetNotification(resetHour: number) {
   } catch {}
 }
 
-export function notifyQuotaReached(resetHour: number) {
+/**
+ * @param isFree      Le chauffeur est-il sur le tier gratuit ? Si oui, le message
+ *                    porte la proposition de passage à Plus — c'est le seul
+ *                    moment où elle est vraie ET utile : il vient de buter sur
+ *                    la limite, sur une course qu'il ne pourra pas évaluer.
+ * @param plusScans   Scans/jour du tier Plus, lu depuis `plan_limits` par
+ *                    l'appelant. Jamais codé en dur : la limite est modifiable
+ *                    en base, et un message qui annonce le mauvais chiffre est
+ *                    pire que pas de message du tout.
+ */
+export function notifyQuotaReached(resetHour: number, isFree = false, plusScans?: number | null) {
   const now = new Date();
   const reset = new Date();
   reset.setHours(resetHour, 0, 0, 0);
@@ -126,10 +136,20 @@ export function notifyQuotaReached(resetHour: number) {
   const mins = Math.floor((diffMs % 3600_000) / 60_000);
   const timeStr = hours > 0 ? `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}` : `${mins}min`;
 
+  // Repli sur le message neutre si la limite Plus est inconnue (cache runtime pas
+  // encore chargé) : mieux vaut ne rien promettre qu'annoncer un chiffre faux.
+  const body = isFree && plusScans
+    // `scans` et surtout pas `count` : i18next réserve `count` à la
+    // pluralisation. Il chercherait `bodyFree_one` / `bodyFree_other`, et ne
+    // retomberait sur la clé de base que faute de les trouver — le jour où une
+    // forme plurielle est ajoutée, le message change tout seul.
+    ? i18n.t('notifications.quotaReached.bodyFree', { time: timeStr, scans: plusScans })
+    : i18n.t('notifications.quotaReached.body', { time: timeStr });
+
   scheduleNative(
     'quota-reached',
     i18n.t('notifications.quotaReached.title'),
-    i18n.t('notifications.quotaReached.body', { time: timeStr }),
+    body,
     0,
   );
 }

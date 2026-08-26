@@ -741,10 +741,17 @@ class ShareViewController: UIViewController {
       body["screenHeight"] = ScanProcessor.shared.lastScreenHeight
     }
 
-    // scanTs porté par le payload lui-même : dans la file, chaque entrée doit
-    // être auto-suffisante (la clé timestamp globale ne vaut que pour la dernière).
+    // Portés par le payload lui-même : dans la file, chaque entrée doit être
+    // auto-suffisante (la clé timestamp globale ne vaut que pour la dernière).
+    //
+    // `rideId` est frappé ICI, avant toute écriture : c'est l'identité de la
+    // course, de la file App Group jusqu'à `rides.id`, en passant par les
+    // boutons Prise/Refusée. `scanTs` ne fait plus que la dater — jour
+    // d'affectation et registre de quota.
     let scanTs = Date().timeIntervalSince1970
+    let rideId = UUID().uuidString
     body["scanTs"] = scanTs
+    body["rideId"] = rideId
     enqueueScanResult(body, defaults: defaults)
     rescheduleInactivityReminder(defaults: defaults)
 
@@ -752,14 +759,15 @@ class ShareViewController: UIViewController {
     // transfert même si le chauffeur referme le panneau dans la seconde, et
     // attend le réseau au lieu d'abandonner. L'outbox ci-dessus reste écrite
     // d'abord et reste LA garantie — cet envoi ne fait que raccourcir le délai,
-    // et son échec est sans conséquence (le drain rattrape, l'index unique sur
-    // `scan_ts` interdit le doublon).
-    RideUploader.upload(final, scanTs: scanTs)
+    // et son échec est sans conséquence : le drain rattrape, et il réinsère la
+    // MÊME course (même `id`), écartée sur la clé primaire.
+    RideUploader.upload(final, rideId: rideId, scanTs: scanTs)
 
     // Jumelle minimale que le drain de l'app NE purge PAS — source de l'incrément
-    // KPI natif du bouton ✅ / des commandes Siri (cf. lastScannedFareKm).
+    // KPI natif du bouton ✅ et de la course visée par les commandes Siri
+    // (cf. lastScannedFareKm, tagLastScannedRide).
     defaults.set(
-      ["scanTs": scanTs, "fare": final.displayFare, "km": final.totalDistanceKm],
+      ["rideId": rideId, "fare": final.displayFare, "km": final.totalDistanceKm],
       forKey: "lastTaggableRide"
     )
 
@@ -884,12 +892,26 @@ class ShareViewController: UIViewController {
 
   /// Quota appliqué côté natif : le JS pousse le compteur réel (`scanCountToday`)
   /// + la limite ; le natif incrémente entre deux syncs. Indépendant du JS.
+  ///
+  /// Le compteur vaut pour TOUS les tiers : `plan_limits` donne free = 3 ET
+  /// plus = 15. Exempter les non-free — ce que faisait ce test — laissait un
+  /// abonné Plus franchir sa limite app fermée : chaque scan au-delà s'affichait
+  /// normalement, consommait Gemini et TomTom, puis se faisait refuser
+  /// l'insertion par `check_scan_quota`. Le chauffeur recevait une erreur au
+  /// lieu du « Quota atteint » qui lui aurait épargné le scan.
+  ///
+  /// `isFreeTier` ne sert qu'à choisir le MESSAGE (teaser Plus vs « reviens
+  /// demain »), et c'est `showQuotaReached()` qui s'en charge. Doit rester
+  /// aligné avec AnalyzeRideIntent.isScanQuotaReached et, côté Android, avec
+  /// FloatingBubbleService (`quotaByCount`), qui ne testent ni l'un ni l'autre
+  /// le tier.
+  ///
+  /// `scanQuotaLimit` est la limite EFFECTIVE : celle du plan PLUS les crédits
+  /// achetés. Ce calcul ne connaît pas les crédits, c'est le JS qui les intègre.
   private func isScanQuotaReached() -> Bool {
     guard let d = UserDefaults(suiteName: Self.appGroupId) else { return false }
-    let isFree = (d.object(forKey: "isFreeTier") as? Bool) ?? true
-    if !isFree { return false }
     let limit = d.integer(forKey: "scanQuotaLimit")
-    if limit <= 0 { return false }   // limite inconnue / illimitée → on ne bloque pas
+    if limit <= 0 { return false }   // -1 = premium (illimité) / limite inconnue
     return Self.scanCountForToday(d) >= limit
   }
 

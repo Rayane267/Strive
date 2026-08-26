@@ -37,16 +37,25 @@ RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
                   resetHour:(nonnull NSNumber *)resetHour)
 
 // Accusé de réception d'un scan : retire l'entrée du journal une fois la course
-// écrite en base. Sans lui, l'entrée est rejouée à chaque relève.
-RCT_EXTERN_METHOD(ackScan:(NSString *)qid)
+// écrite en base. Sans lui, l'entrée est rejouée à chaque relève. `rideId` est
+// l'identité frappée au scan — la même clé partout, jusqu'à `rides.id`.
+RCT_EXTERN_METHOD(ackScan:(NSString *)rideId)
 
-RCT_EXTERN_METHOD(drainRideDecisions)
+RCT_EXTERN_METHOD(getPendingRideDecisions:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(ackRideDecision:(NSString *)rideId)
+
+// Décision prise dans l'app dont l'écriture a échoué : elle rejoint la file, au
+// même titre que celles tapées sur la carte ou la notification.
+RCT_EXTERN_METHOD(queueRideDecision:(NSString *)rideId
+                  accepted:(BOOL)accepted)
 
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 
 RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
 
-RCT_EXTERN_METHOD(clearLiveActivityResult:(nonnull NSNumber *)scanTs)
+RCT_EXTERN_METHOD(clearLiveActivityResult:(NSString *)rideId)
 
 RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 

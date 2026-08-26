@@ -27,7 +27,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
 import { supabase } from '../services/supabase';
-import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare, fetchRideIdByScanTs } from '../services/ridesService';
+import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
 import { computeWeeklyTease, WeeklyTease } from '../utils/weeklyTease';
 import { fetchParserConfig } from '../services/parserConfigService';
 import { useTranslation } from 'react-i18next';
@@ -133,6 +133,39 @@ async function fetchLastRideTs(userId: string, sinceIso: string): Promise<number
   return data?.created_at ? new Date(data.created_at).getTime() : null;
 }
 
+type LocalDecision = { status: 'ACCEPTED' | 'DECLINED'; at: number };
+
+// Durée de vie d'une décision locale. Large : elle ne sert qu'à couvrir le vol
+// d'une lecture, mais une course hors de la fenêtre du jour ne viendrait jamais
+// la périmer, et une entrée immortelle finirait par forcer un statut sur une
+// course modifiée ailleurs (autre appareil, Historique).
+const LOCAL_DECISION_TTL_MS = 5 * 60_000;
+
+/**
+ * Recouvre une liste lue en base par les décisions DÉJÀ écrites localement.
+ *
+ * Une lecture partie AVANT l'écriture rend la course encore « En attente », et
+ * atterrit après : elle ressuscitait la course que le chauffeur venait de
+ * trancher — d'où « je valide, l'app la remet en attente, et il faut tirer pour
+ * rafraîchir ». Le cas est la norme au retour au premier plan, où `fetchData` et
+ * le drain des décisions partent ensemble.
+ *
+ * Le calque se vide tout seul : dès que la base renvoie le même statut, l'entrée
+ * n'a plus de raison d'être.
+ */
+function overlayLocalDecisions(list: Ride[], local: Map<string, LocalDecision>): Ride[] {
+  if (local.size === 0) return list;
+  const cutoff = Date.now() - LOCAL_DECISION_TTL_MS;
+  for (const [id, d] of local) if (d.at < cutoff) local.delete(id);
+  if (local.size === 0) return list;
+  return list.map(r => {
+    const d = local.get(r.id);
+    if (!d) return r;
+    if (r.status === d.status) { local.delete(r.id); return r; }
+    return { ...r, status: d.status };
+  });
+}
+
 // Sécurité « session oubliée » (cf. effet de restauration) : bornes appliquées
 // quand une session ouverte est retrouvée à l'ouverture de l'app (les timers JS
 // ne tournent pas app fermée). Sans activité depuis ce délai → abandonnée ;
@@ -164,9 +197,11 @@ const DashboardScreen = () => {
     : t('tier.freeBadge', 'Free');
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
-  // Utiliser stats.scans (autoritatif depuis fetchData + incrément local au scan)
-  // plutôt que rides.length, qui décroît quand handleStatusUpdate filter une course
-  // 700 ms après decline/accept → faisait remonter artificiellement le quota.
+  // `stats.scans` et jamais `rides.length` : le quota se compte sur le COMPTEUR
+  // serveur (`profiles.daily_scans_count`, seul écrivain `enforce_scan_quota`),
+  // c'est-à-dire sur les scans consommés, pas sur les courses affichées. Les
+  // deux ont divergé pour de bon le jour où une course a pu disparaître de la
+  // liste — le quota remontait alors tout seul.
   const remaining = getRemainingScans(tier, stats.scans, extraCredits);
   const canScan = remaining === null || remaining > 0;
 
@@ -362,9 +397,10 @@ const DashboardScreen = () => {
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
   const lastScanTsRef = useRef(0);
-  // scanTs déjà traités : la file native peut livrer plusieurs courses d'un
-  // coup, il faut les distinguer sans les confondre avec un doublon d'event.
-  const processedScanTsRef = useRef<number[]>([]);
+  // Courses déjà traitées dans cette session JS : la file native peut en livrer
+  // plusieurs d'un coup, il faut les distinguer sans les confondre avec un
+  // doublon d'event.
+  const processedRideIdsRef = useRef<string[]>([]);
   const canScanRef = useRef(canScan);
   const scanCountRef = useRef(stats.scans);
   const isOnlineRef = useRef(isOnline);
@@ -402,19 +438,30 @@ const DashboardScreen = () => {
   const fuelRef = useRef({ avgCons: 0, fuelType: 'essence', fuelPrice: 0 });
 
   // ── Réconciliation décision notif (Accepter/Refuser) ↔ course ───────────────
-  // scanTs → id de la course créée (corrélation avec la décision tapée sur la
-  // notif iOS). bufferedDecisions : décision arrivée AVANT la création de la
-  // course (drain notif avant drain scan au foreground) → appliquée à sa création.
-  const rideIdByScanTsRef = useRef<Map<number, string>>(new Map());
-  const bufferedDecisionsRef = useRef<Map<number, 'ACCEPTED' | 'DECLINED'>>(new Map());
   const ridesRef = useRef<Ride[]>([]);
-  const applyRideDecisionRef = useRef<(scanTs: number, status: 'ACCEPTED' | 'DECLINED') => void>(() => {});
+  // Décisions écrites en base mais pas encore reflétées par une lecture partie
+  // avant elles (cf. `overlayLocalDecisions`).
+  const localDecisionsRef = useRef<Map<string, LocalDecision>>(new Map());
+  // Passe-plat pour `fetchData`, qui applique les décisions en attente et est
+  // déclaré plus bas. Une ref et pas une dépendance : `applyRideDecision`
+  // dépend de `handleStatusUpdate`, lui-même de `sessionSeconds` — donc d'une
+  // identité qui change à CHAQUE seconde. En dépendance, `fetchData` changerait
+  // au même rythme et `useFocusEffect` rechargerait la liste chaque seconde.
+  const applyRideDecisionRef = useRef<(rideId: string, status: 'ACCEPTED' | 'DECLINED') => Promise<void>>(async () => {});
 
   // Cumul des secondes en ligne des sessions terminées aujourd'hui (hors session
   // en cours) → base du « temps de session du jour » poussé à la Live Activity.
   // Doublé en state : le compteur du Dashboard l'affiche, il lui faut un rendu.
   const todayOnlineBaseSecondsRef = useRef(0);
   const [todayOnlineBaseSeconds, setTodayOnlineBaseSeconds] = useState(0);
+
+  // Lu par le push des KPI ci-dessous. Une REF et pas la valeur : `sessionSeconds`
+  // change chaque seconde, et en dépendance il ferait pousser une mise à jour de
+  // Live Activity par seconde — qu'ActivityKit finirait de toute façon par
+  // ignorer. Le compteur de la carte tourne seul depuis `sessionStartEpoch`, il
+  // n'a pas besoin qu'on le lui rappelle.
+  const sessionSecondsRef = useRef(0);
+  useEffect(() => { sessionSecondsRef.current = sessionSeconds; }, [sessionSeconds]);
 
   // La préférence dayResetHour arrive après coup (fetch des préférences) : une
   // base calculée avec la borne de minuit alors que l'utilisateur est en 4 h
@@ -463,9 +510,29 @@ const DashboardScreen = () => {
     try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
     // Compteur autoritatif poussé au natif → il applique le quota lui-même même
     // quand le JS est suspendu (scan via Share Extension / bulle).
-    try { scannerService.setScanQuota(stats.scans, dailyScans ?? -1, dayResetHour); } catch {}
-    if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan, tier, stats.scans, dailyScans, dayResetHour]);
+    //
+    // La limite envoyée est la limite EFFECTIVE : celle du plan PLUS les crédits
+    // achetés. Le natif ne compare que `scanCountToday >= limite` et ne connaît
+    // pas les crédits ; en lui envoyant les 3 d'un free, un chauffeur ayant
+    // acheté 5 crédits se faisait bloquer à 3 — sur un scan que le serveur
+    // aurait accepté. Le drapeau `setQuotaReached` ne pouvait pas le rattraper :
+    // il s'ajoute au calcul natif (OU), il ne le desserre jamais.
+    //
+    // Le serveur arrive au même total par un autre chemin — limite du plan, puis
+    // un crédit décompté par scan au-delà (`check_scan_quota`). Un free à 3 + 5
+    // crédits est donc bloqué à 8 des deux côtés. `-1` = illimité, et ne doit
+    // surtout pas se faire additionner.
+    const nativeLimit = dailyScans === null || dailyScans === undefined
+      ? -1
+      : dailyScans + extraCredits;
+    try { scannerService.setScanQuota(stats.scans, nativeLimit, dayResetHour); } catch {}
+    // `dayResetHour`, jamais 0 en dur : chez un chauffeur réglé sur 4 h, la
+    // notification « quota rechargé » partait à minuit alors que le scan restait
+    // refusé quatre heures de plus. Et sa clé de dédup, calculée sur la journée
+    // de minuit, ne voyait pas celle posée par l'autre appel (listener de scan)
+    // sur la journée de 4 h — les deux pouvaient donc partir le même jour.
+    if (!canScan) scheduleQuotaResetNotification(dayResetHour);
+  }, [canScan, tier, stats.scans, dailyScans, extraCredits, dayResetHour]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -511,19 +578,20 @@ const DashboardScreen = () => {
       // temps (ou un compteur déjà à la limite) faisait disparaître des courses
       // pourtant scannées en service. Le natif applique déjà ces deux règles
       // AVANT d'analyser — ce qui arrive jusqu'ici a donc été autorisé.
-      // Anti-doublon : on déduplique sur l'identité du scan (`scanTs`), pas sur
-      // son heure d'arrivée. Le natif vide sa file d'attente d'un seul coup —
-      // plusieurs courses légitimes arrivent donc dans la même milliseconde, et
-      // une fenêtre temporelle les aurait toutes jetées sauf la première.
+      // Anti-doublon : sur l'identité de la course, jamais sur son heure
+      // d'arrivée. Le natif vide sa file d'un seul coup — plusieurs courses
+      // légitimes arrivent donc dans la même milliseconde, et une fenêtre
+      // temporelle les aurait toutes jetées sauf la première.
       const scanTs = Number((nativeResult as any).scanTs) || 0;
-      if (scanTs > 0) {
-        if (processedScanTsRef.current.includes(scanTs)) {
-          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (même scanTs)');
+      const rideId = nativeResult.rideId;
+      if (rideId) {
+        if (processedRideIdsRef.current.includes(rideId)) {
+          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (même rideId)');
           return;
         }
-        processedScanTsRef.current = [...processedScanTsRef.current.slice(-19), scanTs];
+        processedRideIdsRef.current = [...processedRideIdsRef.current.slice(-19), rideId];
       } else {
-        // Payload sans scanTs (ancien build encore en attente dans l'App Group) :
+        // Payload sans rideId (entrée de journal écrite par un build antérieur) :
         // on retombe sur la fenêtre d'une seconde.
         const now = Date.now();
         if (now - lastScanTsRef.current < 1000) {
@@ -541,15 +609,10 @@ const DashboardScreen = () => {
       // La liste en mémoire suffit, sans requête ajoutée : `fetchData` tourne
       // au focus ET à chaque retour au premier plan, donc juste avant le drain.
       // Quand elle n'a pas encore répondu, on retombe simplement sur le chemin
-      // complet — l'insert ressortira en doublon, qui est traité comme un
-      // succès. C'est ce qui remplace l'ancien drapeau `savedRemotely` : plus
-      // rien à faire circuler entre les process, et ça vaut quel que soit le
-      // chemin qui a écrit la course.
-      if (scanTs > 0 && ridesRef.current.some(r => r.scan_ts === scanTs)) {
+      // complet — l'insert ressort alors en conflit d'id, traité comme un succès.
+      if (rideId && ridesRef.current.some(r => r.id === rideId)) {
         __DEV__ && console.info('[SCAN] déjà en base — acquittée sans retraitement');
-        if (nativeResult.qid) {
-          try { scannerService.ackScan(nativeResult.qid); } catch {}
-        }
+        try { scannerService.ackScan(rideId); } catch {}
         return;
       }
 
@@ -625,8 +688,8 @@ const DashboardScreen = () => {
       if (!result.pickupAddress?.trim() || !result.destinationAddress?.trim()) {
         __DEV__ && console.warn('[Scanner] adresses incomplètes — course ignorée (silencieux)');
         // Abandon volontaire : rejouer donnerait le même verdict. On acquitte.
-        if (nativeResult.qid) {
-          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
         }
         return;
       }
@@ -660,8 +723,8 @@ const DashboardScreen = () => {
         __DEV__ && console.warn('[Scanner] valeurs aberrantes rejetées', { hourlyRate, kmRate, totalDistance, totalDuration });
         hapticError();
         // Abandon volontaire : les mêmes valeurs seraient rejetées au rejeu.
-        if (nativeResult.qid) {
-          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
         }
         return;
       }
@@ -687,7 +750,11 @@ const DashboardScreen = () => {
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
         try { scannerService.setQuotaReached(true, tierRef.current === 'free'); } catch {}
-        notifyQuotaReached(dayResetHourRef.current);
+        notifyQuotaReached(
+          dayResetHourRef.current,
+          tierRef.current === 'free',
+          getPlanLimits('plus').dailyScans,
+        );
         scheduleQuotaResetNotification(dayResetHourRef.current);
       }
 
@@ -754,44 +821,46 @@ const DashboardScreen = () => {
           netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
-          // Clé de corrélation avec les boutons Prise/Refusée tapés hors de
-          // l'app : elle seule survit à un redémarrage du JS.
+          // Date la course (jour d'affectation + registre de quota). Elle
+          // n'identifie plus rien : c'est `rideId` qui le fait.
           scanTs: scanTs || null,
+          rideId,
         });
-        // `null` = la course est déjà en base : soit le trigger anti-doublon,
-        // soit l'index unique sur `scan_ts` — c'est-à-dire le filet Swift qui a
-        // gagné la course de vitesse (il écrit dès le scan, sans attendre le
-        // pont RN). On ne recrée rien et on ne met RIEN en file offline — c'est
-        // ce qui recréait le doublon plus tard — mais on recharge la liste,
-        // sinon la course existe en base sans apparaître à l'écran.
+        // `null` = une course porte déjà cet id : le filet Swift a gagné la
+        // course de vitesse (il écrit dès le scan, sans attendre le pont RN),
+        // ou c'est un rejeu du journal. On ne recrée rien, mais on recharge la
+        // liste — sinon la course existe en base sans apparaître à l'écran.
         if (!newRide) {
           __DEV__ && console.warn('[SCAN] déjà en base — refresh de la liste');
           // Déjà en base = objectif atteint : on acquitte, sinon le journal
           // rejouerait ce scan à chaque relève sans jamais pouvoir se vider.
-          if (nativeResult.qid) {
-            try { scannerService.ackScan(nativeResult.qid); } catch {}
+          if (rideId) {
+            try { scannerService.ackScan(rideId); } catch {}
           }
           scheduleRefreshRef.current();
           return;
         }
         // La course est en base : le journal natif peut lâcher son entrée. Tout
         // ce qui n'atteint pas cette ligne reste journalisé et sera rejoué.
-        if (nativeResult.qid) {
-          try { scannerService.ackScan(nativeResult.qid); } catch {}
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
         }
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
-        // Corrélation pour les actions de notif : on retient scanTs → id, et si
-        // une décision Accepter/Refuser est déjà arrivée (tapée avant l'ouverture
-        // de l'app), on l'applique immédiatement à la course fraîchement créée.
-        if (nativeResult.scanTs != null) {
-          rideIdByScanTsRef.current.set(nativeResult.scanTs, newRide.id);
-          const buffered = bufferedDecisionsRef.current.get(nativeResult.scanTs);
-          if (buffered) {
-            bufferedDecisionsRef.current.delete(nativeResult.scanTs);
-            applyRideDecisionRef.current(nativeResult.scanTs, buffered);
-          }
-        }
+        // La course vient d'exister : c'est MAINTENANT qu'une décision déjà tapée
+        // sur la carte peut s'écrire. On redemande donc une synchro.
+        //
+        // Sans cette ligne, la décision restait en file jusqu'au prochain
+        // rafraîchissement manuel — c'est le « au premier lancement la course est
+        // en attente, et après avoir actualisé elle est bien enregistrée ».
+        // L'ordre au démarrage à froid est en effet toujours le même : `fetchData`
+        // part au montage, applique les décisions en attente, n'en trouve la
+        // course dans AUCUNE ligne (le drain du journal natif n'a pas encore
+        // inséré), puis le drain arrive — trop tard, plus personne ne repasse.
+        //
+        // `scheduleRefreshRef` coalesce à 400 ms : le natif livre toute sa file
+        // d'un coup, une seule relecture suffit pour dix courses.
+        scheduleRefreshRef.current();
       } catch (e) {
         // Deux familles d'échec, deux traitements opposés :
         //
@@ -810,24 +879,27 @@ const DashboardScreen = () => {
             tags: { flow: 'ride_insert_rejected', code: code ?? 'unknown' },
             extra: { fare: result.fare, distanceKm: totalDistance, scanTs },
           });
-          if (nativeResult.qid) {
-            try { scannerService.ackScan(nativeResult.qid); } catch {}
+          if (rideId) {
+            try { scannerService.ackScan(rideId); } catch {}
           }
           notifyRideRejected(code === 'P0001' ? 'quota' : 'other');
           return;
         }
 
         __DEV__ && console.warn('[SCAN] écriture KO — course conservée au journal', e);
-        // Le scan redevient rejouable. `processedScanTsRef` empêche de traiter
+        // Le scan redevient rejouable. `processedRideIdsRef` empêche de traiter
         // deux fois la même émission ; sans cette libération il empêchait AUSSI
         // le rejeu légitime d'un scan que le journal vient de conserver — la
         // course serait ré-émise à chaque relève et refusée à chaque fois, sans
         // jamais atteindre la base tant que le JS ne redémarre pas.
-        processedScanTsRef.current = processedScanTsRef.current.filter(ts => ts !== scanTs);
+        processedRideIdsRef.current = processedRideIdsRef.current.filter(id => id !== rideId);
         // Affichage optimiste : la course est en sécurité dans le journal natif,
-        // on la montre tout de suite. L'ID temporaire est remplacé au rejeu.
+        // on la montre tout de suite — SOUS SON VRAI ID. Une décision prise sur
+        // cette carte avant que le rejeu ait abouti porte donc déjà la bonne
+        // clé : le natif l'enregistre, et elle s'applique dès que la ligne
+        // existe. L'ancien id temporaire (`pending-…`) ne désignait rien.
         setRides(prev => [{
-          id: `pending-${scanTs || Date.now()}`,
+          id: rideId ?? `pending-${scanTs || Date.now()}`,
           user_id: userId,
           platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
           status: 'PENDING',
@@ -923,18 +995,32 @@ const DashboardScreen = () => {
   // une dep cyclique sur useCallback + TDZ — handleStatusUpdate reste stable.
   const fetchDataRef = useRef<() => void>(() => {});
 
-  const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
+  /**
+   * @param options.resync  Relire la base si l'écriture échoue. Vrai par défaut
+   *   — c'est ce qui remet à l'écran une course que l'optimisme avait déjà
+   *   retirée. FAUX quand l'appel vient du drain : `fetchData` se termine par un
+   *   drain, qui rappellerait `fetchData`, qui redrainerait… Une décision qui
+   *   échoue durablement (course pas encore insérée) mettait ainsi l'écran en
+   *   relecture toutes les 400 ms. Le drain n'a rien à resynchroniser : il n'a
+   *   affiché aucun optimisme, et la décision reste dans la file native.
+   */
+  const handleStatusUpdate = useCallback(async (
+    id: string,
+    newStatus: 'ACCEPTED' | 'DECLINED',
+    options?: { resync?: boolean },
+  ) => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
-    const scanTs = ridesRef.current.find(r => r.id === id)?.scan_ts;
-    if (Platform.OS === 'ios' && scanTs && ScanBridge?.clearLiveActivityResult) {
-      ScanBridge.clearLiveActivityResult(scanTs);
-    }
+    // La course est tranchée : son verdict n'a plus rien à faire sur le lock
+    // screen. iOS efface la carte Live Activity, Android retire la notification
+    // de résultat — qui restait affichée avec ses deux boutons sur une course
+    // déjà décidée. Sans effet si l'affichage montre déjà une course plus
+    // récente : c'est le natif qui compare, sur l'id.
+    try { scannerService.clearRideResult?.(id); } catch {}
     setRides(prev => {
       const updated = prev.map(r => (r.id === id ? { ...r, status: newStatus } : r));
       if (newStatus === 'ACCEPTED') {
         const accepted = updated.filter(r => r.status === 'ACCEPTED');
         const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
-        const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
         // €/h sur le temps en ligne CUMULÉ du jour (sessions terminées + courante).
         const onlineH = (todayOnlineBaseSecondsRef.current + sessionSeconds) / 3600 || 1/3600;
         const avgRate = totalEarnings / onlineH;
@@ -943,91 +1029,128 @@ const DashboardScreen = () => {
           earnings: totalEarnings.toFixed(0),
           avgRate: avgRate.toFixed(0),
         }));
-        // KPI poussés au natif : iOS → Live Activity, Android → notification
-        // persistante du foreground service (même tableau de bord du jour).
-        if (ScanBridge?.updateSessionKPI) {
-          ScanBridge.updateSessionKPI({
-            todayEarnings: totalEarnings,
-            todayHourlyRate: avgRate,
-            todayKm: totalKm,
-            onlineMinutes: Math.floor((todayOnlineBaseSecondsRef.current + sessionSeconds) / 60),
-          });
-        }
+        // Les KPI natifs (Live Activity iOS / notification persistante Android)
+        // NE sont plus poussés d'ici : React peut ré-invoquer cet updater, et un
+        // appel de pont n'a rien à faire dans une fonction qu'on doit pouvoir
+        // rejouer. L'effet sur `rides` (plus bas) recalcule exactement les mêmes
+        // totaux, juste après, et couvre en plus tout ce qui les fait bouger
+        // sans passer par ici — tarif corrigé, décision drainée, rechargement.
       }
       return updated;
     });
-    setTimeout(() => {
-      setRides(prev => prev.filter(r => r.id !== id));
-    }, 500);
+    // La course tranchée RESTE dans `rides`. Elle quitte la section « En attente »
+    // toute seule — `pendingRides` filtre sur `status === 'PENDING'`, et le statut
+    // vient de changer juste au-dessus.
+    //
+    // Elle en était retirée 500 ms plus tard, ce qui n'avait aucun effet visible
+    // (elle avait déjà disparu de l'écran) mais amputait la liste qui SERT À
+    // COMPTER : `acceptedCount`, et surtout le `totalEarnings` recalculé ici même.
+    // Deux courses acceptées à plus de 500 ms d'intervalle — le cas normal, un
+    // aller-retour réseau les sépare — et la seconde ne trouvait plus la première :
+    // les gains repartaient d'une seule course. Le compte ne redevenait juste
+    // qu'au rafraîchissement suivant, qui relit tout depuis la base.
+    // Posé AVANT l'écriture : une lecture déjà en vol rendra encore PENDING et
+    // atterrira après. Sans ce calque elle écrasait la décision, et le chauffeur
+    // devait tirer pour rafraîchir. Retiré si l'écriture échoue — la course est
+    // alors bel et bien restée en attente.
+    localDecisionsRef.current.set(id, { status: newStatus, at: Date.now() });
     try {
       await updateRideStatus(id, newStatus);
     } catch (e) {
+      localDecisionsRef.current.delete(id);
+      // La décision rejoint la FILE NATIVE, là où vivent déjà celles tapées sur
+      // la carte ou la notification. Sans ça, le choix fait dans l'app était le
+      // seul à se perdre : une course scannée app suspendue n'est pas encore en
+      // base quand elle s'affiche, l'update ne touche aucune ligne, et le
+      // « Prise » du chauffeur disparaissait avec le rafraîchissement qui suit.
+      // Dédoublonnée sur `rideId` côté natif, rejouée au prochain drain,
+      // acquittée au succès — rien à empiler côté JS.
+      try { scannerService.queueRideDecision?.(id, newStatus); } catch {}
       // Le serveur n'a pas pris l'update → l'UI a déjà retiré la course (optimiste).
       // On signale l'échec (haptique) et on resync depuis la DB (source de vérité)
       // pour ne pas laisser la course disparue alors qu'elle est toujours PENDING.
       Sentry.captureException(e, { tags: { flow: 'ride_status_update' } });
       hapticError();
-      fetchDataRef.current?.();
+      if (options?.resync !== false) fetchDataRef.current?.();
+      // RELAYÉE, après traitement local. `applyRideDecision` doit savoir que
+      // l'écriture a échoué : sans ça il acquitterait la décision venue du natif
+      // et celle-ci serait perdue, alors même que le but de l'acquittement est
+      // de la conserver jusqu'à succès.
+      throw e;
     }
   }, [sessionSeconds]);
 
-  // Décision Prise/Refusée venue d'un bouton hors de l'app (Live Activity,
-  // action de notification, Siri) : l'émetteur ne connaît que `scanTs`.
-  //  1. mapping en mémoire scanTs → id (app restée vivante depuis le scan),
-  //  2. la clé exacte portée par la course elle-même (`scan_ts`),
-  //  3. la même clé, demandée à la base : la course peut être enregistrée sans
-  //     être dans la liste chargée, et le mapping mémoire meurt avec le process,
-  //  4. repli historique pour les courses antérieures à la colonne `scan_ts`,
-  //  5. sinon la course n'existe pas encore → on bufferise (appliquée à sa création).
-  const applyRideDecision = useCallback(async (scanTs: number, status: 'ACCEPTED' | 'DECLINED') => {
-    let rideId = rideIdByScanTsRef.current.get(scanTs);
-    if (!rideId) {
-      rideId = ridesRef.current.find(r => r.scan_ts != null && r.scan_ts === scanTs)?.id;
+  // Applique UNE décision Prise/Refusée tapée hors de l'app (bouton de la Live
+  // Activity, action de notification, Siri). Un `update … where id = rideId`,
+  // rien de plus : l'émetteur connaît la course, puisque son id a été frappé au
+  // scan et porté jusqu'au bouton.
+  //
+  // Ce qui a disparu ici : trois stratégies pour retrouver la course à partir
+  // d'un horodatage — la liste en mémoire, une requête sur `scan_ts`, puis une
+  // corrélation par proximité de `created_at` (±3 min) qui pouvait désigner la
+  // mauvaise course quand deux scans se suivaient.
+  //
+  // Appelé UNIQUEMENT depuis `fetchData`, donc à un moment où la session est
+  // ouverte. Si l'écriture échoue — la course n'est pas encore en base, le
+  // réseau est coupé — on n'acquitte pas, et la décision est retentée à la
+  // synchro suivante. La file native est le seul endroit où elle vit.
+  const applyRideDecision = useCallback(async (rideId: string, status: 'ACCEPTED' | 'DECLINED') => {
+    if (!rideId) return;
+    // Acquitter APRÈS l'écriture, jamais avant. `handleStatusUpdate` lève si
+    // aucune ligne n'a été modifiée — on n'acquitte donc que sur un vrai succès.
+    try {
+      await handleStatusUpdate(rideId, status, { resync: false });
+      scannerService.ackRideDecision?.(rideId);
+    } catch {
+      // Conservée dans la file native, retentée à la prochaine synchro.
     }
-    if (!rideId && user?.id) {
-      try {
-        rideId = (await fetchRideIdByScanTs(user.id, scanTs)) ?? undefined;
-      } catch {}
-    }
-    if (!rideId) {
-      // Corrélation temporelle : `created_at` est l'heure d'INSERTION, qui peut
-      // suivre le scan de plusieurs heures quand l'app était fermée. Ne vaut
-      // donc que pour les courses sans `scan_ts` — les nouvelles passent par
-      // les étapes ci-dessus.
-      const cand = ridesRef.current
-        .filter(r => r.status === 'PENDING' && r.scan_ts == null)
-        .map(r => ({ id: r.id, dt: Math.abs(new Date(r.created_at).getTime() / 1000 - scanTs) }))
-        .filter(x => x.dt < 180)
-        .sort((a, b) => a.dt - b.dt)[0];
-      rideId = cand?.id;
-    }
-    if (rideId) handleStatusUpdate(rideId, status);
-    else bufferedDecisionsRef.current.set(scanTs, status);
-  }, [handleStatusUpdate, user?.id]);
+  }, [handleStatusUpdate]);
 
   useEffect(() => { applyRideDecisionRef.current = applyRideDecision; }, [applyRideDecision]);
   useEffect(() => { ridesRef.current = rides; }, [rides]);
 
+  // Les KPI de la carte suivent la BASE, et plus seulement les décisions prises
+  // dans l'app.
+  //
+  // Ils n'étaient poussés qu'à deux endroits : au passage en ligne, et à chaque
+  // acceptation (`handleStatusUpdate`). Entre les deux, c'est le natif qui les
+  // incrémentait seul, à partir de la dernière course scannée. Tout ce qui
+  // bougeait autrement — un tarif corrigé, une course repassée en refusée, une
+  // décision appliquée au drain du journal — laissait la carte sur une valeur
+  // périmée jusqu'à l'acceptation suivante.
+  //
+  // Sur `rides` : la liste change au chargement, à l'insertion d'un scan et à
+  // chaque décision. C'est exactement quand les chiffres du jour bougent, et
+  // jamais plus souvent. Le natif, lui, préserve le verdict d'une course encore
+  // en attente (`resultShowing`) — cette mise à jour n'écrase donc pas un
+  // résultat affiché.
   useEffect(() => {
-    const sub = scannerService.onRideDecision(({ scanTs, status }) => {
-      applyRideDecisionRef.current(scanTs, status);
+    if (!ScanBridge?.updateSessionKPI) return;
+    const accepted = rides.filter(r => r.status === 'ACCEPTED');
+    const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
+    const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
+    const onlineSeconds = todayOnlineBaseSecondsRef.current + sessionSecondsRef.current;
+    ScanBridge.updateSessionKPI({
+      todayEarnings: totalEarnings,
+      todayHourlyRate: onlineSeconds > 0 ? totalEarnings / (onlineSeconds / 3600) : 0,
+      todayKm: totalKm,
+      onlineMinutes: Math.floor(onlineSeconds / 60),
     });
-    return () => sub?.remove();
-  }, []);
+  }, [rides]);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
   }, []);
 
   const handleDeclinePress = useCallback((id: string) => {
-    handleStatusUpdate(id, 'DECLINED');
+    handleStatusUpdate(id, 'DECLINED').catch(() => {});
   }, [handleStatusUpdate]);
 
   const handleConfirmYes = () => {
     if (!confirmModal) return;
     const id = confirmModal;
     setConfirmModal(null);
-    handleStatusUpdate(id, 'ACCEPTED');
+    handleStatusUpdate(id, 'ACCEPTED').catch(() => {});
   };
 
   const handleConfirmNo = () => {
@@ -1071,7 +1194,7 @@ const DashboardScreen = () => {
     }
     const id = priceModal.rideId;
     setPriceModal(null);
-    handleStatusUpdate(id, 'ACCEPTED');
+    handleStatusUpdate(id, 'ACCEPTED').catch(() => {});
   };
 
 
@@ -1288,8 +1411,15 @@ const DashboardScreen = () => {
   handleToggleOnlineRef.current = handleToggleOnline;
 
   const fetchingRef = useRef(false);
+  // Une relecture demandée pendant qu'une autre est en vol était simplement
+  // JETÉE. C'est le refresh du drain des décisions qui disparaissait ainsi : il
+  // part 400 ms après le retour au premier plan, alors que le `fetchData` lancé
+  // au même instant enchaîne encore ses quatre requêtes. Elle est maintenant
+  // reportée à la fin de celle en cours.
+  const refetchQueuedRef = useRef(false);
   const fetchData = useCallback(async () => {
-    if (!user?.id || fetchingRef.current) return;
+    if (!user?.id) return;
+    if (fetchingRef.current) { refetchQueuedRef.current = true; return; }
     fetchingRef.current = true;
     try {
       setLoading(true);
@@ -1325,15 +1455,15 @@ const DashboardScreen = () => {
         });
       }
 
-      // Auto-expire old PENDING rides (before today's reset)
-      await supabase
-        .from('rides')
-        .update({ status: 'DECLINED' })
-        .eq('user_id', user.id)
-        .eq('status', 'PENDING')
-        .lt('created_at', resetTime.toISOString());
-
-      const ridesData = await fetchRides(user.id, resetTime);
+      // Les courses d'hier restées sans décision GARDENT leur statut. Elles
+      // basculaient en DECLINED au premier chargement du lendemain : une donnée
+      // inventée, qui comptait comme refusée une course peut-être prise, et
+      // faussait le taux d'acceptation de l'Historique. « En attente » dit la
+      // vérité — le chauffeur n'a pas tranché.
+      const ridesData = overlayLocalDecisions(
+        await fetchRides(user.id, resetTime),
+        localDecisionsRef.current,
+      );
 
 
       const { data: sessionsData } = await supabase
@@ -1352,20 +1482,70 @@ const DashboardScreen = () => {
         return sum;
       }, 0);
 
+      // Scans consommés selon le COMPTEUR serveur, c'est-à-dire le nombre exact
+      // sur lequel le quota est appliqué (`check_scan_quota`). Compter les
+      // courses donnait un autre chiffre dès qu'une course disparaissait — d'où
+      // des « 2/3 » affichés pendant que l'insertion était refusée, ce qui est
+      // indéfendable côté chauffeur.
+      //
+      // `daily_scans_day` dit à quelle journée se rapporte le compteur : plus
+      // ancienne que la journée courante, il est périmé et vaut 0. C'est ce qui
+      // remplace une remise à zéro planifiée, des deux côtés.
+      //
+      // Repli sur `ridesData.length` si les colonnes sont absentes : la
+      // migration `20260822_scan_quota_on_profile.sql` peut ne pas être
+      // déployée sur l'environnement qui sert ce build. Mieux vaut l'ancien
+      // chiffre approximatif qu'un écran vide.
+      let usedScans = ridesData.length;
+      try {
+        const { data: quotaRow } = await supabase
+          .from('profiles')
+          .select('daily_scans_count, daily_scans_day')
+          .eq('id', user.id)
+          .maybeSingle();
+        const count = (quotaRow as { daily_scans_count?: number | null } | null)?.daily_scans_count;
+        const day = (quotaRow as { daily_scans_day?: string | null } | null)?.daily_scans_day;
+        if (typeof count === 'number') {
+          usedScans = day && new Date(day).getTime() >= resetTime.getTime() ? count : 0;
+        }
+      } catch {}
+
       const totalOnlineHours = totalOnlineSeconds / 3600;
       setStats({
         earnings: totalEarnings.toFixed(0),
         avgRate: (totalOnlineHours > 0 ? totalEarnings / totalOnlineHours : 0).toFixed(0),
-        scans: ridesData.length,
+        scans: usedScans,
       });
       setRides(ridesData);
       cacheRides(ridesData); // Cache pour mode hors-ligne
+
+      // ── Décisions Prise/Refusée en attente ──────────────────────────────
+      // Le seul point où elles sont appliquées, et il est ici pour une raison :
+      // à cette ligne la session est ouverte et la liste chargée, donc la course
+      // est trouvable. Le natif ne fait qu'empiler ; c'est l'app qui vient
+      // chercher, quand elle est en état d'écrire en base.
+      //
+      // Ce qui remplace : un événement natif, un tampon mémoire, un accusé de
+      // réception et deux relances — quatre pièces qui n'existaient que pour
+      // rattraper des décisions arrivées trop tôt. Une décision non appliquée
+      // reste simplement dans la file et repasse à la synchro suivante.
+      ridesRef.current = ridesData;
+      try {
+        const pending = await scannerService.getPendingRideDecisions();
+        for (const d of pending) await applyRideDecisionRef.current(d.rideId, d.status);
+      } catch {}
     } catch (e) {
       __DEV__ && console.error(e);
       setFetchError(true);
     } finally {
       setLoading(false);
       fetchingRef.current = false;
+      // Relance COALESCÉE et pas récursive : les demandes empilées pendant cette
+      // lecture ne valent qu'une seule relecture, 400 ms plus tard.
+      if (refetchQueuedRef.current) {
+        refetchQueuedRef.current = false;
+        scheduleRefreshRef.current();
+      }
     }
   }, [user?.id]);
 
@@ -1378,15 +1558,58 @@ const DashboardScreen = () => {
     setRefreshing(false);
   }, [fetchData]);
 
-  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+  /**
+   * Applique les décisions Prise/Refusée en attente, SANS passer par `fetchData`.
+   *
+   * Elles étaient drainées uniquement à la fin de `fetchData` — derrière le
+   * chargement des préférences, des courses, des sessions et du quota, et
+   * surtout derrière la garde `fetchingRef` : un `fetchData` déjà en vol au
+   * moment où l'app revient au premier plan faisait ignorer le second appel,
+   * décisions comprises. D'où « je tape Prise sur la carte, j'ouvre l'app, et je
+   * dois tirer pour rafraîchir ».
+   *
+   * Rien ne justifiait cette dépendance : depuis que l'id est frappé au scan,
+   * appliquer une décision est un `update … where id = rideId`. La liste des
+   * courses ne sert pas, seule la session est nécessaire. Une décision dont la
+   * course n'est pas encore en base ne touche aucune ligne, n'est donc pas
+   * acquittée, et repasse au prochain drain — le comportement voulu.
+   */
+  const drainRideDecisions = useCallback(async () => {
+    try {
+      await awaitSessionRestored();
+      if (!userIdRef.current) return;
+      const pending = await scannerService.getPendingRideDecisions();
+      if (pending.length === 0) return;
+      for (const d of pending) await applyRideDecisionRef.current(d.rideId, d.status);
+      // Les totaux du jour (gains, €/h, quota) sont recalculés depuis la base :
+      // `handleStatusUpdate` n'a mis à jour que la course elle-même.
+      //
+      // Le refresh COALESCÉ, pas un appel direct : un `fetchData` est très
+      // probablement encore en vol à cet instant (les deux partent ensemble au
+      // retour au premier plan), et un appel direct se ferait avaler par
+      // `fetchingRef`. Les 400 ms lui laissent le temps de finir.
+      scheduleRefreshRef.current();
+    } catch {}
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    fetchData();
+    drainRideDecisions();
+  }, [fetchData, drainRideDecisions]));
 
   // Re-fetch stats on every foreground resume (fetchData computes the correct day boundary)
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') fetchDataRef.current?.();
+      if (state !== 'active') return;
+      fetchDataRef.current?.();
+      // En plus de `fetchData`, et non à l'intérieur : c'est tout l'intérêt, le
+      // drain ne doit pas pouvoir être avalé par la garde anti-concurrence.
+      drainRideDecisions();
     });
     return () => sub.remove();
-  }, []);
+    // `drainRideDecisions` est stable (useCallback sans dépendance) : le
+    // listener n'est pas reposé à chaque rendu.
+  }, [drainRideDecisions]);
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
 
@@ -1829,7 +2052,7 @@ const DashboardScreen = () => {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalBtnCancel}
-                onPress={() => { setPriceModal(null); handleStatusUpdate(priceModal!.rideId, 'ACCEPTED'); }}
+                onPress={() => { setPriceModal(null); handleStatusUpdate(priceModal!.rideId, 'ACCEPTED').catch(() => {}); }}
               >
                 <Text style={styles.modalBtnCancelText}>
                   {t('dashboard.priceModal.skip', 'Passer')}

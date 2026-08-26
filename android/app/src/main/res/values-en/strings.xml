@@ -10,4 +10,6 @@
     <string name="scanner_notif_online">online</string>
     <string name="scanner_ride_accept">✅ Ride taken</string>
     <string name="scanner_ride_decline">❌ Declined</string>
+    <string name="scanner_quota_reached">Quota reached</string>
+    <string name="scanner_quota_reached_free">Quota reached · Go Plus</string>
 </resources>

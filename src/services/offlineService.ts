@@ -133,7 +133,7 @@ export async function getLastSyncTime(): Promise<string | null> {
 // `queueOfflineRide` / `syncOfflineQueue` n'existent plus. Les courses qui
 // n'atteignent pas Supabase restent désormais dans le JOURNAL NATIF des scans
 // (App Group iOS / SharedPreferences Android), retiré entrée par entrée via
-// `scannerService.ackScan(qid)` une fois l'écriture confirmée.
+// `scannerService.ackScan(rideId)` une fois l'écriture confirmée.
 //
 // Pourquoi cette file a disparu :
 //   • elle supprimait la course au bout de 5 tentatives — un refus permanent

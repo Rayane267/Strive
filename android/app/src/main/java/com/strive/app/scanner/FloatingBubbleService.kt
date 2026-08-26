@@ -52,8 +52,10 @@ class FloatingBubbleService : Service() {
          *  du foreground service. */
         private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
         private const val SESSION_NOTIF_ID = 43
-        /** Notification de résultat de scan avec boutons Accepter / Refuser. */
-        private const val RESULT_NOTIF_ID = 44
+        /** Notification de résultat de scan avec boutons Accepter / Refuser.
+         *  Non privé : `ScanBridgeModule.clearRideResult` l'annule quand la
+         *  décision a été prise dans l'app. */
+        const val RESULT_NOTIF_ID = 44
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
 
@@ -300,6 +302,10 @@ class FloatingBubbleService : Service() {
         // franchissaient donc leur limite app fermée — le serveur refusait ensuite
         // l'insertion et la course était perdue. `isFreeTier` ne sert plus qu'à
         // choisir l'écran affiché (teaser Plus vs « revenez demain »).
+        //
+        // `scanQuotaLimit` est la limite EFFECTIVE poussée par le JS : celle du
+        // plan PLUS les crédits achetés. Ce calcul ne connaît pas les crédits,
+        // et sans eux il bloquait un chauffeur qui venait d'en acheter.
         val quotaByCount = scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             ScanBridgeModule.emitScanFailure(this, "quota_reached")
@@ -477,9 +483,15 @@ class FloatingBubbleService : Service() {
         val today = todayKey()
         scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
         scanCountDay = today
-        // Horodatage du scan (secondes epoch) — corrèle la course émise au JS avec
-        // la décision Accepter/Refuser tapée sur la notification. Mirror iOS.
+        // Horodatage du scan (secondes epoch) : il DATE la course — jour
+        // d'affectation et registre de quota. Il ne l'identifie plus.
         val scanTs = System.currentTimeMillis() / 1000.0
+        // Son identité, frappée ICI, avant tout affichage et toute écriture. Elle
+        // part avec la notification (boutons Prise/Refusée), avec l'événement JS,
+        // dans le journal des scans, et jusqu'à `rides.id`. Une seule valeur pour
+        // tout le trajet : un tap sur la notification désigne donc la course, sans
+        // que rien n'ait à la retrouver. Mirror iOS.
+        val rideId = java.util.UUID.randomUUID().toString()
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
@@ -492,8 +504,8 @@ class FloatingBubbleService : Service() {
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
-            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, scanTs) }
-            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs)
+            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, rideId) }
+            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs, rideId)
             return
         }
 
@@ -515,8 +527,8 @@ class FloatingBubbleService : Service() {
             } else {
                 ocr
             }
-            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, scanTs) }
-            ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs)
+            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
+            ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId)
         }
     }
 
@@ -999,7 +1011,19 @@ class FloatingBubbleService : Service() {
             setPadding(0, 0, dpToPx(6), 0)
         })
         pill.addView(TextView(this).apply {
-            text = "Quota atteint"; textSize = 13f; setTextColor(Color.WHITE)
+            // Un free bloqué voit la sortie sur la pastille elle-même : c'est le
+            // seul moment où la proposition est vraie ET utile — il vient de
+            // buter sur sa limite, sur une course qu'il ne pourra pas évaluer.
+            // Le tap ouvre déjà l'app, la pastille devient donc le point d'entrée.
+            //
+            // `str(...)` et plus un littéral : ce texte suivait la locale du
+            // téléphone alors que tout le reste suit la langue choisie DANS
+            // Strive.
+            text = str(
+                if (isFreeTier) com.strive.R.string.scanner_quota_reached_free
+                else com.strive.R.string.scanner_quota_reached
+            )
+            textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
 
@@ -1175,10 +1199,11 @@ class FloatingBubbleService : Service() {
     /**
      * Notification de résultat avec boutons Accepter / Refuser — permet de taguer
      * la course sans ouvrir l'app (mains libres). Au tap, RideDecisionReceiver
-     * relaie la décision au JS (onRideDecision) via scanTs. Mirror iOS
-     * (AnalyzeRideIntent.sendLocalNotification + catégorie STRIVE_SCAN_RESULT).
+     * enregistre la décision sous `rideId`, que le Dashboard écrit directement en
+     * base. Mirror iOS (AnalyzeRideIntent.sendLocalNotification + catégorie
+     * STRIVE_SCAN_RESULT).
      */
-    private fun postRideDecisionNotification(result: OcrParser.ScanResult, scanTs: Double) {
+    private fun postRideDecisionNotification(result: OcrParser.ScanResult, rideId: String) {
         val m = computeMetrics(result)
         val verdict = when (m.level) { 2 -> "✅"; 1 -> "⚠️"; else -> "❌" }
         // displayFare = net de carburant si l'option est active, sinon brut.
@@ -1190,7 +1215,7 @@ class FloatingBubbleService : Service() {
         fun decisionPi(status: String, requestCode: Int): android.app.PendingIntent {
             val intent = Intent(this, RideDecisionReceiver::class.java).apply {
                 action = RideDecisionReceiver.ACTION
-                putExtra(RideDecisionReceiver.EXTRA_SCAN_TS, scanTs)
+                putExtra(RideDecisionReceiver.EXTRA_RIDE_ID, rideId)
                 putExtra(RideDecisionReceiver.EXTRA_STATUS, status)
                 putExtra(RideDecisionReceiver.EXTRA_NOTIF_ID, RESULT_NOTIF_ID)
             }
@@ -1200,8 +1225,18 @@ class FloatingBubbleService : Service() {
             )
         }
 
-        // requestCodes distincts (base sur scanTs) pour ne pas écraser un PI par l'autre.
-        val base = (scanTs % 100000).toInt() * 2
+        // Course visée par la notification affichée : `clearRideResult` s'y
+        // réfère pour ne l'annuler que si la décision porte bien sur elle — et
+        // pas sur un scan plus ancien, dont la carte a déjà été remplacée.
+        applicationContext
+            .getSharedPreferences(ScanBridgeModule.SCANS_PREFS, MODE_PRIVATE)
+            .edit().putString(ScanBridgeModule.LAST_NOTIF_RIDE_KEY, rideId).apply()
+
+        // requestCodes distincts pour ne pas écraser un PendingIntent par l'autre.
+        // Deux notifications successives doivent aussi porter des codes distincts,
+        // sinon FLAG_UPDATE_CURRENT réécrit les extras de la précédente — d'où le
+        // hash de l'id plutôt qu'un compteur.
+        val base = (rideId.hashCode() and 0x3FFFFFFF) * 2
         val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)

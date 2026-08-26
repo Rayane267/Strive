@@ -510,12 +510,17 @@ enum RideUploader {
 
   /// Programme l'écriture de la course. Retourne immédiatement : le transfert
   /// est confié au démon système et survit à la mort de ce process.
-  static func upload(_ final: ScanProcessor.FinalResult, scanTs: Double) {
+  static func upload(_ final: ScanProcessor.FinalResult, rideId: String, scanTs: Double) {
     guard let defaults = UserDefaults(suiteName: appGroupId),
           let restUrl = defaults.string(forKey: "supabaseRestUrl"), !restUrl.isEmpty,
           let anonKey = defaults.string(forKey: "geminiSupabaseKey"), !anonKey.isEmpty,
           let cred = currentCredential(defaults),
-          let url = URL(string: "\(restUrl)/rest/v1/rides"),
+          // `on_conflict=id` + `resolution=ignore-duplicates` (plus bas) : le
+          // POST est un upsert qui ne fait rien si la course existe déjà. Une
+          // session de fond peut retenter un transfert ; sans ça le rejeu
+          // repartait en 409, remontait en erreur, et brouillait le diagnostic
+          // d'un envoi qui avait en réalité abouti.
+          let url = URL(string: "\(restUrl)/rest/v1/rides?on_conflict=id"),
           let dir = bodyDirectory()
     else { return }
 
@@ -530,6 +535,12 @@ enum RideUploader {
       : nil
 
     var body: [String: Any] = [
+      // L'id frappé au scan, et non un uuid tiré par le serveur. C'est ce qui
+      // rend cet envoi et le drain de l'outbox interchangeables : le second
+      // réinsère la même ligne, écartée sur la clé primaire. Sans lui, les deux
+      // chemins créaient deux courses qu'il fallait ensuite reconnaître comme
+      // une seule — tout ce que 20260821_ride_id_at_scan.sql a pu retirer.
+      "id": rideId,
       "user_id": cred.uid,
       // Même normalisation que `createRide` côté JS : la colonne n'accepte pas
       // UNKNOWN.
@@ -563,7 +574,7 @@ enum RideUploader {
     // Une session de fond n'accepte QUE `uploadTask(with:fromFile:)` — ni
     // `dataTask`, ni un corps en mémoire. Le fichier doit survivre au process :
     // il vit dans le container partagé, et le délégué le retire à la fin.
-    let file = dir.appendingPathComponent("\(Int(scanTs * 1000)).json")
+    let file = dir.appendingPathComponent("\(rideId).json")
     guard (try? payload.write(to: file, options: .atomic)) != nil else { return }
 
     var req = URLRequest(url: url)
@@ -572,7 +583,7 @@ enum RideUploader {
     req.setValue("Bearer \(cred.jwt)", forHTTPHeaderField: "Authorization")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     // Rien à relire : l'app rechargera la liste depuis la base.
-    req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+    req.setValue("return=minimal,resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
 
     let task = session.uploadTask(with: req, fromFile: file)
     // Sert au délégué à retrouver le corps à supprimer.

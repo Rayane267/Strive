@@ -149,8 +149,8 @@ struct StriveLiveActivity: Widget {
                 level: context.state.verdictLevel
               )
               .padding(.horizontal, 6)
-              if #available(iOS 17.0, *), let ts = context.state.scanTs, ts > 0 {
-                DecisionButtons(scanTs: ts)
+              if #available(iOS 17.0, *), let id = context.state.rideId, !id.isEmpty {
+                DecisionButtons(rideId: id)
                   .padding(.horizontal, 6)
               }
             }
@@ -350,8 +350,8 @@ private struct LockScreenView: View {
         // Boutons Accepter/Refuser directement sur le lock screen (iOS 17+) —
         // sinon les iPhone sans Dynamic Island n'ont aucun moyen de taguer sans
         // ouvrir l'app.
-        if #available(iOS 17.0, *), let ts = state.scanTs, ts > 0 {
-          DecisionButtons(scanTs: ts)
+        if #available(iOS 17.0, *), let id = state.rideId, !id.isEmpty {
+          DecisionButtons(rideId: id)
         }
       }
       .padding(.horizontal, 16)
@@ -672,31 +672,38 @@ private struct RouteRow: View {
 
 /// Deux boutons interactifs qui taguent la course sans ouvrir l'app. Chaque tap
 /// exécute RideDecisionIntent → écrit la décision dans l'App Group → réconcilié
-/// côté JS (updateRideStatus). N'apparaît que si scanTs est connu.
+/// côté JS (updateRideStatus). N'apparaît que si la course a un id — c'est-à-dire
+/// dès qu'un résultat de scan est affiché, l'id étant frappé au scan.
+///
+/// `minHeight: 28` : compromis assumé. La cible d'origine (~21 pt) rate assez
+/// souvent pour donner « des fois je clique et rien ne se passe » ; les 44 pt
+/// d'Apple, eux, mangent la carte et donnent deux pavés. 28 gagne les quelques
+/// points qui comptent sans déséquilibrer l'île. `contentShape` fige la capsule
+/// entière comme cible, marges comprises.
 @available(iOS 17.0, *)
 private struct DecisionButtons: View {
-  let scanTs: Double
+  let rideId: String
   var body: some View {
     HStack(spacing: 8) {
-      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: false)) {
+      Button(intent: RideDecisionIntent(rideId: rideId, accepted: false)) {
         Label(laString(fr: "Refusée", en: "Declined"), systemImage: "xmark")
           .font(.system(size: 13, weight: .bold))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 4)
+          .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.94, green: 0.27, blue: 0.27))
           .foregroundColor(.white)
           .clipShape(Capsule())
+          .contentShape(Capsule())
       }
       .buttonStyle(.plain)
 
-      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: true)) {
+      Button(intent: RideDecisionIntent(rideId: rideId, accepted: true)) {
         Label(laString(fr: "Prise", en: "Taken"), systemImage: "checkmark")
           .font(.system(size: 13, weight: .bold))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 4)
+          .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.0, green: 0.78, blue: 0.32))
           .foregroundColor(.white)
           .clipShape(Capsule())
+          .contentShape(Capsule())
       }
       .buttonStyle(.plain)
     }
