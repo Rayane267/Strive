@@ -174,33 +174,6 @@ func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {
   return (fare, km)
 }
 
-/// Recopie les KPI de session dans l'App Group (`laSessionSnapshot`).
-///
-/// C'est la SEULE copie qui survit à la mort de la carte : quand iOS la retire
-/// alors que la session continue, `LiveActivityManager.ensureRunning()` la
-/// recrée à partir de là. Une mise à jour de la carte qui ne passe pas par ici
-/// est donc oubliée dès que la carte disparaît — c'était le cas du bouton ✅,
-/// qui incrémentait les gains à l'écran et les laissait revenir à leur valeur
-/// d'avant si la carte était recréée entre-temps.
-///
-/// Fonction libre, et pas la méthode du manager : `revertLiveActivityToIdle`
-/// tourne aussi dans des contextes où `LiveActivityManager` n'est pas compilé.
-/// Le manager, lui, délègue ici — un seul écrivain, une seule forme.
-@available(iOS 16.2, *)
-func saveLiveActivitySessionSnapshot(_ s: StriveActivityAttributes.ContentState) {
-  let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
-    ?? "group.com.striveapp.app"
-  guard let d = UserDefaults(suiteName: appGroupId) else { return }
-  var snap: [String: Any] = [
-    "todayEarnings": s.todayEarnings,
-    "todayHourlyRate": s.todayHourlyRate,
-    "todayKm": s.todayKm,
-    "onlineMinutes": s.onlineMinutes,
-  ]
-  if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
-  d.set(snap, forKey: "laSessionSnapshot")
-}
-
 /// Empile la décision Accepter/Refuser dans l'App Group. Rien d'autre : l'app
 /// vient la chercher (`getPendingRideDecisions`) au moment où elle peut l'écrire
 /// en base, et l'acquitte alors. Supabase reste la source de vérité et corrige
@@ -265,10 +238,6 @@ func revertLiveActivityToIdle(rideId: String, addFare: Double, addKm: Double) as
       onlineMinutes: prev.onlineMinutes,
       sessionStartEpoch: prev.sessionStartEpoch
     )
-    // AVANT l'await : ce process peut être suspendu pendant `activity.update`,
-    // et tout ce qui suit disparaît alors avec lui. Même ordre que dans
-    // `RideDecisionIntent.perform`, pour la même raison.
-    saveLiveActivitySessionSnapshot(idle)
     await activity.update(
       ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
     )

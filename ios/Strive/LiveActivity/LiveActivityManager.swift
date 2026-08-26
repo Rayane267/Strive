@@ -52,84 +52,6 @@ final class LiveActivityManager {
     set { stateLock.lock(); _stateObserverTask = newValue; stateLock.unlock() }
   }
 
-  // ── État EN VOL ───────────────────────────────────────────────────────────
-  //
-  // `activity.content.state` est l'état APPLIQUÉ, pas le dernier demandé : une
-  // update part en `Task` et met un moment à atterrir. Tout ce qui lit `prev`
-  // entre-temps repart donc de l'état d'AVANT.
-  //
-  // C'est exactement ce que fait le Dashboard quand une course est validée :
-  // effacer le verdict (`clearResult` → `backToIdle`), puis pousser les gains
-  // du jour (`updateSessionKPI`). Le second lisait un verdict encore affiché,
-  // le premier des gains encore à zéro — et selon celui des deux qui atterrit
-  // en dernier, la carte revenait au résumé de session avec les gains d'avant.
-  // Sur la PREMIÈRE course de la journée, ça se lit « les gains n'ont pas
-  // bougé » : ils valaient 0 et sont restés à 0.
-  //
-  // Deux garde-fous, parce que la carte peut aussi être écrite par un autre
-  // process (le bouton ✅ de l'îlot passe par `revertLiveActivityToIdle`, qui
-  // ne connaît pas ce manager) :
-  //   • l'entrée est effacée dès que NOTRE update a atterri,
-  //   • et ignorée passé 10 s, si le process a été suspendu entre-temps.
-  private var _inFlight: (seq: UInt64, activityId: String, state: StriveActivityAttributes.ContentState, at: Date)?
-  private var _seq: UInt64 = 0
-  /// Chaîne des updates : deux `Task` lancés coup sur coup peuvent atterrir
-  /// dans l'ordre inverse. Chacun attend le précédent — la dernière demandée
-  /// est donc toujours celle qui reste affichée.
-  private var _updateChain: Task<Void, Never>?
-
-  /// Le dernier état DEMANDÉ pour cette carte, à défaut celui qui est appliqué.
-  private func latestState(_ a: Activity<StriveActivityAttributes>) -> StriveActivityAttributes.ContentState {
-    stateLock.lock(); defer { stateLock.unlock() }
-    if let f = _inFlight, f.activityId == a.id, Date().timeIntervalSince(f.at) < 10 {
-      return f.state
-    }
-    return a.content.state
-  }
-
-  private func beginInFlight(_ a: Activity<StriveActivityAttributes>,
-                             _ s: StriveActivityAttributes.ContentState) -> UInt64 {
-    stateLock.lock(); defer { stateLock.unlock() }
-    _seq &+= 1
-    _inFlight = (_seq, a.id, s, Date())
-    return _seq
-  }
-
-  /// N'efface QUE sa propre entrée : une update plus récente lancée entre-temps
-  /// est le nouvel état en vol, et doit le rester.
-  private func endInFlight(_ seq: UInt64) {
-    stateLock.lock(); defer { stateLock.unlock() }
-    if _inFlight?.seq == seq { _inFlight = nil }
-  }
-
-  private func clearInFlight() {
-    stateLock.lock(); _inFlight = nil; _updateChain = nil; stateLock.unlock()
-  }
-
-  /// Unique point d'envoi vers ActivityKit : mémorise l'état demandé et met
-  /// l'update à la queue derrière les précédentes.
-  private func enqueue(
-    _ activity: Activity<StriveActivityAttributes>,
-    _ content: ActivityContent<StriveActivityAttributes.ContentState>,
-    alert: AlertConfiguration? = nil,
-    completion: (() -> Void)? = nil
-  ) {
-    // Verrou tenu sur TOUTE la séquence (le verrou est récursif) : deux envois
-    // concurrents pourraient sinon s'ordonner différemment dans `_inFlight` et
-    // dans la chaîne, et `latestState` rendrait l'avant-dernier état demandé.
-    stateLock.lock()
-    let seq = beginInFlight(activity, content.state)
-    let previous = _updateChain
-    let task = Task { [weak self] in
-      _ = await previous?.value
-      await activity.update(content, alertConfiguration: alert)
-      self?.endInFlight(seq)
-      completion?()
-    }
-    _updateChain = task
-    stateLock.unlock()
-  }
-
   private static let appGroupId = "group.com.striveapp.app"
   /// Dernier état de session connu (KPI du jour + ancre du timer), rejoué quand
   /// iOS a retiré la carte alors que la session continue.
@@ -236,8 +158,6 @@ final class LiveActivityManager {
         pushType: nil
       )
       log("OK id=\(current?.id ?? "nil")")
-      // Nouvelle carte : ce qui restait en vol visait l'ancienne.
-      clearInFlight()
       observeState()
       saveSessionSnapshot(state)
       return true
@@ -250,11 +170,16 @@ final class LiveActivityManager {
   /// Mémorise l'état de session (KPI du jour + ancre du timer) dans l'App Group.
   /// C'est la seule copie qui survit à la mort de la carte : sans elle, une carte
   /// recréée repartirait à 0 € / 0 km / timer remis à zéro.
-  /// Délègue à `saveLiveActivitySessionSnapshot` : le bouton ✅ de la carte
-  /// écrit le même snapshot depuis un process où ce manager n'existe pas, et
-  /// deux copies de la même sérialisation finiraient par diverger.
   private func saveSessionSnapshot(_ s: StriveActivityAttributes.ContentState) {
-    saveLiveActivitySessionSnapshot(s)
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    var snap: [String: Any] = [
+      "todayEarnings": s.todayEarnings,
+      "todayHourlyRate": s.todayHourlyRate,
+      "todayKm": s.todayKm,
+      "onlineMinutes": s.onlineMinutes,
+    ]
+    if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
+    d.set(snap, forKey: Self.sessionSnapshotKey)
   }
 
   /// Réarme uniquement l'affichage d'une session encore active. Une fermeture
@@ -320,21 +245,8 @@ final class LiveActivityManager {
     guard UserDefaults(suiteName: Self.appGroupId)?.bool(forKey: "sessionOnline") == true else {
       return nil
     }
-    // 3 s au plus, toujours très loin du watchdog de l'AppIntent (25 s).
-    //
-    // C'était 1,5 s. Le cas qui débordait : le PREMIER scan après le passage en
-    // ligne, quand le chauffeur bascule directement sur son application VTC.
-    // Strive n'a alors pas eu une seconde au premier plan, iOS l'évince, et le
-    // raccourci relance le process À FROID — ActivityKit doit rejoindre le
-    // démon système avant que `Activity.activities` se peuple, et ça n'entre pas
-    // toujours dans une seconde et demie. Les scans suivants trouvent le process
-    // chaud, d'où le « des fois ».
-    //
-    // Le coût du doublement est nul quand il n'y a rien à attendre : la garde
-    // `sessionOnline` juste au-dessus sort immédiatement si aucune session n'est
-    // ouverte. On n'attend donc que dans le cas où une carte est réellement à
-    // l'écran, et le repli notification n'est retardé que là.
-    for _ in 0..<12 {
+    // 1,5 s au plus, largement sous le budget de l'AppIntent (watchdog à 25 s).
+    for _ in 0..<6 {
       Thread.sleep(forTimeInterval: 0.25)
       if let live = liveActivity() {
         log("live activity apparue après attente")
@@ -361,11 +273,14 @@ final class LiveActivityManager {
       return false
     }
     if Thread.isMainThread {
-      enqueue(activity, content, alert: alert)
+      Task { await activity.update(content, alertConfiguration: alert) }
       return true
     }
     let sem = DispatchSemaphore(value: 0)
-    enqueue(activity, content, alert: alert) { sem.signal() }
+    Task {
+      await activity.update(content, alertConfiguration: alert)
+      sem.signal()
+    }
     guard sem.wait(timeout: .now() + 3) == .success else {
       log("update TIMEOUT on \(activity.id)")
       return false
@@ -420,7 +335,7 @@ final class LiveActivityManager {
     guard let activity = liveActivity() ?? waitForLiveActivity() else { return false }
     autoDismiss?.cancel()
     autoDismiss = nil
-    let prev = latestState(activity)
+    let prev = activity.content.state
     let state = StriveActivityAttributes.State(
       platform: platform,
       fare: fare,
@@ -458,9 +373,7 @@ final class LiveActivityManager {
     log("backToIdle")
     // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
     // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base.
-    // `latestState` et pas `content.state` : le push de gains qui accompagne une
-    // validation part juste avant, et n'a pas encore atterri.
-    let prev = latestState(activity)
+    let prev = activity.content.state
     let idle = StriveActivityAttributes.State(
       platform: "IDLE",
       fare: 0, hourlyRate: 0, kmRate: 0,
@@ -472,7 +385,7 @@ final class LiveActivityManager {
       sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
-    enqueue(activity, content)
+    Task { await activity.update(content) }
   }
 
   /// Efface le verdict seulement s'il est encore celui de la course décidée.
@@ -484,7 +397,7 @@ final class LiveActivityManager {
     // `rideId` n'a rien à protéger — c'est le cas qui la laissait figée sur son
     // verdict dès que l'état n'était pas parfaitement synchronisé.
     guard let activity = liveActivity() else { return }
-    if let prevId = latestState(activity).rideId, prevId != rideId {
+    if let prevId = activity.content.state.rideId, prevId != rideId {
       return
     }
     backToIdle()
@@ -499,7 +412,7 @@ final class LiveActivityManager {
       return false
     }
     log("showError() on \(activity.id)")
-    let prev = latestState(activity)
+    let prev = activity.content.state
     let errorState = StriveActivityAttributes.State(
       platform: "ERROR",
       fare: 0, hourlyRate: 0, kmRate: 0,
@@ -538,7 +451,7 @@ final class LiveActivityManager {
     onlineMinutes: Int
   ) {
     guard let activity = liveActivity() else { return }
-    let prev = latestState(activity)
+    let prev = activity.content.state
     // Tant que la dernière course attend une décision, le dashboard ne doit pas
     // écraser son verdict. `RideDecisionIntent` efface `rideId` en revenant aux KPI.
     let resultShowing = prev.rideId != nil
@@ -564,7 +477,7 @@ final class LiveActivityManager {
       staleDate: Date().addingTimeInterval(3600 * 8),
       relevanceScore: resultShowing ? 100 : 50
     )
-    enqueue(activity, content)
+    Task { await activity.update(content) }
     saveSessionSnapshot(state)
   }
 
@@ -574,7 +487,6 @@ final class LiveActivityManager {
     log("stop() current=\(current?.id ?? "nil")")
     autoDismiss?.cancel()
     autoDismiss = nil
-    clearInFlight()
     stateObserverTask?.cancel()
     stateObserverTask = nil
     if current == nil {

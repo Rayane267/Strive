@@ -285,13 +285,22 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// n'ait à la retrouver. `scanTs`, lui, ne fait plus que la dater.
   ///
   /// `done` est appelé quand TOUT est écrit, écriture en base comprise : c'est ce
-  /// qui maintient le process en vie le temps de la requête. Aucun thread n'est
-  /// bloqué au passage — cette méthode peut tourner sur le main thread (le succès
-  /// TomTom y repasse), où une attente synchrone exposerait au watchdog.
+  /// qui maintient le process en vie le temps de la requête. Le callback TomTom
+  /// peut arriver sur le main thread ; on le déporte alors pour laisser
+  /// `waitForLiveActivity` récupérer une carte dans un process relancé à froid.
   private func presentResult(
     _ result: ScanProcessor.FinalResult,
     done: @escaping (String) -> Void
   ) {
+    // TomTom et Gemini rappellent sur le main thread. `waitForLiveActivity()` ne
+    // doit jamais attendre là, donc l'ancien chemin court-circuitait précisément
+    // la récupération de l'activité après un lancement à froid.
+    if Thread.isMainThread {
+      DispatchQueue.global(qos: .userInitiated).async {
+        self.presentResult(result, done: done)
+      }
+      return
+    }
     // Verrou anti double-appui libéré dès qu'on a un résultat à montrer.
     ScanProcessor.markScanFinished()
     let scanTs = Date().timeIntervalSince1970

@@ -310,7 +310,8 @@
       "Bash(sed -i 's/        if \\(nativeResult\\\\.rideId\\) {\\\\n/X/' src/screens/DashboardScreen.tsx)",
       "Bash(echo *)",
       "Bash(grep -rlE \"eyJ[A-Za-z0-9_-]{40,}\" supabase/functions/)",
-      "Bash(grep -v \"^\\\\s*//\")"
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(grep -vE \"^\\\\+\\\\s*//|^\\\\+\\\\s*$\")"
     ]
   },
   "enableAllProjectMcpServers": true,
