@@ -244,11 +244,32 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
       // vocales (StriveActivityAttributes.swift) : une seule écriture, un seul
       // format. L'app viendra chercher la décision (`getPendingRideDecisions`)
       // quand elle sera en état de l'appliquer.
+      let accepted = action == Self.acceptActionId
       appendRideDecision(
         rideId: rideId,
-        accepted: action == Self.acceptActionId,
+        accepted: accepted,
         appGroupId: Self.appGroupId
       )
+
+      // ET les KPI de la carte, comme le fait le bouton de la Live Activity.
+      // Sans ça, une décision prise sur la NOTIFICATION laissait les gains du
+      // lock screen inchangés jusqu'à la prochaine ouverture de l'app — alors
+      // que la notification est justement le chemin emprunté quand la carte n'a
+      // PAS pu montrer le verdict. Les deux surfaces répondaient donc
+      // différemment au même geste.
+      //
+      // `completionHandler` est appelé APRÈS l'attente : le signaler avant
+      // autorise iOS à suspendre le process en plein `activity.update`.
+      if #available(iOS 16.2, *) {
+        let add = accepted
+          ? lastScannedFareKm(appGroupId: Self.appGroupId)
+          : (fare: 0.0, km: 0.0)
+        Task {
+          await revertLiveActivityToIdle(rideId: rideId, addFare: add.fare, addKm: add.km)
+          completionHandler()
+        }
+        return
+      }
     }
     completionHandler()
   }

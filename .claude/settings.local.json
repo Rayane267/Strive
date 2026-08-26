@@ -311,7 +311,8 @@
       "Bash(echo *)",
       "Bash(grep -rlE \"eyJ[A-Za-z0-9_-]{40,}\" supabase/functions/)",
       "Bash(grep -v \"^\\\\s*//\")",
-      "Bash(grep -vE \"^\\\\+\\\\s*//|^\\\\+\\\\s*$\")"
+      "Bash(grep -vE \"^\\\\+\\\\s*//|^\\\\+\\\\s*$\")",
+      "Bash(grep -vE \"^[+-]\\\\s*//|^[+-]\\\\s*///|^[+-]\\\\s*$\")"
     ]
   },
   "enableAllProjectMcpServers": true,
