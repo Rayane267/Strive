@@ -1,7 +1,7 @@
 <resources>
   <string name="app_name">Strive</string>
   <string name="accessibility_service_description">Strive est un outil professionnel pour chauffeurs VTC. Ce service d\'accessibilité est utilisé uniquement pour capturer l\'écran des applications Uber, Bolt et Heetch lorsque l\'utilisateur appuie sur le bouton de scan, afin d\'extraire automatiquement les informations de la course (tarif, distance, adresses) via OCR local. Aucune donnée personnelle n\'est lue ni collectée. L\'analyse est effectuée sur l\'appareil et ne s\'active qu\'à la demande explicite du chauffeur.</string>
-  <string name="expo_runtime_version">1.0.0</string>
+  <string name="expo_runtime_version">2.4.1</string>
   <string name="scanner_not_a_ride">Aucune offre de course détectée</string>
   <string name="scanner_session_required_bubble">Passez en ligne pour scanner</string>
   <string name="scanner_session_required_title">Session requise</string>

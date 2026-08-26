@@ -3,8 +3,15 @@
  *
  * ⚠️ Contrairement à telemetryService (non nominatif), ceci stocke des DONNÉES
  * PERSONNELLES (adresses dans les blocs OCR) → table scan_debug, RLS owner-only,
- * écriture via RPC security-definer, rétention 30 j. Réservé bêta consentante.
+ * écriture via RPC security-definer, rétention 30 j.
  * Voir migration 20260613_scan_debug.sql.
+ *
+ * BASE LÉGALE : intérêt légitime (RGPD art. 6.1.f), déclaré dans
+ * `PRIVACY_POLICY.md` §2.6 — et non un consentement, contrairement à ce que
+ * disait cet en-tête. L'opposition prévue par l'art. 21 est portée par
+ * `preferences.scan_debug_opt_out` : la RPC sort sans rien écrire quand le
+ * drapeau est levé (migration 20260826). Le Dashboard le teste aussi avant
+ * d'appeler, pour ne pas envoyer des adresses qui seront refusées.
  *
  * But : reproduire les cas en fixture pour corriger le parser, et amorcer un
  * dataset labellisé (native vs gemini vs, plus tard, correction utilisateur).

@@ -182,7 +182,10 @@ const DashboardScreen = () => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true, deduct_fuel: false });
+  // `scan_debug_opt_out` : opposition à la capture de diagnostic
+  // (PRIVACY_POLICY §2.6). Défaut `false` — pas opposé — pour que le
+  // comportement d'un profil sans ligne de préférences reste celui d'avant.
+  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true, deduct_fuel: false, scan_debug_opt_out: false });
   // Coût carburant au km (conso × prix du jour) : pré-calculé ici car le natif
   // n'a ni le type de carburant ni le tarif à la pompe. 0 = rien à déduire.
   const [fuelPerKm, setFuelPerKm] = useState(0);
@@ -784,9 +787,14 @@ const DashboardScreen = () => {
       // stocke les blocs OCR pour reproduire le cas en fixture + amorcer un
       // dataset (native vs gemini). Données perso → table scan_debug privée,
       // RLS owner-only, rétention 30 j. Fire-and-forget.
+      //
+      // L'OPPOSITION est vérifiée ici en plus de la RPC. Le serveur reste seul
+      // juge — un bundle antérieur ne connaît pas ce drapeau, et une garde
+      // côté app se contourne — mais quand le chauffeur s'est opposé, autant
+      // ne pas envoyer ses adresses sur le réseau pour se les faire refuser.
       const nativePickupMissing = !nativeResult.pickupAddress;
       const nativeDestMissing = !nativeResult.destinationAddress;
-      if (nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
+      if (!preferences.scan_debug_opt_out && nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
         logScanDebug({
           platform: nativeResult.platform,
           screenHeight: nativeResult.screenHeight ?? null,
@@ -1426,7 +1434,7 @@ const DashboardScreen = () => {
       setFetchError(false);
       const { data: prefsData } = await supabase
         .from('preferences')
-        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup, deduct_fuel')
+        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup, deduct_fuel, scan_debug_opt_out')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -1452,6 +1460,10 @@ const DashboardScreen = () => {
           // `true` écrite du temps de son abonnement et la déduction restait
           // appliquée au scan, alors que Préférences affiche le toggle éteint.
           deduct_fuel: isFreeTier ? false : (prefsData.deduct_fuel ?? false),
+          // `?? false` et pas `?? true` : la colonne peut manquer si la
+          // migration 20260826 n'est pas encore déployée sur cet
+          // environnement, et une absence ne vaut pas une opposition.
+          scan_debug_opt_out: (prefsData as { scan_debug_opt_out?: boolean }).scan_debug_opt_out ?? false,
         });
       }
 

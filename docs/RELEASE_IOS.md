@@ -34,6 +34,25 @@ Contexte technique constaté :
   ```
   Builder depuis une branche de travail est possible mais tu ne sauras plus quel commit est en prod.
 
+- [ ] **Appliquer les migrations du chantier scan** — `20260820_scan_ledger.sql`,
+  `20260821_ride_id_at_scan.sql`, `20260822_scan_quota_on_profile.sql` et
+  `20260826_scan_debug_opt_out.sql` ne sont pas encore poussées. Le build parlera
+  à la base **prod** : sans elles, le trigger anti-doublon heuristique est
+  toujours en place et le quota reste en `BEFORE INSERT`, donc un rejeu du
+  journal natif peut lever `P0001` sur une course déjà en base. Les deux du
+  milieu vont **ensemble**, c'est écrit en tête de `20260821`.
+  ```bash
+  npx supabase db push --linked
+  ```
+
+- [ ] **`runtimeVersion`** — à rebumper à chaque livraison qui touche au natif.
+  Le contrat JS ↔ natif a changé avec le chantier scan (`rideId` au lieu de
+  `qid`, `getPendingRideDecisions`, `queueRideDecision`) : servir ce JS en OTA à
+  un binaire antérieur ne crashe pas — tous les appels de pont sont en `?.` —
+  mais les décisions Prise/Refusée cessent silencieusement de s'appliquer. Passé
+  à `2.4.1` dans les trois déclarations (`app.json`, `Expo.plist`,
+  `strings.xml`), qui doivent toujours rester identiques.
+
 - [x] ~~**Appliquer les migrations Supabase en production**~~ — fait
   `supabase/migrations/20260816_rides_scan_ts.sql` et `20260817_rides_scan_ts_unique.sql` ne sont pas encore poussées. Le build App Store parlera à la **base prod** → si le schéma manque, l'app est cassée pour le reviewer.
   ```bash
@@ -78,9 +97,35 @@ Suivre `docs/REVENUECAT_SETUP.md`. Points bloquants :
 
 ---
 
-## Phase 3 — Configuration EAS ✅ (déjà opérationnelle)
+## Phase 3 — Configuration EAS ⚠️ (le projet a changé — à re-provisionner)
 
-Vérifié : compte `rayane2677` / projet `@rayane2677s-organization/strive`, et le **build iOS production n°67 a réussi** le 17/08/2026 depuis le commit `6903678`. Toute la chaîne (credentials, provisioning des 3 bundle IDs, secrets) est donc **déjà prouvée fonctionnelle**. Rien à refaire ici.
+> **⚠️ CE QUI SUIT DÉCRIT L'ANCIEN PROJET.** `app.json` est passé de
+> `6b372daa-8fcc-4b08-a949-afaf44b43cc4` à `1c03856b-2aa9-40e5-9e1f-b961ac80d08c`
+> (propagé à `ios/Strive/Supporting/Expo.plist` et à l'`AndroidManifest`). Tout
+> ce qui est **par projet** est donc à refaire avant de builder :
+>
+> - [ ] **`STRIVE_ENV_FILE`** — sans lui `scripts/eas-build-pre-install.js` sort
+>       en erreur et **le build échoue** (c'est voulu : mieux vaut ça qu'un
+>       binaire sans clés).
+>       ```bash
+>       npx eas env:create --scope project --environment production \
+>         --name STRIVE_ENV_FILE --type file --visibility secret --value ./.env
+>       ```
+> - [ ] **`SENTRY_AUTH_TOKEN`** — sinon pas de source maps sur les crashs prod.
+> - [ ] **Credentials iOS** : certificat de distribution et provisioning des
+>       trois bundle IDs, à re-provisionner (`npx eas credentials -p ios`).
+> - [ ] **Numéro de build** : `appVersionSource: remote` + `autoIncrement` tient
+>       le compteur **par projet** → le nouveau repart de zéro. App Store Connect
+>       refuse un numéro qui ne croît pas pour une même version marketing. Si un
+>       binaire 2.4.1 a déjà été téléversé, forcer le compteur au-dessus :
+>       ```bash
+>       npx eas build:version:set --platform ios
+>       ```
+> - [ ] **Canal OTA** : les binaires issus de l'ancien projet pointent sur
+>       `u.expo.dev/6b372daa…` et ne recevront plus rien. Sans conséquence si
+>       aucun testeur n'est resté dessus.
+
+Pour mémoire (ancien projet) : compte `rayane2677` / projet `@rayane2677s-organization/strive`, et le **build iOS production n°67 a réussi** le 17/08/2026 depuis le commit `6903678`. La chaîne y était prouvée fonctionnelle.
 
 - [x] Connecté (`eas whoami` → `rayane2677`)
 - [x] Credentials iOS : validés implicitement par les builds `store` réussis (65, 66, 67)
