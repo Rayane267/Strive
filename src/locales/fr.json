@@ -994,6 +994,10 @@
     "start": "Commencer",
     "other": "Autre",
     "counter": "Étape {{current}} sur {{total}}",
+    "demo": {
+      "title": "Une course, un verdict",
+      "desc": "Strive lit l'offre et calcule ce qu'elle rapporte vraiment. Touchez la carte pour voir d'autres courses."
+    },
     "platforms": {
       "title": "Sur quelles apps roulez-vous ?",
       "desc": "Strive apprendra à reconnaître leurs écrans. Vous pouvez en choisir plusieurs."

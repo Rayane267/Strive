@@ -37,6 +37,7 @@ import { supabase } from '../services/supabase';
 import { deriveThreshold, SOCIAL_RATES, DriverStatus } from '../utils/incomeGoal';
 import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionService';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import ScanPreview from '../components/ScanPreview';
 
 /**
  * Segments du trait discontinu marquant le seuil personnel. Construit à la main
@@ -79,7 +80,18 @@ const formatEuros = (n: number) =>
   `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
 
 /**
- * Les quatre questions, puis l'écran de résultat.
+ * Une démonstration, les quatre questions, puis l'écran de résultat.
+ *
+ * LA DÉMONSTRATION D'ABORD, et c'est le seul changement d'ordre. Avant elle, on
+ * demandait quatre chiffres puis de l'argent à quelqu'un qui n'avait jamais vu
+ * l'app faire son travail. Les dix onboardings les mieux notés du marché ont
+ * tous le même réflexe — première action utile en moins d'une minute, Duolingo
+ * repoussant même la création de compte après elle — et c'était le seul écart
+ * structurel entre eux et ce flux.
+ *
+ * On montre la surface RÉELLE, l'îlot dynamique, pas une abstraction : c'est là
+ * que le verdict apparaîtra pour de vrai, puisqu'on scanne depuis une autre app.
+ * Et elle est tapable : trois courses, une bonne, une moyenne, une mauvaise.
  *
  * « platforms » ouvrait la marche et n'y a plus sa place. L'en-tête de ce
  * fichier annonce d'ailleurs « les quatre faits qui permettent de calculer le
@@ -93,7 +105,7 @@ const formatEuros = (n: number) =>
  * c'est vingt pour cent de chemin en moins jusqu'au chiffre qui justifie le
  * formulaire.
  */
-const STEPS = ['hours', 'goal', 'costs', 'status', 'result'] as const;
+const STEPS = ['demo', 'hours', 'goal', 'costs', 'status', 'result'] as const;
 type Step = typeof STEPS[number];
 
 /**
@@ -199,6 +211,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   /** Une étape n'est franchissable qu'une fois sa question répondue. */
   const answered: Record<Step, boolean> = {
+    // Rien à répondre : on regarde. L'écran n'existe que pour donner une raison
+    // aux quatre questions qui suivent.
+    demo: true,
     hours: weeklyHours !== null,
     goal: monthlyGoal !== null,
     costs: fixedCosts !== null,
@@ -466,6 +481,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   const renderStep = () => {
     switch (step) {
+      case 'demo':
+        return <ScanPreview />;
+
       case 'hours':
         return <OptionList choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
 
@@ -615,6 +633,13 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   };
 
   const title = t(`onboarding.${step}.title`);
+  // Chaque question porte deja sa phrase d'explication en traduction — elle n'a
+  // simplement jamais ete affichee. Les apps qui disent POURQUOI elles posent une
+  // question convertissent nettement mieux que celles qui posent sechement ;
+  // celle-ci etait ecrite, dans les deux langues, et dormait dans le fichier.
+  // `defaultValue` vide : l'ecran de resultat n'en a pas, et `t()` rendrait la
+  // cle elle-meme.
+  const desc = t(`onboarding.${step}.desc`, { defaultValue: '' });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -666,6 +691,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           ]}
         >
           <Text style={styles.title}>{title}</Text>
+          {desc ? <Text style={styles.desc}>{desc}</Text> : null}
           <View style={styles.stepContent}>{renderStep()}</View>
           {renderPlusPitch()}
         </Animated.View>
@@ -743,6 +769,17 @@ const styles = StyleSheet.create({
   // en haut elles aussi laissait un grand vide sous les questions à trois
   // réponses, et un écran plein sous celles à six.
   stepWrap: { flex: 1, width: '100%' },
+
+  // La phrase d'explication : plus proche du titre que des reponses, elle en est
+  // la suite et non un element a part.
+  desc: {
+    color: colors.textDimmed,
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 4,
+  },
 
   // Plus d'air au-dessus du titre qu'en dessous : le regard entre par lui.
   title: {

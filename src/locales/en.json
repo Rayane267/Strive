@@ -994,6 +994,10 @@
     "start": "Get started",
     "other": "Other",
     "counter": "Step {{current}} of {{total}}",
+    "demo": {
+      "title": "One ride, one verdict",
+      "desc": "Strive reads the offer and works out what it actually pays. Tap the card to see other rides."
+    },
     "platforms": {
       "title": "Which apps do you drive for?",
       "desc": "Strive will learn to read their screens. You can pick more than one."

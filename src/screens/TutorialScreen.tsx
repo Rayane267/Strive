@@ -20,6 +20,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import ScanPreview from '../components/ScanPreview';
 import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import { useAuth } from '../context/AuthContext';
@@ -81,11 +82,6 @@ const PRESETS = [
   { key: 'premium', hourly: 42, km: 1.70 },
 ];
 
-const PREVIEW_DATA = [
-  { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
-  { hourly: 38, fare: 7,  km: '3.50', duration: 9,  distance: '2.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
-  { hourly: 15, fare: 22, km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
-];
 
 const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const { t } = useTranslation();
@@ -105,7 +101,6 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // branches d'aide existantes.
   const iosTrigger = 'assistive' as IosTrigger;
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
-  const [previewIdx, setPreviewIdx] = useState(0);
   const [minHourly, setMinHourly] = useState(30);
   const [minKm, setMinKm] = useState(1.0);
   const [includePickup, setIncludePickup] = useState(true);
@@ -335,70 +330,12 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
           ) : null}
 
           {/* Slide iOS « See It In Action » — tap to cycle through 3 examples */}
+          {/* Le wrapper ne porte que l'opacité animée de la diapositive :
+              `ScanPreview` embarque déjà la mise en page qu'`iosPreviewBlock`
+              donnait ici, à l'identique. */}
           {isIosPreview ? (
-            <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              {(() => {
-                const p = PREVIEW_DATA[previewIdx];
-                return (
-                  <>
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      onPress={() => { hapticLight(); setPreviewIdx((previewIdx + 1) % PREVIEW_DATA.length); }}
-                    >
-                      <View style={styles.dynamicIsland}>
-                        <View style={styles.diRowTop}>
-                          <Text style={styles.diPlatform}>Uber</Text>
-                          <View style={styles.diHourly}>
-                            <Text style={styles.diHourlyValue}>€{p.hourly}</Text>
-                            <Text style={styles.diHourlyUnit}>/h</Text>
-                          </View>
-                          <View style={{ flex: 1 }} />
-                          <View style={[styles.diFarePill, { backgroundColor: p.color + '46', borderColor: p.color + 'D9' }]}>
-                            <Text style={styles.diFarePillTxt}>€{p.fare}</Text>
-                          </View>
-                          <View style={styles.diKmRate}>
-                            <Feather name="arrow-up-right" size={11} color={p.color} />
-                            <Text style={styles.diKmRateTxt}>€{p.km}/km</Text>
-                          </View>
-                        </View>
-                        <View style={styles.diRouteRow}>
-                          <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
-                            <MaterialCommunityIcons name="car" size={12} color="#000" />
-                          </View>
-                          <View style={styles.diRouteLineWrap}>
-                            <View style={[styles.diRouteLine, { backgroundColor: p.color + 'D9' }]} />
-                            <View style={[styles.diRouteDot, { backgroundColor: p.color }]} />
-                          </View>
-                          <View style={styles.diRouteStats}>
-                            <Text style={styles.diRouteDuration}>{p.duration}min</Text>
-                            <Text style={styles.diRouteDistance}>{p.distance}km</Text>
-                          </View>
-                          <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
-                            <Feather name={p.icon} size={12} color="#000" />
-                          </View>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.previewVerdict}>
-                      <View style={[styles.previewVerdictDot, { backgroundColor: p.color }]} />
-                      <Text style={[styles.previewVerdictTxt, { color: p.color }]}>
-                        {t(p.verdictKey)}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.previewHintTxt}>{t(p.hintKey)}</Text>
-
-                    <View style={styles.previewDots}>
-                      {PREVIEW_DATA.map((d, pi) => (
-                        <TouchableOpacity key={pi} onPress={() => { hapticLight(); setPreviewIdx(pi); }}>
-                          <View style={[styles.previewDot, pi === previewIdx && { backgroundColor: d.color, width: 24 }]} />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
-                );
-              })()}
+            <Animated.View style={{ opacity }}>
+              <ScanPreview />
             </Animated.View>
           ) : null}
 
@@ -979,106 +916,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   // Mock 1:1 du SwiftUI StriveLiveActivity.LockScreenView
-  dynamicIsland: {
-    width: '100%',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    gap: 16,
-  },
-  diRowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  diPlatform: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  diHourly: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 2,
-  },
-  diHourlyValue: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  diHourlyUnit: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  diFarePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  diFarePillTxt: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  diKmRate: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  diKmRateTxt: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  diRouteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  diRouteCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  diRouteLineWrap: {
-    flex: 1,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  diRouteLine: {
-    height: 4,
-    width: '100%',
-    borderRadius: 2,
-  },
-  diRouteDot: {
-    position: 'absolute',
-    width: 11,
-    height: 11,
-    borderRadius: 5.5,
-  },
-  diRouteStats: {
-    alignItems: 'flex-end',
-    minWidth: 50,
-  },
-  diRouteDuration: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  diRouteDistance: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 13,
-  },
   iosPreviewHint: {
     color: colors.textDimmed,
     fontSize: 12,
@@ -1088,43 +925,6 @@ const styles = StyleSheet.create({
   },
 
   // Preview verdict + hint
-  previewVerdict: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  previewVerdictDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  previewVerdictTxt: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  previewHintTxt: {
-    color: colors.textDimmed,
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 14,
-    lineHeight: 17,
-  },
-  previewDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  previewDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
 
   // Minimums presets
   presetRow: {
