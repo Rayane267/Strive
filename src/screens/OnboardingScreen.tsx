@@ -36,23 +36,14 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { deriveThreshold, SOCIAL_RATES, DriverStatus } from '../utils/incomeGoal';
 import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionService';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
-// « OTHER » est un choix comme un autre : il n'ouvre aucune saisie. Le scanner
-// n'a pas besoin de connaître le nom de la plateforme pour lire un montant, et
-// demander lequel ferait payer un clavier pour une information inexploitée.
 /**
  * Segments du trait discontinu marquant le seuil personnel. Construit à la main
  * plutôt qu'avec `borderStyle: 'dashed'`, dont le rendu diffère entre iOS et
  * Android et se déforme dès qu'une bordure est arrondie.
  */
 const DASHES = Array.from({ length: 34 }, (_, i) => i);
-
-const PLATFORMS = [
-  { key: 'UBER', label: 'Uber' },
-  { key: 'BOLT', label: 'Bolt' },
-  { key: 'HEETCH', label: 'Heetch' },
-  { key: 'OTHER', label: null },
-] as const;
 
 // Propositions rapides. `null` ouvre une saisie libre : taper une pastille bat
 // le clavier, mais on ne ferme jamais la porte au chiffre exact.
@@ -87,15 +78,101 @@ const STATUS_CHOICES: (number | null)[] = [
 const formatEuros = (n: number) =>
   `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
 
-/** Les 5 questions, puis l'écran de résultat. */
-const STEPS = ['platforms', 'hours', 'goal', 'costs', 'status', 'result'] as const;
+/**
+ * Les quatre questions, puis l'écran de résultat.
+ *
+ * « platforms » ouvrait la marche et n'y a plus sa place. L'en-tête de ce
+ * fichier annonce d'ailleurs « les quatre faits qui permettent de calculer le
+ * seuil » : la cinquième question n'en était pas un. `deriveThreshold` ne s'en
+ * sert pas, `preferences.platforms` n'est relu nulle part dans l'app, et le
+ * scanner apprend la plateforme tout seul à chaque course — elle est écrite sur
+ * chaque `rides.platform`.
+ *
+ * C'était donc une collecte posée AVANT la valeur, sur l'écran où l'on décroche
+ * le plus : celui qui n'a encore rien reçu. Quatre questions au lieu de cinq,
+ * c'est vingt pour cent de chemin en moins jusqu'au chiffre qui justifie le
+ * formulaire.
+ */
+const STEPS = ['hours', 'goal', 'costs', 'status', 'result'] as const;
 type Step = typeof STEPS[number];
+
+/**
+ * Carte de réponse. C'est le geste répété de tout l'onboarding — quatre
+ * questions, une carte par ligne — donc le seul qui mérite une réponse au doigt.
+ * `docs/DESIGN.md` la définit : « les cartes interactives se réduisent
+ * légèrement (0.98) plutôt que de changer de couleur. Réponse tactile, pas
+ * signal visuel. » D'où `activeOpacity={1}` : l'échelle porte le retour, le voile
+ * gris de TouchableOpacity ferait doublon et brouillerait l'état sélectionné.
+ *
+ * Composant de MODULE, et pas une fonction déclarée dans le corps de l'écran :
+ * là-bas React en recrée le type à chaque rendu, démonte la carte et repose sa
+ * valeur animée — l'appui n'aurait jamais le temps de se voir.
+ *
+ * Descente asymétrique : 90 ms pour s'enfoncer, 160 pour revenir. L'enfoncement
+ * doit suivre le doigt, le retour peut se permettre d'être vu.
+ */
+const OptionCard = ({
+  active,
+  reduceMotion,
+  onPress,
+  children,
+  accessibilityRole,
+  accessibilityState,
+}: {
+  active: boolean;
+  reduceMotion: boolean;
+  onPress: () => void;
+  children: React.ReactNode;
+  accessibilityRole?: 'button' | 'checkbox';
+  accessibilityState?: { selected?: boolean; checked?: boolean };
+}) => {
+  const press = useRef(new Animated.Value(0)).current;
+  const to = (toValue: number) =>
+    Animated.timing(press, {
+      toValue,
+      duration: toValue === 1 ? 90 : 160,
+      easing: toValue === 1 ? Easing.out(Easing.quad) : Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+  return (
+    <Animated.View
+      style={
+        reduceMotion
+          ? undefined
+          : {
+              transform: [
+                { scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] }) },
+              ],
+            }
+      }
+    >
+      <TouchableOpacity
+        style={[styles.option, active && styles.optionActive]}
+        activeOpacity={1}
+        onPressIn={reduceMotion ? undefined : () => to(1)}
+        onPressOut={reduceMotion ? undefined : () => to(0)}
+        onPress={onPress}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={accessibilityState}
+      >
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+/** Le bouton principal interpole sa couleur de fond entre eteint et allume. */
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const { t } = useTranslation();
   const { user, profile } = useAuth();
   const navigation = useNavigation<any>();
   const isPremium = getEffectivePlanTier(profile) !== 'free';
+  // « Reduire les animations » : tout ce qui suit degrade en fondu, jamais en
+  // suppression — l'ecran doit rester lisible et les etats rester distincts.
+  const reduceMotion = useReduceMotion();
 
   const [index, setIndex] = useState(0);
   const step: Step = STEPS[index];
@@ -105,7 +182,6 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // chauffeur n'a pas donnée, et elle produit pourtant un seuil de rentabilité
   // qu'il croira être le sien. `null` = pas encore répondu, et le bouton
   // « Continuer » reste inactif tant que c'est le cas.
-  const [platforms, setPlatforms] = useState<string[]>([]);
   const [weeklyHours, setWeeklyHours] = useState<number | null>(null);
   const [monthlyGoal, setMonthlyGoal] = useState<number | null>(null);
   const [fixedCosts, setFixedCosts] = useState<number | null>(null);
@@ -123,7 +199,6 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   /** Une étape n'est franchissable qu'une fois sa question répondue. */
   const answered: Record<Step, boolean> = {
-    platforms: platforms.length > 0,
     hours: weeklyHours !== null,
     goal: monthlyGoal !== null,
     costs: fixedCosts !== null,
@@ -143,6 +218,45 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // l'impression que l'écran répond au doigt plutôt qu'il ne défile.
   const anim = useRef(new Animated.Value(1)).current;
 
+  // ── Progression ───────────────────────────────────────────────────────────
+  // Elle sautait d'un pas a l'autre. C'est pourtant le seul element qui reponde
+  // a « ou j'en suis, et combien il reste » : un saut ne raconte rien, un
+  // parcours si. `scaleX` et non `width` — la largeur passe par la mise en page
+  // a chaque image, la transformation part sur le pilote natif.
+  const progress = useRef(new Animated.Value(1 / STEPS.length)).current;
+  useEffect(() => {
+    const toValue = (index + 1) / STEPS.length;
+    if (reduceMotion) { progress.setValue(toValue); return; }
+    Animated.timing(progress, {
+      toValue,
+      // Plus long que la transition de contenu (320 ms) : la barre doit encore
+      // avancer quand la question suivante est deja lisible, sinon on ne la voit
+      // pas bouger — on la retrouve simplement plus loin.
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [index, progress, reduceMotion]);
+
+  // ── Etat du bouton principal ──────────────────────────────────────────────
+  // Il s'allume quand la question est repondue. Le basculement etait sec ; une
+  // transition courte le rattache au geste qui vient d'avoir lieu.
+  const ctaOn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const toValue = canContinue ? 1 : 0;
+    if (reduceMotion) { ctaOn.setValue(toValue); return; }
+    Animated.timing(ctaOn, {
+      toValue,
+      duration: canContinue ? 180 : 120,
+      easing: Easing.out(Easing.quad),
+      // La couleur de fond s'interpole, ce que le pilote natif ne sait pas
+      // faire. Un seul bouton, deux images par seconde de transition : le cout
+      // est nul, et l'alternative — un fondu croise de deux vues superposees —
+      // couterait une vue pour rien.
+      useNativeDriver: false,
+    }).start();
+  }, [canContinue, ctaOn, reduceMotion]);
+
   // ── Révélation du résultat ────────────────────────────────────────────────
   // Le dernier écran est le seul qui affiche un chiffre produit par les
   // réponses : il s'écrit en montant depuis zéro plutôt que d'apparaître fait.
@@ -152,6 +266,14 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   useEffect(() => {
     if (step !== 'result') return;
+    // Sous « Reduire les animations », le seuil est POSE, pas joue : le chiffre
+    // affiche sa valeur finale et l'ecart est a sa hauteur. On ne prive personne
+    // de l'information, on retire la mise en scene.
+    if (reduceMotion) {
+      setCounted(FREE_THRESHOLDS.hourly);
+      reveal.setValue(1);
+      return;
+    }
     reveal.setValue(0);
     const id = reveal.addListener(({ value }) => {
       setCounted(Math.round(value * FREE_THRESHOLDS.hourly));
@@ -166,7 +288,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
       useNativeDriver: false,
     }).start();
     return () => reveal.removeListener(id);
-  }, [step, reveal]);
+  }, [step, reveal, reduceMotion]);
 
   const go = (next: number) => {
     if (next < 0 || next >= STEPS.length) return;
@@ -177,12 +299,18 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     // masquée — puis la suivante revient de l'avant. Sortie brève et entrée
     // deux fois plus longue : c'est le déséquilibre qui donne la sensation de
     // réponse au doigt.
+    // Sous « Reduire les animations », la sortie et l'entree restent — sans
+    // elles la question changerait sans qu'on sache qu'elle a change — mais le
+    // recul en echelle tombe et les durees se resserrent : il reste un fondu,
+    // ce que recommande Apple en remplacement d'un deplacement.
+    const out = reduceMotion ? 90 : 160;
+    const back = reduceMotion ? 140 : 320;
     Animated.timing(anim, {
-      toValue: 0, duration: 160, easing: Easing.in(Easing.quad), useNativeDriver: true,
+      toValue: 0, duration: out, easing: Easing.in(Easing.quad), useNativeDriver: true,
     }).start(() => {
       setIndex(next);
       Animated.timing(anim, {
-        toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: 1, duration: back, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       }).start();
     });
   };
@@ -201,7 +329,6 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           fixed_costs: fixedCosts,
           driver_status: driverStatus,
           social_rate: socialRate,
-          platforms,
           // Le seuil dérivé est enregistré même en gratuit (où FREE_THRESHOLDS
           // s'applique de toute façon) : le jour où le chauffeur passe Plus, son
           // seuil est déjà là et on ne lui repose pas les questions.
@@ -274,10 +401,10 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             // choisie.
             const active = isOther ? value !== null && !onAnOption : c === value;
             return (
-              <TouchableOpacity
+              <OptionCard
                 key={i}
-                style={[styles.option, active && styles.optionActive]}
-                activeOpacity={0.85}
+                active={active}
+                reduceMotion={reduceMotion}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 onPress={() => {
@@ -312,7 +439,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     {subFor(c as number)}
                   </Text>
                 ) : null}
-              </TouchableOpacity>
+              </OptionCard>
             );
           })}
         </View>
@@ -339,39 +466,6 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   const renderStep = () => {
     switch (step) {
-      case 'platforms':
-        return (
-          <View style={styles.optionList}>
-            {PLATFORMS.map(p => {
-              const active = platforms.includes(p.key);
-              return (
-                <TouchableOpacity
-                  key={p.key}
-                  style={[styles.option, active && styles.optionActive]}
-                  activeOpacity={0.85}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: active }}
-                  onPress={() => {
-                    hapticLight();
-                    // Toute plateforme peut être décochée, y compris la dernière :
-                    // « Continuer » se grise alors, ce qui dit mieux qu'un clic
-                    // sans effet qu'il faut au moins un choix.
-                    setPlatforms(prev =>
-                      prev.includes(p.key)
-                        ? prev.filter(k => k !== p.key)
-                        : [...prev, p.key],
-                    );
-                  }}
-                >
-                  <Text style={[styles.optionTxt, active && styles.optionTxtActive]}>
-                    {p.label ?? t('onboarding.other')}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        );
-
       case 'hours':
         return <OptionList choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
 
@@ -544,7 +638,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
         )}
 
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${((index + 1) / STEPS.length) * 100}%` }]} />
+          <Animated.View
+            style={[styles.progressFill, { transform: [{ scaleX: progress }] }]}
+          />
         </View>
       </View>
 
@@ -576,8 +672,16 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.cta, !canContinue && styles.ctaDisabled]}
+        <AnimatedTouchable
+          style={[
+            styles.cta,
+            {
+              backgroundColor: ctaOn.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['rgba(255,255,255,0.12)', colors.primary],
+              }),
+            },
+          ]}
           onPress={onPrimary}
           activeOpacity={0.88}
           disabled={saving || !canContinue}
@@ -588,7 +692,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           <Text style={[styles.ctaTxt, !canContinue && styles.ctaTxtDisabled]}>
             {isLast ? t('onboarding.start') : t('onboarding.next')}
           </Text>
-        </TouchableOpacity>
+        </AnimatedTouchable>
       </View>
     </SafeAreaView>
   );
@@ -616,7 +720,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  progressFill: {
+    height: '100%',
+    // Pleine largeur, mise a l'echelle depuis le bord GAUCHE : sans
+    // `transformOrigin`, la barre grandirait par son centre et deborderait a
+    // gauche autant qu'elle avance a droite.
+    width: '100%',
+    transformOrigin: 'left',
+    backgroundColor: colors.primary,
+    // Pas d'arrondi ici : mis a l'echelle, il s'ecraserait en ellipse. La piste
+    // porte le sien et rogne le depassement.
+  },
 
   body: {
     flexGrow: 1,
