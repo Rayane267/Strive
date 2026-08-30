@@ -52,10 +52,48 @@ final class LiveActivityManager {
     set { stateLock.lock(); _stateObserverTask = newValue; stateLock.unlock() }
   }
 
+  /// Dernier état poussé PAR CE PROCESS, avec sa date et la carte visée.
+  ///
+  /// `activity.content.state` n'est pas ce qu'on vient d'écrire : c'est l'écho
+  /// d'ActivityKit, rafraîchi seulement quand le démon système a confirmé
+  /// l'update. Toute méthode qui lisait `content.state` pour « garder ce qui est
+  /// affiché » lisait donc l'état d'AVANT pendant quelques millisecondes.
+  ///
+  /// Concrètement : `update()` pousse un verdict, l'événement part au JS dans la
+  /// foulée, le Dashboard pousse ses KPI sur changement de `rides` — et
+  /// `updateSessionKPI` relit un écho encore à l'état précédent. S'il valait
+  /// `IDLE`, elle conclut qu'aucun résultat n'est affiché et réécrit un IDLE
+  /// par-dessus le verdict ; s'il portait la course d'AVANT, elle recopie les
+  /// chiffres de celle-là sur le scan qui vient d'arriver. Les deux updates
+  /// étant à quelques millisecondes d'écart, seule la dernière est rendue.
+  ///
+  /// ⚠️ Ce n'est PAS ce qui empêche un résultat de déplier le Dynamic Island :
+  /// quand le cercle `minimal` affiche bien le verdict, l'état est arrivé et
+  /// rien ne l'a écrasé. Ce cas-là ne dépend pas de nous — voir la note sur
+  /// l'alerte dans `update()`.
+  private var _lastPushed: (state: StriveActivityAttributes.ContentState, at: Date, activityId: String)?
+  private var lastPushed: (state: StriveActivityAttributes.ContentState, at: Date, activityId: String)? {
+    get { stateLock.lock(); defer { stateLock.unlock() }; return _lastPushed }
+    set { stateLock.lock(); _lastPushed = newValue; stateLock.unlock() }
+  }
+
+  /// Au-delà de ce délai, l'écho fait foi de nouveau.
+  ///
+  /// Ce mémo ne vaut que pour ce process : `revertLiveActivityToIdle` (boutons
+  /// ✅/❌ de la carte) écrit sans passer par ce manager, et l'AppIntent peut
+  /// tourner ailleurs. Sans plafond, on ressusciterait un état que quelqu'un
+  /// d'autre a déjà remplacé. Le retard de l'écho se compte en millisecondes ;
+  /// cinq secondes le couvrent très largement.
+  private static let echoLagWindow: TimeInterval = 5
+
   private static let appGroupId = "group.com.striveapp.app"
   /// Dernier état de session connu (KPI du jour + ancre du timer), rejoué quand
   /// iOS a retiré la carte alors que la session continue.
   private static let sessionSnapshotKey = "laSessionSnapshot"
+  /// Drapeau de la trace persistée, piloté depuis l'écran Diagnostic.
+  static let tracingKey = "laTracing"
+  static let traceKey = "laSteps"
+  static let lastStepKey = "laLastStep"
 
   /// Résout la langue UI (fr/en) : préférence poussée par l'app via l'App Group
   /// (`appLanguage`), sinon locale système. Même logique que la Share Extension
@@ -76,8 +114,18 @@ final class LiveActivityManager {
   /// du scan — et laissait des données de diagnostic sur l'appareil sans finalité.
   private func log(_ msg: String) {
     NSLog("[Strive:LA] %@", msg)
-    #if DEBUG
-    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    // La trace persistée est OPT-IN, plus réservée au DEBUG.
+    //
+    // Elle avait été coupée en production pour une bonne raison : une lecture et
+    // deux écritures dans un conteneur partagé entre trois process, à chaque
+    // appel, sur le chemin chaud du scan — et des données de diagnostic laissées
+    // sur l'appareil sans finalité. Ce raisonnement tient toujours, d'où le
+    // drapeau : éteint par défaut, le coût retombe à UNE lecture de dictionnaire,
+    // et rien n'est écrit. Allumé depuis l'écran Diagnostic, elle permet de lire
+    // la trace sans Mac ni Console.app — le seul moyen jusqu'ici.
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+          defaults.bool(forKey: Self.tracingKey)
+    else { return }
     var trace = defaults.string(forKey: "laSteps") ?? ""
     let fmt = DateFormatter()
     fmt.dateFormat = "HH:mm:ss.SSS"
@@ -85,7 +133,6 @@ final class LiveActivityManager {
     if trace.count > 2000 { trace = String(trace.suffix(2000)) }
     defaults.set(trace, forKey: "laSteps")
     defaults.set(msg, forKey: "laLastStep")
-    #endif
   }
 
   @discardableResult
@@ -159,6 +206,7 @@ final class LiveActivityManager {
       )
       log("OK id=\(current?.id ?? "nil")")
       observeState()
+      if let created = current { rememberPush(state, on: created) }
       saveSessionSnapshot(state)
       return true
     } catch {
@@ -180,6 +228,48 @@ final class LiveActivityManager {
     ]
     if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
     d.set(snap, forKey: Self.sessionSnapshotKey)
+  }
+
+  /// Mémorise ce qu'on vient d'écrire, pour que la prochaine lecture ne dépende
+  /// pas du délai de retour d'ActivityKit.
+  private func rememberPush(_ state: StriveActivityAttributes.ContentState,
+                            on activity: Activity<StriveActivityAttributes>) {
+    lastPushed = (state: state, at: Date(), activityId: activity.id)
+  }
+
+  /// L'état le plus récent CONNU de la carte.
+  ///
+  /// À utiliser partout où l'on lit l'état courant pour « garder ce qui est
+  /// affiché » : `activity.content.state` seul est l'écho d'ActivityKit, en
+  /// retard de quelques millisecondes sur nos propres écritures. Trois règles :
+  ///
+  ///  1. l'écho a rattrapé notre dernière écriture → il fait foi, on oublie le
+  ///     mémo (un autre process pourra écrire sans qu'on le contredise) ;
+  ///  2. notre écriture a moins de `echoLagWindow` et l'écho diffère → l'écho
+  ///     est en retard, notre mémo fait foi ;
+  ///  3. au-delà de la fenêtre → l'écho fait foi (`revertLiveActivityToIdle`,
+  ///     déclenché par les boutons de la carte, écrit sans passer par ici).
+  private func freshestState(of activity: Activity<StriveActivityAttributes>)
+    -> StriveActivityAttributes.ContentState {
+    let echo = activity.content.state
+    guard let memo = lastPushed, memo.activityId == activity.id else { return echo }
+    if echo == memo.state {
+      lastPushed = nil
+      return echo
+    }
+    guard Date().timeIntervalSince(memo.at) < Self.echoLagWindow else {
+      lastPushed = nil
+      return echo
+    }
+    // Écriture d'un autre chemin (boutons ✅/❌ → `revertLiveActivityToIdle`)
+    // postérieure à la nôtre : c'est elle qui est à l'écran, pas notre mémo.
+    if let foreign = UserDefaults(suiteName: Self.appGroupId)?
+         .object(forKey: "laForeignWriteAt") as? Double,
+       foreign > memo.at.timeIntervalSince1970 {
+      lastPushed = nil
+      return echo
+    }
+    return memo.state
   }
 
   /// Réarme uniquement l'affichage d'une session encore active. Une fermeture
@@ -221,6 +311,53 @@ final class LiveActivityManager {
     return live
   }
 
+  /// Ouvre la connexion ActivityKit AVANT d'en avoir besoin.
+  ///
+  /// Dans un process relancé à froid par le raccourci, `Activity.activities` se
+  /// remplit de façon asynchrone : au moment de présenter le verdict, la liste
+  /// est encore vide et `waitForLiveActivity` DORT jusqu'à 1,5 s avant de pouvoir
+  /// pousser quoi que ce soit. Ce délai s'intercale entre le geste du chauffeur
+  /// et l'update — or c'est la fenêtre de l'intent qui vaut à la carte sa
+  /// priorité d'affichage (voir `AnalyzeRideIntent.runPipeline` : « tant que
+  /// l'intent est en cours, la présentation est traitée comme une action
+  /// déclenchée par l'utilisateur et passe devant »).
+  ///
+  /// Le contenu finissait par arriver — la pastille du Dynamic Island changeait
+  /// bien de couleur — mais le dépliage bref que déclenche l'alerte, lui, était
+  /// passé. C'est ce qui distinguait le PREMIER scan (process froid, 1,5 s
+  /// d'attente) de tous les suivants (process chaud, aucune attente).
+  ///
+  /// Appelée au DÉBUT du scan, elle laisse ActivityKit rejoindre le démon
+  /// système pendant l'OCR, TomTom et Gemini — du temps qu'on passait de toute
+  /// façon à attendre. Ne bloque pas l'appelant : lecture seule, sur un thread de
+  /// fond, abandonnée dès que la carte apparaît.
+  func prewarm() {
+    // `.userInitiated` et non `.utility` : ce préchauffage est sur le chemin
+    // critique de la fonctionnalité clé de l'app. En `.utility` — la classe la
+    // plus basse — il se faisait dépasser par l'OCR et le réseau précisément
+    // dans le cas qu'il doit couvrir : un process à froid, donc chargé. Il
+    // arrivait alors trop tard, et `waitForLiveActivity` héritait du travail
+    // avec 1,5 s seulement.
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else { return }
+      // 20 × 0,25 s = 5 s, contre 2 s auparavant. Le pipeline complet (OCR,
+      // TomTom, parfois Gemini) dépasse régulièrement 2 s : prewarm abandonnait
+      // alors qu'il restait tout le temps du monde avant l'arrivée du résultat.
+      // Rallonger ne coûte RIEN — la boucle est concurrente au scan, en lecture
+      // seule, et sort dès que la carte est là.
+      for i in 0..<20 {
+        // Test AVANT la pause : une carte déjà présente était trouvée avec
+        // 250 ms de retard, sur chaque scan, pour rien.
+        if self.liveActivity() != nil {
+          self.log("prewarm: carte prête (\(i) tours)")
+          return
+        }
+        Thread.sleep(forTimeInterval: 0.25)
+      }
+      self.log("prewarm: aucune carte après 5 s")
+    }
+  }
+
   /// Seconde chance quand `Activity.activities` n'est pas ENCORE peuplée.
   ///
   /// Le cas visé : le chauffeur est en communication, Waze tourne, et iOS a
@@ -245,13 +382,20 @@ final class LiveActivityManager {
     guard UserDefaults(suiteName: Self.appGroupId)?.bool(forKey: "sessionOnline") == true else {
       return nil
     }
-    // 1,5 s au plus, largement sous le budget de l'AppIntent (watchdog à 25 s).
-    for _ in 0..<6 {
-      Thread.sleep(forTimeInterval: 0.25)
+    // 1,5 s au plus, et volontairement PAS davantage : contrairement à
+    // `prewarm`, cette attente est sur le chemin critique — le résultat est déjà
+    // calculé, et chaque quart de seconde ici retarde d'autant le repli
+    // notification, sur une fenêtre de décision de dix secondes. C'est à prewarm
+    // de couvrir le démarrage à froid, pas à cette seconde chance.
+    for i in 0..<6 {
+      // Test AVANT la pause, comme dans prewarm : `liveActivity()` a pu être
+      // renseignée entre-temps par le préchauffage, et attendre 250 ms pour s'en
+      // apercevoir était du délai pur.
       if let live = liveActivity() {
-        log("live activity apparue après attente")
+        log("live activity trouvée après \(i) tours d'attente")
         return live
       }
+      Thread.sleep(forTimeInterval: 0.25)
     }
     log("aucune activité après 1,5 s — session en ligne mais pas de carte")
     return nil
@@ -335,7 +479,9 @@ final class LiveActivityManager {
     guard let activity = liveActivity() ?? waitForLiveActivity() else { return false }
     autoDismiss?.cancel()
     autoDismiss = nil
-    let prev = activity.content.state
+    // Les KPI du jour sont RECOPIÉS depuis l'état courant : les lire dans l'écho
+    // faisait perdre une poussée KPI arrivée juste avant ce scan.
+    let prev = freshestState(of: activity)
     let state = StriveActivityAttributes.State(
       platform: platform,
       fare: fare,
@@ -352,6 +498,34 @@ final class LiveActivityManager {
       sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 100)
+    // L'ALERTE est ce qui déplie le Dynamic Island — pas le contenu.
+    //
+    // Apple, « Displaying live data with Live Activities » :
+    //   « On iPhone and iPad, the system doesn't show a regular alert but instead
+    //     shows the expanded Live Activity in the Dynamic Island […] »
+    //   « [the expanded presentation] appears when a person touches and holds a
+    //     compact or minimal presentation, and it also appears briefly for Live
+    //     Activity updates. »
+    //
+    // Donc toute update de résultat DOIT porter une AlertConfiguration, sans quoi
+    // le verdict change en silence dans une île que personne ne regarde. C'est
+    // aussi pourquoi `backToIdle` et `updateSessionKPI` n'en passent pas : elles
+    // ne portent aucune nouvelle à annoncer.
+    //
+    // ⚠️ Ce dépliage n'est PAS garanti. Quand une autre app a elle aussi une Live
+    // Activity en cours (Waze, Plans, minuteur, musique), iOS bascule les deux en
+    // présentation `minimal` : « The system chooses a Live Activity from one app
+    // to appear attached to the Dynamic Island while it presents a Live Activity
+    // from another app detached from the Dynamic Island. » Reléguée au cercle
+    // détaché, Strive ne se déplie plus toute seule — seule la pastille change de
+    // couleur, et il faut un appui long pour lire le détail.
+    //
+    // Aucune API ne permet de réclamer le créneau attaché : `relevanceScore`
+    // n'ordonne que les activités D'UNE MÊME app entre elles (« the order in
+    // which your Live Activities appear when you start several Live Activities
+    // for your app »). C'est précisément pour ce cas que la présentation
+    // `minimal` porte une pastille pleine du verdict plutôt qu'un glyphe fin —
+    // voir StriveLiveActivity.swift.
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
     let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
     let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
@@ -364,6 +538,7 @@ final class LiveActivityManager {
       log("update NOT delivered on \(activity.id) — caller must notify")
       return false
     }
+    rememberPush(state, on: activity)
     log("updated \(activity.id), waiting for ride decision")
     return true
   }
@@ -373,7 +548,7 @@ final class LiveActivityManager {
     log("backToIdle")
     // Préserve les KPI du jour + le timer de session : sinon le petit dashboard
     // du lock screen se VIDE (0 €, 0 km, 0 min) à chaque retour à l'état de base.
-    let prev = activity.content.state
+    let prev = freshestState(of: activity)
     let idle = StriveActivityAttributes.State(
       platform: "IDLE",
       fare: 0, hourlyRate: 0, kmRate: 0,
@@ -385,6 +560,7 @@ final class LiveActivityManager {
       sessionStartEpoch: prev.sessionStartEpoch
     )
     let content = ActivityContent(state: idle, staleDate: Date().addingTimeInterval(3600 * 8), relevanceScore: 50)
+    rememberPush(idle, on: activity)
     Task { await activity.update(content) }
   }
 
@@ -397,7 +573,11 @@ final class LiveActivityManager {
     // `rideId` n'a rien à protéger — c'est le cas qui la laissait figée sur son
     // verdict dès que l'état n'était pas parfaitement synchronisé.
     guard let activity = liveActivity() else { return }
-    if let prevId = activity.content.state.rideId, prevId != rideId {
+    // `freshestState` et pas l'écho : une décision prise dans l'app arrive juste
+    // après l'insertion du scan. Sur l'écho encore à IDLE (rideId nil), la garde
+    // concluait « rien à protéger » et effaçait le résultat qui venait de
+    // s'afficher — la course décidée n'était même pas celle-là.
+    if let prevId = freshestState(of: activity).rideId, prevId != rideId {
       return
     }
     backToIdle()
@@ -412,7 +592,7 @@ final class LiveActivityManager {
       return false
     }
     log("showError() on \(activity.id)")
-    let prev = activity.content.state
+    let prev = freshestState(of: activity)
     let errorState = StriveActivityAttributes.State(
       platform: "ERROR",
       fare: 0, hourlyRate: 0, kmRate: 0,
@@ -436,6 +616,7 @@ final class LiveActivityManager {
       log("showError NOT delivered on \(activity.id) — caller must notify")
       return false
     }
+    rememberPush(errorState, on: activity)
 
     autoDismiss?.cancel()
     let work = DispatchWorkItem { [weak self] in self?.backToIdle() }
@@ -451,7 +632,12 @@ final class LiveActivityManager {
     onlineMinutes: Int
   ) {
     guard let activity = liveActivity() else { return }
-    let prev = activity.content.state
+    // `freshestState` et pas `activity.content.state` : le Dashboard pousse ses
+    // KPI sur changement de `rides`, donc dans les millisecondes qui suivent
+    // l'insertion d'un scan. Sur l'écho encore à IDLE, `resultShowing` tombait à
+    // false et cette méthode réécrivait un IDLE par-dessus le verdict tout juste
+    // poussé — le premier résultat d'une session n'atteignait jamais l'écran.
+    let prev = freshestState(of: activity)
     // Tant que la dernière course attend une décision, le dashboard ne doit pas
     // écraser son verdict. `RideDecisionIntent` efface `rideId` en revenant aux KPI.
     let resultShowing = prev.rideId != nil
@@ -477,6 +663,7 @@ final class LiveActivityManager {
       staleDate: Date().addingTimeInterval(3600 * 8),
       relevanceScore: resultShowing ? 100 : 50
     )
+    rememberPush(state, on: activity)
     Task { await activity.update(content) }
     saveSessionSnapshot(state)
   }
@@ -485,6 +672,7 @@ final class LiveActivityManager {
     // Lecture unique (cf. start()) : deux lectures + force-unwrap = crash
     // possible si un autre thread libère la carte entre les deux.
     log("stop() current=\(current?.id ?? "nil")")
+    lastPushed = nil
     autoDismiss?.cancel()
     autoDismiss = nil
     stateObserverTask?.cancel()

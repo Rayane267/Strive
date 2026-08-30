@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { Toast, useToast } from '../components/Toast';
@@ -47,6 +47,20 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 type Cycle = 'monthly' | 'yearly';
 
+const TRIAL_DAYS = 7;
+
+/// Montants de repli, en clair, quand le store ne répond pas.
+///
+/// Jumeaux NUMÉRIQUES de `subscription.monthlyFallbackPrice` /
+/// `yearlyFallbackPrice`, qui n'existaient qu'en chaîne formatée : sans eux, le
+/// prix hebdomadaire et l'ancrage annuel — les deux chiffres qui font choisir —
+/// disparaissaient dès que RevenueCat était injoignable, et l'écran ne montrait
+/// plus que deux prix bruts sans point de comparaison.
+///
+/// ⚠️ À garder synchro avec les deux clés i18n ci-dessus. Le store reste la
+/// source de vérité : ces valeurs ne servent QUE quand il ne répond pas.
+const FALLBACK_AMOUNT: Record<Cycle, number> = { monthly: 9.99, yearly: 89.99 };
+
 /// Ce que Plus AJOUTE — et rien d'autre.
 ///
 /// Les cinq lignes précédentes vendaient le scan, le €/h en direct, le trafic
@@ -67,13 +81,11 @@ type Cycle = 'monthly' | 'yearly';
 /// l'argument produit le plus parlant, et elle est formulée sans affirmer
 /// d'exclusivité. Si le taux de remboursement monte, c'est la première à
 /// remettre en cause — le gratuit dispose déjà de ce qu'elle décrit.
-const FEATURES = [
-  { icon: 'zap',        colorKey: 'subscription.feat.scan',      textKey: 'subscription.feat.scanText' },
-  { icon: 'target',     colorKey: 'subscription.feat.threshold', textKey: 'subscription.feat.thresholdText' },
-  { icon: 'navigation', colorKey: 'subscription.feat.traffic',   textKey: 'subscription.feat.trafficText' },
-  { icon: 'droplet',    colorKey: 'subscription.feat.fuel',      textKey: 'subscription.feat.fuelText' },
-  { icon: 'calendar',   colorKey: 'subscription.feat.history',   textKey: 'subscription.feat.historyText' },
-] as const;
+///
+/// Les libellés sont volontairement COURTS — une ligne, lisible d'un coup d'œil.
+/// Les phrases explicatives de `feat.*` restent en base pour d'autres surfaces ;
+/// ici elles cassaient le rythme et repoussaient les formules hors de l'écran.
+const BENEFITS = ['scans', 'thresholds', 'traffic', 'fuel', 'history'] as const;
 
 const FAQ_ITEMS = [1, 2, 3, 4] as const;
 
@@ -90,7 +102,15 @@ const ORBS = [
 
 const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { t } = useTranslation();
+
+  /// L'écran est le même quel qu'en soit le chemin, mais pas le moment. Arriver
+  /// ici parce qu'on vient d'épuiser ses 30 scans offerts, ce n'est pas y venir
+  /// depuis le Profil : le chauffeur a passé deux ou trois vacations avec l'app
+  /// sans rationnement, il sait exactement ce qu'il perd. L'argumentaire général
+  /// serait à côté — on lui nomme ce qui vient de finir.
+  const fromWelcomeEnd = route.params?.reason === 'welcome_exhausted';
   const { user, profile, refreshProfile, markSubscribed } = useAuth();
   const { toast, showToast, dismissToast } = useToast();
 
@@ -159,24 +179,50 @@ const SubscriptionScreen = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const savingsPct = useMemo(() => {
-    if (!monthly?.rawPrice || !yearly?.rawPrice) return 33;
-    const fullYear = monthly.rawPrice * 12;
-    if (fullYear <= 0) return 33;
-    return Math.max(1, Math.round((1 - yearly.rawPrice / fullYear) * 100));
-  }, [monthly, yearly]);
+  const rawOf = (cy: Cycle) =>
+    (cy === 'yearly' ? yearly : monthly)?.rawPrice || FALLBACK_AMOUNT[cy];
+  const currencyOf = (cy: Cycle) =>
+    (cy === 'yearly' ? yearly : monthly)?.currencyCode || 'EUR';
+
+  const money = (amount: number, currency: string): string => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency', currency, maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${amount.toFixed(2)} ${currency}`;
+    }
+  };
+
+  // Douze mensualités : ce que l'annuel fait éviter. C'est le prix barré de la
+  // carte annuelle, et la base de l'économie affichée en euros.
+  const yearAnchor = rawOf('monthly') * 12;
+  const savedAmount = Math.max(0, yearAnchor - rawOf('yearly'));
+
+  /// Ramène un prix à la semaine.
+  ///
+  /// C'est le plus petit dénominateur crédible d'un abonnement, et il rend
+  /// l'annuel lisible : « 89,99 € » se compare mal à « 9,99 € », « 1,73 € par
+  /// semaine » se compare tout seul. Calculé depuis `rawPrice` et formaté dans
+  /// la devise du store — donc juste hors zone euro aussi.
+  const weeklyText = (cy: Cycle): string => {
+    const raw = rawOf(cy);
+    return money(cy === 'yearly' ? raw / 52 : (raw * 12) / 52, currencyOf(cy));
+  };
 
   const activeProductId = cycle === 'yearly' ? IAP_PRODUCTS.PLUS_YEARLY : IAP_PRODUCTS.PLUS_MONTHLY;
-  const activePkg = cycle === 'yearly' ? yearly : monthly;
 
   // Éligibilité essai : par produit. Le CTA reflète le cycle sélectionné ;
-  // le bandeau de la carte mensuelle reflète l'éligibilité du produit mensuel.
+  // le bandeau de chaque carte reflète l'éligibilité de SON produit.
   const trialEligible = !!trialByProduct[activeProductId];
-  const monthlyTrial = !!trialByProduct[IAP_PRODUCTS.PLUS_MONTHLY];
+  const isTrial = (cy: Cycle) =>
+    !!trialByProduct[cy === 'yearly' ? IAP_PRODUCTS.PLUS_YEARLY : IAP_PRODUCTS.PLUS_MONTHLY];
 
-  const mainPriceText =
-    activePkg?.priceString ??
-    (cycle === 'yearly' ? t('subscription.yearlyFallbackPrice') : t('subscription.monthlyFallbackPrice'));
+  const priceOf = (cy: Cycle) =>
+    (cy === 'yearly' ? yearly : monthly)?.priceString ??
+    t(cy === 'yearly' ? 'subscription.yearlyFallbackPrice' : 'subscription.monthlyFallbackPrice');
+
+  const mainPriceText = priceOf(cycle);
 
   const handleFaqToggle = (idx: number) => {
     hapticLight();
@@ -262,9 +308,70 @@ const SubscriptionScreen = () => {
   const storeLabel = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
 
   const ctaLabel = trialEligible ? t('subscription.ctaTrial') : t('subscription.ctaSubscribe');
-  const ctaHint = trialEligible
-    ? t('subscription.ctaHintTrial', { price: mainPriceText, cycle: cycle === 'yearly' ? t('subscription.cycleYearly') : t('subscription.cycleMonthly') })
-    : t('subscription.ctaHintNoTrial', { cycle: cycle === 'yearly' ? t('subscription.cycleYearly') : t('subscription.cycleMonthly') });
+  const periodWord = cycle === 'yearly' ? t('subscription.periodYear') : t('subscription.periodMonth');
+  const finePrint = trialEligible
+    ? t('subscription.finePrintTrial', { days: TRIAL_DAYS, price: mainPriceText, period: periodWord })
+    : t('subscription.finePrintNoTrial', { price: mainPriceText, period: periodWord });
+
+  // ── Carte de formule ───────────────────────────────────────────────────────
+  // Reprend la structure qui convertit : un bandeau au-dessus du prix, qui porte
+  // l'essai à gauche et l'économie à droite, et se remplit quand la formule est
+  // choisie. Le prix reste le seul gros chiffre de la carte ; l'équivalent
+  // hebdomadaire, juste dessous, sert de comparateur entre les deux.
+  const renderPlan = (cy: Cycle) => {
+    const selected = cycle === cy;
+    const trial = isTrial(cy);
+
+    return (
+      <Pressable
+        key={cy}
+        onPress={() => { hapticLight(); setCycle(cy); }}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        style={[styles.plan, selected && styles.planSelected]}
+      >
+        <View style={[styles.stripe, selected && styles.stripeOn]}>
+          <Text style={[styles.stripeText, selected && styles.stripeTextOn]}>
+            {trial
+              ? t('subscription.trialStrip', { days: TRIAL_DAYS })
+              : cy === 'monthly'
+                ? t('subscription.trust.commitment')
+                : ''}
+          </Text>
+          {cy === 'yearly' && savedAmount > 0 && (
+            <Text style={[styles.stripeBadge, selected && styles.stripeBadgeOn]}>
+              {t('subscription.saveAmount', { amount: money(savedAmount, currencyOf('yearly')) })}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.planBody}>
+          <View style={selected ? styles.radioOn : styles.radioOff}>
+            {selected && <Feather name="check" size={13} color="#062318" />}
+          </View>
+          <Text style={[styles.planName, selected && styles.planNameOn]}>
+            {t(cy === 'yearly' ? 'subscription.yearlyTab' : 'subscription.monthlyTab')}
+          </Text>
+          <View style={styles.planPriceCol}>
+            <Text style={styles.planPrice}>
+              {/* Douze mensualités barrées : sans ce repère, « 89,99 € » se lit
+                  comme neuf fois plus cher que « 9,99 € ». */}
+              {cy === 'yearly' && savedAmount > 0 && (
+                <Text style={styles.planAnchor}>{money(yearAnchor, currencyOf('yearly'))}  </Text>
+              )}
+              {priceOf(cy)}
+              <Text style={styles.planPer}>
+                {t(cy === 'yearly' ? 'subscription.perYearShort' : 'subscription.perMonthShort')}
+              </Text>
+            </Text>
+            <Text style={styles.planWeek}>
+              {t('subscription.perWeekEquiv', { price: weeklyText(cy) })}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -282,16 +389,13 @@ const SubscriptionScreen = () => {
 
         {/* ── HERO ── */}
         <View style={styles.hero}>
-          {/* Radial glow */}
           <SafeGradient
             colors={['rgba(0,230,118,0.22)', 'rgba(0,230,118,0.06)', 'transparent']}
             style={styles.heroGlow}
             pointerEvents="none"
           />
-          {/* Secondary warm glow */}
           <View style={styles.heroWarmGlow} pointerEvents="none" />
 
-          {/* Floating orbs */}
           <Animated.View style={[styles.orbContainer, { transform: [{ translateY: orbTranslateY }] }]} pointerEvents="none">
             {ORBS.map((o, i) => (
               <View
@@ -305,52 +409,40 @@ const SubscriptionScreen = () => {
             ))}
           </Animated.View>
 
-          {/* Logo Strive dans l'anneau lumineux, à la place de la couronne : ce
-              qu'on vend est Strive Plus, pas un rang. La couronne était le
-              symbole générique du « premium » et ne renvoyait à rien du
-              produit. L'anneau animé est conservé — c'est lui qui fait l'accroche. */}
           <View style={styles.crownRow}>
             <View style={styles.crownOuter}>
               <Animated.View style={[styles.crownGlowRing, { opacity: glowAnim }]} />
-              <Image
-                source={require('../assets/strive-logo.png')}
-                style={styles.crownBadge}
-              />
+              <Image source={require('../assets/strive-logo.png')} style={styles.crownBadge} />
             </View>
           </View>
 
-          <Text style={styles.labelText}>STRIVE PLUS</Text>
+          <Text style={styles.labelText}>{t('subscription.label')}</Text>
           <Text style={styles.heroTitle}>
-            {isPlus ? t('subscription.heroTitleActive') : t('subscription.heroTitle')}
+            {isPlus ? t('subscription.heroTitleActive')
+              : fromWelcomeEnd ? t('subscription.heroTitleWelcomeEnd')
+              : t('subscription.heroTitle')}
           </Text>
           <Text style={styles.heroSub}>
-            {isPlus ? t('subscription.heroSubActive') : t('subscription.heroSub')}
+            {isPlus ? t('subscription.heroSubActive')
+              : fromWelcomeEnd ? t('subscription.heroSubWelcomeEnd')
+              : t('subscription.heroSub')}
           </Text>
         </View>
 
-        {/* ── FEATURES ── */}
-        <View style={styles.featureList}>
-          {FEATURES.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <SafeGradient
-                colors={['rgba(0,230,118,0.2)', 'rgba(0,230,118,0.08)']}
-                style={styles.featureIconWrap}
-              >
-                <Feather name={f.icon as any} size={16} color={colors.primary} />
-              </SafeGradient>
-              <Text style={styles.featureText}>
-                <Text style={styles.featureHighlight}>{t(f.colorKey)}</Text>
-                {'  '}{t(f.textKey)}
-              </Text>
+        {/* ── CE QUE ÇA APPORTE ── */}
+        <View style={styles.benefits}>
+          {BENEFITS.map(k => (
+            <View key={k} style={styles.benefitRow}>
+              <View style={styles.check}>
+                <Feather name="check" size={13} color="#062318" />
+              </View>
+              <Text style={styles.benefitText}>{t(`subscription.benefit.${k}`)}</Text>
             </View>
           ))}
         </View>
 
-        {/* ── Divider ── */}
-        <View style={styles.divider} />
-
         {isPlus ? (
-          /* ── ACTIVE SUBSCRIBER ── */
+          /* ── ABONNÉ ACTIF ── */
           <View style={styles.activeCard}>
             <SafeGradient
               colors={['rgba(0,230,118,0.12)', 'rgba(0,230,118,0.03)']}
@@ -362,7 +454,7 @@ const SubscriptionScreen = () => {
               </View>
               <Text style={styles.activeCardTitle}>{t('subscription.activeTitle')}</Text>
             </View>
-            <Text style={styles.activeCardSub}>{t('subscription.activeSub')}</Text>
+            <Text style={styles.activeCardSub}>{t('subscription.heroSubActive')}</Text>
 
             <TouchableOpacity style={styles.manageBtn} onPress={handleManage} activeOpacity={0.8}>
               <Feather name="external-link" size={15} color={colors.textMain} />
@@ -371,11 +463,7 @@ const SubscriptionScreen = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.cancelHint}
-              onPress={handleManage}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.cancelHint} onPress={handleManage} activeOpacity={0.7}>
               <Feather name="info" size={13} color={colors.textDimmed} />
               <Text style={styles.cancelHintText}>
                 {t('subscription.cancelHint', { store: storeLabel })}
@@ -384,119 +472,23 @@ const SubscriptionScreen = () => {
           </View>
         ) : (
           <>
-            {/* ── PLAN CARDS ── */}
+            {/* ── FORMULES ── */}
+            <View style={styles.plans}>
+              {renderPlan('yearly')}
+              {renderPlan('monthly')}
+            </View>
 
-            {/* Monthly — hero card */}
-            <Pressable
-              onPress={() => { hapticLight(); setCycle('monthly'); }}
-              style={[styles.planCard, styles.planCardMonthly, cycle === 'monthly' && styles.planCardMonthlySelected]}
-            >
-              <SafeGradient
-                colors={cycle === 'monthly'
-                  ? ['rgba(0,230,118,0.14)', 'rgba(0,230,118,0.04)']
-                  : ['rgba(0,230,118,0.06)', 'rgba(0,230,118,0.01)']}
-                style={StyleSheet.absoluteFillObject}
-              />
-              {/* Ribbon badge */}
-              <View style={styles.popularBadge}>
-                <SafeGradient colors={['#A4FF6B', '#00FF8C', colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.popularBadgeInner}>
-                  <MaterialCommunityIcons name={monthlyTrial ? 'gift-outline' : 'star-four-points'} size={10} color="#062318" />
-                  <Text style={styles.popularBadgeText}>
-                    {monthlyTrial ? t('subscription.trialRibbon', '7 JOURS GRATUITS') : t('subscription.popular')}
-                  </Text>
-                </SafeGradient>
-              </View>
-              <View style={styles.planCardLeft}>
-                <View style={cycle === 'monthly' ? styles.radioSelected : styles.radio}>
-                  {cycle === 'monthly' && <View style={styles.radioInner} />}
-                </View>
-              </View>
-              <View style={styles.planCardContent}>
-                <Text style={[styles.planCardTitle, styles.planCardTitleMonthly]}>
-                  {t('subscription.monthlyAccess')}
-                </Text>
-                {monthlyTrial ? (
-                  <>
-                    <Text style={styles.trialFreeLabel}>{t('subscription.trialFreeLabel', '0,00 € pendant 7 jours')}</Text>
-                    <Text style={styles.trialThenPrice}>
-                      {t('subscription.trialThenPrice', 'puis {{price}}/mois', { price: monthly?.priceString ?? t('subscription.monthlyFallbackPrice') })}
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={[styles.planCardPrice, styles.planCardPriceMonthly]}>
-                      {monthly?.priceString ?? t('subscription.monthlyFallbackPrice')}
-                      <Text style={styles.planCardPriceSuffix}> {t('subscription.perMonthShort')}</Text>
-                    </Text>
-                  </>
-                )}
-                <Text style={styles.monthlySubHint}>
-                  {monthlyTrial
-                    ? t('subscription.trialHint', 'Annulable à tout moment pendant l\'essai')
-                    : t('subscription.monthlyHint')}
-                </Text>
-              </View>
-            </Pressable>
-
-            {/* Yearly — secondary */}
-            <Pressable
-              onPress={() => { hapticLight(); setCycle('yearly'); }}
-              style={[styles.planCard, cycle === 'yearly' && styles.planCardSelected]}
-            >
-              {cycle === 'yearly' && (
-                <SafeGradient
-                  colors={['rgba(0,230,118,0.08)', 'rgba(0,230,118,0.02)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-              )}
-              <View style={styles.planCardLeft}>
-                <View style={cycle === 'yearly' ? styles.radioSelected : styles.radio}>
-                  {cycle === 'yearly' && <View style={styles.radioInner} />}
-                </View>
-              </View>
-              <View style={styles.planCardContent}>
-                <View style={styles.planCardTitleRow}>
-                  <Text style={[styles.planCardTitle, cycle === 'yearly' && styles.planCardTitleActive]}>
-                    {t('subscription.yearlyAccess')}
-                  </Text>
-                  <View style={styles.bestBadge}>
-                    <Text style={styles.bestBadgeText}>-{savingsPct}%</Text>
-                  </View>
-                </View>
-                <Text style={styles.planCardPrice}>
-                  {yearly?.priceString ?? t('subscription.yearlyFallbackPrice')}
-                  <Text style={styles.planCardPriceSuffix}> {t('subscription.perYearShort')}</Text>
-                </Text>
-                {yearly?.pricePerMonthString && (
-                  <Text style={styles.planCardEquiv}>
-                    {t('subscription.perMonthEquiv', { price: yearly.pricePerMonthString })}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
-
-            {/* ── TRUST ── */}
-            <View style={styles.trustRow}>
-              <View style={styles.trustPill}>
-                <Feather name="refresh-cw" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>{t('subscription.trust.cancel')}</Text>
-              </View>
-              <View style={styles.trustPill}>
-                <Feather name="shield" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>
-                  {Platform.OS === 'ios' ? t('subscription.trust.secure') : t('subscription.trust.secureAndroid', 'Google Play')}
-                </Text>
-              </View>
-              <View style={styles.trustPill}>
-                <Feather name="unlock" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>{t('subscription.trust.commitment')}</Text>
-              </View>
+            {/* ── LA PHRASE QUI LÈVE LE FREIN ── */}
+            <View style={styles.reassure}>
+              <Feather name="shield" size={14} color={colors.primary} />
+              <Text style={styles.reassureText}>
+                {trialEligible ? t('subscription.noPaymentToday') : t('subscription.trust.cancel')}
+              </Text>
             </View>
           </>
         )}
 
         {/* ── FAQ ── */}
-        <View style={styles.divider} />
         <Text style={styles.faqTitle}>{t('subscription.faq.title')}</Text>
         <View style={styles.faqList}>
           {FAQ_ITEMS.map((n, i) => {
@@ -509,18 +501,16 @@ const SubscriptionScreen = () => {
                     <Feather name={opened ? 'minus' : 'plus'} size={14} color={opened ? '#000' : colors.textMuted} />
                   </View>
                 </Pressable>
-                {opened && (
-                  <Text style={styles.faqA}>{t(`subscription.faq.a${n}`)}</Text>
-                )}
+                {opened && <Text style={styles.faqA}>{t(`subscription.faq.a${n}`)}</Text>}
               </View>
             );
           })}
         </View>
 
-        <View style={{ height: isPlus ? 40 : 190 }} />
+        <View style={isPlus ? styles.spacerActive : styles.spacerBuy} />
       </ScrollView>
 
-      {/* ── STICKY BOTTOM ── */}
+      {/* ── BARRE D'ACHAT ── */}
       {!isPlus && (
         <SafeGradient
           colors={[`${colors.background}00`, colors.background, colors.background]}
@@ -552,8 +542,6 @@ const SubscriptionScreen = () => {
             </TouchableOpacity>
           </Animated.View>
 
-          <Text style={styles.ctaHint}>{ctaHint}</Text>
-
           <View style={styles.footer}>
             <TouchableOpacity onPress={handleRestore} disabled={restoring}>
               {restoring
@@ -570,6 +558,8 @@ const SubscriptionScreen = () => {
               <Text style={styles.footerLink}>{t('subscription.privacy')}</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.finePrint}>{finePrint}</Text>
         </SafeGradient>
       )}
 
@@ -580,6 +570,7 @@ const SubscriptionScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  scroll: { paddingBottom: 20 },
 
   closeBtn: {
     position: 'absolute', top: 54, right: 20, zIndex: 20,
@@ -589,11 +580,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
 
-  scroll: { paddingBottom: 20 },
-
   // ── Hero ──
   hero: {
-    paddingHorizontal: 24, paddingTop: 60, paddingBottom: 32,
+    paddingHorizontal: 24, paddingTop: 60, paddingBottom: 30,
     overflow: 'hidden', alignItems: 'center',
   },
   heroGlow: {
@@ -639,97 +628,77 @@ const styles = StyleSheet.create({
     lineHeight: 22, textAlign: 'center', maxWidth: 300,
   },
 
-  // ── Features ──
-  featureList: { marginHorizontal: 20, marginBottom: 24, gap: 16 },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  featureIconWrap: {
-    width: 36, height: 36, borderRadius: 12,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  featureText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '500', flex: 1, lineHeight: 20 },
-  featureHighlight: { color: colors.primary, fontWeight: '800' },
-
-  divider: {
-    height: 1, marginHorizontal: 32, marginBottom: 22,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-
-  // ── Plan cards ──
-  planCard: {
-    marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.06)',
-    flexDirection: 'row', alignItems: 'center',
-    overflow: 'hidden',
-  },
-  planCardMonthly: {
-    borderWidth: 2, borderColor: 'rgba(0,230,118,0.25)',
-    paddingTop: 28,
-  },
-  planCardMonthlySelected: {
-    borderColor: colors.primary,
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16 },
-      android: { elevation: 10 },
-    }),
-  },
-  planCardSelected: {
-    borderColor: colors.primary,
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
-      android: { elevation: 6 },
-    }),
-  },
-  planCardLeft: { marginRight: 14 },
-  planCardContent: { flex: 1 },
-  planCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  planCardTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  planCardTitleMonthly: { color: colors.primary },
-  planCardTitleActive: { color: colors.textMuted },
-  planCardPrice: { color: colors.textMain, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  planCardPriceMonthly: { fontSize: 30 },
-  planCardPriceSuffix: { color: colors.textDimmed, fontSize: 13, fontWeight: '600' },
-  planCardEquiv: { color: colors.textDimmed, fontSize: 12, marginTop: 2, fontWeight: '500' },
-  monthlySubHint: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: '500' },
-  trialFreeLabel: { color: colors.primary, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
-  trialThenPrice: { color: colors.textDimmed, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  popularBadge: { position: 'absolute', top: -1, right: 16, zIndex: 1 },
-  popularBadgeInner: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
-  },
-  popularBadgeText: { color: '#062318', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
-
-  radio: {
+  // ── Bénéfices ──
+  benefits: { marginHorizontal: 22, gap: 13, marginBottom: 26 },
+  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  check: {
     width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)',
-  },
-  radioSelected: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  radioInner: {
-    width: 12, height: 12, borderRadius: 6,
     backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 1,
   },
+  benefitText: { color: colors.textMain, fontSize: 15, fontWeight: '600', flex: 1, lineHeight: 21 },
+  benefitStrong: { color: colors.primary, fontWeight: '800' },
 
-  bestBadge: {
-    backgroundColor: '#A4FF6B', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 6,
+  // ── Formules ──
+  plans: { marginHorizontal: 18, gap: 12, marginBottom: 18 },
+  plan: {
+    borderRadius: 18, overflow: 'hidden',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: colors.surface,
   },
-  bestBadgeText: { color: '#0A2010', fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
-  trialPill: {
-    backgroundColor: 'rgba(0,230,118,0.15)', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
+  planSelected: {
+    borderColor: colors.primary,
+    ...Platform.select({
+      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 16 },
+      android: { elevation: 8 },
+    }),
   },
-  trialPillText: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  stripe: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 9,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  stripeOn: { backgroundColor: colors.primary },
+  stripeText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
+  stripeTextOn: { color: '#062318' },
+  stripeBadge: { color: colors.textDimmed, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.5 },
+  stripeBadgeOn: { color: '#062318' },
 
-  // ── Active subscriber ──
+  planBody: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 16, gap: 12,
+  },
+  radioOff: {
+    width: 26, height: 26, borderRadius: 13,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  radioOn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  planName: { color: colors.textMuted, fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  planNameOn: { color: colors.textMain },
+  planPriceCol: { flex: 1, alignItems: 'flex-end' },
+  planPrice: { color: colors.textMain, fontSize: 21, fontWeight: '900', letterSpacing: -0.5 },
+  planAnchor: {
+    color: colors.textDimmed, fontSize: 13, fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  planPer: { color: colors.textDimmed, fontSize: 13, fontWeight: '700' },
+  planWeek: { color: colors.textDimmed, fontSize: 12, marginTop: 2, fontWeight: '500' },
+
+  // ── Réassurance ──
+  reassure: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, marginBottom: 30,
+  },
+  reassureText: { color: colors.textMuted, fontSize: 13.5, fontWeight: '600' },
+
+  // ── Abonné actif ──
   activeCard: {
-    marginHorizontal: 16, marginBottom: 22,
+    marginHorizontal: 18, marginBottom: 26,
     borderRadius: 20, padding: 22,
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
     overflow: 'hidden',
@@ -757,26 +726,12 @@ const styles = StyleSheet.create({
   },
   cancelHintText: { color: colors.textDimmed, fontSize: 12 },
 
-  // ── Trust ──
-  trustRow: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    justifyContent: 'center', gap: 8,
-    paddingHorizontal: 16, marginTop: 8, marginBottom: 28,
-  },
-  trustPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(0,230,118,0.08)',
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
-  },
-  trustText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
-
   // ── FAQ ──
   faqTitle: {
     color: colors.textMain, fontSize: 18, fontWeight: '900',
-    marginHorizontal: 20, marginBottom: 14, letterSpacing: -0.3,
+    marginHorizontal: 22, marginBottom: 14, letterSpacing: -0.3,
   },
-  faqList: { marginHorizontal: 16, gap: 8 },
+  faqList: { marginHorizontal: 18, gap: 8 },
   faqItem: {
     backgroundColor: colors.surface, borderRadius: 14,
     paddingHorizontal: 18, paddingVertical: 16,
@@ -797,13 +752,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
   },
 
-  // ── Sticky bottom ──
+  spacerActive: { height: 40 },
+  spacerBuy: { height: 210 },
+
+  // ── Barre d'achat ──
   stickyBottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingBottom: 28, paddingTop: 24,
+    paddingHorizontal: 20, paddingBottom: 22, paddingTop: 26,
   },
   ctaTouch: {
-    borderRadius: 18, overflow: 'hidden', marginBottom: 10,
+    borderRadius: 18, overflow: 'hidden', marginBottom: 12,
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22 },
       android: { elevation: 14 },
@@ -811,15 +769,21 @@ const styles = StyleSheet.create({
   },
   ctaGradient: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 10, paddingVertical: 20,
+    gap: 10, paddingVertical: 19,
   },
   ctaText: { color: '#062318', fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
-  ctaHint: { color: colors.textDimmed, fontSize: 11, textAlign: 'center', marginBottom: 12, lineHeight: 16 },
 
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  footerLink: { color: 'rgba(255,255,255,0.25)', fontSize: 11 },
-  footerLinkUnderline: { color: 'rgba(255,255,255,0.35)', fontSize: 11, textDecorationLine: 'underline' },
-  footerSep: { color: 'rgba(255,255,255,0.15)', fontSize: 11 },
+  footer: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: 10, marginBottom: 8,
+  },
+  footerSep: { color: 'rgba(255,255,255,0.15)', fontSize: 12 },
+  footerLink: { color: colors.textDimmed, fontSize: 12 },
+  footerLinkUnderline: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
+  finePrint: {
+    color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 15,
+    textAlign: 'center', paddingHorizontal: 8,
+  },
 });
 
 export default SubscriptionScreen;

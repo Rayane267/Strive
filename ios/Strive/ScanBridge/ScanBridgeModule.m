@@ -3,6 +3,15 @@
 
 @interface RCT_EXTERN_MODULE(ScanBridge, RCTEventEmitter)
 
+RCT_EXTERN_METHOD(getDiagnostics:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(resetPresentationCounters)
+
+RCT_EXTERN_METHOD(setDiagnosticsTracing:(BOOL)enabled)
+
+RCT_EXTERN_METHOD(clearDiagnostics)
+
 RCT_EXTERN_METHOD(startScanner:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

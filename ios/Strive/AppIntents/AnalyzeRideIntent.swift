@@ -2,6 +2,7 @@ import AppIntents
 import UIKit
 import UserNotifications
 import ActivityKit
+import CallKit
 
 /// Reprise UNIQUE d'une continuation. `performExpiringActivity` rappelle son
 /// bloc à l'expiration alors que le pipeline peut encore aboutir, et le watchdog
@@ -188,6 +189,22 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       return .result(value: "too_soon")
     }
 
+    // Préchauffe ActivityKit MAINTENANT, pas au moment d'afficher.
+    //
+    // Le raccourci relance souvent le process À FROID, et `Activity.activities`
+    // s'y remplit de façon asynchrone : `presentResult` trouvait la liste vide et
+    // devait l'attendre en dormant (`waitForLiveActivity`, jusqu'à 1,5 s). Ce
+    // délai s'intercalait entre le geste du chauffeur et l'update — la fenêtre
+    // même qui vaut à la carte sa priorité d'affichage (voir `runPipeline`). Le
+    // verdict finissait par s'afficher, mais l'île ne se dépliait plus : symptôme
+    // « seul le premier scan ne s'affiche pas en étendu ».
+    //
+    // Ici, la connexion s'établit pendant l'OCR, TomTom et Gemini — du temps
+    // qu'on passait de toute façon à attendre. Non bloquant.
+    if #available(iOS 16.2, *), liveActivityReady {
+      LiveActivityManager.shared.prewarm()
+    }
+
     return .result(value: await runPipeline(image: image))
   }
 
@@ -322,6 +339,36 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         verdictLevel: result.verdictLevel, rideId: rideId
       )
     }
+    // ── Appel en cours : la carte affiche, mais l'îlot ne se déplie pas ──
+    //
+    // Pendant un appel, la pilule d'appel occupe le créneau ATTACHÉ du Dynamic
+    // Island. Strive est reléguée au cercle `minimal` détaché et ne se déplie
+    // plus d'elle-même, `AlertConfiguration` ou pas — il faut un appui manuel
+    // pour lire le détail. Aucune API ne permet de réclamer le créneau.
+    //
+    // Le repli notification existait déjà, mais il ne se déclenche que si la
+    // carte REFUSE l'update. Ici elle l'accepte parfaitement : `shown` vaut
+    // true, et le chauffeur n'avait donc qu'un rond de couleur, sans les
+    // chiffres, au moment précis où il a dix secondes pour décider.
+    //
+    // On envoie donc la notification EN PLUS de la carte quand un appel est en
+    // cours. Elle porte le détail complet et les boutons Accepter/Refuser, et
+    // une bannière par-dessus un écran d'appel est plus visible qu'une pastille
+    // de 20 pt. C'est le seul cas où les deux surfaces partent ensemble.
+    if shown && Self.hasActiveCall() {
+      let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
+      sendLocalNotification(
+        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
+        body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm",
+                     result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
+        category: "STRIVE_SCAN_RESULT", rideId: rideId,
+        // Même niveau que le repli : un verdict de course ne vaut que dans les
+        // secondes qui suivent, et un chauffeur en appel est justement celui qui
+        // risque le plus de le manquer.
+        level: .timeSensitive
+      )
+    }
+
     if !shown {
       // Le scan a réussi mais la Live Activity n'a rien pu afficher : on retombe
       // sur la notification ET on trace, sinon la panne reste invisible côté
@@ -601,6 +648,24 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// Réservé aux réponses de scan : tout passer en `.timeSensitive` reviendrait à
   /// annuler la Concentration du chauffeur, ce qu'Apple comme les utilisateurs
   /// sanctionnent.
+  /// Observateur d'appels, retenu pour toute la vie du process.
+  ///
+  /// `CXCallObserver` doit être GARDÉ EN VIE : une instance créée puis relâchée
+  /// dans la même expression peut rendre une liste vide avant d'avoir été
+  /// peuplée. D'où ce `static let` plutôt qu'un `CXCallObserver().calls` en
+  /// ligne, qui est le piège classique de cette API.
+  private static let callObserver = CXCallObserver()
+
+  /// Un appel est-il en cours ? Couvre le cellulaire comme la VoIP passant par
+  /// CallKit (WhatsApp, Messenger…), qui occupent le créneau attaché de la même
+  /// façon. Un appel qui sonne sans être décroché compte aussi : l'îlot est déjà
+  /// pris.
+  ///
+  /// Aucune autorisation ni entitlement : c'est une simple lecture d'état.
+  private static func hasActiveCall() -> Bool {
+    callObserver.calls.contains { !$0.hasEnded }
+  }
+
   private func sendLocalNotification(
     title: String,
     body: String,

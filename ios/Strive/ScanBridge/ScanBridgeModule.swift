@@ -247,6 +247,75 @@ class ScanBridgeModule: RCTEventEmitter {
   /// pas le perdre, et des relances pour le rejouer. Quatre mécanismes pour
   /// compenser un seul problème de calendrier. En laissant le JS venir chercher,
   /// le problème n'existe plus.
+  // MARK: - Diagnostic
+
+  /// Rend la trace Live Activity telle qu'elle est stockée dans l'App Group.
+  ///
+  /// C'est le seul moyen de lire ce que fait ActivityKit sans un Mac et
+  /// Console.app. `tracing` dit à l'écran si la collecte est active — sans quoi
+  /// il afficherait un vide qu'on prendrait pour « aucune erreur ».
+  @objc func getDiagnostics(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else {
+      resolve(["trace": "", "lastStep": "", "tracing": false])
+      return
+    }
+    if #available(iOS 16.2, *) {
+      resolve([
+        "trace": d.string(forKey: LiveActivityManager.traceKey) ?? "",
+        "lastStep": d.string(forKey: LiveActivityManager.lastStepKey) ?? "",
+        "tracing": d.bool(forKey: LiveActivityManager.tracingKey),
+        // Combien de fois le système a demandé chaque présentation du Dynamic
+        // Island, sur un état de résultat. Écrit par le widget lui-même — c'est
+        // le seul endroit qui sait, aucune API ne permet de l'interroger.
+        // `since` borne la fenêtre : « déplié : 0 » ne veut rien dire si la
+        // mesure n'a duré que trente secondes.
+        "presentations": [
+          "expanded": d.integer(forKey: "laPres_expanded"),
+          "compact":  d.integer(forKey: "laPres_compact"),
+          "minimal":  d.integer(forKey: "laPres_minimal"),
+          "since":    d.double(forKey: "laPres_since"),
+        ],
+      ])
+    } else {
+      resolve(["trace": "", "lastStep": "", "tracing": false])
+    }
+  }
+
+  /// Remet les compteurs de présentation à zéro, pour démarrer une mesure
+  /// propre avant une vacation.
+  @objc func resetPresentationCounters() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    for k in ["laPres_expanded", "laPres_compact", "laPres_minimal",
+              "laPres_expanded_at", "laPres_compact_at", "laPres_minimal_at",
+              "laPres_since"] {
+      d.removeObject(forKey: k)
+    }
+  }
+
+  @objc func setDiagnosticsTracing(_ enabled: Bool) {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    if #available(iOS 16.2, *) {
+      d.set(enabled, forKey: LiveActivityManager.tracingKey)
+      // En coupant, on efface : laisser des traces sur l'appareil après que le
+      // chauffeur a désactivé la collecte serait garder des données sans finalité.
+      if !enabled {
+        d.removeObject(forKey: LiveActivityManager.traceKey)
+        d.removeObject(forKey: LiveActivityManager.lastStepKey)
+      }
+    }
+  }
+
+  @objc func clearDiagnostics() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    if #available(iOS 16.2, *) {
+      d.removeObject(forKey: LiveActivityManager.traceKey)
+      d.removeObject(forKey: LiveActivityManager.lastStepKey)
+    }
+  }
+
   @objc func getPendingRideDecisions(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
@@ -316,9 +385,15 @@ class ScanBridgeModule: RCTEventEmitter {
         )
       }
 
-      // Nettoyage de la trace debug Live Activity (écrite par LiveActivityManager).
-      defaults?.removeObject(forKey: "laSteps")
-      defaults?.removeObject(forKey: "laLastStep")
+      // Nettoyage de la trace Live Activity — SAUF si elle a été demandée.
+      // C'est exactement au moment d'un résultat qu'elle est intéressante :
+      // l'effacer ici, c'est la vider juste avant qu'on la lise.
+      if #available(iOS 16.2, *), defaults?.bool(forKey: LiveActivityManager.tracingKey) == true {
+        // on la garde
+      } else {
+        defaults?.removeObject(forKey: "laSteps")
+        defaults?.removeObject(forKey: "laLastStep")
+      }
     }
 
     sendEvent(withName: "onScanResult", body: result)

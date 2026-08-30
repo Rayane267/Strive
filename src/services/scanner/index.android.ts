@@ -62,6 +62,14 @@ export const scannerService: ScannerService = {
   // l'app : elle restait sinon affichée avec ses boutons, sur une course déjà
   // tranchée. Pendant de `clearLiveActivityResult` côté iOS.
   clearRideResult: (rideId: string) => ScanBridge.clearRideResult?.(rideId),
+
+  // Android n'a pas de Live Activity : rien à tracer de ce côté. L'écran
+  // Diagnostic n'y affichera que les échecs de scan, qui viennent de Supabase.
+  getDiagnostics: async () => ({ trace: '', lastStep: '', tracing: false }),
+  // Pas de Dynamic Island sur Android : rien à compter.
+  resetPresentationCounters: () => {},
+  setDiagnosticsTracing: () => {},
+  clearDiagnostics: () => {},
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
   setScannerEnabled: () => {},
 

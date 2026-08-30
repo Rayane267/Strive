@@ -13,7 +13,7 @@ export interface PlanLimits {
 // garder une UX correcte en degraded mode.
 const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
   free: { dailyScans: 3, analyticsRangeDays: 1 },
-  plus: { dailyScans: 15, analyticsRangeDays: 7 },
+  plus: { dailyScans: 30, analyticsRangeDays: 7 },
   premium: { dailyScans: null, analyticsRangeDays: null },
 };
 
@@ -122,18 +122,46 @@ export function getPlanLimits(tier: PlanTier): PlanLimits {
   return (_runtimeLimits ?? FALLBACK_LIMITS)[tier];
 }
 
-/** Returns remaining scans (null = unlimited). Counts extra credits after daily limit exhausted. */
+/**
+ * Crédits de bienvenue encore valides sur ce profil, 0 si le pool a périmé.
+ *
+ * Miroir exact du test de `enforce_scan_quota` (20260830_welcome_credits.sql) :
+ * le serveur ne remet PAS la colonne à zéro à l'expiration — c'est la date qui
+ * la rend inerte. Lire `welcome_credits` sans passer par ici afficherait donc un
+ * solde que le serveur refuserait de consommer.
+ */
+export function getWelcomeCredits(profile?: {
+  welcome_credits?: number | null;
+  welcome_credits_expires_at?: string | null;
+} | null): number {
+  if (!profile?.welcome_credits) return 0;
+  const exp = profile.welcome_credits_expires_at;
+  if (!exp) return 0;
+  const ts = new Date(exp).getTime();
+  if (Number.isNaN(ts) || ts <= Date.now()) return 0;
+  return Math.max(0, profile.welcome_credits);
+}
+
+/**
+ * Returns remaining scans (null = unlimited).
+ * Ordre de consommation, aligné sur `enforce_scan_quota` : quota journalier,
+ * puis crédits de bienvenue (ils périment), puis crédits achetés.
+ * `welcomeCredits` est optionnel — les appelants antérieurs au pool de
+ * bienvenue restent justes, ils comptent simplement un pool de moins.
+ */
 export function getRemainingScans(
   tier: PlanTier,
   todayCount: number,
   extraCredits: number,
+  welcomeCredits: number = 0,
 ): number | null {
   const { dailyScans } = getPlanLimits(tier);
   if (dailyScans === null) return null;
   // Clamp inputs : un compteur négatif ou NaN ne doit pas créditer de scans bonus.
   const safeToday = Number.isFinite(todayCount) ? Math.max(0, todayCount) : 0;
   const safeExtra = Number.isFinite(extraCredits) ? Math.max(0, extraCredits) : 0;
+  const safeWelcome = Number.isFinite(welcomeCredits) ? Math.max(0, welcomeCredits) : 0;
   const fromPlan = Math.max(0, dailyScans - safeToday);
-  return fromPlan + safeExtra;
+  return fromPlan + safeWelcome + safeExtra;
 }
 

@@ -35,7 +35,27 @@ const KM_SCALE: ReadonlyArray<{ hourly: number; km: number }> = [
  * objectif net se compare directement au chiffre d'affaires qu'il génère.
  */
 export const SOCIAL_RATES = {
-  auto_entrepreneur: 0.22,
+  // 21,2 % du CA — micro-BIC « prestations de services commerciales », la
+  // catégorie dont relève le transport de personnes. C'est le taux Urssaf 2026,
+  // pas les 22 % arrondis d'avant. À NE PAS confondre avec les 25,6 % des
+  // « autres prestations de services » (micro-BNC), qui montent avec la réforme
+  // 2026 mais ne concernent pas le VTC.
+  //
+  // Rien n'est déductible de cette base : ni carburant, ni leasing, ni péages.
+  // C'est le prix de la simplicité du micro — et c'est pourquoi les charges
+  // fixes sont remontées au brut dans `deriveThreshold` pour ce statut.
+  //
+  // Un créateur sous ACRE paie environ 15,9 % la première année. On ne le
+  // demande pas : c'est à ça que sert « autre ».
+  auto_entrepreneur: 0.212,
+  // Part de l'enveloppe de rémunération absorbée par les cotisations. En SASU,
+  // 100 € de brut coûtent ~145 € et laissent ~78 € net, soit ~46 % de
+  // l'enveloppe ; en EURL, ~45 % du bénéfice pour un gérant majoritaire. Les
+  // deux tombent près de 45 %.
+  //
+  // ⚠️ Cette base n'est PAS celle de l'auto-entrepreneur. 21,2 % portent sur le
+  // chiffre d'affaires, 45 % sur la rémunération. Les comparer directement n'a
+  // aucun sens — d'où la base rappelée sous chaque option à l'écran.
   societe: 0.45,
   salarie: 0,
 } as const;
@@ -51,6 +71,12 @@ export type GoalInput = {
   fixedCosts: number;
   /** Part du CA reversée en charges sociales (0,22 = 22 %). */
   socialRate: number;
+  /**
+   * Statut du chauffeur. Il ne sert qu'à UNE chose : savoir si les charges
+   * fixes se déduisent avant ou après les cotisations. Voir `deriveThreshold`.
+   * Absent → traitement auto-entrepreneur, qui était le comportement d'origine.
+   */
+  status?: DriverStatus;
 };
 
 export type DerivedThreshold = {
@@ -101,7 +127,29 @@ export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
   // Le chauffeur ne touche que (1 − taux) de ce qu'il encaisse : viser son net
   // sans ce terme sous-estimait le seuil d'environ 30 %, au point que le
   // plancher de rentabilité s'appliquait dans tous les cas réalistes.
-  const requiredRevenue = (monthlyGoal + costs) / (1 - rate);
+  //
+  // MAIS les charges fixes ne se placent pas au même endroit selon le statut.
+  //
+  //   • Auto-entrepreneur — les cotisations portent sur le CA ENCAISSÉ, LOA
+  //     comprise. La LOA doit donc être remontée au brut elle aussi :
+  //         CA = (net + fixes) ÷ (1 − taux)
+  //
+  //   • Société — la LOA, l'assurance et le reste sont des charges
+  //     d'exploitation, déduites AVANT la rémunération. Les cotisations ne
+  //     portent que sur ce qui est versé au dirigeant :
+  //         CA = net ÷ (1 − taux) + fixes
+  //
+  // Les diviser pour tout le monde surestimait le CA nécessaire en société.
+  // Sur 3 500 € net, 1 400 € de charges et 45 % : 8 909 € annoncés contre
+  // 7 764 € réels, soit 68,5 €/h au lieu de 59,5 €/h sur 130 heures. Le
+  // chauffeur refusait des courses qui lui convenaient.
+  //
+  // Statut inconnu (« autre », taux saisi à la main) → traitement
+  // auto-entrepreneur, celui d'origine : on ne devine pas un régime.
+  const chargesBeforeContributions = input.status === 'societe';
+  const requiredRevenue = chargesBeforeContributions
+    ? monthlyGoal / (1 - rate) + costs
+    : (monthlyGoal + costs) / (1 - rate);
   const rawHourly = roundHalf(requiredRevenue / monthlyHours);
 
   const floored = rawHourly < FREE_THRESHOLDS.hourly;

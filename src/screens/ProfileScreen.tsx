@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   View,
@@ -15,6 +15,7 @@ import {
   Animated,
   NativeModules,
   Easing,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -30,13 +31,15 @@ import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
-import { registerPushToken, unregisterPushToken } from '../services/notificationService';
+import { registerPushToken, unregisterPushToken, getNotificationStatus } from '../services/notificationService';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
 import { getEffectivePlanTier } from '../services/subscriptionService';
+import { revokeAppleAccess } from '../services/appleRevoke';
+import * as Sentry from '@sentry/react-native';
 
 /// Taille des icônes de menu. 22 et non 20 : posées à nu, sans tuile pour les
 /// soutenir, deux pixels de plus suffisent à leur redonner du poids face à un
@@ -136,26 +139,67 @@ const ProfileScreen = () => {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  // Notifications : l'état affiché est la présence d'un jeton enregistré, pas un
-  // drapeau local — c'est le jeton qui décide si le serveur peut joindre
-  // l'appareil, donc c'est lui qui fait foi.
+  // Notifications : l'état affiché croise DEUX conditions, le jeton enregistré
+  // ET la permission système.
+  //
+  // Le jeton seul ne suffit pas, et c'était le bug : quand le chauffeur révoque
+  // les notifications depuis les Réglages iOS, le jeton reste stocké côté app.
+  // L'interrupteur affichait donc « activé » alors que plus rien n'arrivait —
+  // et le récapitulatif du tutoriel, qui lit la permission, disait l'inverse.
+  // Deux écrans de la même app se contredisaient.
+  //
+  // Les deux comptent, pour deux raisons distinctes : la permission décide si le
+  // système affiche la notification, le jeton décide si le serveur peut
+  // l'envoyer. Il en manque une, rien n'arrive.
   const [pushEnabled, setPushEnabled] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem('@strive_fcm_token').then(v => setPushEnabled(!!v));
+  const refreshPushState = useCallback(async () => {
+    const [token, status] = await Promise.all([
+      AsyncStorage.getItem('@strive_fcm_token'),
+      getNotificationStatus(),
+    ]);
+    setPushEnabled(!!token && status === 'granted');
   }, []);
+
+  useEffect(() => {
+    refreshPushState();
+    // La permission peut changer HORS de l'app, dans les Réglages iOS. Sans
+    // cette relecture au retour au premier plan, l'interrupteur resterait sur
+    // l'état lu au montage — exactement le mensonge qu'on vient de corriger.
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active') refreshPushState();
+    });
+    return () => sub.remove();
+  }, [refreshPushState]);
 
   const togglePush = async (next: boolean) => {
     setPushEnabled(next);
     hapticLight();
     if (!user?.id) return;
     try {
-      if (next) await registerPushToken(user.id);
-      else await unregisterPushToken(user.id);
-      // `registerPushToken` sort sans rien faire si la permission système est
-      // refusée : on relit donc le jeton plutôt que de croire l'interrupteur.
-      const token = await AsyncStorage.getItem('@strive_fcm_token');
-      setPushEnabled(!!token);
+      if (next) {
+        const result = await registerPushToken(user.id);
+        // Refus système : la fenêtre « Strive souhaite vous envoyer des
+        // notifications » ne se réaffiche jamais après un premier refus, ni sur
+        // iOS ni sur Android 13+. L'interrupteur revenait donc en arrière sans
+        // un mot, et le chauffeur n'avait aucun moyen de savoir qu'il fallait
+        // passer par les Réglages. On l'y emmène.
+        if (result === 'denied') {
+          Alert.alert(
+            t('preferences.pushDeniedTitle'),
+            t('preferences.pushDeniedBody'),
+            [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('preferences.openSettings'), onPress: () => Linking.openSettings() },
+            ],
+          );
+        }
+      } else {
+        await unregisterPushToken(user.id);
+      }
+      // On relit l'état complet plutôt que de croire l'interrupteur : ni le
+      // jeton ni la permission ne se déduisent du geste du chauffeur.
+      await refreshPushState();
     } catch {
       setPushEnabled(!next);
     }
@@ -286,6 +330,24 @@ const ProfileScreen = () => {
     }
     setDeleting(true);
     try {
+      // Apple d'abord, tant que la session vit encore : la révocation exige un
+      // code d'autorisation frais obtenu depuis l'appareil, et l'edge function
+      // exige le JWT du titulaire. Après `delete_account`, ni l'un ni l'autre
+      // n'existe plus.
+      //
+      // Best-effort assumé : si le chauffeur refuse la ré-authentification ou
+      // qu'Apple est injoignable, on supprime quand même. Le retenir dans un
+      // compte qu'il veut voir disparaître serait pire que le jeton résiduel.
+      // Mais l'échec part dans Sentry — une révocation qu'on croit faite et qui
+      // ne l'est pas se paie en rejet App Store, des semaines plus tard.
+      const appleOutcome = await revokeAppleAccess(user as any);
+      if (appleOutcome === 'failed' || appleOutcome === 'cancelled') {
+        Sentry.captureMessage('apple_revoke_not_completed', {
+          level: 'warning',
+          tags: { flow: 'delete_account', outcome: appleOutcome },
+        });
+      }
+
       // RGPD : purge l'avatar du Storage AVANT delete_account (après, plus de
       // session pour le faire ; un DELETE SQL sur storage.objects laisserait
       // le fichier orphelin côté S3). Best-effort : un échec ne bloque pas la
@@ -375,6 +437,20 @@ const ProfileScreen = () => {
       sub: t('support.menuSub', 'Contacter le support, suivre tes demandes'),
       onPress: () => navigation.navigate('SupportTickets'),
     },
+    // Diagnostics : outil de développement, invisible sur le build App Store.
+    // `__DEV__` couvre les builds de debug ; `is_admin` (déjà utilisé pour le
+    // back-office support) garde l'accès sur une build de production pour nos
+    // seuls comptes — c'est là qu'il sert vraiment, un bug de scan ne se
+    // reproduisant pas dans un simulateur. Un chauffeur, lui, ne le voit jamais.
+    ...(__DEV__ || profile?.is_admin
+      ? [{
+          icon: 'stethoscope',
+          iconLib: 'mc' as const,
+          title: t('diagnostics.title'),
+          sub: t('diagnostics.menuSub'),
+          onPress: () => navigation.navigate('Diagnostics'),
+        }]
+      : []),
   ];
 
   const renderIcon = (item: MenuItem) => {

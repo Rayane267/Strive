@@ -163,6 +163,26 @@ export interface ScannerService {
   onScanFailure(
     cb: (f: { reason: string; surface: string; platform?: string | null; detail?: string | null; occurredAt?: number | null }) => void,
   ): { remove: () => void } | undefined;
+  /** Trace de diagnostic Live Activity, telle que stockée côté natif.
+   *  iOS uniquement — Android n'a pas de Live Activity, la trace y est vide. */
+  getDiagnostics?(): Promise<{
+    trace: string;
+    lastStep: string;
+    tracing: boolean;
+    /** Combien de fois le système a demandé chaque présentation du Dynamic
+     *  Island sur un état de résultat. Aucune API ne permet de savoir laquelle
+     *  est à l'écran : le widget compte ses propres rendus, et c'est le seul
+     *  signal disponible. Un compteur à 0 prouve l'absence ; un compteur haut
+     *  est un majorant (SwiftUI peut évaluer une vue sans l'afficher).
+     *  `since` = début de la fenêtre de mesure, en secondes epoch. */
+    presentations?: { expanded: number; compact: number; minimal: number; since: number };
+  }>;
+  /** Redémarre une mesure propre des présentations. iOS uniquement. */
+  resetPresentationCounters?(): void;
+  /** Active ou coupe la collecte. Éteinte, rien n'est écrit sur l'appareil ;
+   *  la couper efface aussi ce qui avait été collecté. */
+  setDiagnosticsTracing?(enabled: boolean): void;
+  clearDiagnostics?(): void;
   /** Écoute le refus de permission */
   onPermissionDenied(cb: () => void): { remove: () => void } | undefined;
 }

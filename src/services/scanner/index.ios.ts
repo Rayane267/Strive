@@ -144,6 +144,26 @@ export const scannerService: ScannerService = {
     ScanBridge?.clearLiveActivityResult?.(rideId);
   },
 
+  getDiagnostics: async () => {
+    try {
+      return (await ScanBridge?.getDiagnostics?.()) ?? { trace: '', lastStep: '', tracing: false };
+    } catch {
+      return { trace: '', lastStep: '', tracing: false };
+    }
+  },
+
+  resetPresentationCounters: () => {
+    ScanBridge?.resetPresentationCounters?.();
+  },
+
+  setDiagnosticsTracing: (enabled: boolean) => {
+    ScanBridge?.setDiagnosticsTracing?.(enabled);
+  },
+
+  clearDiagnostics: () => {
+    ScanBridge?.clearDiagnostics?.();
+  },
+
   setScanQuota: (countToday: number, limit: number, resetHour: number) => {
     ScanBridge?.setScanQuota?.(countToday, limit, resetHour);
   },

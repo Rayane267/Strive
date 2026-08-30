@@ -37,6 +37,9 @@ struct StriveLiveActivity: Widget {
       let lockGreen = Color(red: 0.0, green: 0.78, blue: 0.32)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
+          // Compté ici et pas dans les trois autres régions : elles sont
+          // évaluées ensemble, une seule suffit à dater un dépliage.
+          let _ = laCountPresentation(.expanded, platform: context.state.platform)
           if isError {
             Image(systemName: "xmark.circle.fill")
               .font(.system(size: 18, weight: .bold))
@@ -157,6 +160,7 @@ struct StriveLiveActivity: Widget {
           }
         }
       } compactLeading: {
+        let _ = laCountPresentation(.compact, platform: context.state.platform)
         if isError {
           Image(systemName: "xmark.circle.fill")
             .foregroundColor(errorRed)
@@ -214,6 +218,7 @@ struct StriveLiveActivity: Widget {
             .minimumScaleFactor(0.6)
         }
       } minimal: {
+        let _ = laCountPresentation(.minimal, platform: context.state.platform)
         // `minimal` est la SEULE surface visible quand autre chose occupe le
         // Dynamic Island — un appel en cours au premier chef. Dans ce cas iOS ne
         // déplie pas l'activité de lui-même : ce cercle de ~20 pt est tout ce
@@ -719,6 +724,55 @@ private struct DecisionButtons: View {
 ///
 /// ⚠️ Une Live Activity déjà affichée ne se re-rend pas sur changement de langue :
 /// elle garde la sienne jusqu'au prochain `update()` (donc au prochain scan).
+// MARK: - Compteur de présentations (mesure, pas décoration)
+
+/// Les quatre présentations du Dynamic Island que le système peut demander.
+/// `compactTrailing` n'est pas comptée : elle est rendue en même temps que
+/// `compactLeading`, la compter doublerait le total.
+enum LAPresentation: String {
+  case expanded, compact, minimal
+}
+
+/// Estampille la présentation que le système vient de demander.
+///
+/// POURQUOI ÇA EXISTE. Aucune API ActivityKit ne dit quelle présentation est à
+/// l'écran. Mais chacune des quatre closures de `DynamicIsland` n'est évaluée
+/// que si le système a besoin de CETTE présentation : leur exécution est donc le
+/// seul signal disponible. On le compte, l'écran Diagnostic le lit.
+///
+/// ⚠️ CE QUE LA MESURE VAUT. SwiftUI peut évaluer un corps sans l'afficher, donc
+/// un compteur à 28 ne prouve pas 28 affichages — c'est un majorant. En revanche
+/// un compteur à ZÉRO prouve l'absence : si `expanded` n'est jamais évalué sur
+/// une vacation entière, l'îlot ne s'est jamais déplié. C'est cette asymétrie
+/// qui rend la mesure concluante pour la question posée.
+///
+/// Opt-in derrière `laTracing`, comme la trace : on n'écrit rien chez un
+/// chauffeur qui n'a rien demandé.
+@discardableResult
+private func laCountPresentation(_ p: LAPresentation, platform: String) -> Bool {
+  // Seuls les états de RÉSULTAT sont comptés. L'IDLE se re-rend en boucle (le
+  // timer de session tourne) et noierait la mesure sous des milliers de passages
+  // qui n'ont rien à voir avec l'affichage d'un verdict.
+  switch platform {
+  case "IDLE", "SCANNING", "RECAP", "ERROR", "LOCKED": return false
+  default: break
+  }
+  let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+    ?? "group.com.striveapp.app"
+  guard let d = UserDefaults(suiteName: groupId), d.bool(forKey: "laTracing") else {
+    return false
+  }
+  let key = "laPres_\(p.rawValue)"
+  d.set(d.integer(forKey: key) + 1, forKey: key)
+  d.set(Date().timeIntervalSince1970, forKey: "laPres_\(p.rawValue)_at")
+  // Début de la fenêtre de mesure : sans lui, « déplié : 0 » ne dit pas si la
+  // mesure a duré une soirée ou trente secondes.
+  if d.object(forKey: "laPres_since") == nil {
+    d.set(Date().timeIntervalSince1970, forKey: "laPres_since")
+  }
+  return true
+}
+
 private func laString(fr: String, en: String) -> String {
   let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
     ?? "group.com.striveapp.app"

@@ -1,15 +1,18 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Dimensions,
   Animated,
   Platform,
   Linking,
   Switch,
+  AppState,
+  Alert,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Image } from 'react-native';
@@ -23,7 +26,9 @@ import { useTranslation } from 'react-i18next';
 import ScanPreview from '../components/ScanPreview';
 import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import { registerPushToken, getNotificationStatus } from '../services/notificationService';
 import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
@@ -43,6 +48,16 @@ type IosTrigger = 'backTap' | 'assistive' | 'homeScreen';
 // Accent unique = vert brand sur toutes les slides (palette disciplinée). Les
 // couleurs sémantiques rouge/orange/vert vivent uniquement dans le preview verdict.
 const A = colors.primary;
+/** Les quatre exigences de l'installation iOS. `notif` est la seule que l'app
+ *  peut vérifier ; les trois autres n'ont aucune API et sont affichées comme
+ *  « à vérifier », jamais comme acquises. */
+const RECAP_ROWS = [
+  { key: 'notif' },
+  { key: 'shortcut' },
+  { key: 'bubble' },
+  { key: 'urgent' },
+] as const;
+
 const STEPS = (Platform.OS === 'ios'
   ? [
       { key: '1',        icon: 'steering',           color: A, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
@@ -58,6 +73,11 @@ const STEPS = (Platform.OS === 'ios'
       // manquait en bas, où le bouton « Ouvrir les Réglages » mordait sur
       // l'étape « Ajouter Strive ».
       { key: '3',        icon: 'gesture-tap-button', color: A, titleKey: '',                            descKey: '',                            tip: '' },
+      // Récapitulatif juste après les réglages, et pas à la fin du tutoriel :
+      // c'est le moment où le chauffeur vient de les faire et peut encore y
+      // retourner. Le mettre en dernier reviendrait à lui signaler un problème
+      // quand il a déjà l'esprit ailleurs.
+      { key: 'recap',    icon: 'clipboard-check',     color: A, titleKey: 'tutorial.recap.title',         descKey: 'tutorial.recap.desc',         tip: '' },
       { key: 'la_tip',   icon: 'cellphone-nfc',       color: A, titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
       { key: '4',        icon: 'chart-line',         color: A, titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
       { key: '5',        icon: 'rocket-launch',      color: A, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
@@ -101,6 +121,62 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   // branches d'aide existantes.
   const iosTrigger = 'assistive' as IosTrigger;
   const [shortcutInstalled, setShortcutInstalled] = useState(false);
+  /// État réel de la permission notifications, relu sans jamais afficher la
+  /// fenêtre système — elle ne s'affiche qu'une fois par installation, la brûler
+  /// pour peindre un bouton en vert serait le pire échange.
+  const [notifGranted, setNotifGranted] = useState(false);
+
+  /// « Prêt » exige DEUX conditions, pas une : la permission système accordée
+  /// ET un jeton FCM enregistré. Le Profil se fie déjà au jeton, et son
+  /// raisonnement est le bon — c'est lui qui décide si le serveur peut joindre
+  /// l'appareil. Une permission accordée sans jeton (réseau coupé au moment de
+  /// l'enregistrement) laisserait le chauffeur sans verdict alors que l'écran
+  /// afficherait un vert rassurant. Les deux doivent tenir.
+  const refreshNotifStatus = useCallback(async () => {
+    const [status, token] = await Promise.all([
+      getNotificationStatus(),
+      AsyncStorage.getItem('@strive_fcm_token'),
+    ]);
+    setNotifGranted(status === 'granted' && !!token);
+  }, []);
+
+  useEffect(() => {
+    refreshNotifStatus();
+    // Le chauffeur peut accorder la permission depuis les Réglages iOS, hors de
+    // l'app : on relit à chaque retour au premier plan plutôt que de rester sur
+    // un état figé au montage.
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active') refreshNotifStatus();
+    });
+    return () => sub.remove();
+  }, [refreshNotifStatus]);
+
+  /// C'est CET appel qui affiche la fenêtre système. Il est ici et pas au
+  /// démarrage parce que c'est le seul moment où le chauffeur a une raison de
+  /// dire oui : on vient de lui expliquer que le verdict arrive par là.
+  const enableNotifications = useCallback(async () => {
+    if (user?.id) await registerPushToken(user.id, true);
+    await refreshNotifStatus();
+    const granted = (await getNotificationStatus()) === 'granted';
+    // BOUTON MORT ÉVITÉ. La fenêtre système ne s'affiche qu'une fois par
+    // installation : si le chauffeur avait déjà refusé, `requestPermission`
+    // répond « non » de mémoire, sans rien montrer. Le bouton serait resté
+    // orange à ne rien faire, et il aurait conclu que l'app est cassée.
+    //
+    // On DEMANDE avant d'ouvrir les Réglages, exactement comme l'interrupteur du
+    // Profil, et avec les mêmes textes : le catapulter hors de l'app sans un mot
+    // au milieu d'un tutoriel serait plus brutal que le problème qu'on résout.
+    if (!granted) {
+      Alert.alert(
+        t('preferences.pushDeniedTitle'),
+        t('preferences.pushDeniedBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('preferences.openSettings'), onPress: () => Linking.openSettings() },
+        ],
+      );
+    }
+  }, [user?.id, refreshNotifStatus, t]);
   const [minHourly, setMinHourly] = useState(30);
   const [minKm, setMinKm] = useState(1.0);
   const [includePickup, setIncludePickup] = useState(true);
@@ -208,6 +284,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     const isIosPreview = Platform.OS === 'ios' && item.key === 'preview';
     const isIosInstall = Platform.OS === 'ios' && item.key === '2';
     const isIosTrigger = Platform.OS === 'ios' && item.key === '3';
+    const isRecap = Platform.OS === 'ios' && item.key === 'recap';
     const isMinimums = item.key === 'minimums';
     const isDone = item.key === '5';
     const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger || isMinimums || isDone;
@@ -222,9 +299,23 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
     return (
       <View style={styles.slide}>
-        {/* Halo de fond unique, très discret */}
+        {/* Halo de fond unique, très discret. Hors du ScrollView : il est en
+            position absolue et ne doit pas défiler avec le contenu. */}
         <View style={styles.glowCircle} />
 
+        {/* DÉFILEMENT VERTICAL. La diapositive était une hauteur fixe centrée :
+            dès qu'une étape portait sa description ET son bouton, le texte
+            SORTAIT du cadre, sans recours. C'est ce qui obligeait à une action
+            par écran.
+            `flexGrow: 1` + `justifyContent: 'center'` garde le centrage exact
+            d'avant quand le contenu est court, et laisse défiler quand il est
+            long — les deux comportements, sans choisir. Axe vertical contre
+            FlatList horizontale : aucun conflit de geste. */}
+        <ScrollView
+          style={styles.slideScroll}
+          contentContainerStyle={styles.slideContent}
+          showsVerticalScrollIndicator={false}
+        >
         <Animated.View style={{ alignItems: 'center', opacity, transform: [{ scale }, { translateY }] }}>
           {showCompactIcon ? (
             <SafeGradient
@@ -287,44 +378,142 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             </Animated.View>
           ) : null}
 
-          {/* Slide iOS 2 — Install Shortcut (single-line steps like ref) */}
+          {/* ── Diapositive « Dans l'app » ────────────────────────────────
+               Deux réglages, deux boutons EN LIGNE sous leur propre explication.
+               C'est le patron de la référence RideIQ, et ce qu'il corrige est
+               précis : lire une consigne puis chercher où appuyer. Ici l'action
+               est là où on vient de comprendre pourquoi elle sert.
+               Tient dans la hauteur depuis que la diapositive défile. */}
           {isIosInstall ? (
             <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
-              <View style={styles.installStepsCard}>
-                {[1, 2, 3].map(n => (
-                  <View key={n} style={styles.installStepRow}>
-                    <View style={[styles.installStepNum, { backgroundColor: item.color }]}>
-                      <Text style={styles.installStepNumTxt}>{n}</Text>
-                    </View>
-                    <Text style={styles.installStepTxt}>{t(`tutorial.iosInstall.step${n}t`)}</Text>
+
+              {/* 1 — Notifications. Absente du tutoriel jusqu'ici : la permission
+                  n'était demandée que par l'interrupteur du Profil, que le
+                  chauffeur ne visite pas forcément. Or c'est par la notification
+                  que le verdict arrive quand la carte n'a rien pu afficher. */}
+              <View style={styles.setupStep}>
+                <View style={styles.triggerStepRow}>
+                  <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
+                    <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>1</Text>
                   </View>
-                ))}
+                  <View style={styles.triggerStepTexts}>
+                    <Text style={styles.triggerStepTitle}>{t('tutorial.iosInstall.notifT')}</Text>
+                    <Text style={styles.triggerStepSub}>{t('tutorial.iosInstall.notifS')}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.stepCta,
+                    { backgroundColor: notifGranted ? 'rgba(0,230,118,0.14)' : item.color },
+                    notifGranted && { borderWidth: 1, borderColor: item.color + '80' },
+                  ]}
+                  onPress={enableNotifications}
+                  activeOpacity={0.85}
+                  disabled={notifGranted}
+                >
+                  <MaterialCommunityIcons
+                    name={notifGranted ? 'check-circle' : 'bell-ring'}
+                    size={17}
+                    color={notifGranted ? item.color : colors.background}
+                  />
+                  <Text style={[styles.iosBigCtaTxt, notifGranted && { color: item.color }]}>
+                    {notifGranted
+                      ? t('tutorial.iosInstall.notifDone')
+                      : t('tutorial.iosInstall.notifCta')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 2 — Le raccourci */}
+              <View style={styles.setupStep}>
+                <View style={styles.triggerStepRow}>
+                  <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
+                    <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>2</Text>
+                  </View>
+                  <View style={styles.triggerStepTexts}>
+                    <Text style={styles.triggerStepTitle}>{t('tutorial.iosInstall.shortcutT')}</Text>
+                    <Text style={styles.triggerStepSub}>{t('tutorial.iosInstall.shortcutS')}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.stepCta,
+                    { backgroundColor: shortcutInstalled ? 'rgba(0,230,118,0.14)' : item.color },
+                    shortcutInstalled && { borderWidth: 1, borderColor: item.color + '80' },
+                  ]}
+                  onPress={installShortcut}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons
+                    name={shortcutInstalled ? 'check-circle' : 'download'}
+                    size={17}
+                    color={shortcutInstalled ? item.color : colors.background}
+                  />
+                  <Text style={[styles.iosBigCtaTxt, shortcutInstalled && { color: item.color }]}>
+                    {shortcutInstalled
+                      ? t('tutorial.iosInstall.ctaDone', 'Raccourci installé — rouvrir')
+                      : t('tutorial.iosInstall.cta')}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <Text style={styles.installWarning}>
                 <MaterialCommunityIcons name="alert" size={13} color="#FFB300" />
                 {'  '}{t('tutorial.iosInstall.warning')}
               </Text>
+            </Animated.View>
+          ) : null}
+
+          {/* ── Récapitulatif d'installation ────────────────────────────────
+               POURQUOI IL EXISTE. Sans lui, le chauffeur termine le tutoriel sans
+               savoir si son installation FONCTIONNE. Et le pire cas est muet :
+               AssistiveTouch désactivé, l'app ne répond simplement jamais, sans
+               message ni erreur — il conclut qu'elle est cassée.
+
+               POURQUOI TOUT N'EST PAS VERT. Une seule de ces quatre lignes est
+               réellement vérifiable : les notifications, via
+               `getNotificationStatus()`. iOS n'expose AUCUNE API pour savoir si
+               AssistiveTouch est actif, si un raccourci existe, ni quel niveau
+               d'interruption est autorisé. Les autres sont donc marquées
+               « à vérifier », avec le chemin pour le faire soi-même.
+               Peindre un faux « Prêt » vert serait bien pire que d'admettre
+               l'ignorance : le chauffeur croirait son installation bonne et
+               chercherait la panne partout ailleurs. */}
+          {isRecap ? (
+            <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
+              {RECAP_ROWS.map(row => {
+                const state = row.key === 'notif'
+                  ? (notifGranted ? 'ok' : 'todo')
+                  : 'unknown';
+                return (
+                  <View key={row.key} style={styles.recapRow}>
+                    <MaterialCommunityIcons
+                      name={state === 'ok' ? 'check-circle' : state === 'todo' ? 'alert-circle' : 'help-circle'}
+                      size={22}
+                      color={state === 'ok' ? item.color : state === 'todo' ? '#FFB300' : colors.textDimmed}
+                    />
+                    <View style={styles.recapTexts}>
+                      <Text style={styles.triggerStepTitle}>{t(`tutorial.recap.${row.key}T`)}</Text>
+                      <Text style={styles.triggerStepSub}>{t(`tutorial.recap.${row.key}S`)}</Text>
+                    </View>
+                    <Text style={[
+                      styles.recapState,
+                      state === 'ok' && { color: item.color },
+                      state === 'todo' && { color: '#FFB300' },
+                    ]}>
+                      {t(`tutorial.recap.state_${state}`)}
+                    </Text>
+                  </View>
+                );
+              })}
 
               <TouchableOpacity
-                style={[
-                  styles.iosBigCta,
-                  { backgroundColor: shortcutInstalled ? 'rgba(0,230,118,0.14)' : item.color },
-                  shortcutInstalled && { borderWidth: 1, borderColor: item.color + '80' },
-                ]}
-                onPress={installShortcut}
+                style={[styles.stepCta, { backgroundColor: item.color, marginTop: 18 }]}
+                onPress={() => Linking.openSettings()}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons
-                  name={shortcutInstalled ? 'check-circle' : 'download'}
-                  size={18}
-                  color={shortcutInstalled ? item.color : colors.background}
-                />
-                <Text style={[styles.iosBigCtaTxt, shortcutInstalled && { color: item.color }]}>
-                  {shortcutInstalled
-                    ? t('tutorial.iosInstall.ctaDone', 'Raccourci installé — rouvrir')
-                    : t('tutorial.iosInstall.cta')}
-                </Text>
+                <Feather name="settings" size={17} color={colors.background} />
+                <Text style={styles.iosBigCtaTxt}>{t('tutorial.recap.openSettings')}</Text>
               </TouchableOpacity>
             </Animated.View>
           ) : null}
@@ -511,6 +700,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             </Animated.View>
           ) : null}
         </Animated.View>
+        </ScrollView>
       </View>
     );
   };
@@ -643,12 +833,14 @@ const styles = StyleSheet.create({
 
   flatList: { flex: 1 },
 
-  slide: {
-    width,
-    flex: 1,
+  slide: { width, flex: 1 },
+  slideScroll: { flex: 1, width: '100%' },
+  slideContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
+    paddingTop: 12,
     paddingBottom: 40,
   },
 
@@ -787,6 +979,24 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
 
+  recapRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  recapTexts: { flex: 1 },
+  recapState: {
+    color: colors.textDimmed,
+    fontSize: 13, fontWeight: '700',
+    marginTop: 2,
+  },
+  setupStep: { marginBottom: 24 },
+  stepCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 9, marginTop: 12,
+    paddingVertical: 14, borderRadius: 14,
+  },
   iosBigCta: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,9 +8,20 @@
  * soit au chauffeur. Un composant et pas deux copies : ces chiffres sont la
  * vitrine du produit, ils ne doivent pas diverger d'un écran à l'autre.
  *
- * Les valeurs sont crédibles et non arrondies — 17 € pour 28 min et 5,4 km fait
- * 53 €/h, le calcul tient si quelqu'un le refait. Une démonstration dont les
+ * Les valeurs sont crédibles et non arrondies : une démonstration dont les
  * chiffres ne tombent pas juste se retourne contre le produit qu'elle vend.
+ *
+ * `hourly` et `km` sont DÉRIVÉS de `fare`, `duration` et `distance` — ils ne
+ * s'inventent pas. Verte : 17 € / 18 min = 57 €/h, 17 € / 5,4 km = 3,15 €/km.
+ * Orange : 9 € / 28 min = 19 €/h, 9 € / 7 km = 1,29 €/km. Contre les seuils du
+ * gratuit (25 €/h, 1,10 €/km), l'orange passe au km et échoue à l'heure : c'est
+ * exactement le « peut-être » qu'elle doit illustrer.
+ *
+ * Rouge : 11 € / 42 min = 16 €/h, 11 € / 10,3 km = 1,07 €/km — les deux sous
+ * les seuils, ce qui est bien le piège annoncé. Elle affichait auparavant 22 €
+ * pour 15 €/h et 0,78 €/km : deux valeurs qui ne dérivaient de rien, et 22 €
+ * sur 42 min font en réalité 31 €/h avec 2,14 €/km, soit une EXCELLENTE course
+ * étiquetée « à éviter ». La démonstration se contredisait elle-même.
  */
 
 import React, { useState } from 'react';
@@ -22,9 +33,9 @@ import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
 
 export const PREVIEW_DATA = [
-  { hourly: 53, fare: 17, km: '3.15', duration: 28, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
-  { hourly: 38, fare: 7,  km: '3.50', duration: 9,  distance: '2.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
-  { hourly: 15, fare: 22, km: '0.78', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
+  { hourly: 57, fare: 17, km: '3.15', duration: 18, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
+  { hourly: 19, fare: 9,  km: '1.29', duration: 28, distance: '7.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
+  { hourly: 16, fare: 11, km: '1.07', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
 ];
 
 const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {

@@ -89,10 +89,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
-    "subscriptionSub": "15 scans/day, live €/h...",
+    "subscriptionSub": "30 scans/day, live €/h...",
     "subscriptionSubActive": "Cancel, change plan...",
     "upgradeCardTitle": "Upgrade to Strive Plus",
-    "upgradeCardSub": "15 scans/day · Live €/h · No commitment",
+    "upgradeCardSub": "30 scans/day · Live €/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -259,7 +259,7 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 15 scans/day so you stop driving at a loss.",
+      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 30 scans/day so you stop driving at a loss.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
@@ -274,7 +274,7 @@
     "upgradeCard": {
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
-      "perk1": "15 scans/day",
+      "perk1": "30 scans/day",
       "perk2": "Live €/h",
       "perk3": "History"
     },
@@ -440,7 +440,10 @@
     "push": "Push notifications",
     "pushSub": "Scan alerts, reminders and recaps",
     "languageSub": "Choose the app language",
-    "languageDevice": "Device language"
+    "languageDevice": "Device language",
+    "pushDeniedTitle": "Notifications denied",
+    "pushDeniedBody": "You declined notifications for Strive. iOS won't ask again — turn them on in your device Settings.",
+    "openSettings": "Open Settings"
   },
   "upgrade": {
     "title": "Upgrade to Pro",
@@ -536,8 +539,8 @@
       "verdictMaybe": "MAYBE",
       "verdictSkip": "SKIP",
       "hintGood": "Both metrics exceed your minimums ✓",
-      "hintAverage": "Good $/mi but short trip — your call",
-      "hintBad": "$/hr too low, long distance — skip this one"
+      "hintAverage": "Good €/km but the €/h doesn't follow — your call",
+      "hintBad": "€/h too low, long distance — skip this one"
     },
     "minimums": {
       "title": "Set Your Minimums",
@@ -576,7 +579,13 @@
       "step3t": "Come back here and tap Continue",
       "cta": "Get Shortcut",
       "warning": "You need to install the shortcut first.",
-      "ctaDone": "Shortcut installed — reopen"
+      "ctaDone": "Shortcut installed — reopen",
+      "notifT": "Notifications",
+      "notifS": "Allow them: that's how the verdict reaches you when the card couldn't show it. Without this, a successful scan can show you nothing.",
+      "notifCta": "Enable notifications",
+      "notifDone": "Notifications enabled",
+      "shortcutT": "The shortcut",
+      "shortcutS": "It takes the screenshot and runs the analysis on its own. Already pre-configured — you just add it."
     },
     "step3": {
       "title": "Accept or decline instantly",
@@ -652,7 +661,27 @@
       "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
       "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
     },
-    "restartVideo": "Replay video"
+    "restartVideo": "Replay video",
+    "recap": {
+      "title": "Your setup",
+      "desc": "What Strive can verify, and what only you can confirm.",
+      "notifT": "Notifications",
+      "notifS": "That's how the verdict reaches you when the card couldn't show it.",
+      "shortcutT": "The shortcut",
+      "shortcutS": "iOS gives no way to check it exists. Open the Shortcuts app to see it.",
+      "bubbleT": "AssistiveTouch bubble",
+      "bubbleS": "It is what you tap to analyse an offer. Settings › Accessibility › Touch › AssistiveTouch.",
+      "urgentT": "Time-sensitive alerts",
+      "urgentS": "Without them, Driving Focus or Do Not Disturb hides the verdict.",
+      "state_ok": "Ready",
+      "state_todo": "To enable",
+      "state_unknown": "To check",
+      "openSettings": "Open Settings"
+    },
+    "notifStep": {
+      "title": "Allow notifications",
+      "desc": "That's how the verdict reaches you when the card couldn't show it. Without this, a successful scan can show you nothing."
+    }
   },
   "help": {
     "title": "Help & Support",
@@ -683,7 +712,7 @@
       "q9": "What is the ride quality score?",
       "a9": "A score out of 100 given to each ride by comparing its €/h and €/km to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
       "q10": "How many scans per day?",
-      "a10": "3 scans per day on the free plan, 15 per day with Strive Plus.",
+      "a10": "3 scans per day on the free plan, 30 per day with Strive Plus.",
       "q11": "How do I contact support?",
       "a11": "From Profile → My tickets: open a ticket and we reply right inside the app (you get a notification for every reply)."
     }
@@ -804,7 +833,7 @@
       }
     },
     "feat": {
-      "scan": "15 scans a day",
+      "scan": "30 scans a day",
       "scanText": "instead of 3 — enough to cover a full day's shift.",
       "threshold": "Your floor, not ours",
       "thresholdText": "you set the €/h at which a ride is worth taking.",
@@ -878,7 +907,7 @@
       "scans": {
         "label": "Daily scans",
         "free": "3 / day",
-        "plus": "15 / day"
+        "plus": "30 / day"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -912,7 +941,26 @@
     "restorePrevious": "Restore previous purchases",
     "restoreSuccessSub": "Your subscription is active again.",
     "restoreFailSub": "Check your connection and try again.",
-    "manageStore": "Manage on the App Store"
+    "manageStore": "Manage on the App Store",
+    "planName": "Strive Plus",
+    "periodMonth": "month",
+    "periodYear": "year",
+    "perWeekEquiv": "that's {{price}} a week",
+    "trialStrip": "{{days}}-day free trial",
+    "noPaymentToday": "No payment today",
+    "cancelAnytime": "Cancel anytime",
+    "finePrintTrial": "{{days}} days free, then {{price}} per {{period}}. Renews automatically.",
+    "finePrintNoTrial": "{{price}} per {{period}}. Renews automatically, cancel anytime.",
+    "benefit": {
+      "scans": "30 scans a day instead of 3",
+      "thresholds": "Your own €/h and €/km thresholds",
+      "traffic": "€/h based on real traffic, not straight-line",
+      "fuel": "Your model's fuel cost deducted",
+      "history": "7 days of history and stats"
+    },
+    "saveAmount": "SAVE {{amount}}",
+    "heroTitleWelcomeEnd": "Your 30 free\nscans are gone.",
+    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 30 a day — every day."
   },
   "network": {
     "offline": "No internet connection"
@@ -1025,18 +1073,77 @@
       "desc": "It sets the share of your revenue that goes to social contributions.",
       "auto": "Sole trader",
       "company": "Company",
-      "employee": "Employee"
+      "employee": "Employee",
+      "autoSub": "≈21% of turnover, nothing deductible",
+      "companySub": "≈45% of pay, expenses deducted first",
+      "employeeSub": "No contributions on your side"
     },
     "result": {
-      "title": "Your break-even rate",
+      "title": "Your driving rule",
       "desc": "",
       "fromGoal": "Computed from your target, your hours and your costs. Strive will mark any ride below it as SKIP.",
       "floored": "Your target is reachable below this — we keep this rate, because a ride paying less costs you money once wear and contributions are counted.",
-      "plusTitle": "Unlock your threshold",
-      "plusPersonal": "{{goal}} net over {{hours}} h a month comes at a precise rate.",
-      "yoursCaption": "yours",
-      "standardCaption": "standard, for everyone",
-      "answersLine": "{{goal}} net · {{hours}} h a month · {{revenue}} revenue"
+      "yoursCaption": "Your break-even rate",
+      "answersLine": "{{goal}} net · {{hours}} h a month · {{revenue}} revenue",
+      "freeApplies": "Free applies",
+      "yoursLabel": "Your threshold",
+      "decisionKicker": "Your rule, from now on",
+      "lockedPrompt": "Below your rate, a ride is not worth your time.",
+      "readyPrompt": "Your rate is ready. Below it, you decline.",
+      "plusOnly": "With Plus",
+      "unlockCta": "Apply my rate with Plus",
+      "unlockReassurance": "Your personal rate will be applied to every ride.",
+      "later": "Continue without",
+      "lockedBody": "Strive worked it out from your answers. Unlock it with Plus so it applies to your rides.",
+      "lockedTag": "LOCKED"
+    },
+    "computing": {
+      "title": "Working out your rate",
+      "desc": "",
+      "gross": "Grossing up your net target",
+      "costs": "Adding your fixed costs",
+      "hours": "Spreading it over your monthly hours",
+      "km": "Setting your per-kilometre floor"
     }
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "menuSub": "Technical traces and failed scans",
+    "tracingTitle": "Collect traces",
+    "tracingSub": "Records what the Dynamic Island does during a scan. When off, nothing is written to the device.",
+    "androidNote": "Android has no Live Activity: only the failed-scan list is filled in here.",
+    "traceTitle": "Live Activity trace",
+    "traceEmpty": "No trace yet. Turn collection on, reproduce the problem, then come back.",
+    "traceWaiting": "Collecting. Run a scan, then come back here.",
+    "clear": "Clear trace",
+    "failuresTitle": "Failed scans",
+    "failuresEmpty": "No failures recorded in the last 30 days.",
+    "reload": "Reload",
+    "countersTitle": "Anti-abuse counters",
+    "countersHint": "Clears the Keychain signup counter and regenerates the device identifier. Use it to replay a create → delete → recreate account cycle.",
+    "countersReset": "Reset this device",
+    "countersResetting": "Resetting…",
+    "countersDone": "Counters cleared. The device now looks brand new: signup quota free and welcome gift replayable.",
+    "presTitle": "Dynamic Island — presentations",
+    "presNeedsTracing": "Turn collection on above, then drive as usual. Counters fill up on every scan result.",
+    "presWaiting": "No result measured since the reset. Run a scan.",
+    "presExpanded": "Expanded island",
+    "presCompact": "Compact",
+    "presMinimal": "Minimal pill",
+    "presSince": "Measuring since {{date}}",
+    "presReset": "Restart measurement",
+    "replayTitle": "Replay first launch",
+    "replayHint": "Opens the gift screen without touching the database, as many times as needed. The second button re-arms onboarding and the tutorial — restart the app afterwards.",
+    "replayGift": "Show the free-scans screen",
+    "replayOnboarding": "Re-arm onboarding",
+    "replayDone": "Done. Fully close the app and relaunch it to see the flow again."
+  },
+  "welcomeGift": {
+    "body": "Use them within {{days}} days, on top of your daily scans.",
+    "cta": "Claim them",
+    "hello": "Welcome.",
+    "helloNamed": "Welcome, {{name}}.",
+    "unit": "free scans",
+    "a11y": "{{n}} free scans"
   }
 }

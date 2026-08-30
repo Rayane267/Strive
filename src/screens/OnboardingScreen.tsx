@@ -14,7 +14,7 @@
  * `utils/incomeGoal.deriveThreshold`, qui porte le raisonnement.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -23,10 +23,14 @@ import {
   TextInput,
   Animated,
   Easing,
+  Image,
+  Platform,
   ScrollView,
 } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
+import SafeGradient from '../components/SafeGradient';
 import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -34,17 +38,19 @@ import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
-import { deriveThreshold, SOCIAL_RATES, DriverStatus } from '../utils/incomeGoal';
-import { getEffectivePlanTier, FREE_THRESHOLDS } from '../services/subscriptionService';
+import { getPlusPackages } from '../services/iapService';
+import {
+  deriveThreshold,
+  SOCIAL_RATES,
+  DriverStatus,
+} from '../utils/incomeGoal';
+import {
+  getEffectivePlanTier,
+  FREE_THRESHOLDS,
+  fetchPlanLimits,
+} from '../services/subscriptionService';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import ScanPreview from '../components/ScanPreview';
-
-/**
- * Segments du trait discontinu marquant le seuil personnel. Construit à la main
- * plutôt qu'avec `borderStyle: 'dashed'`, dont le rendu diffère entre iOS et
- * Android et se déforme dès qu'une bordure est arrondie.
- */
-const DASHES = Array.from({ length: 34 }, (_, i) => i);
 
 // Propositions rapides. `null` ouvre une saisie libre : taper une pastille bat
 // le clavier, mais on ne ferme jamais la porte au chiffre exact.
@@ -61,7 +67,7 @@ const DASHES = Array.from({ length: 34 }, (_, i) => i);
 // était tel que le chauffeur tapait « Autre » — donc le clavier — pour la
 // plupart des situations réelles. Cinq + « Autre » tiennent en six cartes
 // empilées sans que l'écran ait besoin de défiler.
-const HOURS_CHOICES: (number | null)[] = [35, 40, 45, 50, 60, null];
+const HOURS_CHOICES: (number | null)[] = [30, 35, 40, 45, 50, null];
 const GOAL_CHOICES: (number | null)[] = [1500, 2000, 2500, 3000, 3500, null];
 const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
 const STATUS_CHOICES: (number | null)[] = [
@@ -77,7 +83,9 @@ const STATUS_CHOICES: (number | null)[] = [
  * la règle tient en une ligne.
  */
 const formatEuros = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
+  `${Math.round(n)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
 
 /**
  * Une démonstration, les quatre questions, puis l'écran de résultat.
@@ -105,8 +113,33 @@ const formatEuros = (n: number) =>
  * c'est vingt pour cent de chemin en moins jusqu'au chiffre qui justifie le
  * formulaire.
  */
-const STEPS = ['demo', 'hours', 'goal', 'costs', 'status', 'result'] as const;
-type Step = typeof STEPS[number];
+const STEPS = ['demo', 'hours', 'goal', 'costs', 'status', 'computing', 'result'] as const;
+
+/// Les quatre étapes annoncées pendant le calcul — ce sont EXACTEMENT celles de
+/// `deriveThreshold`, dans l'ordre où il les exécute. Rien d'inventé : annoncer
+/// un travail qui n'a pas lieu serait un mensonge posé dans la vitrine, et
+/// surtout ça raterait l'objectif. Un chiffre expliqué avant d'être affiché
+/// n'arrive pas comme une affirmation arbitraire.
+const COMPUTE_STEPS = ['gross', 'costs', 'hours', 'km'] as const;
+
+/// Plancher de l'écran de calcul.
+///
+/// Le calcul lui-même est une division : il ne prend rien. Mais l'écran couvre
+/// du travail RÉEL — écriture des préférences, rechargement des paliers, et
+/// surtout préchargement de l'offre RevenueCat pour que le paywall s'ouvre sans
+/// attente derrière. On attend le plus lent des deux, jamais moins de ça.
+///
+/// Deux secondes, pas cinq : au-delà de trois, le coût en abandons dépasse le
+/// gain de crédibilité, et on est ici juste avant l'écran qui doit vendre.
+const MIN_COMPUTE_MS = 2000;
+
+/// Diamètre et épaisseur de l'anneau de progression.
+const RING = 168;
+/// Quarante graduations : assez pour que la lumière tourne sans à-coup, assez
+/// peu pour qu'on distingue chaque barre s'allumer.
+const TICKS = Array.from({ length: 40 }, (_, i) => i);
+const TICK_RADIUS = RING / 2 - 10;
+type Step = (typeof STEPS)[number];
 
 /**
  * Carte de réponse. C'est le geste répété de tout l'onboarding — quatre
@@ -143,7 +176,8 @@ const OptionCard = ({
     Animated.timing(press, {
       toValue,
       duration: toValue === 1 ? 90 : 160,
-      easing: toValue === 1 ? Easing.out(Easing.quad) : Easing.out(Easing.cubic),
+      easing:
+        toValue === 1 ? Easing.out(Easing.quad) : Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
 
@@ -154,7 +188,12 @@ const OptionCard = ({
           ? undefined
           : {
               transform: [
-                { scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] }) },
+                {
+                  scale: press.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 0.98],
+                  }),
+                },
               ],
             }
       }
@@ -174,10 +213,62 @@ const OptionCard = ({
   );
 };
 
+/// Vrai flou : ANDROID SEULEMENT, et à partir de l'API 31.
+///
+/// `filter: [{ blur }]` de React Native s'appuie sur `RenderEffect` côté
+/// Android — un flou gaussien natif, lisse, vérifié à l'émulateur. L'app
+/// descendant à l'API 24, le repli couvre Android 7 à 11.
+///
+/// ⚠️ PAS sur iOS, malgré le support annoncé. Dans
+/// `RCTViewComponentView.mm`, le chemin du flou est derrière le feature flag
+/// `enableSwiftUIBasedFilters` et, quand il est actif, il REPARENTE tous les
+/// sous-vues dans un conteneur SwiftUI puis les rend à la vue d'origine. Deux
+/// issues, mauvaises toutes les deux : flag éteint, le flou est ignoré en
+/// silence et le seuil s'affiche en clair — on donne ce qu'on fait payer ;
+/// flag allumé, ce reparentage s'applique à une vue qui porte une opacité
+/// animée par le pilote natif et qui est démontée à la sortie de l'écran.
+///
+/// iOS prend donc la pastille. Elle est nette, elle assume d'être un masque, et
+/// elle ne dépend d'aucune API récente.
+const CAN_BLUR =
+  Platform.OS === 'android' &&
+  typeof Platform.Version === 'number' &&
+  Platform.Version >= 31;
+
+/**
+ * Nombre masqué : flou gaussien natif là où la plateforme le sait, pastille
+ * pleine ailleurs.
+ *
+ * Le repli n'imite pas le flou — il assume autre chose. Empiler des copies
+ * décalées donnait un gribouillis ; une pastille à la taille exacte du nombre
+ * se lit comme une valeur reprise, pas comme un rendu raté. Ce qui lève
+ * l'ambiguïté, c'est la séquence : le chauffeur a vu les chiffres défiler à
+ * découvert avant que ça se couvre. Masqué d'entrée, le même bloc passerait
+ * pour du contenu qui n'a pas chargé — c'était le défaut de la version
+ * caviardée d'origine.
+ *
+ * Positionné en absolu par-dessus la copie nette, qui garde la place dans le
+ * flux et donne donc la boîte à couvrir.
+ */
+const BlurredNumber = ({
+  text, style, mask,
+}: { text: string; style: StyleProp<TextStyle>; mask: StyleProp<ViewStyle> }) =>
+  CAN_BLUR
+    ? <Text style={[style, styles.blurCopySolo]}>{text}</Text>
+    : <View style={mask} />;
+
 /** Le bouton principal interpole sa couleur de fond entre eteint et allume. */
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
+const OnboardingScreen = ({
+  onFinish,
+}: {
+  /// `openPaywall` distingue les deux sorties de l'écran final. Le paywall n'est
+  /// pas ouvert ici mais par `RootNavigator`, qui sait aussi marquer l'onboarding
+  /// comme vu et rafraîchir le profil — trois choses qui doivent arriver
+  /// ensemble. Sortir en naviguant directement les sautait toutes les trois.
+  onFinish?: (opts?: { openPaywall?: boolean }) => void;
+}) => {
   const { t } = useTranslation();
   const { user, profile } = useAuth();
   const navigation = useNavigation<any>();
@@ -204,9 +295,18 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
+  /** Statut déduit du taux — « autre » dès que le taux est saisi à la main. */
+  const driverStatus: DriverStatus =
+    (Object.keys(SOCIAL_RATES) as (keyof typeof SOCIAL_RATES)[]).find(
+      k => socialRate !== null && SOCIAL_RATES[k] === socialRate,
+    ) ?? 'autre';
+
   const derived =
-    monthlyGoal !== null && weeklyHours !== null && fixedCosts !== null && socialRate !== null
-      ? deriveThreshold({ monthlyGoal, weeklyHours, fixedCosts, socialRate })
+    monthlyGoal !== null &&
+    weeklyHours !== null &&
+    fixedCosts !== null &&
+    socialRate !== null
+      ? deriveThreshold({ monthlyGoal, weeklyHours, fixedCosts, socialRate, status: driverStatus })
       : null;
 
   /** Une étape n'est franchissable qu'une fois sa question répondue. */
@@ -218,14 +318,11 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     goal: monthlyGoal !== null,
     costs: fixedCosts !== null,
     status: socialRate !== null,
+    // Rien à répondre, et rien à toucher : l'écran avance tout seul.
+    computing: true,
     result: true,
   };
   const canContinue = answered[step];
-
-  /** Statut déduit du taux — « autre » dès que le taux est saisi à la main. */
-  const driverStatus: DriverStatus =
-    (Object.keys(SOCIAL_RATES) as (keyof typeof SOCIAL_RATES)[])
-      .find(k => socialRate !== null && SOCIAL_RATES[k] === socialRate) ?? 'autre';
 
   // ── Transition entre questions ────────────────────────────────────────────
   // Un seul moment animé : le contenu sort et rentre avec un léger décalage
@@ -241,7 +338,10 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const progress = useRef(new Animated.Value(1 / STEPS.length)).current;
   useEffect(() => {
     const toValue = (index + 1) / STEPS.length;
-    if (reduceMotion) { progress.setValue(toValue); return; }
+    if (reduceMotion) {
+      progress.setValue(toValue);
+      return;
+    }
     Animated.timing(progress, {
       toValue,
       // Plus long que la transition de contenu (320 ms) : la barre doit encore
@@ -259,7 +359,10 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const ctaOn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const toValue = canContinue ? 1 : 0;
-    if (reduceMotion) { ctaOn.setValue(toValue); return; }
+    if (reduceMotion) {
+      ctaOn.setValue(toValue);
+      return;
+    }
     Animated.timing(ctaOn, {
       toValue,
       duration: canContinue ? 180 : 120,
@@ -279,33 +382,204 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const reveal = useRef(new Animated.Value(0)).current;
   const [counted, setCounted] = useState(0);
 
+  /// Remise à zéro avant peinture, pas après.
+  ///
+  /// L'écran n'est pas remonté entre deux passages : `counted` gardait donc la
+  /// valeur de la visite précédente, et comme la montée démarre après 260 ms de
+  /// délai, le seuil s'affichait en clair pendant ce temps-là — on voyait « 69 »
+  /// avant de le voir monter. `useEffect` arriverait trop tard : il s'exécute
+  /// après le rendu, la valeur périmée aurait déjà été peinte.
+  useLayoutEffect(() => {
+    if (step === 'result') setCounted(0);
+  }, [step]);
+
+  /// La séquence de l'écran de conversion, en trois temps.
+  ///
+  ///   1. le chiffre MONTE depuis zéro — l'app calcule sous ses yeux ;
+  ///   2. il se POSE, net, assez longtemps pour être lu ;
+  ///   3. il se FLOUTE, et l'offre arrive.
+  ///
+  /// L'ordre fait tout : on ne peut pas vouloir récupérer un chiffre qu'on n'a
+  /// jamais vu. Le masquer d'entrée — ce que faisait le placeholder « — — » —
+  /// ne crée aucun manque, seulement l'impression d'un écran à moitié rendu.
+  ///
+  /// Le flou est un VRAI flou, sans dépendance native : `textShadowRadius` sur
+  /// un glyphe transparent ne peint que l'ombre diffuse des chiffres. On lit
+  /// « il y a un nombre », jamais le nombre.
+  /// Avancement de l'écran de calcul : 0 → 1 sur `MIN_COMPUTE_MS`.
+  /// Deux valeurs pour une seule progression.
+  ///
+  /// `compute` pilote TOUT le visuel — quarante graduations, les phrases — au
+  /// pilote natif : quarante opacités interpolées à chaque frame passeraient mal
+  /// par le pont JS. `computeJs` ne sert qu'au pourcentage, qui doit être lu
+  /// depuis JS pour être affiché en texte. Même durée, même courbe, lancées
+  /// ensemble : elles ne peuvent pas se désynchroniser.
+  const compute = useRef(new Animated.Value(0)).current;
+  const computeJs = useRef(new Animated.Value(0)).current;
+  const [pct, setPct] = useState(0);
+
+  useEffect(() => {
+    if (step !== 'computing') return;
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    compute.setValue(0);
+    computeJs.setValue(0);
+    setPct(0);
+    const id = computeJs.addListener(({ value }) => setPct(Math.round(value * 100)));
+    const ease = Easing.inOut(Easing.quad);
+    Animated.parallel([
+      Animated.timing(compute, {
+        toValue: 1, duration: MIN_COMPUTE_MS, easing: ease, useNativeDriver: true,
+      }),
+      Animated.timing(computeJs, {
+        toValue: 1, duration: MIN_COMPUTE_MS, easing: ease, useNativeDriver: false,
+      }),
+    ]).start();
+
+    // Le VRAI travail. Il a lieu ici plutôt qu'à la sortie de l'onboarding :
+    // c'est le seul moment où le chauffeur regarde sans rien attendre, et
+    // précharger l'offre RevenueCat maintenant fait ouvrir le paywall sans
+    // délai quand il touche « Appliquer mon taux avec Plus ».
+    //
+    // `allSettled` : aucun de ces trois travaux n'est bloquant. Un échec de
+    // réseau ne doit pas retenir le chauffeur devant une barre figée.
+    const work = Promise.allSettled([
+      user?.id && derived
+        ? supabase.from('preferences').upsert({
+            id: user.id,
+            monthly_goal: monthlyGoal,
+            weekly_hours: weeklyHours,
+            fixed_costs: fixedCosts,
+            driver_status: driverStatus,
+            social_rate: socialRate,
+            min_hourly_rate: derived.hourly,
+            min_km_rate: derived.km,
+          })
+        : Promise.resolve(),
+      fetchPlanLimits(),
+      getPlusPackages(),
+    ]);
+
+    work.then(() => {
+      if (cancelled) return;
+      const wait = Math.max(0, MIN_COMPUTE_MS - (Date.now() - startedAt));
+      setTimeout(() => { if (!cancelled) go(index + 1); }, wait);
+    });
+
+    return () => { cancelled = true; computeJs.removeListener(id); };
+    // `go` et les réponses sont stables une fois l'étape atteinte : les mettre
+    // en dépendance relancerait la séquence à chaque rendu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  const derivedHourly = derived?.hourly ?? null;
+
+  /// Le flou s'installe au moment exact où le compteur DÉPASSE le seuil gratuit.
+  ///
+  /// Tant que le chiffre monte dans ce que le gratuit accorde déjà, il n'y a
+  /// rien à cacher : le chauffeur le lit. Au-delà de 25 €/h commence ce qu'il
+  /// n'a pas — et c'est précisément là que ça devient illisible. Le flou cesse
+  /// d'être un rideau tiré arbitrairement : il marque une frontière.
+  ///
+  /// Dérivé de `reveal` plutôt que joué à part, donc rigoureusement synchrone
+  /// avec le compteur — impossible que le flou arrive avant ou après le passage.
+  const blurStart = Math.min(0.98, FREE_THRESHOLDS.hourly / (derivedHourly || FREE_THRESHOLDS.hourly));
+  const blurProgress = reveal.interpolate({
+    inputRange: [blurStart, Math.min(1, blurStart + 0.18)],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const pitchAnim = useRef(new Animated.Value(0)).current;
+
+  /// Arrivée en cascade de l'écran final.
+  ///
+  /// Une seule valeur, et chaque élément lit une TRANCHE différente de sa course.
+  /// C'est ce qui donne l'ordre de lecture — le filet, le sur-titre, la règle,
+  /// le chiffre, la comparaison, l'explication — au lieu d'un bloc qui apparaît
+  /// d'un coup et où l'œil ne sait pas par où commencer.
+  const intro = useRef(new Animated.Value(0)).current;
+  /// Part de la barre du gratuit : 25 €/h rapportés au seuil calculé. C'est la
+  /// proportion qui porte l'argument — plus le seuil est haut, plus la barre du
+  /// gratuit paraît courte, et l'écart se voit sans qu'on ait à le nommer.
+  const freeShare = derivedHourly
+    ? Math.min(100, Math.round((FREE_THRESHOLDS.hourly / derivedHourly) * 100))
+    : 100;
+
+  /// Les barres poussent depuis la gauche. `transformOrigin` évite de connaître
+  /// leur largeur : `scaleX` seul les ferait grandir depuis leur centre.
+  const barGrow = (from: number, to: number) => ({
+    transform: [{
+      scaleX: intro.interpolate({
+        inputRange: [from, to], outputRange: [0, 1], extrapolate: 'clamp',
+      }),
+    }],
+  });
+
+  const enterAt = (from: number, to: number) => ({
+    opacity: intro.interpolate({ inputRange: [from, to], outputRange: [0, 1], extrapolate: 'clamp' }),
+    transform: [{
+      translateY: intro.interpolate({
+        inputRange: [from, to], outputRange: [18, 0], extrapolate: 'clamp',
+      }),
+    }],
+  });
+
   useEffect(() => {
     if (step !== 'result') return;
     // Sous « Reduire les animations », le seuil est POSE, pas joue : le chiffre
     // affiche sa valeur finale et l'ecart est a sa hauteur. On ne prive personne
     // de l'information, on retire la mise en scene.
     if (reduceMotion) {
-      setCounted(FREE_THRESHOLDS.hourly);
       reveal.setValue(1);
+      intro.setValue(1);
+      setCounted(derivedHourly ?? FREE_THRESHOLDS.hourly);
+      pitchAnim.setValue(1);
       return;
     }
     reveal.setValue(0);
-    const id = reveal.addListener(({ value }) => {
-      setCounted(Math.round(value * FREE_THRESHOLDS.hourly));
-    });
-    Animated.timing(reveal, {
-      toValue: 1,
-      duration: 900,
-      delay: 260,
-      easing: Easing.out(Easing.cubic),
-      // Le compteur lit la valeur depuis JS : le pilote natif la rendrait
-      // inaccessible et le chiffre resterait figé à zéro.
-      useNativeDriver: false,
-    }).start();
-    return () => reveal.removeListener(id);
-  }, [step, reveal, reduceMotion]);
+    pitchAnim.setValue(0);
+    intro.setValue(0);
+
+    const target = derivedHourly ?? FREE_THRESHOLDS.hourly;
+    const id = reveal.addListener(({ value }) => setCounted(Math.round(value * target)));
+
+    const seq: Animated.CompositeAnimation[] = [
+      Animated.timing(reveal, {
+        toValue: 1,
+        duration: 1100,
+        delay: 260,
+        easing: Easing.out(Easing.cubic),
+        // Le compteur lit la valeur depuis JS : le pilote natif la rendrait
+        // inaccessible et le chiffre resterait figé à zéro.
+        useNativeDriver: false,
+      }),
+      // Un temps d'arrêt sur le chiffre arrivé — flouté — avant d'offrir la clé.
+      Animated.delay(650),
+    ];
+    seq.push(Animated.timing(pitchAnim, {
+      toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }));
+
+    const sequence = Animated.parallel([
+      Animated.timing(intro, {
+        toValue: 1, duration: 1150, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.sequence(seq),
+    ]);
+    sequence.start();
+    return () => { sequence.stop(); reveal.removeListener(id); };
+  }, [step, reveal, pitchAnim, intro, reduceMotion, derivedHourly]);
 
   const go = (next: number) => {
+    // L'écran de calcul ne se traverse QUE vers l'avant : il repart tout seul
+    // dès qu'on l'atteint, donc y revenir en arrière renvoyait aussitôt au
+    // résultat — le chevron « retour » ne servait plus à rien depuis la
+    // dernière page. On l'enjambe.
+    if (STEPS[next] === 'computing' && next < index) {
+      go(next - 1);
+      return;
+    }
     if (next < 0 || next >= STEPS.length) return;
     hapticLight();
     setEditing(null);
@@ -321,16 +595,22 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     const out = reduceMotion ? 90 : 160;
     const back = reduceMotion ? 140 : 320;
     Animated.timing(anim, {
-      toValue: 0, duration: out, easing: Easing.in(Easing.quad), useNativeDriver: true,
+      toValue: 0,
+      duration: out,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
     }).start(() => {
       setIndex(next);
       Animated.timing(anim, {
-        toValue: 1, duration: back, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: 1,
+        duration: back,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
       }).start();
     });
   };
 
-  const finish = async () => {
+  const finish = async (openPaywall = true) => {
     hapticSuccess();
     setSaving(true);
     // Best-effort : un échec d'enregistrement ne doit pas retenir le chauffeur à
@@ -347,7 +627,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           // Le seuil dérivé est enregistré même en gratuit (où FREE_THRESHOLDS
           // s'applique de toute façon) : le jour où le chauffeur passe Plus, son
           // seuil est déjà là et on ne lui repose pas les questions.
-          ...(derived ? { min_hourly_rate: derived.hourly, min_km_rate: derived.km } : {}),
+          ...(derived
+            ? { min_hourly_rate: derived.hourly, min_km_rate: derived.km }
+            : {}),
         });
       }
     } catch (e) {
@@ -357,7 +639,7 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
       Sentry.captureException(e, { tags: { flow: 'onboarding_save' } });
     } finally {
       setSaving(false);
-      if (onFinish) onFinish();
+      if (onFinish) onFinish({ openPaywall });
       else if (navigation.canGoBack()) navigation.goBack();
     }
   };
@@ -371,7 +653,11 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
     // Champ vide quand rien n'a encore été répondu : pré-remplir reviendrait à
     // proposer une réponse, ce que « Autre » est justement censé éviter.
     setDraft(
-      current === null ? '' : isPercent ? String(Math.round(current * 100)) : String(current),
+      current === null
+        ? ''
+        : isPercent
+        ? String(Math.round(current * 100))
+        : String(current),
     );
     setEditing(step);
   };
@@ -393,7 +679,14 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
    * mieux et se tape sans viser.
    */
   const OptionList = ({
-    choices, value, onPick, unit, zeroLabel, labelFor, subFor, isPercent,
+    choices,
+    value,
+    onPick,
+    unit,
+    zeroLabel,
+    labelFor,
+    subFor,
+    isPercent,
   }: {
     choices: (number | null)[];
     value: number | null;
@@ -414,7 +707,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             // « Autre » ne s'allume qu'une fois une valeur saisie : tant que rien
             // n'est répondu, `value` vaut null et aucune carte ne doit paraître
             // choisie.
-            const active = isOther ? value !== null && !onAnOption : c === value;
+            const active = isOther
+              ? value !== null && !onAnOption
+              : c === value;
             return (
               <OptionCard
                 key={i}
@@ -432,19 +727,24 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     onPick(null);
                     return;
                   }
-                  if (isOther) { openDraft(value, !!isPercent); return; }
+                  if (isOther) {
+                    openDraft(value, !!isPercent);
+                    return;
+                  }
                   setEditing(null);
                   onPick(c as number);
                 }}
               >
-                <Text style={[styles.optionTxt, active && styles.optionTxtActive]}>
+                <Text
+                  style={[styles.optionTxt, active && styles.optionTxtActive]}
+                >
                   {isOther
                     ? t('onboarding.other')
                     : labelFor
-                      ? labelFor(c as number)
-                      : c === 0 && zeroLabel
-                        ? zeroLabel
-                        : `${c}${unit ?? ''}`}
+                    ? labelFor(c as number)
+                    : c === 0 && zeroLabel
+                    ? zeroLabel
+                    : `${c}${unit ?? ''}`}
                 </Text>
                 {!isOther && subFor ? (
                   <Text
@@ -482,10 +782,27 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const renderStep = () => {
     switch (step) {
       case 'demo':
-        return <ScanPreview />;
+        // Traitement propre à cette étape, et c'est voulu : la carte est le
+        // HÉROS de l'écran — la seule chose que le chauffeur voit avant qu'on
+        // lui demande quoi que ce soit. À sa taille d'origine elle occupait
+        // 250 px de haut sur 1500 disponibles, et les 1250 restants se lisaient
+        // comme un écran inachevé. Grossie et recentrée, le vide devient de la
+        // présence. Les questions, elles, restent ancrées sous leur titre.
+        return (
+          <View style={styles.demoWrap}>
+            <ScanPreview />
+          </View>
+        );
 
       case 'hours':
-        return <OptionList choices={HOURS_CHOICES} value={weeklyHours} onPick={setWeeklyHours} unit=" h" />;
+        return (
+          <OptionList
+            choices={HOURS_CHOICES}
+            value={weeklyHours}
+            onPick={setWeeklyHours}
+            unit=" h"
+          />
+        );
 
       case 'goal':
         return (
@@ -504,7 +821,9 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             value={fixedCosts}
             onPick={setFixedCosts}
             zeroLabel={t('onboarding.costs.none')}
-            labelFor={v => (v === 0 ? t('onboarding.costs.none') : formatEuros(v))}
+            labelFor={v =>
+              v === 0 ? t('onboarding.costs.none') : formatEuros(v)
+            }
           />
         );
 
@@ -516,121 +835,265 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
             onPick={setSocialRate}
             isPercent
             labelFor={v =>
-              v === SOCIAL_RATES.auto_entrepreneur ? t('onboarding.status.auto')
-              : v === SOCIAL_RATES.societe ? t('onboarding.status.company')
-              : t('onboarding.status.employee')}
+              v === SOCIAL_RATES.auto_entrepreneur
+                ? t('onboarding.status.auto')
+                : v === SOCIAL_RATES.societe
+                ? t('onboarding.status.company')
+                : t('onboarding.status.employee')
+            }
+            // Le taux AVEC sa base. Les deux chiffres ne portent pas sur la même
+            // chose — 21 % du chiffre d'affaires contre 45 % de la rémunération —
+            // et posés nus côte à côte ils feraient conclure que la société coûte
+            // deux fois plus cher, ce qui est faux.
+            subFor={v =>
+              v === SOCIAL_RATES.auto_entrepreneur
+                ? t('onboarding.status.autoSub')
+                : v === SOCIAL_RATES.societe
+                ? t('onboarding.status.companySub')
+                : t('onboarding.status.employeeSub')
+            }
           />
         );
 
-      case 'result':
-        if (!derived) return null;
+      case 'computing':
         return (
-          // Un seuil est une ligne : au-dessus, la course vaut le coup ; en
-          // dessous, elle coûte de l'argent. On la dessine donc, plutôt que de
-          // poser le chiffre dans une carte. La bande teintée entre le seuil
-          // standard et le sien est exactement ce qu'il laisse passer aujourd'hui
-          // — l'écart argumente tout seul, sans phrase de vente.
-          <View>
-            <Animated.View
-              style={{
-                opacity: reveal.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1] }),
-              }}
-            >
-              <View style={styles.markRow}>
-                {isPremium ? (
-                  <Text style={styles.markValue}>{derived.hourly.toFixed(0)} €/h</Text>
-                ) : (
-                  <>
-                    {/* Deux barres caviardées plutôt que des points de
-                        suspension : elles occupent la place exacte d'un nombre
-                        à deux chiffres et se lisent comme une valeur masquée,
-                        là où des puces typographiques flottaient au-dessus de
-                        la ligne de base. */}
-                    <View style={styles.redactRow}>
-                      <View style={styles.redact} />
-                      <View style={styles.redact} />
-                    </View>
-                    <Text style={styles.markUnit}>€/h</Text>
-                    <Feather name="lock" size={19} color={colors.primary} />
-                  </>
-                )}
-                <Text style={styles.markCaption}>{t('onboarding.result.yoursCaption')}</Text>
+          <View style={styles.computeWrap}>
+            {/* Couronne de graduations. Quarante barres posées sur le cercle,
+                chacune tournée de son angle puis poussée vers l'extérieur —
+                `rotate` PUIS `translateY`, l'ordre compte : la translation se
+                fait dans le repère déjà tourné. Chacune s'allume quand la
+                progression atteint sa part, ce qui fait tourner la lumière
+                autour du cercle. Pas de `react-native-svg` dans le projet, et
+                l'ajouter pour cet écran imposerait un module natif à installer
+                aussi côté iOS. */}
+            <View style={styles.ring}>
+              <View style={styles.ringInner} />
+              {TICKS.map(i => {
+                const at = i / TICKS.length;
+                return (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.tick,
+                      {
+                        opacity: compute.interpolate({
+                          inputRange: [at, Math.min(1, at + 0.02)],
+                          outputRange: [0.13, 1],
+                          extrapolate: 'clamp',
+                        }),
+                        transform: [
+                          { rotate: `${at * 360}deg` },
+                          { translateY: -TICK_RADIUS },
+                        ],
+                      },
+                    ]}
+                  />
+                );
+              })}
+              <Text style={styles.ringPct}>
+                {pct}
+                <Text style={styles.ringPctSign}> %</Text>
+              </Text>
+            </View>
+
+            {/* Une phrase à la fois, qui monte en entrant et sort par le haut.
+                Les quatre superposées dans une boîte de hauteur fixe : rien ne
+                bouge autour d'elles quand elles se remplacent. */}
+            <View style={styles.phraseBox}>
+              {COMPUTE_STEPS.map((k, i) => {
+                const seg = 1 / COMPUTE_STEPS.length;
+                const from = i * seg;
+                const to = (i + 1) * seg;
+                const last = i === COMPUTE_STEPS.length - 1;
+                return (
+                  <Animated.Text
+                    key={k}
+                    style={[
+                      styles.phrase,
+                      {
+                        opacity: compute.interpolate({
+                          inputRange: [from, from + 0.05, to - 0.05, to],
+                          // La dernière ne s'efface pas : l'écran disparaît sur elle.
+                          outputRange: [0, 1, 1, last ? 1 : 0],
+                          extrapolate: 'clamp',
+                        }),
+                        transform: [{
+                          translateY: compute.interpolate({
+                            inputRange: [from, from + 0.05, to - 0.05, to],
+                            outputRange: [14, 0, 0, last ? 0 : -14],
+                            extrapolate: 'clamp',
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
+                    {t(`onboarding.computing.${k}`)}
+                  </Animated.Text>
+                );
+              })}
+            </View>
+          </View>
+        );
+
+      case 'result': {
+        if (!derived) return null;
+        const locked = derived.hourly > FREE_THRESHOLDS.hourly && !isPremium;
+        const personalRate = `${derived.hourly.toFixed(0)} €/h`;
+        return (
+          <View style={styles.decision}>
+            <Animated.Text style={[styles.decisionKicker, enterAt(0.04, 0.24)]}>
+              {t('onboarding.result.decisionKicker')}
+            </Animated.Text>
+            <Animated.Text style={[styles.decisionPrompt, enterAt(0.12, 0.38)]}>
+              {locked
+                ? t('onboarding.result.lockedPrompt')
+                : t('onboarding.result.readyPrompt')}
+            </Animated.Text>
+
+            {/* Un PANNEAU, pas une suite de lignes.
+                Le chiffre et la comparaison forment un seul objet posé sur le
+                fond : c'est ce qui distingue un écran composé d'un empilement de
+                paragraphes. Deux barres remplacent les deux lignes de texte —
+                l'écart entre le gratuit et son seuil se VOIT au lieu de se lire,
+                et c'est tout l'argument de l'écran. */}
+            <Animated.View style={[styles.panel, enterAt(0.24, 0.56)]}>
+              <SafeGradient
+                colors={['rgba(0,230,118,0.10)', 'rgba(0,230,118,0.02)']}
+                style={StyleSheet.absoluteFillObject}
+                pointerEvents="none"
+              />
+
+              <View style={styles.rateBlock}>
+                <View>
+                  <Animated.Text
+                    style={[
+                      styles.rateValue,
+                      locked
+                        ? { opacity: blurProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }
+                        : null,
+                    ]}
+                  >
+                    {counted} €/h
+                  </Animated.Text>
+                  {locked ? (
+                    <Animated.View
+                      style={[
+                        styles.blurLayer,
+                        CAN_BLUR ? styles.blurFilterBig : null,
+                        { opacity: blurProgress },
+                      ]}
+                    >
+                      <BlurredNumber
+                        text={`${counted} €/h`}
+                        style={styles.rateValue}
+                        mask={styles.maskPillBig}
+                      />
+                    </Animated.View>
+                  ) : null}
+                </View>
+                {/* La marque plutôt qu'un cadenas : le flou dit déjà que c'est
+                    verrouillé, et un cadenas de plus n'ajoute qu'un symbole de
+                    refus. Le badge, lui, nomme ce qui ouvre. */}
+                <View style={styles.plusBadge}>
+                  <Image
+                    source={require('../assets/strive-logo.png')}
+                    style={styles.plusBadgeLogo}
+                  />
+                  <Text style={styles.plusBadgeTxt}>{t('tier.plusName')}</Text>
+                </View>
               </View>
-              <View style={styles.dashRow}>
-                {DASHES.map(i => <View key={i} style={styles.dash} />)}
+              <Text style={styles.rateLabel}>
+                {t('onboarding.result.yoursCaption')}
+              </Text>
+
+              <View style={styles.bars}>
+                <View style={styles.barRow}>
+                  <Text style={styles.barLabel}>
+                    {t('onboarding.result.freeApplies')}
+                  </Text>
+                  <View style={styles.barTrack}>
+                    <Animated.View
+                      style={[
+                        styles.barFill,
+                        styles.barFillFree,
+                        { width: `${freeShare}%` },
+                        barGrow(0.42, 0.72),
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>{FREE_THRESHOLDS.hourly} €/h</Text>
+                </View>
+
+                <View style={styles.barRow}>
+                  <Text style={styles.barLabelOn}>
+                    {t('onboarding.result.yoursLabel')}
+                  </Text>
+                  <View style={styles.barTrack}>
+                    <Animated.View style={[styles.barFill, barGrow(0.5, 0.86)]}>
+                      <SafeGradient
+                        colors={['rgba(0,230,118,0.55)', colors.primary]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                    </Animated.View>
+                  </View>
+                  <View style={styles.barValueEnd}>
+                    {locked ? (
+                      <View>
+                        <Animated.Text
+                          style={[
+                            styles.barValueOn,
+                            { opacity: blurProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+                          ]}
+                        >
+                          {counted} €/h
+                        </Animated.Text>
+                        <Animated.View
+                          style={[
+                            styles.blurLayer,
+                            CAN_BLUR ? styles.blurFilterSmall : null,
+                            { opacity: blurProgress },
+                          ]}
+                        >
+                          <BlurredNumber
+                            text={`${counted} €/h`}
+                            style={styles.barValueOn}
+                            mask={styles.maskPillSmall}
+                          />
+                        </Animated.View>
+                      </View>
+                    ) : (
+                      <Text style={styles.barValueOn}>{personalRate}</Text>
+                    )}
+                  </View>
+                </View>
               </View>
             </Animated.View>
 
-            <Animated.View
-              style={[
-                styles.gapBand,
-                {
-                  transform: [{
-                    scaleY: reveal.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1] }),
-                  }],
-                },
-              ]}
-            />
-
-            <View style={styles.solidLine} />
-            <View style={styles.markRow}>
-              <Text style={[styles.markValue, styles.markValueStd]}>{counted} €/h</Text>
-              <Text style={styles.markCaption}>{t('onboarding.result.standardCaption')}</Text>
-            </View>
-
-            {/* Ses propres réponses, en une ligne : elles rendent le calcul
-                vérifiable sans reconstruire un tableau de statistiques. */}
-            <Text style={styles.answersLine}>
+            <Animated.Text style={[styles.decisionExplanation, enterAt(0.56, 0.86)]}>
+              {locked
+                ? t('onboarding.result.lockedBody')
+                : t('onboarding.result.floored')}
+            </Animated.Text>
+            <Animated.Text style={[styles.answersLine, enterAt(0.68, 1)]}>
               {t('onboarding.result.answersLine', {
                 goal: formatEuros(monthlyGoal ?? 0),
                 hours: derived.monthlyHours,
                 revenue: formatEuros(derived.requiredRevenue),
               })}
-            </Text>
+            </Animated.Text>
           </View>
         );
+      }
     }
   };
 
-  /**
-   * Le seuil qui vient d'être calculé n'est appliqué qu'aux offres des abonnés :
-   * en gratuit, `DashboardScreen` force FREE_THRESHOLDS pour tout le monde. On le
-   * dit ici, au seul moment où le chauffeur a son propre chiffre sous les yeux et
-   * peut mesurer l'écart. Rien à afficher s'il est déjà abonné.
-   */
-  const renderPlusPitch = () => {
-    if (step !== 'result' || !derived || isPremium) return null;
-    return (
-      <Animated.View
-        style={{ opacity: reveal.interpolate({ inputRange: [0.8, 1], outputRange: [0, 1] }) }}
-      >
-        <TouchableOpacity
-          style={styles.plusCard}
-          activeOpacity={0.85}
-          onPress={() => {
-            hapticLight();
-            navigation.navigate('SubscriptionScreen');
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={t('onboarding.result.plusTitle')}
-        >
-          <Feather name="unlock" size={20} color={colors.primary} />
-          <View style={styles.plusTexts}>
-            <Text style={styles.plusTitle}>{t('onboarding.result.plusTitle')}</Text>
-            {/* Ses propres chiffres, repris tels qu'il vient de les donner :
-                c'est ce qui distingue cette ligne d'un encart promotionnel. */}
-            <Text style={styles.plusPersonal}>
-              {t('onboarding.result.plusPersonal', {
-                goal: formatEuros(monthlyGoal ?? 0),
-                hours: derived.monthlyHours,
-              })}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={colors.primary} />
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+  const showUnlock =
+    step === 'result' &&
+    !!derived &&
+    !isPremium &&
+    derived.hourly > FREE_THRESHOLDS.hourly;
 
   const title = t(`onboarding.${step}.title`);
   // Chaque question porte deja sa phrase d'explication en traduction — elle n'a
@@ -685,7 +1148,12 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
               // déplacement vertical ferait lire l'arrivée comme une liste qui
               // remonte, ce qui n'est pas le propos.
               transform: [
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+                {
+                  scale: anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.96, 1],
+                  }),
+                },
               ],
             },
           ]}
@@ -693,32 +1161,92 @@ const OnboardingScreen = ({ onFinish }: { onFinish?: () => void }) => {
           <Text style={styles.title}>{title}</Text>
           {desc ? <Text style={styles.desc}>{desc}</Text> : null}
           <View style={styles.stepContent}>{renderStep()}</View>
-          {renderPlusPitch()}
         </Animated.View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <AnimatedTouchable
-          style={[
-            styles.cta,
-            {
-              backgroundColor: ctaOn.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['rgba(255,255,255,0.12)', colors.primary],
-              }),
-            },
-          ]}
-          onPress={onPrimary}
-          activeOpacity={0.88}
-          disabled={saving || !canContinue}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canContinue }}
-          accessibilityLabel={isLast ? t('onboarding.start') : t('onboarding.next')}
-        >
-          <Text style={[styles.ctaTxt, !canContinue && styles.ctaTxtDisabled]}>
-            {isLast ? t('onboarding.start') : t('onboarding.next')}
-          </Text>
-        </AnimatedTouchable>
+        {/* Rien pendant le calcul : l'écran avance seul, et un bouton inerte
+            n'inviterait qu'à taper dessus. */}
+        {step === 'computing' ? null : showUnlock ? (
+          // L'offre n'arrive qu'APRÈS le flou : tant que le chiffre est encore
+          // net, rien ne doit détourner l'œil de lui. C'est le troisième temps
+          // de la séquence.
+          <Animated.View
+            style={{
+              opacity: pitchAnim,
+              transform: [{
+                translateY: pitchAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }),
+              }],
+            }}
+          >
+            <TouchableOpacity
+              style={styles.unlockCta}
+              activeOpacity={0.88}
+              onPress={() => {
+                hapticLight();
+                // Pas de `navigate` direct : `finish` écrit les réponses, marque
+                // l'onboarding vu, rafraîchit le profil, PUIS laisse
+                // `RootNavigator` ouvrir le paywall. En naviguant d'ici, le
+                // chauffeur revenait sur cet écran en fermant le paywall — et on
+                // lui proposait « continuer sans » après qu'il ait payé.
+                finish(true);
+              }}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel={t('onboarding.result.unlockCta')}
+            >
+              <Text style={styles.unlockCtaTxt}>
+                {t('onboarding.result.unlockCta')}
+              </Text>
+              <Feather
+                name="arrow-up-right"
+                size={19}
+                color={colors.background}
+              />
+            </TouchableOpacity>
+            <Text style={styles.unlockReassurance}>
+              {t('onboarding.result.unlockReassurance')}
+            </Text>
+            <TouchableOpacity
+              style={styles.laterBtn}
+              // Le libellé dit « sans » : c'est la seule sortie qui ne doit pas
+              // enchaîner sur le paywall.
+              onPress={() => finish(false)}
+              disabled={saving}
+              accessibilityRole="button"
+            >
+              <Text style={styles.laterTxt}>
+                {t('onboarding.result.later')}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : (
+          <AnimatedTouchable
+            style={[
+              styles.cta,
+              {
+                backgroundColor: ctaOn.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['rgba(255,255,255,0.12)', colors.primary],
+                }),
+              },
+            ]}
+            onPress={onPrimary}
+            activeOpacity={0.88}
+            disabled={saving || !canContinue}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canContinue }}
+            accessibilityLabel={
+              isLast ? t('onboarding.start') : t('onboarding.next')
+            }
+          >
+            <Text
+              style={[styles.ctaTxt, !canContinue && styles.ctaTxtDisabled]}
+            >
+              {isLast ? t('onboarding.start') : t('onboarding.next')}
+            </Text>
+          </AnimatedTouchable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -791,14 +1319,36 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     marginBottom: 12,
   },
-  stepContent: { width: '100%', flex: 1, justifyContent: 'center' },
+  // Les réponses sont ANCRÉES sous la question, elles ne flottent plus au centre.
+  // Avec `flex: 1, justifyContent: 'center'`, quatre cartes dans 1400 px de haut
+  // laissaient ~350 px de vide AU-DESSUS et autant en dessous : le bloc paraissait
+  // perdu, et l'écran inachevé. Le centrage visait les questions à trois réponses,
+  // mais un vide unique sous le contenu se lit comme de la place laissée exprès,
+  // là où deux vides symétriques se lisent comme une erreur de mise en page.
+  // Les questions à six réponses débordent dans le ScrollView, qui est là pour ça.
+  // `flexGrow` et non `flex` : le conteneur prend la hauteur restante SANS
+  // l'imposer à ses enfants. Une liste de réponses reste donc collée sous le
+  // titre, tandis que la démonstration, qui demande `flex: 1`, se recentre dans
+  // tout l'espace. Une seule règle, deux comportements selon ce qu'on y met.
+  stepContent: { width: '100%', flexGrow: 1, marginTop: 34 },
+
+  // Recentrage vertical, sans agrandissement. `ScanPreview` est déjà en pleine
+  // largeur : une transformation d'échelle la faisait déborder des deux côtés,
+  // coins arrondis coupés — elle ne peut gagner qu'en HAUTEUR, ce qui se règle
+  // dans le composant lui-même et non ici. Le recentrage suffit à supprimer
+  // l'effet d'écran inachevé : deux vides équilibrés se lisent comme de la
+  // respiration, un vide de 1000 px sous le contenu comme un oubli.
+  // Retrait latéral EN PLUS des 24 px de la page : la carte de résultat ne doit
+  // pas courir d'un bord à l'autre. C'est un objet posé sur l'écran, pas un
+  // bandeau — l'espace de chaque côté est ce qui le fait lire comme tel.
+  demoWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
 
   // ── Cartes de réponse ──────────────────────────────────────────────────────
-  optionList: { gap: 10 },
+  optionList: { gap: 12 },
   option: {
-    minHeight: 64,
+    minHeight: 72,
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 18,
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -808,7 +1358,10 @@ const styles = StyleSheet.create({
   // Sélection en aplat plein plutôt qu'en teinte légère : sur fond sombre, un
   // fond à 11 % d'opacité se distingue mal de l'état par défaut, surtout en
   // plein soleil dans une voiture.
-  optionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  optionActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
   optionTxt: { color: colors.textMain, fontSize: 17, fontWeight: '700' },
   optionTxtActive: { color: colors.background },
   optionSub: {
@@ -853,13 +1406,37 @@ const styles = StyleSheet.create({
   // Le seuil standard est celui qui s'applique vraiment aujourd'hui : il reste
   // en blanc, couleur du fait acquis. Le vert est réservé à ce qui se débloque.
   markValueStd: { color: colors.textMain },
-  markUnit: { color: colors.primary, fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
-  redactRow: { flexDirection: 'row', gap: 5, alignSelf: 'flex-end', marginBottom: 4 },
-  redact: { width: 22, height: 34, borderRadius: 5, backgroundColor: colors.primary + '4D' },
+  markUnit: {
+    color: colors.primary,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+  },
+  redactRow: {
+    flexDirection: 'row',
+    gap: 5,
+    alignSelf: 'flex-end',
+    marginBottom: 4,
+  },
+  redact: {
+    width: 22,
+    height: 34,
+    borderRadius: 5,
+    backgroundColor: colors.primary + '4D',
+  },
   markCaption: { color: colors.textMuted, fontSize: 14, marginLeft: 2 },
 
-  dashRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: colors.primary + '80' },
+  dashRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  dash: {
+    width: 6,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.primary + '80',
+  },
 
   // La bande grandit depuis le bas : elle se déploie à partir du seuil acquis
   // vers celui qui manque, ce qui donne à l'écart un sens de lecture.
@@ -870,6 +1447,124 @@ const styles = StyleSheet.create({
   },
 
   solidLine: { height: 2, borderRadius: 1, backgroundColor: colors.textMain },
+
+  // ── Décision de course ────────────────────────────────────────────────────
+  // Une feuille de route, pas un tableau de bord : le contraste vient des
+  // règles typographiques et des lignes fonctionnelles, jamais d'un effet.
+  decision: { paddingTop: 6 },
+  decisionKicker: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  decisionPrompt: {
+    color: colors.textMain,
+    fontSize: 27,
+    lineHeight: 32,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+    maxWidth: 310,
+  },
+  rateBlock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  rateValue: {
+    color: colors.primary,
+    fontSize: 58,
+    lineHeight: 62,
+    fontWeight: '900',
+    letterSpacing: -2.8,
+  },
+  // Couche de flou : occupe exactement la boîte de la copie nette, qui reste
+  // dans le flux et donne donc la taille.
+  blurLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  computeWrap: { marginTop: 36, alignItems: 'center' },
+
+  // ── Couronne de graduations ──
+  ring: {
+    width: RING, height: RING,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ringInner: {
+    position: 'absolute',
+    width: RING - 56, height: RING - 56, borderRadius: (RING - 56) / 2,
+    borderWidth: 1, borderColor: 'rgba(0,230,118,0.14)',
+  },
+  tick: {
+    position: 'absolute',
+    width: 3, height: 14, borderRadius: 2,
+    backgroundColor: colors.primary,
+  },
+  ringPct: {
+    color: colors.textMain, fontSize: 42, fontWeight: '900', letterSpacing: -1.6,
+  },
+  ringPctSign: { color: colors.textDimmed, fontSize: 18, fontWeight: '800' },
+
+  // ── Phrase courante ──
+  phraseBox: { height: 58, marginTop: 34, alignSelf: 'stretch', justifyContent: 'center' },
+  phrase: {
+    position: 'absolute', left: 0, right: 0,
+    color: colors.textMain, fontSize: 16, fontWeight: '600',
+    textAlign: 'center', lineHeight: 23,
+  },
+
+  panel: {
+    marginTop: 26,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.16)',
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 20,
+    overflow: 'hidden',
+  },
+  plusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingLeft: 8, paddingRight: 12, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,230,118,0.13)',
+    borderWidth: 1, borderColor: 'rgba(0,230,118,0.30)',
+  },
+  plusBadgeLogo: { width: 18, height: 18, borderRadius: 6 },
+  plusBadgeTxt: {
+    color: colors.textMain, fontSize: 11, fontWeight: '900', letterSpacing: 1.2,
+  },
+  bars: { marginTop: 24, gap: 14 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  barLabel: { color: colors.textDimmed, fontSize: 12, width: 84 },
+  barLabelOn: { color: colors.textMain, fontSize: 12, fontWeight: '700', width: 84 },
+  barTrack: {
+    flex: 1, height: 8, borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%', width: '100%', borderRadius: 4,
+    transformOrigin: 'left center',
+  },
+  barFillFree: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  barValue: { color: colors.textDimmed, fontSize: 13, fontWeight: '700', width: 58, textAlign: 'right' },
+  barValueEnd: { width: 58, alignItems: 'flex-end' },
+  barValueOn: { color: colors.primary, fontSize: 14, fontWeight: '900' },
+  maskPillBig: { flex: 1, borderRadius: 14, backgroundColor: 'rgba(0,230,118,0.28)' },
+  maskPillSmall: { flex: 1, borderRadius: 7, backgroundColor: 'rgba(0,230,118,0.28)' },
+  blurCopySolo: { position: 'absolute', top: 0, left: 0 },
+  blurFilterBig: { filter: [{ blur: 11 }] },
+  blurFilterSmall: { filter: [{ blur: 5 }] },
+  rateLabel: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  decisionExplanation: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 20,
+    maxWidth: 350,
+  },
 
   answersLine: {
     color: colors.textDimmed,
@@ -894,9 +1589,43 @@ const styles = StyleSheet.create({
   },
   plusTexts: { flex: 1 },
   plusTitle: { color: colors.primary, fontSize: 15, fontWeight: '800' },
-  plusPersonal: { color: colors.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 2 },
+  plusPersonal: {
+    color: colors.textMuted,
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: 2,
+  },
 
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
+  unlockCta: {
+    minHeight: 62,
+    paddingHorizontal: 24,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primary,
+    shadowColor: '#00FF8C',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  unlockCtaTxt: {
+    color: colors.background,
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+  unlockReassurance: {
+    color: colors.textMuted,
+    fontSize: 12.5,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 9,
+  },
+  laterBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 1 },
+  laterTxt: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
   // se lisait comme un bouton désactivé alors qu'il était bien actif.
   cta: {

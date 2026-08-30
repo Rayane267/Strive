@@ -21,6 +21,15 @@ export interface Profile {
   subscription_expires_at?: string | null;   // ISO timestamptz
   subscription_product_id?: string | null;
   extra_scan_credits: number;
+  /** Pool de bienvenue — 30 scans offerts une fois par appareil à la sortie de
+   *  l'onboarding. Distinct de `extra_scan_credits` parce qu'il périme, là où un
+   *  crédit acheté ne doit jamais périmer. Consommé AVANT lui. */
+  welcome_credits?: number | null;
+  /** Péremption du pool de bienvenue. Porte deux informations : la date, et le
+   *  fait que ce compte a déjà reçu son cadeau (non NULL = servi). Passé cette
+   *  date, `welcome_credits` ne vaut plus rien — la colonne n'est pas remise à
+   *  zéro pour autant, ni ici ni côté serveur. */
+  welcome_credits_expires_at?: string | null;   // ISO timestamptz
   /** Scans consommés dans la journée de travail en cours. Écrit UNIQUEMENT par
    *  le trigger `check_scan_quota`, et en lecture seule côté client — c'est la
    *  valeur sur laquelle le serveur applique le quota, donc celle que l'écran

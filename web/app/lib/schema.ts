@@ -11,6 +11,7 @@
 // Les ajouter dès que les fiches sont publiées.
 
 import { faqs } from '../data/faq';
+import { PREMIUM_LIVE } from '../data/plans';
 
 export const SITE_URL = 'https://striveapp.fr';
 export const CONTACT_EMAIL = 'contact@striveapp.fr';
@@ -86,7 +87,7 @@ export const appSchema = {
       price: 9.99,
       priceCurrency: 'EUR',
       description:
-        "15 scans par jour, €/h en direct avec trafic temps réel, seuils personnalisés, historique complet. Essai gratuit de 7 jours, sans engagement.",
+        "30 scans par jour, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
     },
     {
       '@type': 'Offer',
@@ -95,6 +96,27 @@ export const appSchema = {
       priceCurrency: 'EUR',
       description: "Toutes les fonctions Strive Plus, soit 7,49 € par mois. Essai gratuit de 7 jours.",
     },
+    // Premium n'est déclaré qu'une fois réellement en vente : un Offer que la
+    // page n'affiche pas est du balisage trompeur. Voir PREMIUM_LIVE.
+    ...(PREMIUM_LIVE
+      ? [
+          {
+            '@type': 'Offer',
+            name: 'Strive Premium — mensuel',
+            price: 24.99,
+            priceCurrency: 'EUR',
+            description:
+              'Tout Strive Plus, sans limite : scans illimités, historique et statistiques sans limite de date, support prioritaire.',
+          },
+          {
+            '@type': 'Offer',
+            name: 'Strive Premium — annuel',
+            price: 219.99,
+            priceCurrency: 'EUR',
+            description: 'Toutes les fonctions Strive Premium, soit 18,33 € par mois.',
+          },
+        ]
+      : []),
   ],
 };
 

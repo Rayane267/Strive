@@ -199,66 +199,130 @@ export type PlusPackage = {
   currencyCode: string;
 };
 
+function toPackage(packages: Record<string, any>, productId: string, isYearly: boolean): PlusPackage | null {
+  const pkg = packages[productId];
+  if (!pkg?.product) return null;
+  const p = pkg.product;
+  const out: PlusPackage = {
+    productId,
+    priceString: p.priceString ?? '',
+    rawPrice: typeof p.price === 'number' ? p.price : 0,
+    currencyCode: p.currencyCode ?? 'EUR',
+  };
+  if (isYearly && out.rawPrice > 0) {
+    // Format le prix mensuel équivalent avec la locale courante.
+    try {
+      const formatter = new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: out.currencyCode,
+        maximumFractionDigits: 2,
+      });
+      out.pricePerMonthString = formatter.format(out.rawPrice / 12);
+    } catch {
+      out.pricePerMonthString = `${(out.rawPrice / 12).toFixed(2)} ${out.currencyCode}`;
+    }
+  }
+  return out;
+}
+
 export async function getPlusPackages(): Promise<{ monthly: PlusPackage | null; yearly: PlusPackage | null }> {
   const Purchases = rc();
   if (!Purchases) return { monthly: null, yearly: null };
 
   try {
     const packages = await getAllPackages();
-    const toPackage = (productId: string, isYearly: boolean): PlusPackage | null => {
-      const pkg = packages[productId];
-      if (!pkg?.product) return null;
-      const p = pkg.product;
-      const out: PlusPackage = {
-        productId,
-        priceString: p.priceString ?? '',
-        rawPrice: typeof p.price === 'number' ? p.price : 0,
-        currencyCode: p.currencyCode ?? 'EUR',
-      };
-      if (isYearly && out.rawPrice > 0) {
-        // Format le prix mensuel équivalent avec la locale courante.
-        try {
-          const formatter = new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: out.currencyCode,
-            maximumFractionDigits: 2,
-          });
-          out.pricePerMonthString = formatter.format(out.rawPrice / 12);
-        } catch {
-          out.pricePerMonthString = `${(out.rawPrice / 12).toFixed(2)} ${out.currencyCode}`;
-        }
-      }
-      return out;
-    };
     return {
-      monthly: toPackage(IAP_PRODUCTS.PLUS_MONTHLY, false),
-      yearly: toPackage(IAP_PRODUCTS.PLUS_YEARLY, true),
+      monthly: toPackage(packages, IAP_PRODUCTS.PLUS_MONTHLY, false),
+      yearly: toPackage(packages, IAP_PRODUCTS.PLUS_YEARLY, true),
     };
   } catch {
     return { monthly: null, yearly: null };
   }
 }
 
+// ─── Les quatre abonnements en un appel ───────────────────────────────────────
+// PAS ENCORE UTILISÉ : le paywall ne vend que Plus, et Premium ne se lance
+// qu'un à deux mois après l'app. Prêt pour ce jour-là — quatre produits en un
+// seul getOfferings, plutôt que deux appels qui doubleraient le round-trip
+// store et laisseraient la moitié des cartes sans prix pendant une seconde.
+//
+// `premium.monthly == nil` signifie « le store ne sert pas encore ces
+// produits » : c'est le signal sur lequel le paywall pourra se brancher pour
+// afficher Premium sans nouvelle release, le jour où les SKU entrent dans
+// l'offering RevenueCat.
+export type SubscriptionTierPackages = { monthly: PlusPackage | null; yearly: PlusPackage | null };
+
+export async function getSubscriptionPackages(): Promise<{
+  plus: SubscriptionTierPackages;
+  premium: SubscriptionTierPackages;
+}> {
+  const empty = { monthly: null, yearly: null };
+  const Purchases = rc();
+  if (!Purchases) return { plus: empty, premium: empty };
+
+  try {
+    const packages = await getAllPackages();
+    return {
+      plus: {
+        monthly: toPackage(packages, IAP_PRODUCTS.PLUS_MONTHLY, false),
+        yearly: toPackage(packages, IAP_PRODUCTS.PLUS_YEARLY, true),
+      },
+      premium: {
+        monthly: toPackage(packages, IAP_PRODUCTS.PREMIUM_MONTHLY, false),
+        yearly: toPackage(packages, IAP_PRODUCTS.PREMIUM_YEARLY, true),
+      },
+    };
+  } catch {
+    return { plus: empty, premium: empty };
+  }
+}
+
 // ─── Trial eligibility (per product) ──────────────────────────────────────────
-// Apple : 1 essai par "subscription group" par compte iCloud. Donc si l'user a
-// déjà testé Plus monthly, il sera inéligible aussi pour Plus yearly (même groupe).
-// Renvoie un map productId → boolean. En cas d'erreur ou RC indispo, renvoie {} (= traité comme non éligible).
+// Renvoie un map productId → boolean. En cas d'erreur ou de SDK indispo, {} —
+// traité comme « pas d'essai », ce qui est le repli sûr : mieux vaut taire un
+// essai réel que d'en promettre un que le store refusera.
 export async function checkTrialEligibility(productIds: string[]): Promise<Record<string, boolean>> {
   const Purchases = rc();
   if (!Purchases || productIds.length === 0) return {};
+
+  // ANDROID — `checkTrialOrIntroductoryPriceEligibility` est inutilisable ici :
+  // le SDK le documente noir sur blanc (« Android always returns
+  // INTRO_ELIGIBILITY_STATUS_UNKNOWN »). Comme on ne considérait éligible que le
+  // statut `eligible`, l'essai n'était JAMAIS annoncé sur Android — ni le
+  // bandeau des cartes, ni le libellé du bouton, ni la mention légale — alors
+  // que Google Play l'accordait bel et bien à l'achat.
+  //
+  // On lit donc l'offre elle-même. Google Play ne renvoie que les offres
+  // auxquelles le compte a droit : la présence d'une phase gratuite sur
+  // `defaultOption` — l'option que RevenueCat achètera — vaut donc éligibilité.
+  if (Platform.OS === 'android') {
+    try {
+      const packages = await getAllPackages();
+      const out: Record<string, boolean> = {};
+      for (const id of productIds) {
+        out[id] = !!packages[id]?.product?.defaultOption?.freePhase;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  // iOS — un essai par « subscription group » et par compte iCloud. Donc un
+  // chauffeur qui a déjà testé Plus mensuel est inéligible au Plus annuel aussi.
   try {
     const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
     const out: Record<string, boolean> = {};
     // RC enum: 0=unknown, 1=ineligible, 2=eligible, 3=no_intro_offer
     for (const id of productIds) {
-      const status = result?.[id]?.status;
-      out[id] = status === 2;
+      out[id] = result?.[id]?.status === 2;
     }
     return out;
   } catch {
     return {};
   }
 }
+
 
 // ─── Restore purchases (obligatoire pour validation App Store) ────────────────
 // Renvoie l'entitlement actif restauré ('premium' > 'plus'), ou null si aucun.

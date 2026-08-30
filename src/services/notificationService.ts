@@ -23,28 +23,57 @@ interface NotificationPayload {
 }
 
 /**
+ * Verdict de l'enregistrement, pour que l'appelant puisse RÉAGIR.
+ *
+ * La fonction sortait en `void` quelle que soit l'issue. Conséquence sur iOS :
+ * un chauffeur qui avait refusé les notifications une première fois voyait
+ * l'interrupteur revenir en arrière sans un mot — le système ne repropose
+ * JAMAIS sa fenêtre après un refus, il faut passer par les Réglages, et rien
+ * ne le lui disait. `denied` existe pour qu'on puisse l'y emmener.
+ */
+export type PushRegisterResult = 'granted' | 'denied' | 'unavailable' | 'error';
+
+/**
  * Enregistre le token FCM sur le profil Supabase de l'utilisateur.
  * Appelé au démarrage de l'app si l'utilisateur est connecté.
  */
-export async function registerPushToken(userId: string): Promise<void> {
+export async function registerPushToken(
+  userId: string,
+  /**
+   * `false` = on n'AFFICHE PAS la fenêtre système ; on enregistre le jeton
+   * seulement si la permission est déjà accordée.
+   *
+   * C'est le mode du démarrage. Demander la permission au moment de la connexion
+   * était le pire instant possible : le chauffeur vient de créer son compte, il
+   * n'a encore rien vu de l'app, il n'a aucune raison de dire oui — et un refus
+   * est définitif, le système ne repropose jamais sa fenêtre. Le seul bon moment
+   * est celui où il coche l'interrupteur : là il l'a demandé.
+   */
+  prompt = true,
+): Promise<PushRegisterResult> {
   try {
     const fcm = await getMessagingApi();
-    if (!fcm) return;
+    if (!fcm) return 'unavailable';
 
     const messagingInstance = fcm.getMessaging(fcm.getApp());
 
-    const authStatus = await fcm.requestPermission(messagingInstance);
+    // C'est CET appel qui affiche la fenêtre « Strive souhaite vous envoyer des
+    // notifications ». Il ne la montre qu'une fois par installation : ensuite le
+    // système répond de mémoire, sans rien afficher.
+    const authStatus = prompt
+      ? await fcm.requestPermission(messagingInstance)
+      : await fcm.hasPermission(messagingInstance);
     const enabled =
       authStatus === fcm.AuthorizationStatus.AUTHORIZED ||
       authStatus === fcm.AuthorizationStatus.PROVISIONAL;
 
-    if (!enabled) return;
+    if (!enabled) return 'denied';
 
     const token = await fcm.getToken(messagingInstance);
-    if (!token) return;
+    if (!token) return 'error';
 
     const cached = await AsyncStorage.getItem(FCM_TOKEN_KEY);
-    if (cached === token) return;
+    if (cached === token) return 'granted';
 
     let appLang = 'fr';
     try {
@@ -62,8 +91,10 @@ export async function registerPushToken(userId: string): Promise<void> {
       .eq('id', userId);
 
     await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+    return 'granted';
   } catch (e) {
     __DEV__ && console.warn('[NOTIF] registerPushToken error:', e);
+    return 'error';
   }
 }
 
@@ -71,6 +102,33 @@ export async function registerPushToken(userId: string): Promise<void> {
  * Configure les listeners de notifications (foreground + background).
  * Retourne une fonction de cleanup.
  */
+/**
+ * État de la permission notifications, SANS jamais afficher la fenêtre système.
+ *
+ * Existe pour le récapitulatif du tutoriel : il doit pouvoir dire « Prêt » ou
+ * « À activer » sans déclencher de demande — la fenêtre ne s'affiche qu'une fois
+ * par installation, et la brûler en affichant un état serait la pire façon de la
+ * perdre.
+ *
+ * `unknown` n'est pas un détail : sur un appareil sans Firebase configuré ou un
+ * simulateur, on ne SAIT pas. Le récapitulatif doit alors le dire plutôt que
+ * d'afficher un faux « Prêt » vert, qui ferait croire au chauffeur que son
+ * installation fonctionne.
+ */
+export async function getNotificationStatus(): Promise<'granted' | 'denied' | 'unknown'> {
+  try {
+    const fcm = await getMessagingApi();
+    if (!fcm) return 'unknown';
+    const authStatus = await fcm.hasPermission(fcm.getMessaging(fcm.getApp()));
+    return authStatus === fcm.AuthorizationStatus.AUTHORIZED ||
+           authStatus === fcm.AuthorizationStatus.PROVISIONAL
+      ? 'granted'
+      : 'denied';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function setupNotificationListeners(
   onNotification?: (payload: NotificationPayload) => void,
 ): () => void {
@@ -167,6 +225,7 @@ async function getMessagingApi(): Promise<{
   getApp: () => any;
   getMessaging: (app: any) => any;
   requestPermission: (m: any) => Promise<number>;
+  hasPermission: (m: any) => Promise<number>;
   getToken: (m: any) => Promise<string>;
   onMessage: (m: any, cb: (msg: any) => void) => () => void;
   onTokenRefresh: (m: any, cb: (token: string) => void) => () => void;
@@ -181,6 +240,7 @@ async function getMessagingApi(): Promise<{
       getApp,
       getMessaging: messagingMod.getMessaging,
       requestPermission: messagingMod.requestPermission,
+      hasPermission: messagingMod.hasPermission,
       getToken: messagingMod.getToken,
       onMessage: messagingMod.onMessage,
       onTokenRefresh: messagingMod.onTokenRefresh,

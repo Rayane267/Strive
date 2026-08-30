@@ -35,7 +35,7 @@ import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 
-import { getEffectivePlanTier, getPlanLimits, getRemainingScans, FREE_THRESHOLDS } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits, FREE_THRESHOLDS } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
@@ -67,6 +67,15 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { ScanBridge } = NativeModules;
+
+/**
+ * Marque le paywall de fin de cadeau comme déjà présenté. Une seule fois dans la
+ * vie du compte : les 30 scans de bienvenue ne se rechargent jamais, donc la
+ * condition « cadeau reçu et épuisé » resterait vraie à jamais sans ce drapeau,
+ * et le chauffeur reprendrait le paywall en pleine figure à chaque retour sur
+ * l'app.
+ */
+const WELCOME_PAYWALL_SEEN_KEY = '@strive_welcome_paywall_seen';
 
 /**
  * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
@@ -200,12 +209,20 @@ const DashboardScreen = () => {
     : t('tier.freeBadge', 'Free');
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
+  // Deux pools distincts en base — le cadeau de bienvenue périme, les crédits
+  // achetés non (20260830_welcome_credits.sql) — mais rigoureusement le même
+  // effet ici : des scans en plus une fois le quota du jour épuisé. L'écran les
+  // somme donc, et n'a pas à expliquer la différence au chauffeur.
+  // `getWelcomeCredits` applique la péremption : le serveur ne remet pas la
+  // colonne à zéro, afficher `welcome_credits` brut mentirait.
+  const welcomeCredits = getWelcomeCredits(profile);
+  const bonusCredits = welcomeCredits + extraCredits;
   // `stats.scans` et jamais `rides.length` : le quota se compte sur le COMPTEUR
   // serveur (`profiles.daily_scans_count`, seul écrivain `enforce_scan_quota`),
   // c'est-à-dire sur les scans consommés, pas sur les courses affichées. Les
   // deux ont divergé pour de bon le jour où une course a pu disparaître de la
   // liste — le quota remontait alors tout seul.
-  const remaining = getRemainingScans(tier, stats.scans, extraCredits);
+  const remaining = getRemainingScans(tier, stats.scans, extraCredits, welcomeCredits);
   const canScan = remaining === null || remaining > 0;
 
   const [isOnline, setIsOnline] = useState(false);
@@ -238,7 +255,11 @@ const DashboardScreen = () => {
   // ── Push notifications ─────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
-    registerPushToken(user.id);
+    // `false` : le Dashboard s'affiche à chaque ouverture de l'app. Y déclencher
+    // la fenêtre de permission la ferait apparaître au pire moment — pendant que
+    // le chauffeur regarde ses gains — et son refus serait définitif. On se
+    // contente d'enregistrer le jeton si la permission est déjà accordée.
+    registerPushToken(user.id, false);
     const cleanup = setupNotificationListeners();
     return cleanup;
   }, [user?.id]);
@@ -410,7 +431,9 @@ const DashboardScreen = () => {
   // Refs pour les valeurs lues dans le listener de scan (deps non listées sinon
   // → valeurs obsolètes au moment du scan après changement de tier/crédits/reset).
   const tierRef = useRef(tier);
-  const extraCreditsRef = useRef(extraCredits);
+  // Les deux pools sommés : le listener ne décide que d'un total restant, la
+  // distinction cadeau/achat ne l'intéresse pas (le serveur, lui, tranche).
+  const bonusCreditsRef = useRef(bonusCredits);
   const dayResetHourRef = useRef(dayResetHour);
   // L'id user est lu APRÈS l'attente de restauration de session dans le listener
   // de scan : la valeur capturée à l'abonnement peut encore être nulle alors que
@@ -432,7 +455,7 @@ const DashboardScreen = () => {
   useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { tierRef.current = tier; }, [tier]);
-  useEffect(() => { extraCreditsRef.current = extraCredits; }, [extraCredits]);
+  useEffect(() => { bonusCreditsRef.current = bonusCredits; }, [bonusCredits]);
   useEffect(() => { dayResetHourRef.current = dayResetHour; }, [dayResetHour]);
 
   // Carburant : conso/type du profil + prix unitaire résolu UNE fois (table
@@ -527,7 +550,7 @@ const DashboardScreen = () => {
     // surtout pas se faire additionner.
     const nativeLimit = dailyScans === null || dailyScans === undefined
       ? -1
-      : dailyScans + extraCredits;
+      : dailyScans + bonusCredits;
     try { scannerService.setScanQuota(stats.scans, nativeLimit, dayResetHour); } catch {}
     // `dayResetHour`, jamais 0 en dur : chez un chauffeur réglé sur 4 h, la
     // notification « quota rechargé » partait à minuit alors que le scan restait
@@ -535,7 +558,7 @@ const DashboardScreen = () => {
     // de minuit, ne voyait pas celle posée par l'autre appel (listener de scan)
     // sur la journée de 4 h — les deux pouvaient donc partir le même jour.
     if (!canScan) scheduleQuotaResetNotification(dayResetHour);
-  }, [canScan, tier, stats.scans, dailyScans, extraCredits, dayResetHour]);
+  }, [canScan, tier, stats.scans, dailyScans, bonusCredits, dayResetHour]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -749,7 +772,7 @@ const DashboardScreen = () => {
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
       try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1, dayResetHourRef.current); } catch {}
-      const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
+      const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, bonusCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
         try { scannerService.setQuotaReached(true, tierRef.current === 'free'); } catch {}
@@ -1629,6 +1652,35 @@ const DashboardScreen = () => {
     drainRideDecisions();
   }, [fetchData, drainRideDecisions]));
 
+  // Fin du cadeau de bienvenue → paywall. C'est le moment de la conversion : le
+  // chauffeur vient de passer 2 ou 3 vacations avec l'app sans rationnement, il
+  // sait ce qu'elle vaut, et il retombe à 3 scans/jour.
+  //
+  // Sur le FOCUS de l'écran, et surtout pas dans le listener de scan : le scan
+  // se déclenche pendant qu'il regarde une offre Uber avec dix secondes pour
+  // décider. Lui ouvrir un paywall par-dessus lui ferait rater la course. On
+  // attend donc qu'il revienne de lui-même dans l'app — c'est le premier
+  // instant où il est disponible, et il l'est vraiment.
+  useFocusEffect(useCallback(() => {
+    // `welcome_credits_expires_at` non nul = le cadeau a été accordé un jour.
+    // `getWelcomeCredits() === 0` = il est fini, consommé ou périmé — les deux
+    // méritent le même écran, le chauffeur a perdu la même chose.
+    const granted = !!profile?.welcome_credits_expires_at;
+    if (!granted || getWelcomeCredits(profile) > 0) return;
+    if (getEffectivePlanTier(profile) !== 'free') return;
+
+    let cancelled = false;
+    AsyncStorage.getItem(WELCOME_PAYWALL_SEEN_KEY).then(seen => {
+      if (cancelled || seen === '1') return;
+      // Posé AVANT la navigation : si l'écran est fermé d'un geste ou si la nav
+      // échoue, le paywall ne doit pas revenir au focus suivant. Insister une
+      // seconde fois sur une offre déjà refusée ne convertit personne.
+      AsyncStorage.setItem(WELCOME_PAYWALL_SEEN_KEY, '1');
+      navigation.navigate('SubscriptionScreen', { reason: 'welcome_exhausted' });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [profile, navigation]));
+
   // Re-fetch stats on every foreground resume (fetchData computes the correct day boundary)
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -1856,14 +1908,14 @@ const DashboardScreen = () => {
               (dailyScans !== null
                 ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
                 : `${t('dashboard.scans')}: ${stats.scans}`)
-              + (extraCredits > 0 ? ` (+${extraCredits})` : '')
+              + (bonusCredits > 0 ? ` (+${bonusCredits})` : '')
             }
           >
             <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
             <Text style={styles.statValue}>
               {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
-              {extraCredits > 0 && (
-                <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
+              {bonusCredits > 0 && (
+                <Text style={styles.statCreditBonus}> +{bonusCredits}</Text>
               )}
             </Text>
             <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
@@ -1958,7 +2010,7 @@ const DashboardScreen = () => {
               <View style={styles.upgradeCardBottom}>
                 <View style={styles.upgradeCardPerk}>
                   <Feather name="zap" size={12} color={colors.primary} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '15 scans/jour')}</Text>
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '30 scans/jour')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>

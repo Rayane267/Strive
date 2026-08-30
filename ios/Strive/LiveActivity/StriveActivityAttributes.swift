@@ -199,6 +199,15 @@ func saveLiveActivitySessionSnapshot(_ s: StriveActivityAttributes.ContentState)
   ]
   if let start = s.sessionStartEpoch { snap["sessionStartEpoch"] = start }
   d.set(snap, forKey: "laSessionSnapshot")
+  // Signale à `LiveActivityManager` qu'une écriture lui a échappé.
+  //
+  // Le manager mémorise son dernier état poussé pour ne pas dépendre du délai de
+  // retour d'ActivityKit (`freshestState`). Mais CE chemin-ci — les boutons
+  // ✅/❌ de la carte — repasse à l'idle sans passer par lui : sans ce repère,
+  // une poussée KPI arrivant juste après un tap ressuscitait le verdict que le
+  // chauffeur venait de trancher. Un tap dans les secondes qui suivent
+  // l'affichage du résultat, c'est le cas NORMAL, pas un cas limite.
+  d.set(Date().timeIntervalSince1970, forKey: "laForeignWriteAt")
 }
 
 /// Empile la décision Accepter/Refuser dans l'App Group. Rien d'autre : l'app

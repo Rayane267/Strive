@@ -89,10 +89,10 @@
     "plus": "Membre Plus",
     "free": "Membre Gratuit",
     "upgradeLink": "Passer Plus →",
-    "subscriptionSub": "15 scans/jour, €/h en direct...",
+    "subscriptionSub": "30 scans/jour, €/h en direct...",
     "subscriptionSubActive": "Annuler, changer de formule...",
     "upgradeCardTitle": "Passe à Strive Plus",
-    "upgradeCardSub": "15 scans/jour · €/h en direct · Sans engagement",
+    "upgradeCardSub": "30 scans/jour · €/h en direct · Sans engagement",
     "verified": "PARTENAIRE VÉRIFIÉ",
     "emailLabel": "EMAIL",
     "phoneLabel": "TÉLÉPHONE",
@@ -259,7 +259,7 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 15 scans/jour pour ne plus rouler à perte.",
+      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 30 scans/jour pour ne plus rouler à perte.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
@@ -274,7 +274,7 @@
     "upgradeCard": {
       "title": "Arrête de rouler à perte",
       "sub": "Plus se rembourse en une seule course évitée",
-      "perk1": "15 scans/jour",
+      "perk1": "30 scans/jour",
       "perk2": "€/h en direct",
       "perk3": "Historique"
     },
@@ -440,7 +440,10 @@
     "push": "Notifications push",
     "pushSub": "Alertes de scan, rappels et récapitulatifs",
     "languageSub": "Choisir la langue de l'app",
-    "languageDevice": "Langue de l'appareil"
+    "languageDevice": "Langue de l'appareil",
+    "pushDeniedTitle": "Notifications refusées",
+    "pushDeniedBody": "Vous avez refusé les notifications pour Strive. iOS ne repropose pas la demande — activez-les dans les Réglages de l'appareil.",
+    "openSettings": "Ouvrir les Réglages"
   },
   "upgrade": {
     "title": "Passer en Pro",
@@ -536,7 +539,7 @@
       "verdictMaybe": "PEUT-ÊTRE",
       "verdictSkip": "REFUSER",
       "hintGood": "Les deux métriques dépassent vos seuils ✓",
-      "hintAverage": "Bon €/km mais course courte — à vous de décider",
+      "hintAverage": "Bon €/km mais le €/h ne suit pas — à vous de décider",
       "hintBad": "€/h trop bas, longue distance — à éviter"
     },
     "minimums": {
@@ -576,7 +579,13 @@
       "step3t": "Revenez ici et appuyez sur Continuer",
       "cta": "Obtenir le raccourci",
       "warning": "Vous devez d'abord installer le raccourci.",
-      "ctaDone": "Raccourci installé — rouvrir"
+      "ctaDone": "Raccourci installé — rouvrir",
+      "notifT": "Notifications",
+      "notifS": "Autorisez-les : c'est par elles que le verdict arrive quand la carte n'a rien pu afficher. Sans ce réglage, un scan réussi peut ne rien vous montrer.",
+      "notifCta": "Activer les notifications",
+      "notifDone": "Notifications activées",
+      "shortcutT": "Le raccourci",
+      "shortcutS": "Il prend la capture et lance l'analyse tout seul. Déjà pré-configuré — vous n'avez qu'à l'ajouter."
     },
     "step3": {
       "title": "Acceptez ou refusez en un instant",
@@ -652,7 +661,27 @@
       "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
       "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
     },
-    "restartVideo": "Revoir la vidéo"
+    "restartVideo": "Revoir la vidéo",
+    "recap": {
+      "title": "Votre installation",
+      "desc": "Ce que Strive peut vérifier, et ce que vous seul pouvez confirmer.",
+      "notifT": "Notifications",
+      "notifS": "C'est par elles que le verdict arrive quand la carte n'a rien pu afficher.",
+      "shortcutT": "Le raccourci",
+      "shortcutS": "iOS ne permet pas de savoir s'il est bien présent. Ouvrez l'app Raccourcis pour le voir.",
+      "bubbleT": "Bulle AssistiveTouch",
+      "bubbleS": "C'est elle que vous touchez pour analyser une offre. Réglages › Accessibilité › Toucher › AssistiveTouch.",
+      "urgentT": "Notifications urgentes",
+      "urgentS": "Sans elles, le mode Conduite ou Ne pas déranger masque le verdict.",
+      "state_ok": "Prêt",
+      "state_todo": "À activer",
+      "state_unknown": "À vérifier",
+      "openSettings": "Ouvrir les Réglages"
+    },
+    "notifStep": {
+      "title": "Autorisez les notifications",
+      "desc": "C'est par elles que le verdict arrive quand la carte n'a rien pu afficher. Sans ce réglage, un scan réussi peut ne rien vous montrer."
+    }
   },
   "help": {
     "title": "Aide & Support",
@@ -683,7 +712,7 @@
       "q9": "C'est quoi le score qualité des courses ?",
       "a9": "Un score sur 100 attribué à chaque course en comparant ses €/h et €/km à vos seuils : vert au-dessus, orange proche, rouge en dessous. Dans les Stats, vous voyez aussi la qualité moyenne de vos courses acceptées.",
       "q10": "Combien de scans par jour ?",
-      "a10": "3 scans par jour avec le plan gratuit, 15 par jour avec Strive Plus.",
+      "a10": "3 scans par jour avec le plan gratuit, 30 par jour avec Strive Plus.",
       "q11": "Comment contacter le support ?",
       "a11": "Depuis Profil → Mes tickets : ouvrez un ticket et on vous répond directement dans l'app (vous recevez une notification à chaque réponse)."
     }
@@ -804,7 +833,7 @@
       }
     },
     "feat": {
-      "scan": "15 scans par jour",
+      "scan": "30 scans par jour",
       "scanText": "au lieu de 3 — de quoi tenir une journée complète de service.",
       "threshold": "Votre seuil, pas le nôtre",
       "thresholdText": "vous fixez le €/h à partir duquel une course vaut le coup.",
@@ -878,7 +907,7 @@
       "scans": {
         "label": "Scans journaliers",
         "free": "3 / jour",
-        "plus": "15 / jour"
+        "plus": "30 / jour"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -912,7 +941,26 @@
     "restorePrevious": "Restaurer les achats précédents",
     "restoreSuccessSub": "Votre abonnement est de nouveau actif.",
     "restoreFailSub": "Vérifiez votre connexion et réessayez.",
-    "manageStore": "Gérer sur l'App Store"
+    "manageStore": "Gérer sur l'App Store",
+    "planName": "Strive Plus",
+    "periodMonth": "mois",
+    "periodYear": "an",
+    "perWeekEquiv": "soit {{price}} par semaine",
+    "trialStrip": "Essai gratuit {{days}} j",
+    "noPaymentToday": "Aucun paiement aujourd'hui",
+    "cancelAnytime": "Annulable à tout moment",
+    "finePrintTrial": "{{days}} jours gratuits, puis {{price}} par {{period}}. Renouvellement automatique.",
+    "finePrintNoTrial": "{{price}} par {{period}}. Renouvellement automatique, annulable à tout moment.",
+    "benefit": {
+      "scans": "30 scans par jour au lieu de 3",
+      "thresholds": "Vos seuils €/h et €/km, pas les nôtres",
+      "traffic": "Le €/h calculé sur le trafic réel",
+      "fuel": "Le carburant de votre modèle déduit",
+      "history": "7 jours d'historique et de statistiques"
+    },
+    "saveAmount": "ÉCONOMISEZ {{amount}}",
+    "heroTitleWelcomeEnd": "Vos 30 scans\nofferts sont finis.",
+    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 30 par jour — tous les jours."
   },
   "network": {
     "offline": "Pas de connexion internet"
@@ -1025,18 +1073,77 @@
       "desc": "Il détermine la part de votre chiffre d'affaires qui part en charges sociales.",
       "auto": "Auto-entrepreneur",
       "company": "Société",
-      "employee": "Salarié"
+      "employee": "Salarié",
+      "autoSub": "≈ 21 % du chiffre d'affaires, rien de déductible",
+      "companySub": "≈ 45 % de la rémunération, charges déduites avant",
+      "employeeSub": "Aucune cotisation à votre charge"
     },
     "result": {
-      "title": "Votre seuil de rentabilité",
+      "title": "Votre règle de course",
       "desc": "",
       "fromGoal": "Calculé depuis votre objectif, vos heures et vos charges. Strive marquera à refuser toute course en dessous.",
       "floored": "Votre objectif est atteignable en dessous — nous gardons ce seuil, car une course moins payée vous coûte de l'argent une fois l'usure et les charges comptées.",
-      "plusTitle": "Débloquez votre seuil",
-      "plusPersonal": "{{goal}} net en {{hours}} h par mois, ça se paie à un tarif précis.",
-      "yoursCaption": "le vôtre",
-      "standardCaption": "standard, pour tous",
-      "answersLine": "{{goal}} net · {{hours}} h par mois · {{revenue}} de chiffre"
+      "yoursCaption": "Votre seuil de rentabilité",
+      "answersLine": "{{goal}} net · {{hours}} h par mois · {{revenue}} de chiffre",
+      "freeApplies": "Le gratuit applique",
+      "yoursLabel": "Votre seuil",
+      "decisionKicker": "Votre règle, dès maintenant",
+      "lockedPrompt": "Sous votre seuil, une course ne mérite pas votre temps.",
+      "readyPrompt": "Votre seuil est prêt. En dessous, vous refusez.",
+      "plusOnly": "Avec Plus",
+      "unlockCta": "Appliquer mon seuil avec Plus",
+      "unlockReassurance": "Votre seuil personnalisé sera appliqué à chaque course.",
+      "later": "Continuer sans",
+      "lockedBody": "Strive l'a calculé depuis vos réponses. Débloquez-le avec Plus pour qu'il s'applique à vos courses.",
+      "lockedTag": "VERROUILLÉ"
+    },
+    "computing": {
+      "title": "Nous calculons votre seuil",
+      "desc": "",
+      "gross": "On remonte votre objectif net au brut",
+      "costs": "On y ajoute vos charges fixes",
+      "hours": "On répartit sur vos heures du mois",
+      "km": "On cale votre seuil au kilomètre"
     }
+  },
+  "diagnostics": {
+    "title": "Diagnostic",
+    "menuSub": "Traces techniques et scans en échec",
+    "tracingTitle": "Collecter les traces",
+    "tracingSub": "Enregistre ce que fait la Dynamic Island pendant un scan. Éteint, rien n'est écrit sur l'appareil.",
+    "androidNote": "Android n'a pas de Live Activity : seule la liste des scans en échec est renseignée ici.",
+    "traceTitle": "Trace Live Activity",
+    "traceEmpty": "Aucune trace. Activez la collecte, reproduisez le problème, puis revenez ici.",
+    "traceWaiting": "Collecte active. Faites un scan, puis revenez ici.",
+    "clear": "Effacer la trace",
+    "failuresTitle": "Scans en échec",
+    "failuresEmpty": "Aucun échec enregistré sur les 30 derniers jours.",
+    "reload": "Recharger",
+    "countersTitle": "Compteurs anti-abus",
+    "countersHint": "Vide le compteur d'inscriptions du Keychain et régénère l'identifiant d'appareil. À utiliser pour rejouer un cycle création → suppression → recréation de compte.",
+    "countersReset": "Réinitialiser l'appareil",
+    "countersResetting": "Réinitialisation…",
+    "countersDone": "Compteurs vidés. L'appareil est vu comme neuf : quota d'inscription libre et cadeau de bienvenue rejouable.",
+    "presTitle": "Dynamic Island — présentations",
+    "presNeedsTracing": "Activez la collecte ci-dessus, puis roulez normalement. Les compteurs se remplissent à chaque résultat de scan.",
+    "presWaiting": "Aucun résultat mesuré depuis la remise à zéro. Faites un scan.",
+    "presExpanded": "Îlot déplié",
+    "presCompact": "Compact",
+    "presMinimal": "Pastille",
+    "presSince": "Mesure depuis le {{date}}",
+    "presReset": "Redémarrer la mesure",
+    "replayTitle": "Rejouer le premier lancement",
+    "replayHint": "Ouvre l'écran du cadeau sans toucher à la base, autant de fois que nécessaire. Le second bouton réarme l'onboarding et le tutoriel — redémarre l'app ensuite.",
+    "replayGift": "Voir l’écran des scans offerts",
+    "replayOnboarding": "Réarmer l'onboarding",
+    "replayDone": "C'est fait. Ferme complètement l'app et relance-la pour revoir le parcours."
+  },
+  "welcomeGift": {
+    "body": "À utiliser dans les {{days}} jours, en plus de vos scans quotidiens.",
+    "cta": "J'en profite",
+    "hello": "Bienvenue.",
+    "helloNamed": "Bienvenue, {{name}}.",
+    "unit": "scans offerts",
+    "a11y": "{{n}} scans offerts"
   }
 }

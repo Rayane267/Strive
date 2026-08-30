@@ -191,7 +191,7 @@ export default function Home() {
         <div className="glass grid divide-y divide-white/[0.06] overflow-hidden rounded-3xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[
             { v: '2,0s', l: 'pour analyser une offre' },
-            { v: '15', l: 'scans par jour avec Plus' },
+            { v: '30', l: 'scans par jour avec Plus' },
             { v: '3', l: 'plateformes prises en charge' },
           ].map((s, i) => (
             <Reveal key={s.l} delay={i * 100}>
