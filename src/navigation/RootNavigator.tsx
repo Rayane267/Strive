@@ -204,7 +204,11 @@ const RootNavigator = () => {
           {showTutorialFirst && (
             <Stack.Screen
               name="TutorialOnboarding"
-              options={{ headerShown: false, animation: 'fade' }}
+              // Même présentation que le tutoriel rejouable depuis le Profil :
+              // il monte du bas comme une feuille. Le fondu d'avant le faisait
+              // apparaître sur place, sans dire d'où il venait ni qu'on peut le
+              // refermer.
+              options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
             >
               {(props: any) => (
                 <TutorialScreenRaw

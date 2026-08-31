@@ -116,4 +116,6 @@ RCT_EXTERN_METHOD(cancelLocalNotification:(NSString *)identifier)
 
 RCT_EXTERN_METHOD(selectionHaptic)
 
+RCT_EXTERN_METHOD(openNotificationSettings)
+
 @end

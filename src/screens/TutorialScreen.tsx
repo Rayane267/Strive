@@ -10,98 +10,212 @@ import {
   Animated,
   Platform,
   Linking,
-  Switch,
   AppState,
   Alert,
+  Image,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
-import { Image } from 'react-native';
 import Video from 'react-native-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SafeGradient from '../components/SafeGradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import ScanPreview from '../components/ScanPreview';
 import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { registerPushToken, getNotificationStatus } from '../services/notificationService';
-import { supabase } from '../services/supabase';
+import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
+/// LE MÊME composant que la première page de l'onboarding, pas une imitation.
+/// Son propre commentaire est formel : ces chiffres sont la vitrine du produit
+/// et ne doivent pas diverger d'un écran à l'autre. Ici il ne présente plus le
+/// produit — c'est fait depuis longtemps — il montre la SORTIE des quatre gestes
+/// qu'on vient d'apprendre, à l'endroit exact où l'étape 3 dit « lisez le
+/// verdict ». Et il reste tapable : trois courses, une bonne, une moyenne, une
+/// mauvaise.
+import ScanPreview from '../components/ScanPreview';
 
 const { width, height } = Dimensions.get('window');
 
 // Démo AssistiveTouch (muette, en boucle) affichée dans le slide déclencheur iOS.
 const ASSISTIVE_VIDEO = require('../assets/assistivetouch.mov');
 
-// URL iCloud du raccourci pré-construit ("Prendre une capture" + "Analyser
-// une course avec Strive"). Si renseignée, le bouton "Obtenir le raccourci"
-// l'installe en un tap.
-const PREBUILT_SHORTCUT_URL: string | null = 'https://www.icloud.com/shortcuts/d678e4a771654387866c5621e97cc58a';
+/**
+ * APERÇU MULTIPLATEFORME — DÉVELOPPEMENT UNIQUEMENT.
+ *
+ * Le tutoriel iOS ne se relit pas sur un poste sans iPhone : c'est celui qui
+ * contient le raccourci, AssistiveTouch et le récap, donc celui qu'on doit
+ * pouvoir regarder. Poser 'ios' ici le rend tel quel sur un appareil Android.
+ *
+ *   'ios'    → force le parcours iOS (aperçu depuis Android)
+ *   'android'→ force le parcours Android (aperçu depuis iOS)
+ *   null     → parcours réel de l'appareil
+ *
+ * Neutralisé en release (`__DEV__` faux) : un build de production suit toujours
+ * sa vraie plateforme, quoi qu'il y ait écrit ici.
+ */
+const PREVIEW_OS: 'ios' | 'android' | null = __DEV__ ? 'ios' : null;
+const OS: 'ios' | 'android' = (PREVIEW_OS ?? Platform.OS) as 'ios' | 'android';
+const IS_IOS = OS === 'ios';
 
-type IosTrigger = 'backTap' | 'assistive' | 'homeScreen';
-
-// iOS = 6 slides (Welcome + Preview + Install + Trigger + Stats + Done)
-// Android = 5 slides (Welcome + Setup + Accept/decline + Stats + Done)
-// Accent unique = vert brand sur toutes les slides (palette disciplinée). Les
-// couleurs sémantiques rouge/orange/vert vivent uniquement dans le preview verdict.
+/**
+ * MISE EN PAGE — pourquoi elle ressemble à l'onboarding, et pas à autre chose.
+ *
+ * L'écran d'avant empilait tous les signaux du gabarit générique : halos en
+ * dégradé derrière chaque icône, cercle lumineux en fond de page, cartes
+ * translucides bordées, pastilles « ÉTAPE n », encart d'astuce à éclair, bouton
+ * en dégradé avec une flèche dans un rond — et tout centré. Beaucoup de
+ * décoration, aucune hiérarchie : rien ne disait où regarder.
+ *
+ * Le vocabulaire vient maintenant de deux endroits.
+ *
+ * 1. L'ONBOARDING DE STRIVE, écran par lequel le chauffeur vient d'arriver :
+ *    même barre de progression épaisse, même pilule pleine largeur entièrement
+ *    arrondie, même accent plein pour l'état choisi. Deux écrans consécutifs
+ *    doivent se lire comme une seule application.
+ *
+ * 2. RIDEIQ, qui fait exactement ce travail-là (installer un raccourci et
+ *    AssistiveTouch) : contenu à plat, aucune carte, titre lourd, corps de texte
+ *    gris aéré, étapes numérotées en pastille pleine, filets de séparation fins,
+ *    boutons pleine largeur sans icône.
+ *
+ * ALIGNEMENT À GAUCHE, et c'est la différence assumée avec l'onboarding : là-bas
+ * une question centrée surplombe des réponses ; ici ce sont des consignes qu'on
+ * exécute en les lisant. Un mode d'emploi se lit au fil du bord gauche, pas
+ * depuis un axe central que l'œil doit retrouver à chaque ligne.
+ *
+ * Une seule couleur porte du sens (le vert de marque). L'ambre et le gris ne
+ * servent qu'aux états du récapitulatif.
+ */
 const A = colors.primary;
+/** Filet de séparation. La seule bordure de l'écran : plus de cartes. */
+const HAIRLINE = 'rgba(255,255,255,0.09)';
+
+/** Retraits de la diapositive. Partagés entre les styles et le calcul de la
+ *  hauteur vidéo : deux valeurs séparées finiraient par diverger. */
+const SLIDE_PAD_TOP = 16;
+const SLIDE_PAD_BOTTOM = 32;
+/** Espace sous le cadre vidéo, avant le reste du contenu. */
+const VIDEO_GAP = 14;
+
+/**
+ * La démonstration du verdict est ici une ILLUSTRATION d'étape, pas le sujet de
+ * la page comme elle l'est sur la première page de l'onboarding. À taille réelle
+ * elle écrasait les quatre gestes qu'elle est censée servir.
+ *
+ * Mise à l'échelle plutôt que redimensionnée : `ScanPreview` est le composant
+ * partagé, on ne touche pas à ses proportions ni à ses tailles de texte — on le
+ * regarde d'un peu plus loin. L'origine en haut à gauche garde son bord aligné
+ * sur celui du texte de l'étape.
+ */
+const PREVIEW_SCALE = 0.85;
+
+/**
+ * HAUTEUR DE LA DÉMO ASSISTIVETOUCH — MESURÉE, PAS DEVINÉE.
+ *
+ * Elle valait 30 % de la hauteur d'écran. Proportionnel n'est pas adaptatif :
+ * sur un petit téléphone, 30 % d'un écran court laissent quand même trop peu
+ * pour le titre, les quatre étapes et le bouton « Ouvrir les Réglages » — qui
+ * est l'action de la diapositive. Et sur un grand, la vidéo reste petite alors
+ * qu'il y avait la place.
+ *
+ * Même méthode que `computeOptionHeight` dans l'onboarding : on mesure les deux
+ * grandeurs non circulaires — la fenêtre du ScrollView, et le bloc qui suit la
+ * vidéo (lien de rejeu, titre, étapes, bouton) — et la vidéo prend ce qui reste.
+ *
+ * Les bornes : en bas 150 pt, en deçà desquels la capture d'un écran d'iPhone
+ * n'est plus lisible et ne démontre plus rien — on préfère alors laisser la
+ * diapositive défiler. En haut 34 % de l'écran, pour qu'elle n'écrase jamais les
+ * étapes, qui sont le vrai contenu.
+ */
+const VIDEO_MIN_H = 150;
+const VIDEO_MAX_H = height * 0.34;
+
+const computeVideoHeight = (viewportH: number, belowH: number): number | undefined => {
+  if (!viewportH || !belowH) return undefined;
+  const free = viewportH - SLIDE_PAD_TOP - SLIDE_PAD_BOTTOM - belowH - VIDEO_GAP;
+  return Math.max(VIDEO_MIN_H, Math.min(VIDEO_MAX_H, free));
+};
+
 /** Les quatre exigences de l'installation iOS. `notif` est la seule que l'app
- *  peut vérifier ; les trois autres n'ont aucune API et sont affichées comme
- *  « à vérifier », jamais comme acquises. */
+ *  puisse vérifier ; `shortcut` ne peut être que DÉCLARÉE par le chauffeur ;
+ *  les deux dernières n'ont aucune API et restent « à vérifier ». */
 const RECAP_ROWS = [
-  { key: 'notif' },
-  { key: 'shortcut' },
-  { key: 'bubble' },
-  { key: 'urgent' },
+  // Chaque exigence porte SA destination. Un unique bouton « Ouvrir les
+  // Réglages » sous les quatre lignes obligeait le chauffeur à deviner laquelle
+  // il allait régler — et le déposait au même endroit dans les quatre cas.
+  { key: 'notif',    target: 'notifications' as const },
+  // Le raccourci mène à l'app Raccourcis, pas aux Réglages : c'est là qu'on le
+  // VOIT. iOS n'offre aucun moyen de vérifier son existence par programme, donc
+  // la ligne ne prétend rien — elle emmène regarder, et affiche « confirmé » si
+  // le chauffeur l'a déclaré à l'étape 2.
+  { key: 'shortcut', target: 'shortcuts' as const },
+  { key: 'bubble',   target: 'accessibility' as const },
+  { key: 'urgent',   target: 'notifications' as const },
 ] as const;
 
-const STEPS = (Platform.OS === 'ios'
+/** Déclaration explicite du chauffeur : « j'ai ajouté le raccourci ». Ce n'est
+ *  PAS une vérification — iOS n'en offre aucune — mais c'est la sienne, pas une
+ *  supposition de l'app. Persisté pour que le récap s'en souvienne au rejeu. */
+const SHORTCUT_DECLARED_KEY = '@strive_shortcut_declared';
+
+/** Le nom EXACT du raccourci dans l'app Raccourcis. Non traduit — c'est un nom
+ *  propre, et le chauffeur doit retrouver cette chaîne telle quelle dans sa
+ *  liste. La changer ici sans la changer dans le raccourci iCloud enverrait
+ *  chercher quelque chose qui n'existe pas. */
+const SHORTCUT_NAME = 'Strive Shortcut';
+
+/**
+ * SÉQUENCE. Le tutoriel ne raconte plus le produit — l'onboarding l'a fait,
+ * démo comprise, et il a déjà calculé et enregistré le seuil du chauffeur. Ce
+ * qui reste ici est ce que lui seul peut faire : installer, puis apprendre les
+ * deux gestes du quotidien (scanner, puis répondre prise/refusée).
+ *
+ * iOS     = 6 slides : Bienvenue · Installation · AssistiveTouch · Récap · Taguer · Antisèche
+ * Android = 4 slides : Bienvenue · Installation · Taguer · Antisèche
+ */
+const STEPS = (IS_IOS
   ? [
-      { key: '1',        icon: 'steering',           color: A, titleKey: 'tutorial.step1.title',         descKey: 'tutorial.step1.desc',         tip: 'tutorial.tips.step1' },
-      { key: 'preview',  icon: 'eye-outline',        color: A, titleKey: 'tutorial.iosPreview.title',    descKey: 'tutorial.iosPreview.subtitle', tip: '' },
-      { key: 'minimums', icon: 'tune-vertical',      color: A, titleKey: 'tutorial.minimums.title',      descKey: 'tutorial.minimums.desc',       tip: '' },
-      { key: '2',        icon: 'download-circle',    color: A, titleKey: 'tutorial.step2_ios.title',     descKey: 'tutorial.step2_ios.desc',     tip: '' },
-      // Pas de sous-titre : la question « Comment voulez-vous lancer le
-      // raccourci ? » n'a plus lieu d'être depuis que le déclencheur est figé
-      // sur AssistiveTouch (cf. iosTrigger ci-dessous).
-      // Ni titre ni sous-titre : « Choisissez votre déclencheur » était faux
-      // depuis que le déclencheur est figé sur AssistiveTouch, et la vidéo plus
-      // les 4 étapes numérotées se suffisent. Ça rend en plus la hauteur qui
-      // manquait en bas, où le bouton « Ouvrir les Réglages » mordait sur
-      // l'étape « Ajouter Strive ».
-      { key: '3',        icon: 'gesture-tap-button', color: A, titleKey: '',                            descKey: '',                            tip: '' },
-      // Récapitulatif juste après les réglages, et pas à la fin du tutoriel :
-      // c'est le moment où le chauffeur vient de les faire et peut encore y
-      // retourner. Le mettre en dernier reviendrait à lui signaler un problème
-      // quand il a déjà l'esprit ailleurs.
-      { key: 'recap',    icon: 'clipboard-check',     color: A, titleKey: 'tutorial.recap.title',         descKey: 'tutorial.recap.desc',         tip: '' },
-      { key: 'la_tip',   icon: 'cellphone-nfc',       color: A, titleKey: 'tutorial.laTip.title',         descKey: 'tutorial.laTip.desc',         tip: 'tutorial.tips.laTip' },
-      { key: '4',        icon: 'chart-line',         color: A, titleKey: 'tutorial.step4.title',         descKey: 'tutorial.step4.desc',         tip: 'tutorial.tips.step4' },
-      { key: '5',        icon: 'rocket-launch',      color: A, titleKey: 'tutorial.step5_ios.title',     descKey: 'tutorial.step5_ios.desc',     tip: 'tutorial.tips.step5_ios' },
+      { key: 'welcome', titleKey: 'tutorial.step1.title',     descKey: 'tutorial.step1.desc',     tip: 'tutorial.tips.step1' },
+      { key: 'install', titleKey: 'tutorial.step2_ios.title', descKey: 'tutorial.step2_ios.desc', tip: '' },
+      // Ni titre ni sous-titre : la vidéo et les quatre étapes numérotées se
+      // suffisent, et la hauteur ainsi rendue évite que le bouton du bas morde
+      // sur l'étape « Ajouter Strive ».
+      { key: 'trigger', titleKey: '',                         descKey: '',                        tip: '' },
+      { key: 'recap',   titleKey: 'tutorial.recap.title',     descKey: 'tutorial.recap.desc',     tip: '' },
+      { key: 'tag',     titleKey: 'tutorial.tag.title',       descKey: 'tutorial.tag.desc',       tip: '' },
+      { key: 'done',    titleKey: 'tutorial.step5_ios.title', descKey: 'tutorial.step5_ios.desc', tip: '' },
     ]
   : [
-      { key: '1',        icon: 'steering',       color: A, titleKey: 'tutorial.step1.title',      descKey: 'tutorial.step1.desc',      tip: 'tutorial.tips.step1' },
-      { key: 'preview',  icon: 'eye-outline',    color: A, titleKey: 'tutorial.iosPreview.title', descKey: 'tutorial.iosPreview.subtitle', tip: '' },
-      { key: 'minimums', icon: 'tune-vertical',  color: A, titleKey: 'tutorial.minimums.title',   descKey: 'tutorial.minimums.desc',   tip: '' },
-      { key: '2',        icon: 'line-scan',      color: A, titleKey: 'tutorial.step2.title',      descKey: 'tutorial.step2.desc',      tip: 'tutorial.tips.step2' },
-      { key: '4',        icon: 'chart-line',     color: A, titleKey: 'tutorial.step4.title',      descKey: 'tutorial.step4.desc',      tip: 'tutorial.tips.step4' },
-      { key: '5',        icon: 'rocket-launch',  color: A, titleKey: 'tutorial.step5.title',      descKey: 'tutorial.step5.desc',      tip: 'tutorial.tips.step5' },
+      { key: 'welcome', titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', tip: 'tutorial.tips.step1' },
+      { key: 'install', titleKey: 'tutorial.step2.title', descKey: 'tutorial.step2.desc', tip: '' },
+      { key: 'tag',     titleKey: 'tutorial.tag.title',   descKey: 'tutorial.tag.desc',   tip: '' },
+      { key: 'done',    titleKey: 'tutorial.step5.title', descKey: 'tutorial.step5.desc', tip: '' },
     ]
-) as readonly { key: string; icon: string; color: string; titleKey: string; descKey: string; tip: string }[];
+) as readonly { key: string; titleKey: string; descKey: string; tip: string }[];
 
-// Le preset `casual` DOIT rester égal à FREE_THRESHOLDS : c'est le réglage
-// réellement appliqué aux comptes gratuits. Avant, le tuto proposait 20 €/h et
-// 0,80 €/km pendant que l'app jugeait à 25 / 1,20 — le chauffeur choisissait un
-// réglage sans effet, sous les valeurs réellement utilisées.
-const PRESETS = [
-  { key: 'casual', hourly: 25, km: 1.10 },
-  { key: 'standard', hourly: 32, km: 1.35 },
-  { key: 'premium', hourly: 42, km: 1.70 },
-];
+/** Les façons de répondre « prise / refusée », par plateforme. iOS a la carte
+ *  Dynamic Island ; Android a les actions de la notification de résultat
+ *  (`FloatingBubbleService`). Les deux retombent sur l'Historique, où les
+ *  courses sans réponse restent « En attente ».
+ *
+ *  La commande vocale Siri a été retirée de cette liste. Les intents existent
+ *  toujours côté natif (`StriveAppShortcuts`) et continuent de répondre — on ne
+ *  l'ENSEIGNE simplement plus ici. */
+const TAG_ROWS = IS_IOS
+  ? [
+      { key: 'di',    icon: 'cellphone-text' },
+      { key: 'notif', icon: 'bell-outline' },
+    ]
+  : [
+      { key: 'notif',   icon: 'bell-outline' },
+      { key: 'history', icon: 'history' },
+    ];
 
+/** L'antisèche finale : la boucle complète, du geste de capture à la réponse qui
+ *  remplit les statistiques. Même anatomie que les étapes d'installation —
+ *  pastille numérotée, titre, sous-titre — plutôt qu'une carte à part. */
+const QUICKREF_STEPS = [1, 2, 3, 4];
 
 const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const { t } = useTranslation();
@@ -116,15 +230,23 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
-  // iOS : un seul déclencheur supporté — AssistiveTouch. (Le choix Back Tap /
-  // Écran d'accueil a été retiré du tuto.) Type large conservé pour les
-  // branches d'aide existantes.
-  const iosTrigger = 'assistive' as IosTrigger;
-  const [shortcutInstalled, setShortcutInstalled] = useState(false);
+  /** Le raccourci a été ouvert (lien iCloud) — on ne sait rien de plus. */
+  const [shortcutOpened, setShortcutOpened] = useState(false);
+  /** Le chauffeur a confirmé l'avoir ajouté. Sa parole, pas notre supposition. */
+  const [shortcutDeclared, setShortcutDeclared] = useState(false);
   /// État réel de la permission notifications, relu sans jamais afficher la
   /// fenêtre système — elle ne s'affiche qu'une fois par installation, la brûler
   /// pour peindre un bouton en vert serait le pire échange.
   const [notifGranted, setNotifGranted] = useState(false);
+  /** Les deux mesures qui dimensionnent la démo AssistiveTouch (cf.
+   *  `computeVideoHeight`). La fenêtre est commune à toutes les diapositives —
+   *  elles ont la même hauteur — et le bloc mesuré est celui qui suit la vidéo. */
+  const [slideViewportH, setSlideViewportH] = useState(0);
+  const [triggerBelowH, setTriggerBelowH] = useState(0);
+  /** Hauteur NATURELLE de la démonstration, mesurée avant mise à l'échelle. Sans
+   *  elle, la vue réduite garderait la place de la vue pleine taille et laisserait
+   *  un trou de 15 % sous elle. */
+  const [previewH, setPreviewH] = useState(0);
 
   /// « Prêt » exige DEUX conditions, pas une : la permission système accordée
   /// ET un jeton FCM enregistré. Le Profil se fie déjà au jeton, et son
@@ -142,6 +264,9 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   useEffect(() => {
     refreshNotifStatus();
+    AsyncStorage.getItem(SHORTCUT_DECLARED_KEY).then(v => {
+      if (v === '1') { setShortcutDeclared(true); setShortcutOpened(true); }
+    });
     // Le chauffeur peut accorder la permission depuis les Réglages iOS, hors de
     // l'app : on relit à chaque retour au premier plan plutôt que de rester sur
     // un état figé au montage.
@@ -172,17 +297,14 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
         t('preferences.pushDeniedBody'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: t('preferences.openSettings'), onPress: () => Linking.openSettings() },
+          { text: t('preferences.openSettings'), onPress: () => openSettingsFor('notifications') },
         ],
       );
     }
   }, [user?.id, refreshNotifStatus, t]);
-  const [minHourly, setMinHourly] = useState(30);
-  const [minKm, setMinKm] = useState(1.0);
-  const [includePickup, setIncludePickup] = useState(true);
-  const [selectedPreset, setSelectedPreset] = useState<string | null>('standard');
 
   const isLast = currentIndex === STEPS.length - 1;
+
 
   const goToIndex = (index: number) => {
     hapticLight();
@@ -196,27 +318,11 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     }).start();
   };
 
-  const savePreferences = async () => {
-    if (!user?.id) return;
-    try {
-      // On laisse l'utilisateur RÉGLER les seuils dans le tuto (il découvre qu'on
-      // peut personnaliser → désir de Plus), mais on ne les ENREGISTRE pas : en
-      // free les seuils sont imposés (FREE_THRESHOLDS). La personnalisation réelle
-      // est un avantage Plus.
-      // Seul `include_pickup` (non gated) est persisté.
-      await supabase.from('preferences').upsert({
-        id: user.id,
-        include_pickup: includePickup,
-      });
-    } catch {}
-  };
-
   const handleNext = () => {
     if (!isLast) {
       goToIndex(currentIndex + 1);
     } else {
       hapticSuccess();
-      savePreferences();
       closeTutorial();
     }
   };
@@ -236,412 +342,225 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-  const installShortcut = () => {
-    if (PREBUILT_SHORTCUT_URL) {
-      Linking.openURL(PREBUILT_SHORTCUT_URL)
-        .then(() => setShortcutInstalled(true))
-        .catch(() => Linking.openURL('shortcuts://'));
-      return;
-    }
-    Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
-    setShortcutInstalled(true);
+  // URL iCloud du raccourci pré-construit (« Prendre une capture » + « Analyser
+  // une course avec Strive »).
+  const PREBUILT_SHORTCUT_URL = 'https://www.icloud.com/shortcuts/d678e4a771654387866c5621e97cc58a';
+
+  /// OUVRIR N'EST PAS INSTALLER. On note seulement que le chauffeur est parti
+  /// vers l'app Raccourcis : il a pu annuler la feuille d'ajout, et rien dans
+  /// iOS ne nous le dira. C'est pourquoi le vert n'arrive qu'après sa
+  /// confirmation explicite, jamais ici.
+  const openShortcut = () => {
+    Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => openShortcutsApp());
+    setShortcutOpened(true);
   };
 
-  // Le CTA primaire du Choose Trigger :
-  // - AssistiveTouch / Back Tap → Réglages (fiche de l'app)
-  // - Écran d'accueil → app Raccourcis (pour épingler le raccourci)
-  //
-  // `App-prefs:` ouvrait autrefois directement Réglages → Accessibilité, mais
-  // c'est un schéma d'URL privé : sans effet sur les iOS récents, et motif de
-  // rejet en revue (règle 2.5.1). `openSettings()` est la seule API publique —
-  // elle ouvre la fiche Réglages de Strive, les étapes numérotées de la slide
-  // donnent le chemin à partir de là. Le libellé promet donc « les Réglages »
-  // et pas « les réglages d'accessibilité », qu'on ne sait pas atteindre.
-  const triggerPrimaryAction = () => {
-    if (iosTrigger === 'homeScreen') {
-      Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
+  const declareShortcut = () => {
+    hapticSuccess();
+    setShortcutDeclared(true);
+    AsyncStorage.setItem(SHORTCUT_DECLARED_KEY, '1');
+  };
+
+  /// Chaque ligne du récap mène à SA destination — le raccourci vers l'app
+  /// Raccourcis (là où on le voit, pas dans les Réglages), la bulle vers
+  /// l'accessibilité, les notifications vers leur page. Sur iOS, seule la page
+  /// des notifications est atteignable directement ; l'accessibilité retombe sur
+  /// la fiche de l'app, où les étapes numérotées de la slide précédente donnent
+  /// le chemin. Voir `utils/appSettings`.
+  const openRecapTarget = (target: 'notifications' | 'accessibility' | 'shortcuts') => {
+    hapticLight();
+    if (target === 'shortcuts') {
+      openShortcutsApp();
       return;
     }
-    Linking.openSettings();
+    openSettingsFor(target);
   };
-  const triggerPrimaryLabel = () =>
-    iosTrigger === 'homeScreen'
-      ? t('tutorial.openShortcuts', 'Ouvrir Raccourcis')
-      : t('tutorial.iosTrigger.ctaSettings', 'Ouvrir les Réglages');
 
   const restartVideo = () => {
     hapticLight();
     videoRef.current?.seek(0);
   };
 
+  /**
+   * L'UNITÉ DE BASE DES TROIS PAGES À ÉTAPES : installation, AssistiveTouch,
+   * antisèche. Pastille numérotée, trait qui descend vers la suivante, titre,
+   * sous-titre — et ce qu'on veut poser dessous (`children`) : un bouton, une
+   * démonstration.
+   *
+   * Le trait est ce qui sépare ça d'une liste à puces : il dit que les étapes
+   * s'enchaînent dans cet ordre, et il tient la colonne de texte alignée d'un
+   * bout à l'autre de la page. Surtout, ce qui vit sous une étape lui APPARTIENT
+   * visiblement — le bouton « Activer les notifications » est dans la colonne de
+   * l'étape 1, au lieu de flotter entre deux étapes sans propriétaire.
+   */
+  const LoopStep = ({
+    n,
+    title,
+    sub,
+    isLast,
+    children,
+  }: {
+    n: number;
+    title: string;
+    sub?: string;
+    isLast?: boolean;
+    children?: React.ReactNode;
+  }) => (
+    <View style={styles.loopRow}>
+      <View style={styles.loopRail}>
+        <View style={styles.stepNum}>
+          <Text style={styles.stepNumTxt}>{n}</Text>
+        </View>
+        {!isLast ? <View style={styles.loopConnector} /> : null}
+      </View>
+      <View style={[styles.loopTexts, isLast && styles.loopTextsLast]}>
+        <Text style={styles.loopTitle}>{title}</Text>
+        {sub ? <Text style={styles.stepSub}>{sub}</Text> : null}
+        {children}
+      </View>
+    </View>
+  );
+
   const renderStep = ({ item, index }: { item: typeof STEPS[number]; index: number }) => {
+    // Fondu seul. L'échelle 0,7 → 1 et la translation verticale faisaient
+    // « arriver » chaque diapositive comme une animation de présentation ; le
+    // glissement horizontal dit déjà tout ce qu'il y a à dire.
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-    const scale = scrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
     const opacity = scrollX.interpolate({ inputRange, outputRange: [0, 1, 0], extrapolate: 'clamp' });
-    const translateY = scrollX.interpolate({ inputRange, outputRange: [30, 0, 30], extrapolate: 'clamp' });
 
     const tipText = t(item.tip, { defaultValue: '' });
-    const isIosPreview = Platform.OS === 'ios' && item.key === 'preview';
-    const isIosInstall = Platform.OS === 'ios' && item.key === '2';
-    const isIosTrigger = Platform.OS === 'ios' && item.key === '3';
-    const isRecap = Platform.OS === 'ios' && item.key === 'recap';
-    const isMinimums = item.key === 'minimums';
-    const isDone = item.key === '5';
-    const hasCustomBlock = isIosPreview || isIosInstall || isIosTrigger || isMinimums || isDone;
-    // Slide déclencheur : la vidéo AssistiveTouch EST le visuel — pas d'icône en
-    // plus, sinon le contenu dépasse la hauteur d'écran (page rognée).
-    const showCompactIcon = hasCustomBlock && !isDone && !isIosTrigger;
-    // Slides sans visuel d'en-tête du tout. `showCompactIcon` seul ne suffisait
-    // pas : à false, le ternaire retombait sur la branche par défaut et rendait
-    // l'icône 96 px + le badge « STEP » (~174 px), soit précisément le
-    // dépassement que le commentaire ci-dessus dit vouloir éviter.
-    const hideHeaderVisual = isDone || isIosTrigger;
+    const isInstall = item.key === 'install';
+    const isTrigger = item.key === 'trigger';
+    const isRecap = item.key === 'recap';
+    const isTag = item.key === 'tag';
+    const isDone = item.key === 'done';
+    const isWelcome = item.key === 'welcome';
+    const videoHeight = computeVideoHeight(slideViewportH, triggerBelowH);
 
     return (
       <View style={styles.slide}>
-        {/* Halo de fond unique, très discret. Hors du ScrollView : il est en
-            position absolue et ne doit pas défiler avec le contenu. */}
-        <View style={styles.glowCircle} />
-
-        {/* DÉFILEMENT VERTICAL. La diapositive était une hauteur fixe centrée :
-            dès qu'une étape portait sa description ET son bouton, le texte
-            SORTAIT du cadre, sans recours. C'est ce qui obligeait à une action
-            par écran.
-            `flexGrow: 1` + `justifyContent: 'center'` garde le centrage exact
-            d'avant quand le contenu est court, et laisse défiler quand il est
-            long — les deux comportements, sans choisir. Axe vertical contre
-            FlatList horizontale : aucun conflit de geste. */}
         <ScrollView
           style={styles.slideScroll}
-          contentContainerStyle={styles.slideContent}
+          contentContainerStyle={[
+            styles.slideContent,
+            !isInstall && !isTrigger && styles.slideContentCentered,
+            isWelcome && styles.slideContentAxis,
+          ]}
           showsVerticalScrollIndicator={false}
+          onLayout={e => setSlideViewportH(e.nativeEvent.layout.height)}
         >
-        <Animated.View style={{ alignItems: 'center', opacity, transform: [{ scale }, { translateY }] }}>
-          {showCompactIcon ? (
-            <SafeGradient
-              colors={[item.color + '25', item.color + '08']}
-              style={styles.iconCompact}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <MaterialCommunityIcons name={item.icon as any} size={26} color={item.color} />
-            </SafeGradient>
-          ) : hideHeaderVisual ? null : (
-            <>
-              <View style={styles.iconContainer}>
-                {item.key === '1' ? (
-                  <Image
-                    source={require('../assets/strive-logo.png')}
-                    style={styles.iconLogoImg}
-                  />
-                ) : (
-                  <SafeGradient
-                    colors={[item.color + '22', item.color + '0A']}
-                    style={styles.iconWrap}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+          <Animated.View style={{ width: '100%', opacity }}>
+
+            {/* Seule la page de garde porte un visuel d'en-tête, et c'est le logo
+                de l'app. Les tuiles à pictogramme des autres pages sont parties :
+                un symbole générique au-dessus d'un titre qui dit déjà tout
+                n'ajoutait rien, et ses 82 px poussaient le troisième bouton de la
+                page d'installation sous le pied de page. */}
+            {isWelcome ? (
+              <Image source={require('../assets/strive-logo.png')} style={[styles.iconLogo, styles.centerSelf]} />
+            ) : null}
+
+            {item.titleKey ? <Text style={styles.title}>{t(item.titleKey)}</Text> : null}
+            {item.descKey ? <Text style={styles.desc}>{t(item.descKey)}</Text> : null}
+
+            {/* L'astuce d'accueil : un paragraphe gris, pas un encart à éclair. */}
+            {tipText ? <Text style={styles.tip}>{tipText}</Text> : null}
+
+            {/* ── Installation ─────────────────────────────────────────────
+                 Un réglage, son explication, son bouton juste dessous : l'action
+                 est là où on vient de comprendre pourquoi elle sert. Les
+                 notifications valent pour les DEUX plateformes ; seul le
+                 raccourci est propre à iOS. */}
+            {isInstall ? (
+              <View style={styles.block}>
+                <LoopStep
+                  n={1}
+                  isLast={!IS_IOS}
+                  title={t('tutorial.iosInstall.notifT')}
+                  sub={IS_IOS ? t('tutorial.iosInstall.notifS') : t('tutorial.iosInstall.notifS_android')}
+                >
+                  <TouchableOpacity
+                    style={[styles.cta, notifGranted && styles.ctaDone]}
+                    onPress={enableNotifications}
+                    activeOpacity={0.85}
+                    disabled={notifGranted}
                   >
-                    <MaterialCommunityIcons name={item.icon as any} size={46} color={item.color} />
-                  </SafeGradient>
-                )}
-              </View>
-
-              {/* Step badge */}
-              <View style={[styles.stepBadge, { backgroundColor: item.color + '18' }]}>
-                <Text style={[styles.stepBadgeText, { color: item.color }]}>
-                  {t('tutorial.step', { defaultValue: 'STEP' })} {index + 1}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {/* titleKey vide = slide sans titre (déclencheur AssistiveTouch) : on ne
-              rend pas un Text vide, qui laisserait sa marge basse. Même logique
-              que descKey ci-dessous. */}
-          {item.titleKey ? (
-            <Text style={[styles.stepTitle, hasCustomBlock && styles.stepTitleCompact]}>{t(item.titleKey)}</Text>
-          ) : null}
-          {/* descKey vide = slide sans sous-titre (ex. Choisir le déclencheur,
-              où la vidéo et les étapes numérotées se suffisent) : on ne rend pas
-              un Text vide, qui laisserait sa marge basse. */}
-          {item.descKey ? (
-            <Text style={[styles.stepDesc, hasCustomBlock && styles.stepDescCompact]}>{t(item.descKey)}</Text>
-          ) : null}
-
-          {/* Interactive tip card — masquée sur les slides iOS custom (déjà denses) */}
-          {tipText && !hasCustomBlock ? (
-            <Animated.View style={[styles.tipCard, { opacity }]}>
-              <View style={[styles.tipIcon, { backgroundColor: item.color + '15' }]}>
-                <Feather name="zap" size={14} color={item.color} />
-              </View>
-              <Text style={styles.tipText}>{tipText}</Text>
-            </Animated.View>
-          ) : null}
-
-          {/* ── Diapositive « Dans l'app » ────────────────────────────────
-               Deux réglages, deux boutons EN LIGNE sous leur propre explication.
-               C'est le patron de la référence RideIQ, et ce qu'il corrige est
-               précis : lire une consigne puis chercher où appuyer. Ici l'action
-               est là où on vient de comprendre pourquoi elle sert.
-               Tient dans la hauteur depuis que la diapositive défile. */}
-          {isIosInstall ? (
-            <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
-
-              {/* 1 — Notifications. Absente du tutoriel jusqu'ici : la permission
-                  n'était demandée que par l'interrupteur du Profil, que le
-                  chauffeur ne visite pas forcément. Or c'est par la notification
-                  que le verdict arrive quand la carte n'a rien pu afficher. */}
-              <View style={styles.setupStep}>
-                <View style={styles.triggerStepRow}>
-                  <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                    <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>1</Text>
-                  </View>
-                  <View style={styles.triggerStepTexts}>
-                    <Text style={styles.triggerStepTitle}>{t('tutorial.iosInstall.notifT')}</Text>
-                    <Text style={styles.triggerStepSub}>{t('tutorial.iosInstall.notifS')}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.stepCta,
-                    { backgroundColor: notifGranted ? 'rgba(0,230,118,0.14)' : item.color },
-                    notifGranted && { borderWidth: 1, borderColor: item.color + '80' },
-                  ]}
-                  onPress={enableNotifications}
-                  activeOpacity={0.85}
-                  disabled={notifGranted}
-                >
-                  <MaterialCommunityIcons
-                    name={notifGranted ? 'check-circle' : 'bell-ring'}
-                    size={17}
-                    color={notifGranted ? item.color : colors.background}
-                  />
-                  <Text style={[styles.iosBigCtaTxt, notifGranted && { color: item.color }]}>
-                    {notifGranted
-                      ? t('tutorial.iosInstall.notifDone')
-                      : t('tutorial.iosInstall.notifCta')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 2 — Le raccourci */}
-              <View style={styles.setupStep}>
-                <View style={styles.triggerStepRow}>
-                  <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                    <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>2</Text>
-                  </View>
-                  <View style={styles.triggerStepTexts}>
-                    <Text style={styles.triggerStepTitle}>{t('tutorial.iosInstall.shortcutT')}</Text>
-                    <Text style={styles.triggerStepSub}>{t('tutorial.iosInstall.shortcutS')}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.stepCta,
-                    { backgroundColor: shortcutInstalled ? 'rgba(0,230,118,0.14)' : item.color },
-                    shortcutInstalled && { borderWidth: 1, borderColor: item.color + '80' },
-                  ]}
-                  onPress={installShortcut}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons
-                    name={shortcutInstalled ? 'check-circle' : 'download'}
-                    size={17}
-                    color={shortcutInstalled ? item.color : colors.background}
-                  />
-                  <Text style={[styles.iosBigCtaTxt, shortcutInstalled && { color: item.color }]}>
-                    {shortcutInstalled
-                      ? t('tutorial.iosInstall.ctaDone', 'Raccourci installé — rouvrir')
-                      : t('tutorial.iosInstall.cta')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.installWarning}>
-                <MaterialCommunityIcons name="alert" size={13} color="#FFB300" />
-                {'  '}{t('tutorial.iosInstall.warning')}
-              </Text>
-            </Animated.View>
-          ) : null}
-
-          {/* ── Récapitulatif d'installation ────────────────────────────────
-               POURQUOI IL EXISTE. Sans lui, le chauffeur termine le tutoriel sans
-               savoir si son installation FONCTIONNE. Et le pire cas est muet :
-               AssistiveTouch désactivé, l'app ne répond simplement jamais, sans
-               message ni erreur — il conclut qu'elle est cassée.
-
-               POURQUOI TOUT N'EST PAS VERT. Une seule de ces quatre lignes est
-               réellement vérifiable : les notifications, via
-               `getNotificationStatus()`. iOS n'expose AUCUNE API pour savoir si
-               AssistiveTouch est actif, si un raccourci existe, ni quel niveau
-               d'interruption est autorisé. Les autres sont donc marquées
-               « à vérifier », avec le chemin pour le faire soi-même.
-               Peindre un faux « Prêt » vert serait bien pire que d'admettre
-               l'ignorance : le chauffeur croirait son installation bonne et
-               chercherait la panne partout ailleurs. */}
-          {isRecap ? (
-            <Animated.View style={[styles.iosInstallBlock, { opacity }]}>
-              {RECAP_ROWS.map(row => {
-                const state = row.key === 'notif'
-                  ? (notifGranted ? 'ok' : 'todo')
-                  : 'unknown';
-                return (
-                  <View key={row.key} style={styles.recapRow}>
-                    <MaterialCommunityIcons
-                      name={state === 'ok' ? 'check-circle' : state === 'todo' ? 'alert-circle' : 'help-circle'}
-                      size={22}
-                      color={state === 'ok' ? item.color : state === 'todo' ? '#FFB300' : colors.textDimmed}
-                    />
-                    <View style={styles.recapTexts}>
-                      <Text style={styles.triggerStepTitle}>{t(`tutorial.recap.${row.key}T`)}</Text>
-                      <Text style={styles.triggerStepSub}>{t(`tutorial.recap.${row.key}S`)}</Text>
-                    </View>
-                    <Text style={[
-                      styles.recapState,
-                      state === 'ok' && { color: item.color },
-                      state === 'todo' && { color: '#FFB300' },
-                    ]}>
-                      {t(`tutorial.recap.state_${state}`)}
+                    <Text style={[styles.ctaTxt, notifGranted && styles.ctaDoneTxt]}>
+                      {notifGranted
+                        ? t('tutorial.iosInstall.notifDone')
+                        : t('tutorial.iosInstall.notifCta')}
                     </Text>
-                  </View>
-                );
-              })}
+                  </TouchableOpacity>
+                </LoopStep>
 
-              <TouchableOpacity
-                style={[styles.stepCta, { backgroundColor: item.color, marginTop: 18 }]}
-                onPress={() => Linking.openSettings()}
-                activeOpacity={0.85}
-              >
-                <Feather name="settings" size={17} color={colors.background} />
-                <Text style={styles.iosBigCtaTxt}>{t('tutorial.recap.openSettings')}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          ) : null}
-
-          {/* Slide iOS « See It In Action » — tap to cycle through 3 examples */}
-          {/* Le wrapper ne porte que l'opacité animée de la diapositive :
-              `ScanPreview` embarque déjà la mise en page qu'`iosPreviewBlock`
-              donnait ici, à l'identique. */}
-          {isIosPreview ? (
-            <Animated.View style={{ opacity }}>
-              <ScanPreview />
-            </Animated.View>
-          ) : null}
-
-          {/* Slide Minimums — seuils €/h, €/km, pickup */}
-          {isMinimums ? (
-            <Animated.View style={[styles.iosPreviewBlock, { opacity }]}>
-              <View style={styles.presetRow}>
-                {PRESETS.map(p => {
-                  const active = selectedPreset === p.key;
-                  return (
-                    <TouchableOpacity
-                      key={p.key}
-                      style={[styles.presetCard, active && styles.presetCardActive]}
-                      onPress={() => { hapticLight(); setSelectedPreset(p.key); setMinHourly(p.hourly); setMinKm(p.km); }}
-                      activeOpacity={0.85}
+                {IS_IOS ? (
+                  <>
+                    <LoopStep
+                      n={2}
+                      title={t('tutorial.iosInstall.shortcutT')}
+                      sub={t('tutorial.iosInstall.shortcutS')}
                     >
-                      <Text style={[styles.presetName, active && styles.presetNameActive]}>{t(`tutorial.minimums.${p.key}`)}</Text>
-                      <Text style={[styles.presetValue, active && styles.presetValueActive]}>€{p.hourly}/h</Text>
-                      <Text style={[styles.presetSub, active && styles.presetSubActive]}>€{p.km.toFixed(2)}/km</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                      <TouchableOpacity
+                        style={[styles.cta, shortcutOpened && styles.ctaGhost]}
+                        onPress={openShortcut}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[styles.ctaTxt, shortcutOpened && styles.ctaGhostTxt]}>
+                          {shortcutOpened ? t('tutorial.iosInstall.ctaDone') : t('tutorial.iosInstall.cta')}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* LE VERT NE S'ALLUME QUE SUR SA PAROLE. Avant, il suffisait
+                          que le lien s'ouvre pour lire « Raccourci installé » — y
+                          compris quand le chauffeur avait annulé l'ajout. Le récap,
+                          deux slides plus loin, disait pourtant l'inverse. iOS ne
+                          nous a rien appris depuis : on demande, on n'invente pas. */}
+                      {shortcutOpened && !shortcutDeclared ? (
+                        <TouchableOpacity style={styles.cta} onPress={declareShortcut} activeOpacity={0.85}>
+                          <Text style={styles.ctaTxt}>{t('tutorial.iosInstall.confirmCta')}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+
+                      {shortcutDeclared ? (
+                        <View style={styles.confirmedRow}>
+                          <MaterialCommunityIcons name="check-circle" size={16} color={A} />
+                          <Text style={styles.confirmedTxt}>{t('tutorial.iosInstall.confirmed')}</Text>
+                        </View>
+                      ) : null}
+                    </LoopStep>
+
+                    {/* TROISIÈME RÉGLAGE, et non plus une simple ligne « à vérifier »
+                        dans le récapitulatif. Sans lui, le mode Conduite — que
+                        beaucoup de chauffeurs laissent actif en roulant — retient
+                        le verdict au moment précis où il sert. iOS n'expose aucune
+                        API pour le lire ni le poser : tout ce qu'on peut faire est
+                        de l'expliquer et d'ouvrir la bonne page. C'est déjà
+                        infiniment mieux que de l'apprendre en découvrant que rien
+                        ne s'affiche. */}
+                    <LoopStep
+                      n={3}
+                      isLast
+                      title={t('tutorial.iosInstall.urgentT')}
+                      sub={t('tutorial.iosInstall.urgentS')}
+                    >
+                      <TouchableOpacity
+                        style={styles.cta}
+                        onPress={() => openSettingsFor('notifications')}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.ctaTxt}>{t('tutorial.iosInstall.urgentCta')}</Text>
+                      </TouchableOpacity>
+                    </LoopStep>
+
+                  </>
+                ) : null}
               </View>
+            ) : null}
 
-              <Text style={styles.presetHint}>{t('tutorial.minimums.presetHint')}</Text>
-
-              <View style={styles.sliderBlock}>
-                <View style={styles.sliderHeader}>
-                  <Text style={styles.sliderLabel}>{t('tutorial.minimums.hourly')}</Text>
-                  <Text style={styles.sliderValue}>€{minHourly}/h</Text>
-                </View>
-                <Slider
-                  style={styles.slider}
-                  minimumValue={10} maximumValue={80} step={1}
-                  value={minHourly}
-                  onValueChange={v => { setMinHourly(v); setSelectedPreset(null); }}
-                  minimumTrackTintColor={colors.primary}
-                  maximumTrackTintColor="rgba(255,255,255,0.08)"
-                  thumbTintColor={colors.primary}
-                />
-                <Text style={styles.sliderHint}>{t('tutorial.minimums.hourlyHint')}</Text>
-              </View>
-
-              <View style={styles.sliderBlock}>
-                <View style={styles.sliderHeader}>
-                  <Text style={styles.sliderLabel}>{t('tutorial.minimums.kmRate')}</Text>
-                  <Text style={styles.sliderValue}>€{minKm.toFixed(2)}/km</Text>
-                </View>
-                <Slider
-                  style={styles.slider}
-                  minimumValue={0.3} maximumValue={4} step={0.05}
-                  value={minKm}
-                  onValueChange={v => { setMinKm(v); setSelectedPreset(null); }}
-                  minimumTrackTintColor={colors.primary}
-                  maximumTrackTintColor="rgba(255,255,255,0.08)"
-                  thumbTintColor={colors.primary}
-                />
-                <Text style={styles.sliderHint}>{t('tutorial.minimums.kmRateHint')}</Text>
-              </View>
-
-              <View style={styles.pickupRow}>
-                <Text style={styles.pickupLabel}>{t('tutorial.minimums.includePickup')}</Text>
-                <Switch
-                  value={includePickup}
-                  onValueChange={setIncludePickup}
-                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: colors.primary + '60' }}
-                  thumbColor={includePickup ? colors.primary : '#ccc'}
-                />
-              </View>
-            </Animated.View>
-          ) : null}
-
-          {/* Dernière slide = antisèche du premier scan, pas une célébration.
-              La coche verte, la puce « tout est prêt » et l'intertitre
-              « COMMENT ÇA MARCHE » ont été retirés : ils répétaient le titre
-              (« tout est prêt » y figurait trois fois) et repoussaient hors
-              écran la seule chose utile ici — les trois gestes. */}
-          {isDone ? (
-            <Animated.View style={[styles.doneBlock, { opacity }]}>
-              <View style={styles.qrCard}>
-                {(Platform.OS === 'android' ? [
-                  // La couleur porte le sens : les deux gestes restent neutres,
-                  // seul le verdict prend le vert brand — l'oeil tombe sur la
-                  // recompense. Conforme a la regle de palette en tete de fichier.
-                  { icon: 'line-scan', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step1', subKey: 'tutorial.quickRef.android.step1Sub' },
-                  { icon: 'gesture-tap', color: colors.textMuted, labelKey: 'tutorial.quickRef.android.step2', subKey: 'tutorial.quickRef.android.step2Sub' },
-                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.android.step3', subKey: 'tutorial.quickRef.android.step3Sub' },
-                ] : [
-                  { icon: 'cellphone-screenshot', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step1', subKey: 'tutorial.quickRef.ios.step1Sub' },
-                  { icon: 'gesture-tap-hold', color: colors.textMuted, labelKey: 'tutorial.quickRef.ios.step2', subKey: 'tutorial.quickRef.ios.step2Sub' },
-                  { icon: 'check-decagram', color: colors.primary, labelKey: 'tutorial.quickRef.ios.step3', subKey: 'tutorial.quickRef.ios.step3Sub' },
-                ]).map((step, i, arr) => (
-                  <View key={i} style={styles.qrStepRow}>
-                    <View style={styles.qrRail}>
-                      <View style={[styles.qrIcon, { backgroundColor: step.color + '18', borderColor: step.color + '40' }]}>
-                        <MaterialCommunityIcons name={step.icon as any} size={22} color={step.color} />
-                      </View>
-                      {i < arr.length - 1 && <View style={styles.qrConnector} />}
-                    </View>
-                    <View style={[styles.qrStepTexts, i === arr.length - 1 && { paddingBottom: 0 }]}>
-                      <View style={styles.qrStepTitleRow}>
-                        <Text style={[styles.qrStepNum, { color: step.color }]}>{i + 1}</Text>
-                        <Text style={styles.qrLabel}>{t(step.labelKey)}</Text>
-                      </View>
-                      <Text style={styles.qrSub}>{t(step.subKey)}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Animated.View>
-          ) : null}
-
-          {/* Slide iOS 3 — Choose Trigger (inspired by Trip Identifier) */}
-          {isIosTrigger ? (
-            <Animated.View style={[styles.iosTriggerBlock, { opacity }]}>
-              <View style={styles.iosTriggerContent}>
-                <View style={styles.videoPhoneFrame}>
+            {/* ── AssistiveTouch ────────────────────────────────────────── */}
+            {isTrigger ? (
+              <View style={styles.block}>
+                <View style={[styles.videoFrame, videoHeight != null && { height: videoHeight }]}>
                   <Video
                     ref={videoRef}
                     source={ASSISTIVE_VIDEO}
@@ -654,78 +573,251 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     playWhenInactive={false}
                     ignoreSilentSwitch="ignore"
                   />
-                  <TouchableOpacity
-                    style={styles.videoReplayBtn}
-                    onPress={restartVideo}
-                    activeOpacity={0.85}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('tutorial.restartVideo', 'Revoir la vidéo')}
-                  >
-                    <Feather name="rotate-ccw" size={13} color="#fff" />
-                    <Text style={styles.videoReplayTxt}>{t('tutorial.restartVideo', 'Revoir la vidéo')}</Text>
-                  </TouchableOpacity>
                 </View>
-                <Text style={styles.triggerHeroLabel}>{t(`tutorial.iosTrigger.${iosTrigger}.hero`)}</Text>
 
-                <View style={styles.triggerStepsList}>
-                  {[1, 2, 3, 4].map(n => {
-                    const titleKey = `tutorial.iosTrigger.${iosTrigger}.step${n}t`;
-                    const subKey = `tutorial.iosTrigger.${iosTrigger}.step${n}s`;
-                    const title = t(titleKey, { defaultValue: '' });
-                    if (!title) return null;
-                    return (
-                      <View key={n} style={styles.triggerStepRow}>
-                        <View style={[styles.triggerStepNum, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}>
-                          <Text style={[styles.triggerStepNumTxt, { color: item.color }]}>{n}</Text>
-                        </View>
-                        <View style={styles.triggerStepTexts}>
-                          <Text style={styles.triggerStepTitle}>{title}</Text>
-                          <Text style={styles.triggerStepSub}>{t(subKey)}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
+                {/* Tout ce qui suit la vidéo est mesuré d'un bloc : c'est ce qui
+                    doit tenir, et la vidéo prend le reste. */}
+                <View onLayout={e => setTriggerBelowH(e.nativeEvent.layout.height)}>
+                {/* Sous le cadre, et non par-dessus : la pastille flottante était
+                    plus large que la vidéo depuis qu'elle a pris le format d'un
+                    téléphone, et débordait des deux côtés. Un lien discret ne
+                    peut pas déborder, et ne cache pas la démonstration. */}
+                <TouchableOpacity
+                  style={styles.videoReplay}
+                  onPress={restartVideo}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('tutorial.restartVideo', 'Revoir la vidéo')}
+                >
+                  <Feather name="rotate-ccw" size={12} color={colors.textMuted} />
+                  <Text style={styles.videoReplayTxt}>{t('tutorial.restartVideo', 'Revoir la vidéo')}</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.title}>{t('tutorial.iosTrigger.assistive.hero')}</Text>
+
+                {[1, 2, 3, 4].map((n, i, arr) => {
+                  const title = t(`tutorial.iosTrigger.assistive.step${n}t`, { defaultValue: '' });
+                  if (!title) return null;
+                  return (
+                    <LoopStep
+                      key={n}
+                      n={n}
+                      isLast={i === arr.length - 1}
+                      title={title}
+                      sub={t(`tutorial.iosTrigger.assistive.step${n}s`)}
+                    />
+                  );
+                })}
+
+                <TouchableOpacity
+                  style={styles.cta}
+                  onPress={() => openSettingsFor('accessibility')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.ctaTxt}>{t('tutorial.iosTrigger.ctaSettings')}</Text>
+                </TouchableOpacity>
                 </View>
               </View>
+            ) : null}
 
-              <TouchableOpacity
-                style={[styles.iosBigCta, { backgroundColor: item.color }]}
-                onPress={triggerPrimaryAction}
-                activeOpacity={0.85}
-              >
-                <Feather name={iosTrigger === 'homeScreen' ? 'external-link' : 'settings'} size={17} color={colors.background} />
-                <Text style={styles.iosBigCtaTxt}>{triggerPrimaryLabel()}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          ) : null}
-        </Animated.View>
+            {/* ── Récapitulatif ─────────────────────────────────────────────
+                 POURQUOI TOUT N'EST PAS VERT. Une seule de ces quatre lignes est
+                 réellement vérifiable : les notifications. Le raccourci ne peut
+                 être que déclaré par le chauffeur, et il est affiché comme tel —
+                 « confirmé par vous », pas « prêt ». iOS n'expose AUCUNE API pour
+                 AssistiveTouch ni pour le niveau d'interruption : ces deux-là
+                 restent « à vérifier », avec le chemin pour le faire soi-même.
+                 Peindre un faux vert serait bien pire que d'admettre l'ignorance. */}
+            {isRecap ? (
+              <View style={styles.blockList}>
+                {RECAP_ROWS.map((row, index) => {
+                  // Trois natures. Les notifications sont réellement vérifiées
+                  // (permission + jeton). Le raccourci ne peut être que DÉCLARÉ
+                  // par le chauffeur à l'étape 2 — affiché « confirmé », jamais
+                  // « prêt ». La bulle AssistiveTouch n'expose aucune API et
+                  // reste « à vérifier ».
+                  const state = row.key === 'notif'
+                    ? (notifGranted ? 'ok' : 'todo')
+                    : row.key === 'shortcut' && shortcutDeclared
+                    ? 'declared'
+                    : 'unknown';
+                  const stateColor = state === 'ok' || state === 'declared'
+                    ? A
+                    : state === 'todo'
+                    ? '#FFB300'
+                    : colors.textDimmed;
+                  return (
+                    <TouchableOpacity
+                      key={row.key}
+                      style={[styles.recapRow, index < RECAP_ROWS.length - 1 && styles.recapRowDivided]}
+                      onPress={() => openRecapTarget(row.target)}
+                      activeOpacity={0.6}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t(`tutorial.recap.${row.key}T`)} — ${t(`tutorial.recap.state_${state}`)}`}
+                    >
+                      <MaterialCommunityIcons
+                        name={
+                          state === 'ok' ? 'check-circle'
+                          : state === 'declared' ? 'check-circle-outline'
+                          : state === 'todo' ? 'alert-circle'
+                          : 'help-circle'
+                        }
+                        size={21}
+                        color={stateColor}
+                      />
+                      <View style={styles.recapBody}>
+                        {/* Titre et état sur la même ligne, description et chemin
+                            EN DESSOUS et sur toute la largeur. Avant, la
+                            description partageait sa ligne avec l'étiquette
+                            d'état : sa largeur changeait donc d'une ligne à
+                            l'autre selon que l'état disait « À ACTIVER » ou
+                            « À VÉRIFIER », et les quatre paragraphes se
+                            coupaient chacun à un endroit différent. */}
+                        <View style={styles.recapHead}>
+                          <Text style={styles.recapTitle}>{t(`tutorial.recap.${row.key}T`)}</Text>
+                          <Text style={[styles.recapState, { color: stateColor }]}>
+                            {t(`tutorial.recap.state_${state}`)}
+                          </Text>
+                        </View>
+                        <Text style={styles.stepSub}>{t(`tutorial.recap.${row.key}S`)}</Text>
+                        {row.key === 'shortcut' ? (
+                          <View style={styles.shortcutChip}>
+                            {/* La vraie icône Raccourcis d'Apple. Elle porte déjà sa
+                                forme de carré arrondi et ses coins transparents : on
+                                ne lui impose ni rayon ni rognage, qui lui feraient
+                                deux arrondis concurrents. */}
+                            <Image
+                              source={require('../assets/shortcuts-icon.png')}
+                              style={styles.shortcutChipIcon}
+                            />
+                            <Text style={styles.shortcutChipTxt}>{SHORTCUT_NAME}</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.recapPath}>{t(`tutorial.recap.${row.key}Path`)}</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {/* ── Indiquez vos courses ──────────────────────────────────────
+                 Sans cette réponse, `rides.status` reste PENDING et l'Historique
+                 comme les Stats restent vides — le chauffeur en conclut que le
+                 calcul ne marche pas. */}
+            {isTag ? (
+              <View style={styles.blockList}>
+                {TAG_ROWS.map((row, index) => (
+                  <View
+                    key={row.key}
+                    style={[styles.recapRow, index < TAG_ROWS.length - 1 && styles.recapRowDivided]}
+                  >
+                    {/* Neutres : ces icônes classent des façons de faire, elles ne
+                        signalent ni une action à mener ni une réussite. Le vert
+                        reste réservé à ces deux-là. */}
+                    <MaterialCommunityIcons name={row.icon as any} size={21} color={colors.textMain} />
+                    <View style={styles.recapBody}>
+                      <Text style={styles.recapTitle}>{t(`tutorial.tag.${row.key}T`)}</Text>
+                      <Text style={styles.stepSub}>
+                        {row.key === 'notif'
+                          ? t(IS_IOS ? 'tutorial.tag.notifS_ios' : 'tutorial.tag.notifS_android')
+                          : t(`tutorial.tag.${row.key}S`)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {/* ── Antisèche ─────────────────────────────────────────────────
+                 Quatre gestes et non trois : le quatrième — répondre prise ou
+                 refusée — est celui qu'on oublie, et le seul qui remplisse les
+                 statistiques. C'est le dernier écran qu'on regarde avant de
+                 rouler ; s'il n'y figure pas, il n'existe pas. */}
+            {isDone ? (
+              <View style={styles.block}>
+                {QUICKREF_STEPS.map((n, i) => {
+                  const os = IS_IOS ? 'ios' : 'android';
+                  return (
+                    <LoopStep
+                      key={n}
+                      n={n}
+                      isLast={i === QUICKREF_STEPS.length - 1}
+                      title={t(`tutorial.quickRef.${os}.step${n}`)}
+                      sub={t(`tutorial.quickRef.${os}.step${n}Sub`)}
+                    >
+
+                        {n === 3 ? (
+                          <View
+                            style={[
+                              styles.verdictSlot,
+                              previewH > 0 && { height: previewH * PREVIEW_SCALE },
+                            ]}
+                          >
+                            {/* En position absolue : sa hauteur mesurée reste sa
+                                hauteur naturelle, que la fente ait déjà été
+                                dimensionnée ou non. Sans ça, mesure et hauteur
+                                imposée se poursuivraient l'une l'autre. */}
+                            <View
+                              style={styles.verdictScaler}
+                              onLayout={e => setPreviewH(e.nativeEvent.layout.height)}
+                            >
+                              <ScanPreview />
+                            </View>
+                          </View>
+                        ) : null}
+                    </LoopStep>
+                  );
+                })}
+              </View>
+            ) : null}
+          </Animated.View>
         </ScrollView>
       </View>
     );
   };
 
-  // Progress bar width animation
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, STEPS.length - 1],
-    outputRange: ['0%', '100%'],
+    outputRange: [`${Math.round(100 / STEPS.length)}%`, '100%'],
     extrapolate: 'clamp',
   });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
-      {/* Header */}
+      {/* Chevron · progression · Passer — la barre de l'onboarding, à
+          l'identique, avec « Passer » en plus. Le retour compte ici :
+          l'installation renvoie le chauffeur dans les Réglages, et il doit
+          pouvoir relire l'étape d'avant sans deviner qu'un swipe existe. */}
       <View style={styles.header}>
-        <View style={styles.progressBarTrack}>
-          <Animated.View style={[styles.progressBarFill, { width: progressWidth as any }]} />
+        {currentIndex > 0 ? (
+          <TouchableOpacity
+            onPress={() => goToIndex(currentIndex - 1)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back', 'Retour')}
+          >
+            <Feather name="chevron-left" size={24} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerBackSpacer} />
+        )}
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progressWidth as any }]} />
         </View>
-        <TouchableOpacity onPress={() => { savePreferences(); closeTutorial(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel={t('tutorial.skip')}>
-          <Text style={styles.skipText}>{t('tutorial.skip')}</Text>
+        <TouchableOpacity
+          onPress={closeTutorial}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('tutorial.skip')}
+        >
+          <Text style={styles.skip}>{t('tutorial.skip')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Slides — swipe enabled */}
       <Animated.FlatList
         ref={flatListRef}
         data={STEPS}
@@ -733,7 +825,6 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
         keyExtractor={item => item.key}
         horizontal
         pagingEnabled
-        scrollEnabled={true}
         showsHorizontalScrollIndicator={false}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
@@ -743,784 +834,366 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
         viewabilityConfig={viewabilityConfig}
       />
 
-      {/* Footer */}
+      {/* Pilule pleine largeur, entièrement arrondie, un seul mot : celle de
+          l'onboarding. Plus de dégradé ni de flèche dans un rond. */}
       <View style={styles.footer}>
-        {/* Progress dots */}
-        <View style={styles.dotsRow}>
-          {STEPS.map((step, i) => {
-            const isActive = i === currentIndex;
-            const isPast = i < currentIndex;
-            return (
-              <TouchableOpacity key={i} onPress={() => goToIndex(i)} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
-                <Animated.View
-                  style={[
-                    styles.dot,
-                    isPast && { backgroundColor: STEPS[currentIndex].color + '50' },
-                    isActive && [styles.dotActive, { backgroundColor: STEPS[currentIndex].color }],
-                  ]}
-                />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Step counter */}
-        <Text style={styles.stepCounter}>
-          {currentIndex + 1} / {STEPS.length}
-        </Text>
-
-        {/* Navigation button */}
         <TouchableOpacity
-          style={styles.nextBtn}
+          style={styles.footerCta}
           onPress={handleNext}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={isLast ? t('tutorial.start') : t('tutorial.next')}
         >
-          <SafeGradient
-            colors={isLast ? [colors.primary, '#00C864'] : [colors.surface, colors.surfaceLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.nextBtnGradient}
-          >
-            <Text style={[styles.nextBtnText, isLast && styles.nextBtnTextFinal]}>
-              {isLast ? t('tutorial.start') : t('tutorial.next')}
-            </Text>
-            <View style={[styles.nextBtnIcon, isLast && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Feather
-                name={isLast ? 'check' : 'arrow-right'}
-                size={16}
-                color={isLast ? '#fff' : colors.textMuted}
-              />
-            </View>
-          </SafeGradient>
+          <Text style={styles.footerCtaTxt}>
+            {isLast ? t('tutorial.start') : t('tutorial.next')}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
+const PAD = 26;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
+  // ── En-tête ────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 14,
   },
-  progressBarTrack: {
+  // Réserve la place du chevron sur la première slide : sans elle, la barre
+  // sauterait de 24 px au passage à la deuxième.
+  headerBackSpacer: { width: 24 },
+  // Épaisse et pleinement arrondie, comme celle de l'onboarding : c'est la même
+  // progression, elle doit avoir la même forme.
+  progressTrack: {
     flex: 1,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 2,
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 2,
+    backgroundColor: A,
+    borderRadius: 4,
   },
-  skipText: {
+  skip: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: 0.3,
   },
 
+  // ── Diapositive ────────────────────────────────────────────────────────────
   flatList: { flex: 1 },
-
   slide: { width, flex: 1 },
   slideScroll: { flex: 1, width: '100%' },
   slideContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingTop: 12,
-    paddingBottom: 40,
+    // `flex-start` et non `center` : un mode d'emploi commence en haut à gauche
+    // et descend. Le centrage vertical faisait flotter les slides courtes et
+    // rognait les longues.
+    justifyContent: 'flex-start',
+    paddingHorizontal: PAD,
+    // Constantes partagées avec `computeVideoHeight` : ce sont les marges que la
+    // mesure de la fenêtre ne couvre pas.
+    paddingTop: SLIDE_PAD_TOP,
+    paddingBottom: SLIDE_PAD_BOTTOM,
   },
+  slideContentCentered: { justifyContent: 'center', paddingBottom: 64 },
+  /// PAGE DE GARDE UNIQUEMENT. L'alignement à gauche est la règle du reste de
+  /// l'écran, parce qu'on y exécute des consignes en les lisant. « Bienvenue »
+  /// n'en est pas une : ni étape, ni chemin, ni bouton à trouver — juste un nom
+  /// et une promesse. Une couverture se compose sur un axe, et c'est aussi ce
+  /// que fait l'écran de bienvenue de la référence.
+  slideContentAxis: { alignItems: 'center' },
+  centerSelf: { alignSelf: 'center' },
 
-  glowCircle: {
-    position: 'absolute',
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    top: height * 0.04,
-    backgroundColor: colors.primary + '07',
-  },
-
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  iconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  iconLogoImg: {
-    width: 96,
-    height: 96,
-    borderRadius: 26,
-  },
-
-  stepBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  stepBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-
-  stepTitle: {
-    color: colors.textMain,
-    fontSize: 28,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginBottom: 14,
-    letterSpacing: -0.5,
-    lineHeight: 34,
-  },
-  stepTitleCompact: {
-    fontSize: 22,
-    lineHeight: 28,
-    marginBottom: 8,
-  },
-  stepDesc: {
-    color: colors.textMuted,
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 300,
-  },
-  stepDescCompact: {
-    fontSize: 13,
-    lineHeight: 19,
-    maxWidth: 320,
-    marginBottom: 4,
-  },
-  iconCompact: {
+  iconLogo: {
     width: 60,
     height: 60,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 24,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxWidth: 300,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  tipIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tipText: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  // ── iOS slides — common ──
-  iosInstallBlock: {
-    width: '100%',
-    marginTop: 18,
-    alignItems: 'stretch',
-  },
-  iosTriggerBlock: {
-    width: '100%',
-    marginTop: 10,
-    alignItems: 'stretch',
-  },
-  iosPreviewBlock: {
-    width: '100%',
-    marginTop: 14,
-    alignItems: 'stretch',
-  },
-
-  recapRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  recapTexts: { flex: 1 },
-  recapState: {
-    color: colors.textDimmed,
-    fontSize: 13, fontWeight: '700',
-    marginTop: 2,
-  },
-  setupStep: { marginBottom: 24 },
-  stepCta: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 9, marginTop: 12,
-    paddingVertical: 14, borderRadius: 14,
-  },
-  iosBigCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    height: 52,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  iosBigCtaTxt: {
-    color: colors.background,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  iosSecondaryCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    marginTop: 4,
-  },
-  iosSecondaryTxt: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  // (old step styles removed — now using triggerStep* pattern)
-
-  // ── Install hero card ──
-  iosHeroCard: {
-    height: 96,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 17,
     marginBottom: 22,
   },
-  iosHeroIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
-  // ── Trigger : iOS segmented control ──
-  iosSegmented: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 18,
-  },
-  iosSegment: {
-    flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iosSegmentActive: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  iosSegmentTxt: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  iosSegmentTxtActive: {
+  title: {
     color: colors.textMain,
-    fontWeight: '700',
-  },
-
-  // ── Trigger hero illustrative card ──
-  iosTriggerHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.025)',
-    marginBottom: 20,
-  },
-  iosTriggerHeroIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iosTriggerHeroTxt: {
-    flex: 1,
-    color: colors.textMain,
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-
-  // ── Preview : Lock screen frame + Live Activity mock (match Swift) ──
-  iosLockFrame: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  iosLockTime: {
-    color: 'rgba(255,255,255,0.32)',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    marginBottom: 12,
-  },
-  // Mock 1:1 du SwiftUI StriveLiveActivity.LockScreenView
-  iosPreviewHint: {
-    color: colors.textDimmed,
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 17,
-  },
-
-  // Preview verdict + hint
-
-  // Minimums presets
-  presetRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  presetCard: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    alignItems: 'center',
-  },
-  presetCardActive: {
-    backgroundColor: colors.primary + '1A',
-    borderColor: colors.primary + '66',
-  },
-  presetName: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  presetNameActive: { color: colors.primary },
-  presetValue: {
-    color: colors.textMain,
-    fontSize: 15,
+    fontSize: 32,
     fontWeight: '900',
+    letterSpacing: -0.9,
+    lineHeight: 37,
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  presetValueActive: { color: colors.primary },
-  presetSub: {
+  desc: {
+    color: colors.textMuted,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  tip: {
     color: colors.textDimmed,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 18,
+    textAlign: 'center',
+  },
+
+  block: { marginTop: 32 },
+  /// Les rangées portent leur propre `paddingVertical` : sans ce retrait, le
+  /// premier filet tomberait trop bas et la liste paraîtrait décrochée du titre.
+  blockList: { marginTop: 16 },
+
+  // ── Étape numérotée ────────────────────────────────────────────────────────
+  // Vert plein, chiffre sombre. Le gris moyen d'un premier essai les faisait
+  // fondre dans le fond, le blanc les rendait crus ; l'accent de marque tient
+  // les deux bouts. Ce qui garde la page lisible malgré la répétition, c'est que
+  // le bouton du pied de page s'efface sur les diapositives qui portent déjà
+  // leur propre action (cf. `slideHasOwnCta`) — sans ça, on retomberait sur les
+  // aplats d'accent qui se concurrencent.
+  stepNum: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: A,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 2,
   },
-  presetSubActive: { color: colors.primary + 'AA' },
-  presetHint: {
-    color: colors.textDimmed,
-    fontSize: 11,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-
-  // Sliders
-  sliderBlock: {
-    marginBottom: 14,
-  },
-  sliderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  sliderLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  sliderValue: {
-    color: colors.textMain,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  slider: {
-    width: '100%',
-    height: 36,
-  },
-  sliderHint: {
-    color: colors.textDimmed,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: -2,
-  },
-
-  // Pickup toggle
-  pickupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  pickupLabel: {
-    color: colors.textMain,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-  },
-
-  // Trigger content
-  iosTriggerContent: {
-    alignItems: 'center',
-  },
-  triggerRecommended: {
-    color: '#FFB300',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 14,
-    letterSpacing: 0.3,
-  },
-  // Démo AssistiveTouch — cadre "téléphone" portrait autour de la vidéo.
-  // Compact (124 pt) pour que vidéo + 4 étapes + CTA tiennent sans rognage.
-  videoPhoneFrame: {
-    // Hauteur proportionnelle à l'écran (largeur déduite par l'aspectRatio) :
-    // en dur à 124 × 248, la vidéo + les 4 étapes + le CTA dépassaient la slide
-    // sur les petits écrans et le bouton sortait du cadre. Plafonné pour ne pas
-    // devenir énorme sur les grands modèles.
-    height: Math.min(226, height * 0.26),
-    aspectRatio: 9 / 18,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.14)',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  videoPlayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  videoReplayBtn: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  videoReplayTxt: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  triggerHeroLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  triggerStepsList: {
-    width: '100%',
-    gap: 8,
-    marginBottom: 12,
-  },
-  triggerStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  triggerStepNum: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  triggerStepNumTxt: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  triggerStepTexts: {
-    flex: 1,
-    gap: 1,
-  },
-  triggerStepTitle: {
-    color: colors.textMain,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  triggerStepSub: {
-    color: colors.textDimmed,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Done step
-  doneBlock: {
-    width: width - 48,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  doneSubtitle: {
-    color: colors.textDimmed,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-
-  // Install shortcut — single-line steps in a card
-  installStepsCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    padding: 16,
-    gap: 16,
-    marginBottom: 16,
-  },
-  installStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  installStepNum: {
-    width: 30,
-    height: 30,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  installStepNumTxt: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  installStepTxt: {
-    flex: 1,
-    color: colors.textMain,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  installWarning: {
-    color: '#FFB300',
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-
-  // Quick Reference — horizontal card (done step)
-  qrCard: {
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    // Respire un peu plus depuis la suppression de l'intertitre.
-    paddingVertical: 26,
-    paddingHorizontal: 20,
-  },
-  qrStepRow: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  qrRail: {
-    alignItems: 'center',
-    width: 44,
-  },
-  qrIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  qrConnector: {
-    flex: 1,
-    width: 2,
-    minHeight: 14,
-    marginVertical: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 1,
-  },
-  qrStepTexts: {
-    flex: 1,
-    paddingTop: 3,
-    paddingBottom: 16,
-  },
-  qrStepTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 3,
-  },
-  qrStepNum: {
+  stepNumTxt: {
+    color: colors.background,
     fontSize: 13,
     fontWeight: '900',
   },
-  qrLabel: {
+  stepSub: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 3,
+  },
+
+  // ── Antisèche : la boucle du quotidien ─────────────────────────────────────
+  loopRow: { flexDirection: 'row', gap: 14 },
+  loopRail: { alignItems: 'center', width: 26 },
+  /// `flex: 1` : le trait prend exactement la hauteur du texte de son étape, donc
+  /// il touche toujours la pastille suivante, quel que soit le nombre de lignes.
+  loopConnector: {
+    flex: 1,
+    width: 2,
+    minHeight: 12,
+    marginVertical: 6,
+    borderRadius: 1,
+    backgroundColor: HAIRLINE,
+  },
+  loopTexts: { flex: 1, paddingBottom: 20 },
+  loopTextsLast: { paddingBottom: 0 },
+  /// Un cran au-dessus des étapes d'installation : c'est le dernier écran qu'on
+  /// regarde avant de rouler, et le seul qu'on relira au volant.
+  loopTitle: {
     color: colors.textMain,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 23,
+  },
+
+  /// La fente où vit la démonstration. Aucun cadre à elle : `ScanPreview` porte
+  /// déjà le sien (l'îlot dynamique), en ajouter un ferait une carte dans une
+  /// carte. Léger retrait à droite pour qu'elle ne file pas jusqu'au bord.
+  verdictSlot: {
+    marginTop: 14,
+    marginBottom: 4,
+    paddingRight: 4,
+  },
+  verdictScaler: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    transform: [{ scale: PREVIEW_SCALE }],
+    transformOrigin: 'top left',
+  },
+
+  // ── Boutons ────────────────────────────────────────────────────────────────
+  // Même pilule que l'onboarding : pleine largeur, entièrement arrondie, un
+  // libellé centré, aucune icône.
+  cta: {
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: A,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // 6 px collaient le bouton à la phrase qui l'explique : on lisait un bloc
+    // compact au lieu d'une consigne suivie de son action.
+    marginTop: 14,
+  },
+  ctaTxt: {
+    color: colors.background,
     fontSize: 16,
     fontWeight: '800',
   },
-  qrSub: {
-    // textMuted plutot que textDimmed : cette antiseche se lit d'un coup d'oeil,
-    // souvent au volant. On prend le contraste le plus haut des deux gris.
+  /** Action accomplie et vérifiée : plus rien à faire, le bouton s'éteint. */
+  ctaDone: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: A + '55',
+  },
+  ctaDoneTxt: { color: A },
+  /** Action déjà lancée mais non confirmée : reste disponible, sans insister. */
+  ctaGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  ctaGhostTxt: { color: colors.textMuted },
+
+  confirmedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  confirmedTxt: {
+    color: A,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // ── Récapitulatif et façons de taguer ──────────────────────────────────────
+  recapRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 13,
+    paddingVertical: 14,
+  },
+  // Filets entre les rangées : quatre paragraphes séparés par du vide flottaient
+  // sans structure. Avec eux, ça se lit comme la liste de contrôle que c'est.
+  recapRowDivided: {
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+  },
+  recapBody: { flex: 1 },
+  recapHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  recapTitle: {
+    flex: 1,
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  recapState: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  /// La vignette du raccourci, telle qu'elle apparaît dans l'app Raccourcis.
+  /// Le chemin en texte dit où aller ; celle-ci montre CE QU'ON Y CHERCHE — et
+  /// c'est plus utile, parce que le doute du chauffeur n'est pas « où est ma
+  /// liste » mais « est-ce que le mien y est ». Reprise de RideIQ, qui pose le
+  /// même objet à l'écran.
+  ///
+  /// Le carré coloré évoque l'icône Raccourcis d'Apple sans la copier : on ne
+  /// distribue pas l'asset d'un tiers dans un bundle.
+  shortcutChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 10,
+    marginTop: 10,
+    paddingLeft: 8,
+    paddingRight: 16,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  shortcutChipIcon: {
+    width: 30,
+    height: 30,
+  },
+  shortcutChipTxt: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  /// Le chemin exact dans les Réglages. Traitement à part — plus petit, plus
+  /// sourd — parce qu'on ne le LIT pas : on le suit du doigt, écran en main.
+  recapPath: {
+    color: colors.textDimmed,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+
+  // ── Vidéo AssistiveTouch ───────────────────────────────────────────────────
+  // La capture est un écran d'iPhone en portrait. Dans un cadre pleine largeur,
+  // `contain` la posait au milieu de deux grosses bandes noires — on voyait une
+  // boîte noire avant de voir la démonstration. Le cadre prend donc le format de
+  // ce qu'il montre, et se centre.
+  // Hauteur d'abord, largeur déduite du format : à 56 % de large la démo faisait
+  // 55 % de la page et rejetait sous la ligne de flottaison les étapes 3 et 4
+  // ET le bouton « Ouvrir les Réglages », qui est l'action de la diapositive.
+  // Elle illustre le geste, elle ne le remplace pas.
+  // Hauteur posée par `computeVideoHeight` ; celle-ci n'est que le repli du tout
+  // premier rendu, avant que `onLayout` n'ait mesuré quoi que ce soit. La largeur
+  // se déduit du format — la capture est un écran d'iPhone en portrait, et dans
+  // un cadre pleine largeur `contain` la posait entre deux bandes noires.
+  videoFrame: {
+    height: height * 0.28,
+    aspectRatio: 9 / 19.5,
+    alignSelf: 'center',
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    marginBottom: VIDEO_GAP,
+  },
+  videoPlayer: { width: '100%', height: '100%' },
+  videoReplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    marginTop: -10,
+    marginBottom: 20,
+  },
+  videoReplayTxt: {
     color: colors.textMuted,
     fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-
-  footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    gap: 16,
-    alignItems: 'center',
-  },
-
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  dotActive: {
-    width: 28,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  stepCounter: {
-    color: colors.textDimmed,
-    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
 
-  nextBtn: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+  // ── Pied de page ───────────────────────────────────────────────────────────
+  footer: {
+    paddingHorizontal: PAD,
+    paddingBottom: 20,
+    paddingTop: 8,
   },
-  nextBtnGradient: {
-    flexDirection: 'row',
+  // MEMES MESURES que `cta`, la pilule des étapes : hauteur, rayon, taille de
+  // texte. Deux boutons de tailles différentes empilés dans la même colonne se
+  // lisaient comme deux composants sans rapport.
+  footerCta: {
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: A,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 58,
-    gap: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
-  nextBtnText: {
-    color: colors.textMain,
+  footerCtaTxt: {
+    color: colors.background,
     fontSize: 16,
     fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  nextBtnTextFinal: {
-    color: '#fff',
-  },
-  nextBtnIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });
 

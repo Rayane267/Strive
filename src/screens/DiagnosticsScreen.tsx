@@ -120,6 +120,9 @@ const DiagnosticsScreen = () => {
       '@strive_has_seen_tutorial',
       // Le paywall de fin de cadeau ne se montre aussi qu'une fois.
       '@strive_welcome_paywall_seen',
+      // Déclaration « j'ai ajouté le raccourci » du tutoriel iOS : sans elle,
+      // le rejeu repartirait avec la slide Installation déjà cochée en vert.
+      '@strive_shortcut_declared',
     ]);
     Alert.alert(t('diagnostics.replayOnboarding'), t('diagnostics.replayDone'));
   }, [t]);

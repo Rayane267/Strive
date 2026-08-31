@@ -513,15 +513,15 @@
     "openAccessibility": "Open Accessibility",
     "step1": {
       "title": "Welcome to Strive",
-      "desc": "Maximize your earnings as a VTC driver. Strive analyzes every offer so you never accept an unprofitable ride."
+      "desc": "Never accept a ride blind again. We show you what it actually pays — real €/h and €/km, traffic included."
     },
     "step2": {
       "title": "Set up the scanner",
-      "desc": "Grant the accessibility and overlay permissions. A floating bubble will appear on top of your VTC app, ready to analyze offers."
+      "desc": "Allow notifications below. Accessibility and display-over-other-apps will be requested the first time you start the scanner."
     },
     "step2_ios": {
-      "title": "Install the shortcut",
-      "desc": "One tap to add the \"Analyze a ride\" shortcut to your Shortcuts app. Pre-configured and ready to use."
+      "title": "Three settings, once and for all",
+      "desc": ""
     },
     "iosPreview": {
       "title": "See It In Action",
@@ -542,19 +542,6 @@
       "hintAverage": "Good €/km but the €/h doesn't follow — your call",
       "hintBad": "€/h too low, long distance — skip this one"
     },
-    "minimums": {
-      "title": "Set Your Minimums",
-      "desc": "Rides below these rates will be marked SKIP.",
-      "hourly": "Minimum €/hr",
-      "kmRate": "Minimum €/km",
-      "includePickup": "Include pickup in calculations",
-      "casual": "Beginner",
-      "standard": "Standard",
-      "premium": "Demanding",
-      "presetHint": "Tap a preset or customize below",
-      "hourlyHint": "Net hourly earnings. Most VTC drivers aim for €25-35/hr.",
-      "kmRateHint": "Covers fuel + wear. The tax rate is ~€0.60/km; aim for €1.10-1.70/km."
-    },
     "quickRef": {
       "ios": {
         "step1": "Capture the offer",
@@ -562,7 +549,9 @@
         "step2": "Press AssistiveTouch",
         "step2Sub": "Without leaving the app",
         "step3": "Read the verdict",
-        "step3Sub": "Real €/h and €/km, traffic included"
+        "step3Sub": "Real €/h and €/km, traffic included",
+        "step4": "Mark the ride",
+        "step4Sub": "Taken or declined — that's what fills your stats"
       },
       "android": {
         "step1": "Turn on the scanner",
@@ -570,22 +559,26 @@
         "step2": "Tap the bubble",
         "step2Sub": "When the offer appears",
         "step3": "Read the verdict",
-        "step3Sub": "Real €/h and €/km, traffic included"
+        "step3Sub": "Real €/h and €/km, traffic included",
+        "step4": "Mark the ride",
+        "step4Sub": "Taken or declined — that's what fills your stats"
       }
     },
     "iosInstall": {
-      "step1t": "Tap \"Get Shortcut\" below",
-      "step2t": "Tap \"Add Shortcut\" in the Shortcuts app",
-      "step3t": "Come back here and tap Continue",
       "cta": "Get Shortcut",
-      "warning": "You need to install the shortcut first.",
-      "ctaDone": "Shortcut installed — reopen",
+      "ctaDone": "Open again",
       "notifT": "Notifications",
-      "notifS": "Allow them: that's how the verdict reaches you when the card couldn't show it. Without this, a successful scan can show you nothing.",
+      "notifS": "Without them, a scan can succeed and you'd never see it.",
       "notifCta": "Enable notifications",
       "notifDone": "Notifications enabled",
       "shortcutT": "The shortcut",
-      "shortcutS": "It takes the screenshot and runs the analysis on its own. Already pre-configured — you just add it."
+      "shortcutS": "It does everything: the screenshot, the analysis, the verdict. Already set up — just add it.",
+      "notifS_android": "That's how the verdict reaches you, with the Taken and Declined buttons. Without it, a successful scan may show you nothing.",
+      "confirmCta": "I added it",
+      "confirmed": "You confirmed you added it",
+      "urgentT": "Time-sensitive alerts",
+      "urgentS": "Driving Focus hides everything except what's marked urgent. Your verdict needs to be.",
+      "urgentCta": "Open notification settings"
     },
     "step3": {
       "title": "Accept or decline instantly",
@@ -629,25 +622,17 @@
       "ctaSettings": "Open Settings",
       "doneCta": "I've set it up"
     },
-    "laTip": {
-      "title": "Don't dismiss the notification",
-      "desc": "The scan result appears in the Dynamic Island at the top of your screen. If you dismiss the notification on the Lock Screen, the result disappears too."
-    },
-    "tagRides": {
-      "title": "Mark your rides",
-      "desc": "For accurate earnings and €/h, tell Strive whether you took or declined each ride — otherwise your stats stay empty.\n\n• Dynamic Island: tap ✅ Taken or ❌ Declined on the card\n• Hands-free: say \"Hey Siri, Strive ride taken\" (or \"ride declined\")\n• No Dynamic Island: pull the notification down to reveal the buttons"
-    },
     "step4": {
       "title": "Track your performance",
       "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms."
     },
     "step5": {
       "title": "Your first scan",
-      "desc": "Three gestures, two seconds — and you'll know if the ride is worth it before accepting."
+      "desc": "Three gestures to know if a ride is worth it. A fourth so your stats know it too."
     },
     "step5_ios": {
       "title": "Your first scan",
-      "desc": "Three gestures, two seconds — and you'll know if the ride is worth it before accepting."
+      "desc": "Three gestures to know if a ride is worth it. A fourth so your stats know it too."
     },
     "tips": {
       "step1": "Strive works with Uber, Bolt and Heetch. More platforms are coming soon.",
@@ -655,8 +640,6 @@
       "step2_ios": "You can also assign the shortcut to the Action Button (iPhone 15 Pro+) or to AssistiveTouch.",
       "step3": "Pro tip: tap the bubble when an offer appears on your VTC app. No need to switch apps.",
       "step3_ios": "Pro tip: Back Tap works through a thin case. No need to switch apps.",
-      "laTip": "The result stays visible for 10 seconds then disappears automatically.",
-      "tagRides": "The Siri voice command is the safest while driving — no need to touch your phone.",
       "step4": "The Analytics tab shows daily earnings, platform breakdown and your real-time hourly rate.",
       "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
       "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
@@ -664,23 +647,38 @@
     "restartVideo": "Replay video",
     "recap": {
       "title": "Your setup",
-      "desc": "What Strive can verify, and what only you can confirm.",
+      "desc": "Tap a row to jump to that setting.",
       "notifT": "Notifications",
       "notifS": "That's how the verdict reaches you when the card couldn't show it.",
-      "shortcutT": "The shortcut",
-      "shortcutS": "iOS gives no way to check it exists. Open the Shortcuts app to see it.",
       "bubbleT": "AssistiveTouch bubble",
-      "bubbleS": "It is what you tap to analyse an offer. Settings › Accessibility › Touch › AssistiveTouch.",
+      "bubbleS": "It is what you tap to analyse an offer.",
       "urgentT": "Time-sensitive alerts",
-      "urgentS": "Without them, Driving Focus or Do Not Disturb hides the verdict.",
+      "urgentS": "Driving Focus hides the verdict without them.",
       "state_ok": "Ready",
       "state_todo": "To enable",
       "state_unknown": "To check",
-      "openSettings": "Open Settings"
+      "state_declared": "Confirmed",
+      "notifPath": "Settings › Notifications › Strive",
+      "bubblePath": "Settings › Accessibility › Touch › AssistiveTouch",
+      "urgentPath": "Settings › Notifications › Strive › Time Sensitive",
+      "shortcutT": "The shortcut",
+      "shortcutS": "Tap to open Shortcuts and check it's there.",
+      "shortcutPath": "Shortcuts › My Shortcuts › Analyse a ride"
     },
     "notifStep": {
       "title": "Allow notifications",
       "desc": "That's how the verdict reaches you when the card couldn't show it. Without this, a successful scan can show you nothing."
+    },
+    "tag": {
+      "title": "Mark your rides",
+      "desc": "Taken or declined: without that answer, Strive cannot compute your real earnings — your stats stay empty.",
+      "diT": "On the verdict card",
+      "diS": "Tap Taken or Declined right in the Dynamic Island.",
+      "notifT": "From the notification",
+      "notifS_ios": "No Dynamic Island? Pull the notification down and both buttons appear.",
+      "notifS_android": "The Taken and Declined buttons sit right on the result notification.",
+      "historyT": "Or later, in History",
+      "historyS": "Unanswered rides stay flagged \"Pending\" there until you decide."
     }
   },
   "help": {

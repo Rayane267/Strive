@@ -32,6 +32,7 @@ import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { registerPushToken, unregisterPushToken, getNotificationStatus } from '../services/notificationService';
+import { openSettingsFor } from '../utils/appSettings';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
@@ -190,7 +191,7 @@ const ProfileScreen = () => {
             t('preferences.pushDeniedBody'),
             [
               { text: t('common.cancel'), style: 'cancel' },
-              { text: t('preferences.openSettings'), onPress: () => Linking.openSettings() },
+              { text: t('preferences.openSettings'), onPress: () => openSettingsFor('notifications') },
             ],
           );
         }
@@ -1102,6 +1103,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,77,77,0.18)',
     overflow: 'hidden',
+    // Dernier bloc de la page, et le seul à porter une bordure : les 16 px du
+    // `paddingBottom` du ScrollView (la convention partagée avec Accueil,
+    // Historique, Stats et Boutique) laissaient son trait rouge à ras de la
+    // barre d'onglets. Le pied de page portait autrefois le numéro de version,
+    // qui faisait tampon ; il a été retiré, pas remplacé. 22 px = le rythme des
+    // sections (`marginTop: 22`), pour que le bas respire comme le reste.
+    marginBottom: 22,
   },
   menuRow: {
     flexDirection: 'row',

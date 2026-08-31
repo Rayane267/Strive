@@ -556,6 +556,29 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Ouvre les réglages de notification DE L'APP, et pas sa fiche générale.
+  ///
+  /// `openNotificationSettingsURLString` est publique depuis iOS 15.4 : c'est la
+  /// SEULE cible fine des Réglages qu'Apple autorise. `App-prefs:`, qui mènerait
+  /// partout ailleurs, est un schéma privé — sans effet sur les iOS récents et
+  /// motif de rejet en revue (règle 2.5.1).
+  ///
+  /// En deçà de 15.4, repli sur `openSettingsURLString` : c'est exactement le
+  /// comportement d'avant, donc jamais une régression.
+  @objc func openNotificationSettings() {
+    DispatchQueue.main.async {
+      var target: URL?
+      if #available(iOS 15.4, *) {
+        target = URL(string: UIApplication.openNotificationSettingsURLString)
+      }
+      if target == nil {
+        target = URL(string: UIApplication.openSettingsURLString)
+      }
+      guard let url = target else { return }
+      UIApplication.shared.open(url)
+    }
+  }
+
   @objc func setParserConfig(_ configJson: String) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(configJson, forKey: "parserConfig")

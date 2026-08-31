@@ -11,6 +11,8 @@ import { colors } from '../theme/colors';
 import { scannerService } from '../services/scanner';
 import type { PermissionsStatus } from '../services/scanner/types';
 
+import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
+
 const IS_IOS = Platform.OS === 'ios';
 
 // Android < 11 (API 30) a besoin d'une permission MediaProjection supplémentaire
@@ -78,22 +80,23 @@ const ScannerPermissionScreen = () => {
     // Sinon, fallback sur l'app Raccourcis vide où l'utilisateur compose le sien.
     const PREBUILT_SHORTCUT_URL: string | null = null; // ex: 'https://www.icloud.com/shortcuts/<id>'
 
-    const openShortcutsApp = () => {
+    const openShortcuts = () => {
       if (PREBUILT_SHORTCUT_URL) {
-        Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => Linking.openURL('shortcuts://'));
+        Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => openShortcutsApp());
         return;
       }
-      Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
+      openShortcutsApp();
     };
 
     const openIosAccessibility = () => {
-      // Drill direct vers Réglages → Accessibilité → Toucher → Toucher l'arrière.
-      // Le schéma `App-prefs:` avec `&path=` fonctionne iOS 14+ ; cascade de
-      // fallbacks si une version d'iOS rejette la route profonde.
-      Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH/BackTap')
-        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH'))
-        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY'))
-        .catch(() => Linking.openSettings());
+      // `App-prefs:ACCESSIBILITY&path=TOUCH/BackTap` visait juste, mais c'est un
+      // schéma d'URL PRIVÉ : sans effet sur les iOS récents — la cascade de
+      // `.catch` ne rattrapait rien, `openURL` résout sur un schéma inconnu — et
+      // motif de rejet en revue (règle 2.5.1). Le tutoriel l'avait déjà retiré ;
+      // cet écran gardait la vieille route, si bien que deux écrans de la même
+      // app promettaient deux destinations différentes pour le même réglage.
+      // `openSettingsFor` ne promet que ce qu'Apple autorise.
+      openSettingsFor('accessibility');
     };
 
     return (
@@ -126,7 +129,7 @@ const ScannerPermissionScreen = () => {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.stepBtn} onPress={openShortcutsApp}>
+            <TouchableOpacity style={styles.stepBtn} onPress={openShortcuts}>
               <Text style={styles.stepBtnText}>{t('scanner.iosOpenShortcuts', 'Ouvrir Raccourcis')}</Text>
               <Feather name="chevron-right" size={14} color={colors.primary} />
             </TouchableOpacity>

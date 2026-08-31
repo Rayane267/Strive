@@ -513,15 +513,15 @@
     "openAccessibility": "Ouvrir Accessibilité",
     "step1": {
       "title": "Bienvenue sur Strive",
-      "desc": "Maximisez vos gains en tant que chauffeur VTC. Strive analyse chaque offre pour que vous n'acceptiez jamais une course non rentable."
+      "desc": "N'acceptez plus une course à l'aveugle. On vous montre ce qu'elle rapporte vraiment — €/h et €/km, trafic compris."
     },
     "step2": {
       "title": "Configurez le scanner",
-      "desc": "Accordez les permissions d'accessibilité et d'overlay. Une bulle flottante apparaîtra par-dessus votre app VTC, prête à analyser les offres."
+      "desc": "Autorisez les notifications ci-dessous. L'accessibilité et l'affichage par-dessus les autres apps vous seront demandés au premier lancement du scanner."
     },
     "step2_ios": {
-      "title": "Installez le raccourci",
-      "desc": "Un tap pour ajouter le raccourci « Analyser une course » à votre app Raccourcis. Déjà pré-configuré, prêt à l'emploi."
+      "title": "Trois réglages, une seule fois",
+      "desc": ""
     },
     "iosPreview": {
       "title": "Voici ce que vous verrez",
@@ -542,19 +542,6 @@
       "hintAverage": "Bon €/km mais le €/h ne suit pas — à vous de décider",
       "hintBad": "€/h trop bas, longue distance — à éviter"
     },
-    "minimums": {
-      "title": "Configurez vos seuils",
-      "desc": "Les courses en dessous seront marquées à refuser.",
-      "hourly": "Minimum €/h",
-      "kmRate": "Minimum €/km",
-      "includePickup": "Inclure le trajet d'approche",
-      "casual": "Débutant",
-      "standard": "Standard",
-      "premium": "Exigeant",
-      "presetHint": "Choisissez un preset ou personnalisez ci-dessous",
-      "hourlyHint": "Gains horaires nets. La plupart des chauffeurs VTC visent 25-35 €/h.",
-      "kmRateHint": "Couvre le carburant + l'usure. Le barème fiscal est ~0,60 €/km ; visez 1,10-1,70 €/km."
-    },
     "quickRef": {
       "ios": {
         "step1": "Capturez l'offre",
@@ -562,7 +549,9 @@
         "step2": "Appuyez sur AssistiveTouch",
         "step2Sub": "Sans quitter l'application",
         "step3": "Lisez le verdict",
-        "step3Sub": "€/h et €/km réels, trafic inclus"
+        "step3Sub": "€/h et €/km réels, trafic inclus",
+        "step4": "Indiquez la course",
+        "step4Sub": "Prise ou refusée — c'est ce qui remplit vos stats"
       },
       "android": {
         "step1": "Activez le scanner",
@@ -570,22 +559,26 @@
         "step2": "Tapez sur la bulle",
         "step2Sub": "Quand l'offre s'affiche",
         "step3": "Lisez le verdict",
-        "step3Sub": "€/h et €/km réels, trafic inclus"
+        "step3Sub": "€/h et €/km réels, trafic inclus",
+        "step4": "Indiquez la course",
+        "step4Sub": "Prise ou refusée — c'est ce qui remplit vos stats"
       }
     },
     "iosInstall": {
-      "step1t": "Tapez « Obtenir le raccourci » ci-dessous",
-      "step2t": "Tapez « Ajouter le raccourci » dans l'app Raccourcis",
-      "step3t": "Revenez ici et appuyez sur Continuer",
       "cta": "Obtenir le raccourci",
-      "warning": "Vous devez d'abord installer le raccourci.",
-      "ctaDone": "Raccourci installé — rouvrir",
+      "ctaDone": "Ouvrir à nouveau",
       "notifT": "Notifications",
-      "notifS": "Autorisez-les : c'est par elles que le verdict arrive quand la carte n'a rien pu afficher. Sans ce réglage, un scan réussi peut ne rien vous montrer.",
+      "notifS": "Sans elles, un scan peut réussir sans que vous le voyiez jamais.",
       "notifCta": "Activer les notifications",
       "notifDone": "Notifications activées",
       "shortcutT": "Le raccourci",
-      "shortcutS": "Il prend la capture et lance l'analyse tout seul. Déjà pré-configuré — vous n'avez qu'à l'ajouter."
+      "shortcutS": "C'est lui qui fait tout : la capture, l'analyse, le verdict. Déjà réglé, il n'y a qu'à l'ajouter.",
+      "notifS_android": "C'est par elles que le verdict arrive, avec les boutons Prise et Refusée. Sans ce réglage, un scan réussi peut ne rien vous montrer.",
+      "confirmCta": "Je l'ai ajouté",
+      "confirmed": "Vous avez confirmé l'ajout",
+      "urgentT": "Notifications urgentes",
+      "urgentS": "En mode Conduite, tout est masqué — sauf ce qui est marqué urgent. Votre verdict doit en être.",
+      "urgentCta": "Ouvrir les notifications"
     },
     "step3": {
       "title": "Acceptez ou refusez en un instant",
@@ -629,25 +622,17 @@
       "ctaSettings": "Ouvrir les Réglages",
       "doneCta": "C'est configuré"
     },
-    "laTip": {
-      "title": "Ne supprimez pas la notification",
-      "desc": "Le résultat de l'analyse s'affiche dans la Dynamic Island en haut de l'écran. Si vous supprimez la notification sur l'écran verrouillé, le résultat disparaît aussi."
-    },
-    "tagRides": {
-      "title": "Indiquez vos courses",
-      "desc": "Pour que Strive calcule vos vrais gains et votre €/h, indiquez chaque course prise ou refusée — sinon vos stats restent vides.\n\n• Dynamic Island : tapez ✅ Prise ou ❌ Refusée sur la carte\n• Mains libres : « Dis Siri, Strive course prise » (ou « course refusée »)\n• Sans Dynamic Island : tirez la notification vers le bas pour afficher les boutons"
-    },
     "step4": {
       "title": "Suivez vos performances",
       "desc": "Les onglets Historique et Stats affichent vos gains du jour, votre taux d'acceptation et vos plateformes les plus rentables."
     },
     "step5": {
       "title": "Votre premier scan",
-      "desc": "Trois gestes, deux secondes — et vous saurez si la course vaut le coup avant d'accepter."
+      "desc": "Trois gestes pour savoir si la course vaut le coup. Un quatrième pour que vos statistiques le sachent aussi."
     },
     "step5_ios": {
       "title": "Votre premier scan",
-      "desc": "Trois gestes, deux secondes — et vous saurez si la course vaut le coup avant d'accepter."
+      "desc": "Trois gestes pour savoir si la course vaut le coup. Un quatrième pour que vos statistiques le sachent aussi."
     },
     "tips": {
       "step1": "Strive fonctionne avec Uber, Bolt et Heetch. D'autres plateformes arrivent bientôt.",
@@ -655,8 +640,6 @@
       "step2_ios": "Vous pouvez aussi assigner le raccourci au bouton Action (iPhone 15 Pro+) ou à AssistiveTouch.",
       "step3": "Astuce : tapez la bulle quand l'offre apparaît sur votre écran VTC. Pas besoin de changer d'app.",
       "step3_ios": "Astuce : le double-tap au dos fonctionne même avec une coque (fine). Pas besoin de changer d'app.",
-      "laTip": "Le résultat reste affiché 10 secondes puis disparaît automatiquement.",
-      "tagRides": "La commande vocale Siri est la plus sûre au volant — sans toucher le téléphone.",
       "step4": "L'onglet Stats montre vos gains par jour, par plateforme et votre taux horaire en temps réel.",
       "step5": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats.",
       "step5_ios": "Conseil : configurez un seuil de 20€/h minimum pour commencer, puis ajustez selon vos résultats."
@@ -664,23 +647,38 @@
     "restartVideo": "Revoir la vidéo",
     "recap": {
       "title": "Votre installation",
-      "desc": "Ce que Strive peut vérifier, et ce que vous seul pouvez confirmer.",
+      "desc": "Touchez une ligne pour aller au réglage correspondant.",
       "notifT": "Notifications",
       "notifS": "C'est par elles que le verdict arrive quand la carte n'a rien pu afficher.",
-      "shortcutT": "Le raccourci",
-      "shortcutS": "iOS ne permet pas de savoir s'il est bien présent. Ouvrez l'app Raccourcis pour le voir.",
       "bubbleT": "Bulle AssistiveTouch",
-      "bubbleS": "C'est elle que vous touchez pour analyser une offre. Réglages › Accessibilité › Toucher › AssistiveTouch.",
+      "bubbleS": "C'est elle que vous touchez pour analyser une offre.",
       "urgentT": "Notifications urgentes",
-      "urgentS": "Sans elles, le mode Conduite ou Ne pas déranger masque le verdict.",
+      "urgentS": "Le mode Conduite masque le verdict sans elles.",
       "state_ok": "Prêt",
       "state_todo": "À activer",
       "state_unknown": "À vérifier",
-      "openSettings": "Ouvrir les Réglages"
+      "state_declared": "Confirmé",
+      "notifPath": "Réglages › Notifications › Strive",
+      "bubblePath": "Réglages › Accessibilité › Toucher › AssistiveTouch",
+      "urgentPath": "Réglages › Notifications › Strive › Notifications urgentes",
+      "shortcutT": "Le raccourci",
+      "shortcutS": "Touchez pour ouvrir Raccourcis et vérifier qu'il y est.",
+      "shortcutPath": "Raccourcis › Mes raccourcis › Analyser une course"
     },
     "notifStep": {
       "title": "Autorisez les notifications",
       "desc": "C'est par elles que le verdict arrive quand la carte n'a rien pu afficher. Sans ce réglage, un scan réussi peut ne rien vous montrer."
+    },
+    "tag": {
+      "title": "Indiquez vos courses",
+      "desc": "Prise ou refusée : sans cette réponse, Strive ne peut pas calculer vos gains réels — vos statistiques restent vides.",
+      "diT": "Sur la carte du verdict",
+      "diS": "Tapez Prise ou Refusée directement dans la Dynamic Island.",
+      "notifT": "Depuis la notification",
+      "notifS_ios": "Sans Dynamic Island, tirez la notification vers le bas : les deux boutons apparaissent.",
+      "notifS_android": "Les boutons Prise et Refusée sont directement sur la notification de résultat.",
+      "historyT": "Ou plus tard, dans l'Historique",
+      "historyS": "Les courses sans réponse y restent marquées « En attente » jusqu'à ce que vous tranchiez."
     }
   },
   "help": {
