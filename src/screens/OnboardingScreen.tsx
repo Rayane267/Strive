@@ -65,8 +65,16 @@ import ScanPreview from '../components/ScanPreview';
 //
 // Cinq propositions plutôt que trois : à trois, l'écart entre deux réponses
 // était tel que le chauffeur tapait « Autre » — donc le clavier — pour la
-// plupart des situations réelles. Cinq + « Autre » tiennent en six cartes
-// empilées sans que l'écran ait besoin de défiler.
+// plupart des situations réelles.
+//
+// Cinq + « Autre » = six cartes, et elles doivent tenir SANS défilement : une
+// réponse qu'on ne voit pas est une réponse qui n'existe pas, et le chauffeur
+// choisit alors parmi celles que l'écran lui montre. Ça n'a pas toujours été
+// vrai — la ligne d'explication sous le titre, ajoutée après ces presets,
+// poussait la dernière carte hors de l'écran. C'est `computeOptionHeight` qui
+// le garantit désormais, en mesurant plutôt qu'en supposant : ajouter une
+// septième réponse ici ne casse donc rien, les cartes se resserrent d'elles-mêmes
+// jusqu'au plancher tactile.
 const HOURS_CHOICES: (number | null)[] = [30, 35, 40, 45, 50, null];
 const GOAL_CHOICES: (number | null)[] = [1500, 2000, 2500, 3000, 3500, null];
 const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
@@ -156,11 +164,56 @@ type Step = (typeof STEPS)[number];
  * Descente asymétrique : 90 ms pour s'enfoncer, 160 pour revenir. L'enfoncement
  * doit suivre le doigt, le retour peut se permettre d'être vu.
  */
+/**
+ * HAUTEUR DES CARTES DE RÉPONSE — MESURÉE, PAS DEVINÉE.
+ *
+ * Les six réponses doivent tenir sans défilement : une réponse qu'on ne voit pas
+ * est une réponse qui n'existe pas, et le chauffeur choisit alors parmi celles
+ * que l'écran lui montre. Une hauteur en dur ne peut pas le garantir — elle est
+ * juste sur un modèle et fausse sur tous les autres, et la ligne d'explication
+ * sous le titre change de nombre de lignes selon la question, la langue et la
+ * taille de police système du chauffeur.
+ *
+ * On mesure donc les deux seules grandeurs non circulaires : la hauteur du
+ * ScrollView (sa fenêtre, indépendante de son contenu) et celle du bloc
+ * titre + explication. Ce qui reste se divise par le nombre de réponses.
+ *
+ * Les bornes ne sont pas décoratives. En bas, 48 pt est la cible tactile
+ * minimale d'Apple : en deçà on refuse de rétrécir et on laisse le ScrollView
+ * faire son travail — un petit écran défile, il ne devient pas intapable. En
+ * haut, 76 pt évite que quatre réponses sur un grand écran deviennent des
+ * pavés.
+ */
+const OPTION_GAP = 10;
+const OPTION_MIN_H = 48;
+const OPTION_MAX_H = 76;
+/** Doivent suivre `body.paddingTop`, `body.paddingBottom` et
+ *  `stepContent.marginTop` : ce sont les marges que la mesure ne couvre pas. */
+const BODY_PAD_TOP = 20;
+const BODY_PAD_BOTTOM = 24;
+const STEP_CONTENT_MT = 24;
+
+const computeOptionHeight = (
+  viewportH: number,
+  headH: number,
+  count: number,
+): number | undefined => {
+  // Tant qu'une des deux mesures manque (premier rendu), on ne pose aucune
+  // hauteur : la carte prend celle de son style, et le calcul s'applique au
+  // layout suivant.
+  if (!viewportH || !headH || count < 1) return undefined;
+  const free =
+    viewportH - BODY_PAD_TOP - BODY_PAD_BOTTOM - headH - STEP_CONTENT_MT;
+  const perCard = Math.floor((free - (count - 1) * OPTION_GAP) / count);
+  return Math.max(OPTION_MIN_H, Math.min(OPTION_MAX_H, perCard));
+};
+
 const OptionCard = ({
   active,
   reduceMotion,
   onPress,
   children,
+  minHeight,
   accessibilityRole,
   accessibilityState,
 }: {
@@ -168,6 +221,10 @@ const OptionCard = ({
   reduceMotion: boolean;
   onPress: () => void;
   children: React.ReactNode;
+  /** Hauteur calculée par `useOptionHeight` d'après la place réellement libre.
+   *  `minHeight` et non `height` : une carte à deux lignes (statut) doit pouvoir
+   *  dépasser plutôt que rogner son texte. */
+  minHeight?: number;
   accessibilityRole?: 'button' | 'checkbox';
   accessibilityState?: { selected?: boolean; checked?: boolean };
 }) => {
@@ -199,7 +256,7 @@ const OptionCard = ({
       }
     >
       <TouchableOpacity
-        style={[styles.option, active && styles.optionActive]}
+        style={[styles.option, minHeight != null && { minHeight }, active && styles.optionActive]}
         activeOpacity={1}
         onPressIn={reduceMotion ? undefined : () => to(1)}
         onPressOut={reduceMotion ? undefined : () => to(0)}
@@ -291,6 +348,12 @@ const OnboardingScreen = ({
   const [socialRate, setSocialRate] = useState<number | null>(null);
 
   /** Champ en saisie libre, ou null si tout est sur des pastilles. */
+  // Les deux mesures qui pilotent la hauteur des réponses (cf.
+  // `computeOptionHeight`). Non circulaires : la fenêtre du ScrollView ne dépend
+  // pas de son contenu, et le bloc titre + explication est au-dessus des cartes.
+  const [viewportH, setViewportH] = useState(0);
+  const [headH, setHeadH] = useState(0);
+
   const [editing, setEditing] = useState<Step | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -699,6 +762,7 @@ const OnboardingScreen = ({
     isPercent?: boolean;
   }) => {
     const onAnOption = choices.some(c => c !== null && c === value);
+    const optionHeight = computeOptionHeight(viewportH, headH, choices.length);
     return (
       <>
         <View style={styles.optionList}>
@@ -714,6 +778,7 @@ const OnboardingScreen = ({
               <OptionCard
                 key={i}
                 active={active}
+                minHeight={optionHeight}
                 reduceMotion={reduceMotion}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
@@ -1136,6 +1201,9 @@ const OnboardingScreen = ({
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Hauteur de la FENÊTRE, pas du contenu : c'est ce qui rend la mesure
+        // utilisable pour dimensionner ce qu'on va y mettre.
+        onLayout={e => setViewportH(e.nativeEvent.layout.height)}
       >
         <Animated.View
           style={[
@@ -1158,8 +1226,14 @@ const OnboardingScreen = ({
             },
           ]}
         >
-          <Text style={styles.title}>{title}</Text>
-          {desc ? <Text style={styles.desc}>{desc}</Text> : null}
+          {/* Mesuré d'un bloc : l'explication fait deux lignes sur « heures » et
+              trois sur « charges », et davantage si le chauffeur a agrandi la
+              police système. C'est cette variation qui poussait la dernière
+              réponse hors de l'écran. */}
+          <View onLayout={e => setHeadH(e.nativeEvent.layout.height)}>
+            <Text style={styles.title}>{title}</Text>
+            {desc ? <Text style={styles.desc}>{desc}</Text> : null}
+          </View>
           <View style={styles.stepContent}>{renderStep()}</View>
         </Animated.View>
       </ScrollView>
@@ -1289,8 +1363,11 @@ const styles = StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
+    // Constantes partagées avec `computeOptionHeight` : ce sont les marges que
+    // la mesure du ScrollView ne couvre pas, elles doivent être les mêmes des
+    // deux côtés.
+    paddingTop: BODY_PAD_TOP,
+    paddingBottom: BODY_PAD_BOTTOM,
   },
   // Le titre est ancré en haut — il tombe au même endroit d'une question à
   // l'autre — et les réponses se centrent dans la hauteur qui reste. Les caler
@@ -1325,12 +1402,13 @@ const styles = StyleSheet.create({
   // perdu, et l'écran inachevé. Le centrage visait les questions à trois réponses,
   // mais un vide unique sous le contenu se lit comme de la place laissée exprès,
   // là où deux vides symétriques se lisent comme une erreur de mise en page.
-  // Les questions à six réponses débordent dans le ScrollView, qui est là pour ça.
+  // Le ScrollView reste, mais comme filet pour les petits écrans et les gros
+  // corps de texte système — pas comme excuse : à six réponses, tout doit tenir.
   // `flexGrow` et non `flex` : le conteneur prend la hauteur restante SANS
   // l'imposer à ses enfants. Une liste de réponses reste donc collée sous le
   // titre, tandis que la démonstration, qui demande `flex: 1`, se recentre dans
   // tout l'espace. Une seule règle, deux comportements selon ce qu'on y met.
-  stepContent: { width: '100%', flexGrow: 1, marginTop: 34 },
+  stepContent: { width: '100%', flexGrow: 1, marginTop: STEP_CONTENT_MT },
 
   // Recentrage vertical, sans agrandissement. `ScanPreview` est déjà en pleine
   // largeur : une transformation d'échelle la faisait déborder des deux côtés,
@@ -1344,9 +1422,14 @@ const styles = StyleSheet.create({
   demoWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
 
   // ── Cartes de réponse ──────────────────────────────────────────────────────
-  optionList: { gap: 12 },
+  // La MÊME constante que celle du calcul : l'écart entre deux cartes entre dans
+  // la division, un gap ici et un autre là-bas et la hauteur tombe à côté.
+  optionList: { gap: OPTION_GAP },
   option: {
-    minHeight: 72,
+    // Repli du tout premier rendu, avant que `onLayout` n'ait mesuré quoi que ce
+    // soit. Valeur du milieu de la fourchette : au pire une frame à 56 pt avant
+    // que la hauteur juste ne s'applique.
+    minHeight: 56,
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 18,
