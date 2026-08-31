@@ -67,9 +67,13 @@ final class LiveActivityManager {
   /// chiffres de celle-là sur le scan qui vient d'arriver. Les deux updates
   /// étant à quelques millisecondes d'écart, seule la dernière est rendue.
   ///
-  /// ⚠️ Ce n'est PAS ce qui empêche un résultat de déplier le Dynamic Island :
-  /// quand le cercle `minimal` affiche bien le verdict, l'état est arrivé et
-  /// rien ne l'a écrasé. Ce cas-là ne dépend pas de nous — voir la note sur
+  /// ⚠️ Ce mémo ne suffit pas à faire déplier le Dynamic Island, et la note qui
+  /// disait ici que le non-dépliage « ne dépend pas de nous » était FAUSSE.
+  /// Une trace sur quatre scans consécutifs a montré la vraie cause : une
+  /// seconde update, sans alerte, arrivait 99 à 214 ms après le verdict et
+  /// interrompait le dépliage — voir `updateSessionKPI`, qui ne pousse plus
+  /// rien tant qu'un résultat est à l'écran. Reste le cas hors de notre portée,
+  /// celui d'un appel en cours qui occupe la pilule attachée : voir la note sur
   /// l'alerte dans `update()`.
   private var _lastPushed: (state: StriveActivityAttributes.ContentState, at: Date, activityId: String)?
   private var lastPushed: (state: StriveActivityAttributes.ContentState, at: Date, activityId: String)? {
@@ -663,9 +667,34 @@ final class LiveActivityManager {
       staleDate: Date().addingTimeInterval(3600 * 8),
       relevanceScore: resultShowing ? 100 : 50
     )
+    // ── PENDANT QU'UN RÉSULTAT EST À L'ÉCRAN, ON N'ENVOIE RIEN ──────────────
+    //
+    // Ce que cette update contenait : rigoureusement les mêmes valeurs visibles
+    // que le verdict — plateforme, prix, €/h, €/km, distance, durée, niveau,
+    // rideId sont tous recopiés depuis `prev` juste au-dessus. Seuls changeaient
+    // `todayEarnings`, `todayHourlyRate`, `todayKm` et `onlineMinutes`, QUI NE
+    // SONT PAS RENDUS tant qu'une course est affichée : le widget montre alors
+    // la carte de résultat, pas le tableau de session. Elle ne changeait donc
+    // rien à l'écran.
+    //
+    // Ce qu'elle coûtait, en revanche. L'îlot ne se déplie que sur une update
+    // porteuse d'une `AlertConfiguration` — celle du résultat en a une. Celle-ci
+    // n'en a pas, et elle arrivait 99 à 214 ms plus tard (mesuré sur quatre scans
+    // consécutifs : 214, 105, 1130, 99 ms), donc en plein dépliage. Elle re-rend
+    // l'activité et l'interrompt. L'écart variant d'un facteur dix d'un scan à
+    // l'autre, le symptôme était intermittent — le fameux « des fois ça ne
+    // s'affiche pas en étendu ».
+    //
+    // Le snapshot, LUI, reste écrit : c'est la seule copie qui survit à la mort
+    // de la carte, et les KPI repartiront avec le prochain retour à l'idle ou le
+    // prochain verdict. Rien n'est perdu, seule l'update inutile disparaît.
+    saveSessionSnapshot(state)
+    guard !resultShowing else {
+      log("updateSessionKPI: résultat à l'écran — update ignorée (snapshot écrit)")
+      return
+    }
     rememberPush(state, on: activity)
     Task { await activity.update(content) }
-    saveSessionSnapshot(state)
   }
 
   func stop() {
