@@ -1,0 +1,40 @@
+# FINS DE LIGNE — pourquoi ce fichier existe.
+#
+# `core.autocrlf=true` est actif sur le poste Windows : à chaque checkout, git
+# réécrit les fichiers texte en CRLF. C'est sans conséquence pour du TypeScript,
+# mais pas pour les fichiers qu'un shell EXÉCUTE sur le Mac de build.
+#
+# Le build EAS du 2026-08-31 est tombé là-dessus : `ios/.xcode.env` arrivé en
+# CRLF, bash lit le `\r` de la ligne vide comme une commande —
+# « .xcode.env: line 5: $'\r': command not found » — puis `NODE_BINARY` hérite
+# d'un retour chariot et la phase « Generate Specs » de ReactCodegen échoue.
+# L'archive s'arrête avant même de compiler l'app.
+#
+# `eol=lf` force ces fichiers en LF dans le dossier de travail, quel que soit le
+# réglage autocrlf de la machine.
+
+# Fichiers sourcés ou exécutés par les phases de script Xcode
+ios/.xcode.env      text eol=lf
+ios/.xcode.env.local text eol=lf
+
+# Scripts shell et wrappers de build
+*.sh                text eol=lf
+android/gradlew     text eol=lf
+
+# CocoaPods et Ruby : lus par ruby sur macOS
+ios/Podfile         text eol=lf
+Gemfile             text eol=lf
+*.rb                text eol=lf
+
+# Scripts lancés par EAS via leur shebang : un retour chariot en fin de shebang casse
+# l'interpréteur avant même que le script démarre.
+scripts/*.js        text eol=lf
+
+# Binaires — jamais de conversion
+*.png               binary
+*.jpg               binary
+*.jpeg              binary
+*.mov               binary
+*.mp4               binary
+*.keystore          binary
+*.p8                binary
