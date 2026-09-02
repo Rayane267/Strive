@@ -31,7 +31,7 @@ export async function getOrCreateDeviceId(): Promise<string> {
 }
 
 /**
- * Quota serveur (table `device_signups`) : 3 IDENTITÉS distinctes par appareil
+ * Quota serveur (table `device_signups`) : 5 IDENTITÉS distinctes par appareil
  * sur 60 jours glissants.
  *
  * `emailHash` est ce qui rend la suppression de compte réversible : revenir
@@ -96,9 +96,14 @@ export async function grantWelcomeCredits(): Promise<
 }
 
 /**
- * Quota OAuth (Apple / Google) : max 3 créations de compte par device
+ * Quota OAuth (Apple / Google) : max 5 créations de compte par device
  * par fenêtre rolling de 60 jours. Stocké dans le Keychain — persiste
  * après désinstallation.
+ *
+ * Le seuil est monté de 3 à 5 le 2026-09-02. À 3, un appareil partagé — un
+ * iPhone de démo, un téléphone de famille, ou celui de l'équipe de vérification
+ * d'Apple qui a déjà servi — tombait sur un mur infranchissable avant même
+ * d'avoir vu l'app, et `delete_account` ne rouvre pas de slot.
  *
  * Barrière locale, doublée côté serveur par enforceSignupQuota (table
  * device_signups). Mêmes seuil et fenêtre des deux côtés : un écart ferait
@@ -119,7 +124,7 @@ export async function enforceOAuthSignupQuota(emailHash?: string): Promise<void>
   // La position entre dans la clé — deux inscriptions héritées peuvent porter
   // le même horodatage, et les fondre en une seule desserrerait le quota.
   const identities = new Set(recent.map((s, i) => s.h ?? `legacy:${i}:${s.t}`));
-  if (identities.size >= 3) {
+  if (identities.size >= 5) {
     throw new Error('device_signup_limit_reached');
   }
 }

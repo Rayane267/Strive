@@ -98,17 +98,17 @@ describe('enforceSignupQuota', () => {
 });
 
 describe('OAuth signup quota', () => {
-  it('allows signup when fewer than 3 recent signups are recorded', async () => {
+  it('allows signup when fewer than 5 recent signups are recorded', async () => {
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([Date.now(), Date.now()]),
     } as any);
     await expect(enforceOAuthSignupQuota()).resolves.toBeUndefined();
   });
 
-  it('blocks signup at 3 recent signups within the 60-day window', async () => {
+  it('blocks signup at 5 recent signups within the 60-day window', async () => {
     const now = Date.now();
     mockKeychain.getGenericPassword.mockResolvedValue({
-      password: JSON.stringify([now, now, now]),
+      password: JSON.stringify([now, now, now, now, now]),
     } as any);
     await expect(enforceOAuthSignupQuota()).rejects.toThrow('device_signup_limit_reached');
   });
@@ -116,7 +116,7 @@ describe('OAuth signup quota', () => {
   it('ignores signups older than 60 days', async () => {
     const old = Date.now() - 61 * 24 * 60 * 60 * 1000;
     mockKeychain.getGenericPassword.mockResolvedValue({
-      password: JSON.stringify([old, old, old]),
+      password: JSON.stringify([old, old, old, old, old]),
     } as any);
     await expect(enforceOAuthSignupQuota()).resolves.toBeUndefined();
   });
@@ -150,26 +150,29 @@ describe('OAuth signup quota', () => {
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([
         { t: now, h: 'hash-A' }, { t: now, h: 'hash-B' }, { t: now, h: 'hash-C' },
+        { t: now, h: 'hash-D' }, { t: now, h: 'hash-E' },
       ]),
     } as any);
     await expect(enforceOAuthSignupQuota('hash-A')).resolves.toBeUndefined();
   });
 
-  it('still blocks a fourth distinct identity', async () => {
+  it('still blocks a sixth distinct identity', async () => {
     const now = Date.now();
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([
         { t: now, h: 'hash-A' }, { t: now, h: 'hash-B' }, { t: now, h: 'hash-C' },
+        { t: now, h: 'hash-D' }, { t: now, h: 'hash-E' },
       ]),
     } as any);
-    await expect(enforceOAuthSignupQuota('hash-D')).rejects.toThrow('device_signup_limit_reached');
+    await expect(enforceOAuthSignupQuota('hash-F')).rejects.toThrow('device_signup_limit_reached');
   });
 
-  it('counts identities, not passages — three returns of one account stay at one', async () => {
+  it('counts identities, not passages — five returns of one account stay at one', async () => {
     const now = Date.now();
     mockKeychain.getGenericPassword.mockResolvedValue({
       password: JSON.stringify([
         { t: now, h: 'hash-A' }, { t: now, h: 'hash-A' }, { t: now, h: 'hash-A' },
+        { t: now, h: 'hash-A' }, { t: now, h: 'hash-A' },
       ]),
     } as any);
     await expect(enforceOAuthSignupQuota('hash-B')).resolves.toBeUndefined();
