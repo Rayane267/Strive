@@ -51,10 +51,10 @@ const ASSISTIVE_VIDEO = require('../assets/assistivetouch.mov');
  *   'android'→ force le parcours Android (aperçu depuis iOS)
  *   null     → parcours réel de l'appareil
  *
- * Neutralisé en release (`__DEV__` faux) : un build de production suit toujours
- * sa vraie plateforme, quoi qu'il y ait écrit ici.
+ * À laisser sur null : c'est un outil d'aperçu, pas un réglage. Une valeur
+ * forcée ici part telle quelle dans un build de production.
  */
-const PREVIEW_OS: 'ios' | 'android' | null = __DEV__ ? 'ios' : null;
+const PREVIEW_OS: 'ios' | 'android' | null = null;
 const OS: 'ios' | 'android' = (PREVIEW_OS ?? Platform.OS) as 'ios' | 'android';
 const IS_IOS = OS === 'ios';
 
@@ -280,9 +280,9 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   /// démarrage parce que c'est le seul moment où le chauffeur a une raison de
   /// dire oui : on vient de lui expliquer que le verdict arrive par là.
   const enableNotifications = useCallback(async () => {
-    if (user?.id) await registerPushToken(user.id, true);
+    if (!user?.id) return;
+    const result = await registerPushToken(user.id, true);
     await refreshNotifStatus();
-    const granted = (await getNotificationStatus()) === 'granted';
     // BOUTON MORT ÉVITÉ. La fenêtre système ne s'affiche qu'une fois par
     // installation : si le chauffeur avait déjà refusé, `requestPermission`
     // répond « non » de mémoire, sans rien montrer. Le bouton serait resté
@@ -291,7 +291,15 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     // On DEMANDE avant d'ouvrir les Réglages, exactement comme l'interrupteur du
     // Profil, et avec les mêmes textes : le catapulter hors de l'app sans un mot
     // au milieu d'un tutoriel serait plus brutal que le problème qu'on résout.
-    if (!granted) {
+    //
+    // On teste le RÉSULTAT de la demande, et non l'état relu ensuite. L'ancienne
+    // version envoyait aux Réglages dès que le statut n'était pas « accordé » —
+    // ce qui incluait `unknown`, l'état rendu quand Firebase Messaging est
+    // absent (simulateur, build sans Google Play Services). Le chauffeur était
+    // alors envoyé dans des Réglages où les notifications sont déjà autorisées,
+    // sans que la fenêtre système ne se soit jamais affichée. `unavailable`
+    // n'est pas un refus : on se tait.
+    if (result === 'denied') {
       Alert.alert(
         t('preferences.pushDeniedTitle'),
         t('preferences.pushDeniedBody'),
