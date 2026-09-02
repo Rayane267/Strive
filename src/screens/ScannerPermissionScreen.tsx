@@ -12,6 +12,7 @@ import { scannerService } from '../services/scanner';
 import type { PermissionsStatus } from '../services/scanner/types';
 
 import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
+import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
 
 const IS_IOS = Platform.OS === 'ios';
 
@@ -74,18 +75,13 @@ const ScannerPermissionScreen = () => {
 
   // ── Rendu iOS ──────────────────────────────────────────────────────────────
   if (IS_IOS) {
-    // URL iCloud d'un raccourci pré-construit ("Prendre une capture" + "Analyser
-    // une course avec Strive"). Si renseignée, le tap ouvre directement la fiche
-    // d'import du raccourci dans l'app Raccourcis — un tap pour l'installer.
-    // Sinon, fallback sur l'app Raccourcis vide où l'utilisateur compose le sien.
-    const PREBUILT_SHORTCUT_URL: string | null = null; // ex: 'https://www.icloud.com/shortcuts/<id>'
-
+    // Le tap ouvre la fiche d'import du raccourci dans l'app Raccourcis : un
+    // geste pour l'installer. `openShortcutsApp` ne sert plus que de filet si
+    // l'URL iCloud est injoignable — l'app Raccourcis s'ouvre alors vide, et le
+    // chauffeur doit composer le raccourci lui-même. C'est un pis-aller, pas un
+    // chemin nominal.
     const openShortcuts = () => {
-      if (PREBUILT_SHORTCUT_URL) {
-        Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => openShortcutsApp());
-        return;
-      }
-      openShortcutsApp();
+      Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => openShortcutsApp());
     };
 
     const openIosAccessibility = () => {

@@ -34,6 +34,7 @@ import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
 /// verdict ». Et il reste tapable : trois courses, une bonne, une moyenne, une
 /// mauvaise.
 import ScanPreview from '../components/ScanPreview';
+import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
 
 const { width, height } = Dimensions.get('window');
 
@@ -349,10 +350,6 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   }).current;
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
-
-  // URL iCloud du raccourci pré-construit (« Prendre une capture » + « Analyser
-  // une course avec Strive »).
-  const PREBUILT_SHORTCUT_URL = 'https://www.icloud.com/shortcuts/d678e4a771654387866c5621e97cc58a';
 
   /// OUVRIR N'EST PAS INSTALLER. On note seulement que le chauffeur est parti
   /// vers l'app Raccourcis : il a pu annuler la feuille d'ajout, et rien dans
