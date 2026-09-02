@@ -21,6 +21,24 @@ export function getDayStart(resetHour: number = 0): Date {
  * `toISOString().split('T')[0]` donne le jour UTC : à Paris (UTC+2) il bascule
  * dès 22h locale, ce qui décale d'un jour les repères du calendrier.
  */
+/**
+ * Debut de la semaine EN COURS, lundi comme premier jour.
+ *
+ * `(day + 6) % 7` traduit la numerotation JS (dimanche = 0) en un decalage
+ * depuis lundi : un dimanche rend 6, donc la semaine remonte au lundi
+ * precedent et non au lendemain.
+ *
+ * Passe par `getDayStart` pour heriter du `resetHour` : avec un reset a 4 h,
+ * une course prise lundi a 2 h appartient encore a la journee de dimanche,
+ * donc a la semaine passee. C'est toute la difference entre « les 7 derniers
+ * jours », qui glisse, et « cette semaine », qui repart le lundi.
+ */
+export function getWeekStart(resetHour: number = 0): Date {
+  const start = getDayStart(resetHour);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
+}
+
 export function toLocalDateKey(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');

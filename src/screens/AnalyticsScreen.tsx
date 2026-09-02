@@ -25,12 +25,19 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { getEffectivePlanTier, getPlanLimits, FREE_THRESHOLDS } from '../services/subscriptionService';
-import { fetchRides } from '../services/ridesService';
+import { getEffectivePlanTier, getMaxRangeSpanDays, FREE_THRESHOLDS, type PlanTier } from '../services/subscriptionService';
+import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
 import { useNavigation } from '@react-navigation/native';
-import { getDayStart, toLocalDateKey, getBusinessDayKey, parseLocalDateKey } from '../utils/dateUtils';
+import { getDayStart, getWeekStart, toLocalDateKey, getBusinessDayKey, parseLocalDateKey } from '../utils/dateUtils';
+import {
+  pickGranularity,
+  foldSeries,
+  toRateSeries,
+  type Granularity,
+  type DayPoint,
+} from '../utils/chartBuckets';
 import EarningsChart from '../components/EarningsChart';
 import KpiTrendChart from '../components/KpiTrendChart';
 import QualityScoreCard from '../components/QualityScoreCard';
@@ -92,15 +99,23 @@ const AnalyticsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [isEmpty, setIsEmpty] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
+  // Payant = 'plus' OU 'premium' : c'est ce qui ouvre l'historique tout court.
+  // L'ÉTENDUE de la fenêtre, elle, dépend du tier exact (cf. getMaxRangeSpanDays),
+  // d'où deux états là où un booléen suffisait quand Plus était le seul palier.
+  const [isPaid, setIsPaid] = useState(false);
+  const [planTier, setPlanTier] = useState<PlanTier>('free');
 
   // Bilan de la semaine (Plus uniquement) : manque à gagner vs objectif + courses
-  // non rentables évitées, sur les 7 derniers jours. Insight, pas paywall.
+  // non rentables évitées, sur la semaine EN COURS. Insight, pas paywall.
+  //
+  // La fenêtre glissante de 7 jours contredisait `isCurrentWeekView` juste en
+  // dessous, qui décide de l'affichage de la carte sur un lundi de référence :
+  // le même écran appelait « semaine » deux périodes différentes.
   useEffect(() => {
-    if (!user?.id || !isPremium) { setWeeklyBilan({ lossWeek: 0, avoided: 0 }); return; }
+    if (!user?.id || !isPaid) { setWeeklyBilan({ lossWeek: 0, avoided: 0 }); return; }
     (async () => {
       try {
-        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const since = getWeekStart(resetHour);
         const [prefsRes, weekRides] = await Promise.all([
           supabase.from('preferences').select('min_hourly_rate, min_km_rate').eq('id', user.id).single(),
           fetchRides(user.id, since),
@@ -112,7 +127,7 @@ const AnalyticsScreen = () => {
         setWeeklyBilan({ lossWeek: 0, avoided: 0 });
       }
     })();
-  }, [user?.id, isPremium]);
+  }, [user?.id, isPaid, resetHour]);
   const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
@@ -150,9 +165,7 @@ const AnalyticsScreen = () => {
   // qu'on consulte une période dont la fin est antérieure au lundi de cette semaine.
   const isCurrentWeekView = (() => {
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    weekStart.setHours(0, 0, 0, 0);
+    const weekStart = getWeekStart(resetHour);
     const end = dateRange?.end ? new Date(dateRange.end) : now;
     return end >= weekStart;
   })();
@@ -169,6 +182,9 @@ const AnalyticsScreen = () => {
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
   const [qualityScore, setQualityScore] = useState<QualityScore | null>(null);
+  /// Maille des graphes. Elle décide aussi de leur TITRE : « Gains par jour »
+  /// sur des barres hebdomadaires serait faux.
+  const [granularity, setGranularity] = useState<Granularity>('day');
 
   const fetchingRef = useRef(false);
   const fetchAnalytics = useCallback(async () => {
@@ -185,10 +201,10 @@ const AnalyticsScreen = () => {
         .eq('id', user.id)
         .single();
 
-      const planTier = getEffectivePlanTier(profileData);
-      getPlanLimits(planTier);
-      const canAccessHistory = planTier !== 'free';
-      setIsPremium(canAccessHistory);
+      const tier = getEffectivePlanTier(profileData);
+      const canAccessHistory = tier !== 'free';
+      setPlanTier(tier);
+      setIsPaid(canAccessHistory);
 
       let rangeStart = canAccessHistory && dateRange?.start ? new Date(dateRange.start) : getDayStart(resetHour);
       rangeStart.setHours(resetHour, 0, 0, 0);
@@ -199,16 +215,11 @@ const AnalyticsScreen = () => {
 
       // Parallélise rides + sessions + seuils (round-trips indépendants → -1 RTT)
       const [
-        { data: rides, error: ridesError },
+        rides,
         { data: sessionsData, error: sessionsError },
         { data: prefsData },
       ] = await Promise.all([
-        supabase
-          .from('rides')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('created_at', rangeStart.toISOString())
-          .lt('created_at', rangeEnd.toISOString()),
+        fetchRidesInRange(user.id, rangeStart, rangeEnd),
         supabase
           .from('online_sessions')
           .select('duration_seconds, start_at, end_at')
@@ -222,7 +233,6 @@ const AnalyticsScreen = () => {
           .single(),
       ]);
 
-      if (ridesError) throw ridesError;
       if (sessionsError) throw sessionsError;
 
       if (!rides || rides.length === 0) {
@@ -241,7 +251,7 @@ const AnalyticsScreen = () => {
       // compte qui a personnalisé ses seuils avant de repasser free voit ici un
       // score qualité calculé sur des seuils que le scanner n'a jamais
       // appliqués — la carte et le verdict de la même course se contredisent.
-      const isFree = planTier === 'free';
+      const isFree = tier === 'free';
       const minHourly = isFree
         ? FREE_THRESHOLDS.hourly
         : Number(prefsData?.min_hourly_rate ?? 25) || 25;
@@ -291,33 +301,41 @@ const AnalyticsScreen = () => {
         dailyMap.set(dateKey, existing);
       });
 
-      // Build chart data for the date range
-      const chartDays: { label: string; earnings: number; isToday?: boolean }[] = [];
-      const hrTrend: { label: string; value: number }[] = [];
-      const kmTrendData: { label: string; value: number }[] = [];
+      // Série JOURNALIÈRE brute, trous compris : un jour sans course vaut zéro
+      // et doit exister, sinon la semaine se resserre et le graphe ment sur le
+      // rythme réel.
+      const rawDays: DayPoint[] = [];
       const cursor = new Date(rangeStart);
       while (cursor < rangeEnd) {
         // cursor est déjà positionné à resetHour → sa date locale EST la clé du jour
         const key = toLocalDateKey(cursor);
         const dayData = dailyMap.get(key);
-        const dayOfWeek = cursor.getDay();
-        const label = dayLabels[dayOfWeek];
-        chartDays.push({
-          label,
+        rawDays.push({
+          key,
+          date: new Date(cursor),
           earnings: dayData?.earnings || 0,
+          distance: dayData?.distance || 0,
+          hours: dayData?.hours || 0,
           isToday: key === todayStr,
         });
-        if (dayData && dayData.earnings > 0) {
-          const hr = dayData.hours > 0 ? dayData.earnings / dayData.hours : 0;
-          const km = dayData.distance > 0 ? dayData.earnings / dayData.distance : 0;
-          hrTrend.push({ label, value: hr });
-          kmTrendData.push({ label, value: km });
-        }
         cursor.setDate(cursor.getDate() + 1);
       }
-      setDailyEarnings(chartDays);
-      setHourlyTrend(hrTrend);
-      setKmTrend(kmTrendData);
+
+      // Puis on replie à la maille qui reste lisible sur un téléphone. Les taux
+      // se recalculent APRÈS le repli, à partir des sommes : moyenner des €/h
+      // journaliers donnerait le même poids à une vacation de dix heures et à
+      // une course isolée.
+      const gran = pickGranularity(rawDays.length);
+      const folded = foldSeries(rawDays, gran, { locale: i18n.language, dayLabels });
+
+      setGranularity(gran);
+      setDailyEarnings(folded.map(p => ({
+        label: p.label,
+        earnings: p.earnings,
+        isToday: p.isToday,
+      })));
+      setHourlyTrend(toRateSeries(folded, 'hours'));
+      setKmTrend(toRateSeries(folded, 'distance'));
 
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
@@ -382,7 +400,7 @@ const AnalyticsScreen = () => {
 
   const handleDayPress = (day: any) => {
     const todayString = getBusinessDayKey(new Date(), resetHour);
-    if (!isPremium && day.dateString !== todayString) {
+    if (!isPaid && day.dateString !== todayString) {
       setModalAlert(t('analytics.alerts.premiumRequired'));
       return;
     }
@@ -395,8 +413,9 @@ const AnalyticsScreen = () => {
       const end = parseLocalDateKey(day.dateString);
       if (end < start) { setTempStart(day.dateString); return; }
       const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000);
-      if (diffDays > 6) {
-        setModalAlert(t('analytics.alerts.limitText', 'Max 7 jours.'));
+      const maxSpan = getMaxRangeSpanDays(planTier);
+      if (maxSpan !== null && diffDays > maxSpan) {
+        setModalAlert(t('analytics.alerts.limitText', { days: maxSpan + 1 }));
         setTempStart(day.dateString);
         return;
       }
@@ -514,6 +533,36 @@ const AnalyticsScreen = () => {
               <Text style={styles.errorRetry}>{t('errors.retry', 'Réessayer')}</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {/* ── MEILLEURS CRÉNEAUX ── */}
+        {/* HORS des trois branches ci-dessus, et c'est le point.
+            Placée dans la branche « il y a des courses », la carte disparaissait
+            dès que la PÉRIODE AFFICHÉE était vide — typiquement le défaut, qui
+            montre la journée en cours. Un chauffeur qui n'a rien fait
+            aujourd'hui ne voyait donc jamais l'entrée d'un écran qui analyse ses
+            90 DERNIERS JOURS : exactement l'inverse de ce qu'il faut, puisque
+            c'est lui qui a le plus besoin de savoir quand travailler.
+
+            Visible pour tous, free compris : l'écran porte son propre mur
+            Premium et montre ce qu'on achète. Le cacher ne vendrait rien. */}
+        {!loading && (
+          <AnimatedEntrance delay={185} slideFrom="bottom">
+            <TouchableOpacity
+              style={styles.slotsCard}
+              onPress={() => navigation.navigate('BestHours')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.slotsIcon}>
+                <Feather name="clock" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.slotsText}>
+                <Text style={styles.slotsTitle}>{t('bestHours.cardTitle')}</Text>
+                <Text style={styles.slotsSub}>{t('bestHours.cardSub')}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.textDimmed} />
+            </TouchableOpacity>
+          </AnimatedEntrance>
         )}
 
         {loading ? (
@@ -668,7 +717,7 @@ const AnalyticsScreen = () => {
               </AnimatedEntrance>
             )}
 
-            {isPremium && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
+            {isPaid && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
               <AnimatedEntrance delay={175} slideFrom="bottom">
                 <View style={styles.bilanCard}>
                   <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
@@ -690,7 +739,7 @@ const AnalyticsScreen = () => {
             {dailyEarnings.length > 1 && (
               <EarningsChart
                 data={dailyEarnings}
-                title={t('analytics.dailyEarnings', 'Gains par jour')}
+                title={t(`analytics.earningsBy.${granularity}`)}
               />
             )}
 
@@ -779,7 +828,7 @@ const AnalyticsScreen = () => {
             </View>
 
             {/* ── PLUS UPSELL (free users) ── */}
-            {!isPremium && (
+            {!isPaid && (
               <TouchableOpacity
                 style={styles.upsellCard}
                 onPress={() => navigation.navigate('SubscriptionScreen')}
@@ -928,6 +977,32 @@ const styles = StyleSheet.create({
   bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
   bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+
+  // Carte d'entrée vers les meilleurs créneaux. Volontairement plus sobre que
+  // bilanCard : c'est une porte, pas un insight — elle ne doit pas disputer
+  // l'attention aux chiffres de la période affichée.
+  slotsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  slotsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,230,118,0.10)',
+  },
+  slotsText: { flex: 1 },
+  slotsTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  slotsSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
 
   // Date button
   dateBtn: {

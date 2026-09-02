@@ -28,6 +28,49 @@ export async function fetchRides(
   return (data ?? []) as unknown as Ride[];
 }
 
+/**
+ * Toutes les courses d'une période, paginées.
+ *
+ * PostgREST plafonne une réponse à `db-max-rows` (1000 par défaut) et il le
+ * fait SANS erreur : une sélection d'un an revenait tronquée et les totaux
+ * affichés étaient faux, sans que rien ne le signale. Tant que la sélection
+ * était bornée à 7 jours ce plafond restait hors d'atteinte ; il ne l'est plus
+ * depuis que Premium peut demander un mois ou une année.
+ *
+ * Borne haute EXCLUE (`lt`) : `end` est le début de la journée suivante, une
+ * course tombant pile dessus appartient au lendemain, pas aux deux.
+ *
+ * MAX_PAGES borne la boucle — au-delà, mieux vaut un total légèrement court
+ * qu'un écran qui pagine sans fin sur un compte anormal.
+ */
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 25; // 25 000 courses ≈ 2 ans à 30 scans/jour
+
+export async function fetchRidesInRange(
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<Ride[]> {
+  const out: Ride[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await supabase
+      .from('rides')
+      .select(RIDE_COLUMNS)
+      .eq('user_id', userId)
+      .gte('created_at', start.toISOString())
+      .lt('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as Ride[];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
 export async function createRide(params: {
   userId: string;
   platform: 'UBER' | 'BOLT' | 'HEETCH' | 'UNKNOWN';

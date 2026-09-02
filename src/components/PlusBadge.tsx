@@ -31,6 +31,11 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Sans ca, la pastille s'etire sur toute la largeur des que son parent est
+    // une colonne — et le petit rond vert devient une barre verte en travers de
+    // l'ecran. Une pastille ne s'etire jamais : la contrainte est portee ici,
+    // pas laissee a la charge de chaque appelant.
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,

@@ -25,14 +25,24 @@ import { hapticSuccess, hapticError } from '../utils/haptics';
 import { scannerService } from '../services/scanner';
 import { fetchFuelPrice } from '../services/fuelService';
 import BrandLoader from '../components/BrandLoader';
+import SafeGradient from '../components/SafeGradient';
 import PlusBadge from '../components/PlusBadge';
 
 const PreferencesScreen = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
 
-  const isPremium = getEffectivePlanTier(profile) !== 'free';
+  /// Payant = 'plus' OU 'premium'. Tout ce que cet ecran verrouille est leve
+  /// des Plus : aucun reglage d'ici n'est propre a Premium.
+  const isPaid = getEffectivePlanTier(profile) !== 'free';
+
+  /// Virgule decimale en francais. Les curseurs affichaient « 1.10€/km » avec
+  /// un point, seul endroit de l'app a le faire.
+  const dec = (v: number, digits = 2) => {
+    const out = v.toFixed(digits);
+    return i18n.language.startsWith('fr') ? out.replace('.', ',') : out;
+  };
 
   // --- ÉTATS ---
   const [loading, setLoading] = useState(true);
@@ -47,7 +57,7 @@ const PreferencesScreen = () => {
   /// curseurs de seuils, qui montrent FREE_THRESHOLDS plutôt que la valeur stockée.
   /// Un compte free ayant activé l'option avant ce verrou ne la voit donc plus
   /// active, ce qui est honnête : sans données véhicule, elle n'avait aucun effet.
-  const fuelToggleOn = isPremium && deductFuel;
+  const fuelToggleOn = isPaid && deductFuel;
   const [useLiveActivity, setUseLiveActivityRaw] = useState(true);
   const setUseLiveActivity = (v: boolean) => {
     setUseLiveActivityRaw(v);
@@ -245,7 +255,7 @@ const PreferencesScreen = () => {
         <View style={styles.sectionLabel}>
           
           <Text style={styles.sectionLabelText}>{t('preferences.minimums', 'Seuils minimum')}</Text>
-          {!isPremium && <PlusBadge />}
+          {!isPaid && <PlusBadge />}
         </View>
 
         <View style={styles.card}>
@@ -259,7 +269,7 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minHr', 'Tarif/heure min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{(isPremium ? minHr : FREE_THRESHOLDS.hourly)}€/h</Text>
+                <Text style={styles.sliderValueText}>{(isPaid ? minHr : FREE_THRESHOLDS.hourly)}€/h</Text>
               </View>
             </View>
             <Slider
@@ -267,9 +277,9 @@ const PreferencesScreen = () => {
               minimumValue={10}
               maximumValue={80}
               step={1}
-              value={isPremium ? minHr : FREE_THRESHOLDS.hourly}
-              onValueChange={isPremium ? setMinHr : undefined}
-              disabled={!isPremium}
+              value={isPaid ? minHr : FREE_THRESHOLDS.hourly}
+              onValueChange={isPaid ? setMinHr : undefined}
+              disabled={!isPaid}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FFF"
@@ -292,7 +302,7 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minKm', 'Tarif/km min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{(isPremium ? minKm : FREE_THRESHOLDS.km).toFixed(2)}€/km</Text>
+                <Text style={styles.sliderValueText}>{dec(isPaid ? minKm : FREE_THRESHOLDS.km)}€/km</Text>
               </View>
             </View>
             <Slider
@@ -300,36 +310,51 @@ const PreferencesScreen = () => {
               minimumValue={0.3}
               maximumValue={4.0}
               step={0.05}
-              value={isPremium ? minKm : FREE_THRESHOLDS.km}
-              onValueChange={isPremium ? setMinKm : undefined}
-              disabled={!isPremium}
+              value={isPaid ? minKm : FREE_THRESHOLDS.km}
+              onValueChange={isPaid ? setMinKm : undefined}
+              disabled={!isPaid}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FFF"
             />
             <View style={styles.sliderRange}>
-              <Text style={styles.sliderRangeText}>0.30€</Text>
-              <Text style={styles.sliderRangeText}>4.00€</Text>
+              <Text style={styles.sliderRangeText}>{dec(0.3)}€</Text>
+              <Text style={styles.sliderRangeText}>{dec(4)}€</Text>
             </View>
           </View>
 
-          {!isPremium && (
+          {/* Deux vues et non une : le halo doit se dessiner À L'EXTÉRIEUR, or
+              la capsule a besoin d'`overflow: hidden` pour découper le dégradé
+              sur ses coins ronds. Les deux sur la même vue et Android rogne
+              l'ombre avec le reste. */}
+          {!isPaid && (
+            <View style={styles.thresholdUnlockWrap}>
             <TouchableOpacity
               style={styles.thresholdUnlockCard}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               onPress={() => navigation.navigate('SubscriptionScreen')}
+              accessibilityRole="button"
             >
-              <View style={styles.thresholdUnlockIcon}>
-                <MaterialCommunityIcons name="tune-vertical" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.thresholdUnlockTextBlock}>
-                <PlusBadge />
-                <Text style={styles.thresholdUnlockText}>
-                  {t('preferences.thresholdLock', 'Personnalise tes seuils avec Strive Plus')}
-                </Text>
-              </View>
-              <Feather name="arrow-up-right" size={18} color={colors.primary} />
+              {/* Dégradé diagonal très bas — 22 % à 5 % de vert. Il donne un
+                  corps à la capsule sans devenir un aplat : le blanc du libellé
+                  garde tout son contraste, là où un aplat #00E676 ne laisse
+                  passer ni blanc ni noir proprement. */}
+              <SafeGradient
+                colors={['rgba(0,230,118,0.22)', 'rgba(0,230,118,0.05)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+                pointerEvents="none"
+              />
+              {/* Un lien, rien de plus. La phrase qui recopiait les valeurs
+                  imposees a sauté : elles sont deja affichees dans les pastilles
+                  des deux curseurs, juste au-dessus. */}
+              <Text style={styles.thresholdUnlockLink}>
+                {t('preferences.thresholdLockCta')}
+              </Text>
+              <Feather name="arrow-up-right" size={15} color={colors.primary} />
             </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -385,10 +410,10 @@ const PreferencesScreen = () => {
               curseurs de seuils, et un tap sur la ligne mène au paywall. */}
           <TouchableOpacity
             style={styles.toggleRow}
-            activeOpacity={isPremium ? 1 : 0.7}
-            disabled={isPremium}
+            activeOpacity={isPaid ? 1 : 0.7}
+            disabled={isPaid}
             onPress={() => navigation.navigate('SubscriptionScreen')}
-            accessibilityRole={isPremium ? undefined : 'button'}
+            accessibilityRole={isPaid ? undefined : 'button'}
           >
             <View style={[styles.toggleIconWrap, { backgroundColor: fuelToggleOn ? 'rgba(0,230,118,0.12)' : 'rgba(255,255,255,0.06)' }]}>
               <Feather name="droplet" size={18} color={fuelToggleOn ? colors.primary : colors.textDimmed} />
@@ -396,14 +421,14 @@ const PreferencesScreen = () => {
             <View style={styles.toggleTextBlock}>
               <View style={styles.toggleTitleRow}>
                 <Text style={styles.toggleTitle}>{t('preferences.deductFuel', 'Retirer le carburant du prix')}</Text>
-                {!isPremium && <PlusBadge />}
+                {!isPaid && <PlusBadge style={styles.badgeInline} />}
               </View>
               <Text style={styles.toggleSub}>{t('preferences.deductFuelSub', 'Le prix affiché devient net du carburant estimé')}</Text>
             </View>
             <Switch
               value={fuelToggleOn}
-              onValueChange={isPremium ? setDeductFuel : undefined}
-              disabled={!isPremium}
+              onValueChange={isPaid ? setDeductFuel : undefined}
+              disabled={!isPaid}
               trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
               thumbColor={fuelToggleOn ? colors.primary : colors.textDimmed}
               ios_backgroundColor="rgba(255,255,255,0.08)"
@@ -474,10 +499,10 @@ const PreferencesScreen = () => {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color={colors.background} />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <>
-              <Feather name="check" size={20} color={colors.background} />
+              <Feather name="check" size={20} color={colors.onPrimary} />
               <Text style={styles.saveBtnText}>{t('preferences.save', 'Enregistrer')}</Text>
             </>
           )}
@@ -533,6 +558,11 @@ const styles = StyleSheet.create({
   // barrette d'accent disparaît pour la même raison — elle décorait un texte qui
   // n'a pas besoin d'être signalé.
   sectionLabel: {
+    // Rangee, et non colonne : la pastille « PLUS » de la section des seuils
+    // tombait sous le titre au lieu de se poser a cote, sur une ligne a elle.
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 10,
     marginTop: 18,
   },
@@ -574,6 +604,7 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   toggleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  badgeInline: { alignSelf: 'center' },
   toggleTextBlock: { flex: 1, paddingRight: 12 },
   toggleTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: 3 },
   toggleSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
@@ -665,33 +696,55 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sliderRangeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
+  // Contour vert, fond vide, libellé vert.
+  //
+  // Trois essais avant celui-là, et chacun a éliminé une piste : vert sur vert
+  // (illisible, lu comme un élément désactivé) ; fond neutre à libellé blanc
+  // (ne ressemble à rien de ce que l'app fait ailleurs) ; aplat vert à encre
+  // sombre (la bonne lisibilité, mais l'encre foncée sur une si petite surface
+  // fait une tache).
+  //
+  // Ce qui reste, et qui marche : pas d'aplat du tout. Contour vert, libellé
+  // BLANC. Le blanc sur le fond de la carte donne le meilleur contraste des
+  // quatre essais — un texte posé sur #00E676 n'y arrive jamais, quelle que
+  // soit sa couleur — le contour porte l'accent, et l'écran n'a pas un
+  // quatrième aplat vert qui dilue l'emphase des trois autres. C'est le bouton
+  // secondaire par défaut : le contour dit « on peut appuyer », le plein reste
+  // à l'action primaire, ici « Enregistrer ».
+  //
+  // `alignSelf` est ce qui l'empêche de s'étirer : sans lui la pastille reprend
+  // toute la largeur de la carte et redevient la bannière qu'on vient d'enlever.
+  // Le halo, à l'extérieur. Même signature lumineuse que « EN LIGNE » et
+  // « Enregistrer », en beaucoup plus discret : c'est ce qui rattache la
+  // capsule au reste de l'app sans lui donner le poids d'un bouton primaire.
+  thresholdUnlockWrap: {
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    borderRadius: 999,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
   thresholdUnlockCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
-    padding: 12,
-    gap: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(15,189,105,0.10)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(15,189,105,0.28)',
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderLeftWidth: 1,
-    borderRightColor: 'rgba(15,189,105,0.28)',
-    borderBottomColor: 'rgba(15,189,105,0.28)',
-    borderLeftColor: 'rgba(15,189,105,0.28)',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    // Découpe le dégradé sur les coins ronds.
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.38)',
   },
-  thresholdUnlockIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15,189,105,0.16)',
+  thresholdUnlockLink: {
+    color: colors.textMain,
+    fontSize: 13.5,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
-  thresholdUnlockTextBlock: { flex: 1, gap: 6 },
-  thresholdUnlockText: { color: colors.textMain, fontSize: 13, fontWeight: '800', lineHeight: 18 },
 
   // Status message
   statusBox: {
@@ -720,7 +773,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 17,
-    borderRadius: 16,
+    // Entierement arrondi, comme les pastilles et le CTA du paywall.
+    borderRadius: 999,
     marginTop: 6,
     marginBottom: 20,
     gap: 10,
@@ -731,7 +785,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   saveBtnText: {
-    color: colors.background,
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,

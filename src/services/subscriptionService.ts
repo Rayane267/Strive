@@ -53,8 +53,9 @@ export async function fetchPlanLimits(): Promise<void> {
       if (row.tier === 'free' || row.tier === 'plus' || row.tier === 'premium') {
         next[row.tier] = {
           dailyScans: row.daily_scans,
-          // analyticsRangeDays n'a pas de colonne dédiée (et n'est lu nulle part) :
-          // on garde le défaut du tier pour cohérence de l'interface PlanLimits.
+          // analyticsRangeDays n'a pas de colonne dédiée en DB, mais il EST lu
+          // (Analytics et Historique bornent la sélection du calendrier dessus,
+          // via getMaxRangeSpanDays). Ce repli est donc sa seule source de vérité.
           analyticsRangeDays: FALLBACK_LIMITS[row.tier].analyticsRangeDays,
         };
       }
@@ -120,6 +121,19 @@ export function getEffectivePlanTier(profile?: {
 
 export function getPlanLimits(tier: PlanTier): PlanLimits {
   return (_runtimeLimits ?? FALLBACK_LIMITS)[tier];
+}
+
+/**
+ * Écart maximal, en jours, entre les deux bornes d'une sélection au calendrier.
+ * `null` = aucune borne (Premium).
+ *
+ * Le -1 n'est pas une marge : `analyticsRangeDays` compte des journées, une
+ * sélection compte l'intervalle qui les sépare. 7 jours d'historique, ce sont
+ * bien 6 jours d'écart entre le premier et le dernier — du lundi au dimanche.
+ */
+export function getMaxRangeSpanDays(tier: PlanTier): number | null {
+  const days = getPlanLimits(tier).analyticsRangeDays;
+  return days === null ? null : Math.max(0, days - 1);
 }
 
 /**

@@ -12,6 +12,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
+import SafeGradient from '../components/SafeGradient';
 import { colors } from '../theme/colors';
 import { hapticSelection } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -222,7 +223,26 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
           reducedTransparencyFallbackColor="rgba(10,20,14,0.92)"
         />
         <View style={[StyleSheet.absoluteFill, styles.tintOverlay]} />
-        <View style={styles.shimmer} />
+        {/* Reflet du haut de la capsule, en DÉGRADÉ et non en aplat.
+            Un aplat de 1 px posé à `top: 0` est une ligne DROITE en travers
+            d'une capsule dont le bord haut est courbe : près des extrémités la
+            ligne quitte le bord et ses bouts carrés restent visibles. Sur iOS,
+            par-dessus le flou, ça se lit comme une barre oubliée sur la barre
+            d'onglets.
+            Un dégradé transparent → blanc → transparent n'a pas d'extrémité :
+            il s'éteint avant d'atteindre la courbe. C'est aussi ce que fait un
+            vrai reflet spéculaire, plus intense au centre. */}
+        <SafeGradient
+          colors={[
+            'rgba(255,255,255,0)',
+            'rgba(255,255,255,0.26)',
+            'rgba(255,255,255,0)',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.shimmer}
+          pointerEvents="none"
+        />
 
         <View
           style={styles.row}
@@ -419,14 +439,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8, 22, 14, 0.94)',
   },
 
+  // Retrait en pourcentage : le reflet doit mourir avant l'arrondi, or celui-ci
+  // vaut la moitié de la hauteur de la capsule quelle que soit la largeur de
+  // l'écran. Les 28 px fixes d'avant laissaient dépasser la ligne sur un petit
+  // écran et la coupaient trop court sur un grand.
   shimmer: {
     position: 'absolute',
     top: 0,
-    left: 28,
-    right: 28,
+    left: '14%',
+    right: '14%',
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 1,
   },
 
   row: {

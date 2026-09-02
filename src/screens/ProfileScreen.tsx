@@ -38,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 import AvatarView from '../components/AvatarView';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
+import { getWeekStart } from '../utils/dateUtils';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { revokeAppleAccess } from '../services/appleRevoke';
 import * as Sentry from '@sentry/react-native';
@@ -125,7 +126,16 @@ const ProfileScreen = () => {
     let cancelled = false;
     (async () => {
       try {
-        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        // La semaine EN COURS, et non une fenetre glissante de 7 jours : la
+        // carte annonce « Gains de la semaine », donc le total doit repartir de
+        // zero le lundi. Avec la fenetre glissante, un lundi matin affichait
+        // encore les gains du dimanche precedent, et le chiffre ne collait avec
+        // aucune semaine que le chauffeur puisse recouper.
+        //
+        // `resetHour` laisse a 0 volontairement : cet ecran ne lit pas les
+        // preferences, et aller chercher `day_reset_hour` pour un ecart de
+        // quelques heures une fois par semaine couterait un aller-retour.
+        const since = getWeekStart();
         const rides = await fetchRides(user.id, since);
         const total = rides
           .filter(r => r.status === 'ACCEPTED')
@@ -154,12 +164,20 @@ const ProfileScreen = () => {
   // l'envoyer. Il en manque une, rien n'arrive.
   const [pushEnabled, setPushEnabled] = useState(false);
 
+  /// Permission REFUSÉE au niveau système, ce qui n'est pas la même chose que
+  /// « désactivé dans l'app ». Distinguer les deux est tout l'objet de cet état.
+  const [pushBlocked, setPushBlocked] = useState(false);
+
   const refreshPushState = useCallback(async () => {
     const [token, status] = await Promise.all([
       AsyncStorage.getItem('@strive_fcm_token'),
       getNotificationStatus(),
     ]);
     setPushEnabled(!!token && status === 'granted');
+    // 'unknown' (Firebase indisponible) n'est PAS un refus : on ne bloque que
+    // sur un 'denied' explicite, sinon un simulateur sans Google Play Services
+    // afficherait un écran de blocage à tort.
+    setPushBlocked(status === 'denied');
   }, []);
 
   useEffect(() => {
@@ -708,12 +726,29 @@ const ProfileScreen = () => {
             value: i18n.language === 'fr' ? 'Français' : 'English',
             onPress: () => setLangSheetVisible(true),
           },
-          {
-            icon: 'bell-outline',
-            iconLib: 'mc',
-            title: t('preferences.push', 'Notifications push'),
-            toggle: { value: pushEnabled, onChange: togglePush },
-          },
+          // Un interrupteur qui ne peut pas s'allumer n'est pas un interrupteur.
+          // Après un refus système, iOS ne réaffiche jamais sa fenêtre :
+          // `registerPushToken` se fait répondre « non » de mémoire, sans rien
+          // montrer, et la bascule revenait en arrière toute seule. Le chauffeur
+          // voyait un réglage qui refuse de tenir, sans savoir pourquoi.
+          //
+          // Dans ce seul cas la ligne cesse d'être un interrupteur et devient un
+          // raccourci vers les Réglages iOS — le seul endroit où la décision peut
+          // encore être prise.
+          pushBlocked
+            ? {
+                icon: 'bell-off-outline',
+                iconLib: 'mc' as const,
+                title: t('preferences.push', 'Notifications push'),
+                sub: t('preferences.pushBlocked'),
+                onPress: () => openSettingsFor('notifications'),
+              }
+            : {
+                icon: 'bell-outline',
+                iconLib: 'mc' as const,
+                title: t('preferences.push', 'Notifications push'),
+                toggle: { value: pushEnabled, onChange: togglePush },
+              },
         ])}
 
         {/* Abonnement : « Passer à Strive Plus » n'apparaît qu'aux comptes

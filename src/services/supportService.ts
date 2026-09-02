@@ -49,6 +49,14 @@ export interface SupportTicket {
   created_at: string;
   updated_at: string;
   last_message_at: string;
+  /**
+   * Ticket ouvert par un compte Premium, donc traité en priorité.
+   *
+   * Posée par un trigger à l'insertion et immuable ensuite (cf.
+   * 20260901_support_priority.sql) : ce que le client enverrait ici serait
+   * ignoré, et l'afficher n'est donc jamais une promesse en l'air.
+   */
+  priority: boolean;
 }
 
 export interface SupportMessage {
@@ -63,7 +71,7 @@ export interface SupportMessage {
 export async function fetchTickets(): Promise<SupportTicket[]> {
   const { data, error } = await supabase
     .from('support_tickets')
-    .select('id, subject, status, category, subcategory, error_code, created_at, updated_at, last_message_at')
+    .select('id, subject, status, category, subcategory, error_code, created_at, updated_at, last_message_at, priority')
     .order('last_message_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as SupportTicket[];

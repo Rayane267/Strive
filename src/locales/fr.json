@@ -91,7 +91,7 @@
     "upgradeLink": "Passer Plus →",
     "subscriptionSub": "30 scans/jour, €/h en direct...",
     "subscriptionSubActive": "Annuler, changer de formule...",
-    "upgradeCardTitle": "Passe à Strive Plus",
+    "upgradeCardTitle": "Passez à Strive Plus",
     "upgradeCardSub": "30 scans/jour · €/h en direct · Sans engagement",
     "verified": "PARTENAIRE VÉRIFIÉ",
     "emailLabel": "EMAIL",
@@ -272,7 +272,7 @@
       "prideCta": "Voir votre bilan complet avec Plus"
     },
     "upgradeCard": {
-      "title": "Arrête de rouler à perte",
+      "title": "Arrêtez de rouler à perte",
       "sub": "Plus se rembourse en une seule course évitée",
       "perk1": "30 scans/jour",
       "perk2": "€/h en direct",
@@ -350,7 +350,12 @@
     "alerts": {
       "premiumTitle": "Accès Plus",
       "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus.",
-      "limitText": "7 jours maximum — sélection redémarrée à cette date"
+      "limitText": "{{days}} jours maximum — l'historique illimité est réservé à Premium"
+    },
+    "earningsBy": {
+      "day": "Gains par jour",
+      "week": "Gains par semaine",
+      "month": "Gains par mois"
     }
   },
   "history": {
@@ -371,7 +376,7 @@
     "acceptRate": "Taux accept.",
     "filterAll": "Tout · {{count}}",
     "selectDates": "Sélectionner les dates",
-    "upgradeForHistory": "Passez Plus pour voir tout votre historique",
+    "upgradeForHistory": "Passez Plus pour explorer vos journées passées",
     "status": {
       "ACCEPTED": "ACCEPTÉE",
       "DECLINED": "REFUSÉE"
@@ -416,9 +421,8 @@
     "enableTripId": "Activer l'identificateur",
     "enableTripIdSub": "Analyser les offres via le raccourci AssistiveTouch",
     "minimums": "Vos minimums",
-    "minHr": "Minimum $/h",
-    "minKm": "Minimum $/km",
-    "thresholdLock": "Personnalisez vos seuils avec Strive Plus",
+    "minHr": "Minimum €/h",
+    "minKm": "Minimum €/km",
     "dayReset": "Reset de la journée",
     "dayResetSub": "Heure à laquelle vos stats du jour se réinitialisent",
     "dayReset4am": "Reset à 4h du matin",
@@ -443,7 +447,9 @@
     "languageDevice": "Langue de l'appareil",
     "pushDeniedTitle": "Notifications refusées",
     "pushDeniedBody": "Vous avez refusé les notifications pour Strive. iOS ne repropose pas la demande — activez-les dans les Réglages de l'appareil.",
-    "openSettings": "Ouvrir les Réglages"
+    "openSettings": "Ouvrir les Réglages",
+    "thresholdLockCta": "Fixez les vôtres avec Plus",
+    "pushBlocked": "Bloquées dans les réglages du téléphone — appuyez pour les réactiver"
   },
   "upgrade": {
     "title": "Passer en Pro",
@@ -718,6 +724,7 @@
   "support": {
     "title": "Mes tickets",
     "subtitle": "Support Strive",
+    "priorityBadge": "Prioritaire",
     "menuSub": "Contacter le support, suivre vos demandes",
     "empty": "Aucun ticket pour l'instant",
     "emptyHint": "Une question, un souci ? Ouvrez un ticket, on vous répond vite.",
@@ -809,7 +816,7 @@
     "title": "Profil"
   },
   "subscription": {
-    "label": "STRIVE PLUS",
+    "label": "STRIVE",
     "heroTitle": "Sachez.\nDécidez. Gagnez.",
     "heroSub": "Toutes les courses ne se valent pas. Avec Strive Plus, vous savez avant d'accepter.",
     "values": {
@@ -845,7 +852,7 @@
     "yearlyAccess": "ABONNEMENT ANNUEL",
     "monthlyAccess": "ABONNEMENT MENSUEL",
     "heroTitleActive": "Strive Plus actif",
-    "heroSubActive": "Vous profitez de tous les avantages. Gérez votre abonnement ci-dessous.",
+    "heroSubActive": "Votre abonnement est actif. Gérez-le ci-dessous.",
     "activeTitle": "Abonnement actif",
     "activeSub": "Formule {{plan}}",
     "manage": "Gérer mon abonnement",
@@ -883,7 +890,7 @@
     "perMonthShort": "/mois",
     "perYearShort": "/an",
     "perMonthEquiv": "soit {{price}}/mois",
-    "switchYearlyHint": "Passe en annuel pour économiser {{percent}}%",
+    "switchYearlyHint": "Passez en annuel pour économiser {{percent}}%",
     "trialBadge": "7 JOURS D'ESSAI GRATUIT",
     "ctaTrial": "Commencer mes 7 jours gratuits",
     "ctaSubscribe": "S'abonner maintenant",
@@ -950,15 +957,36 @@
     "finePrintTrial": "{{days}} jours gratuits, puis {{price}} par {{period}}. Renouvellement automatique.",
     "finePrintNoTrial": "{{price}} par {{period}}. Renouvellement automatique, annulable à tout moment.",
     "benefit": {
-      "scans": "30 scans par jour au lieu de 3",
-      "thresholds": "Vos seuils €/h et €/km, pas les nôtres",
-      "traffic": "Le €/h calculé sur le trafic réel",
-      "fuel": "Le carburant de votre modèle déduit",
-      "history": "7 jours d'historique et de statistiques"
+      "plus": {
+        "scans": "30 scans par jour au lieu de 3",
+        "thresholds": "Vos seuils €/h et €/km, pas les nôtres",
+        "traffic": "Le €/h calculé sur le trafic réel",
+        "fuel": "Le carburant de votre modèle déduit",
+        "history": "Vos statistiques sur 7 jours d'affilée"
+      },
+      "premium": {
+        "allPlus": "Toutes les fonctionnalités Plus",
+        "scans": "Scans illimités",
+        "history": "Historique et statistiques illimités",
+        "slots": "Vos meilleurs créneaux, heure par heure",
+        "support": "Support prioritaire"
+      }
     },
     "saveAmount": "ÉCONOMISEZ {{amount}}",
     "heroTitleWelcomeEnd": "Vos 30 scans\nofferts sont finis.",
-    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 30 par jour — tous les jours."
+    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 30 par jour — tous les jours.",
+    "tier": {
+      "plus": "Plus",
+      "premium": "Premium"
+    },
+    "heroSubPremium": "Plus aucune limite, et l'app vous dit quand travailler — pas seulement quelle course prendre.",
+    "premiumMonthlyFallbackPrice": "19,99 €",
+    "premiumYearlyFallbackPrice": "179,99 €",
+    "upgradeTitle": "Ce que Premium ajoute",
+    "upgradeSub": "Vous gardez tout ce que Plus vous donne déjà.",
+    "upgradeProrata": "Le changement est immédiat. {{store}} déduit le temps déjà payé sur Plus.",
+    "ctaUpgrade": "Passer à Premium",
+    "bestValueStrip": "Meilleure offre"
   },
   "network": {
     "offline": "Pas de connexion internet"
@@ -1143,5 +1171,36 @@
     "helloNamed": "Bienvenue, {{name}}.",
     "unit": "scans offerts",
     "a11y": "{{n}} scans offerts"
+  },
+  "bestHours": {
+    "title": "Meilleurs créneaux",
+    "menuTitle": "Meilleurs créneaux",
+    "cardTitle": "Vos meilleurs créneaux",
+    "cardSub": "Les heures où ça sonne, et celles où ça paie",
+    "lockTitle": "Réservé à Premium",
+    "lockSub": "La grille de vos 90 derniers jours, heure par heure : quand votre téléphone sonne le plus, et quand vos courses rapportent le mieux. Elle demande des mois d'historique pour dire quelque chose.",
+    "lockCta": "Découvrir Premium",
+    "metric": {
+      "offers": "Ça sonne",
+      "hourlyRate": "Ça paie"
+    },
+    "hint": {
+      "offers": "Les heures où votre téléphone a le plus sonné. Les courses refusées comptent : elles disent que le travail était là.",
+      "hourlyRate": "Ce que vos courses acceptées ont réellement rapporté, carburant déduit, ramené au temps passé en course."
+    },
+    "slot": "{{day}} {{hour}}h–{{nextHour}}h",
+    "detailOffers_one": "{{count}} course",
+    "detailOffers_other": "{{count}} courses",
+    "perHour": "/h",
+    "noAccepted": "aucune course acceptée",
+    "tapHint": "Touchez une case pour voir le détail du créneau.",
+    "top": {
+      "offers": "Vos créneaux les plus chargés",
+      "hourlyRate": "Vos créneaux les plus rentables"
+    },
+    "notEnoughSlots": "Aucun créneau n'atteint encore {{min}} courses — en dessous, un classement ne repose sur rien.",
+    "empty": "Pas encore assez de données",
+    "emptyHint": "Il faut environ {{min}} courses scannées pour que la grille veuille dire quelque chose. Vous en êtes à {{current}}.",
+    "footnote": "Sur les {{days}} derniers jours · {{rides}} courses scannées. Les refus comptent dans le volume, jamais dans le taux horaire."
   }
 }

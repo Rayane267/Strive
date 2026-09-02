@@ -28,6 +28,7 @@ import OnboardingScreenRaw from '../screens/OnboardingScreen';
 import HelpScreenRaw from '../screens/HelpScreen';
 import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
 import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
+import BestHoursScreenRaw from '../screens/BestHoursScreen';
 import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
 
 const AuthScreen = withErrorBoundary(AuthScreenRaw);
@@ -42,6 +43,7 @@ const HelpScreen = withErrorBoundary(HelpScreenRaw);
 const SupportTicketsScreen = withErrorBoundary(SupportTicketsScreenRaw);
 const SupportTicketDetailScreen = withErrorBoundary(SupportTicketDetailScreenRaw);
 const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
+const BestHoursScreen = withErrorBoundary(BestHoursScreenRaw);
 
 const Stack = createNativeStackNavigator();
 
@@ -267,6 +269,12 @@ const RootNavigator = () => {
           <Stack.Screen
             name="SupportTicketDetail"
             component={SupportTicketDetailScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+
+          <Stack.Screen
+            name="BestHours"
+            component={BestHoursScreen}
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
 

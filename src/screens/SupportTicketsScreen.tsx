@@ -191,7 +191,17 @@ const SupportTicketsScreen = () => {
             <Text style={styles.ticketTime}>
               {formatTimeAgo(item.last_message_at, t)}
             </Text>
-            <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+            <View style={styles.ticketBottomRight}>
+              {item.priority ? (
+                <View style={styles.prioBadge}>
+                  <Feather name="zap" size={10} color={colors.primary} />
+                  <Text style={styles.prioBadgeTxt}>
+                    {t('support.priorityBadge', 'Prioritaire')}
+                  </Text>
+                </View>
+              ) : null}
+              <Feather name="chevron-right" size={16} color={colors.textDimmed} />
+            </View>
           </View>
         </TouchableOpacity>
       </ListItemEntrance>
@@ -199,7 +209,7 @@ const SupportTicketsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -289,7 +299,7 @@ const SupportTicketsScreen = () => {
           onPress={() => setComposeOpen(true)}
           activeOpacity={0.85}
         >
-          <Feather name="plus" size={18} color={colors.background} />
+          <Feather name="plus" size={18} color={colors.onPrimary} />
           <Text style={styles.newBtnText}>
             {t('support.newTicket', 'Nouveau ticket')}
           </Text>
@@ -546,12 +556,38 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   ticketTime: { color: colors.textDimmed, fontSize: 12 },
+  ticketBottomRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Pastille « Prioritaire » : la seule preuve visible que Premium change
+  // quelque chose au support. Discrète — c'est une confirmation, pas une pub.
+  prioBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0,230,118,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.22)',
+  },
+  prioBadgeTxt: {
+    color: colors.primary,
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
 
+  // Centré, mais dans le tiers HAUT plutôt qu'au milieu d'un écran vide.
+  //
+  // `justifyContent: center` combiné à `paddingTop: 80` poussait le bloc bien
+  // en dessous du centre optique : le regard tombait sur du noir, et le message
+  // arrivait au niveau du pouce. `flex-start` avec une marge mesurée le remonte
+  // là où on lit.
   empty: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
+    justifyContent: 'flex-start',
+    paddingTop: 56,
     gap: 10,
   },
   emptyIcon: {
@@ -574,7 +610,10 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
 
-  footer: { paddingHorizontal: 20, paddingVertical: 14 },
+  // Plus d'air en bas qu'en haut : le bouton est le dernier élément de l'écran,
+  // et l'encoche gérée par SafeAreaView ne suffit pas à le décoller
+  // visuellement du bord.
+  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18 },
   newBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -582,7 +621,8 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 16,
+    // Capsule pleine, comme « Enregistrer » et le CTA du paywall.
+    borderRadius: 999,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -590,7 +630,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   newBtnText: {
-    color: colors.background,
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,

@@ -10,6 +10,16 @@ export const colors = {
   // fluo qui écrasait le texte des lignes. En accent ponctuel (badges, bordures,
   // liens) `primary` reste le bon ton.
   primarySoft: '#0FBD69',
+  /// Encre des elements poses SUR un aplat vert : texte et icones des boutons
+  /// pleins, coches des listes d'avantages.
+  ///
+  /// Un vert tres sombre, et non `background` : ce dernier (#0A120E) est presque
+  /// neutre et se lit comme du noir pose sur la couleur de marque. #062318 garde
+  /// la teinte, ce qui adoucit le contact — c'est deja ce qu'utilisaient le CTA
+  /// du paywall et les coches, les deux endroits ou le contact vert/encre etait
+  /// juge reussi. Le blanc n'est pas une option : sur #00E676 il tombe autour de
+  /// 1,7:1, largement sous le seuil lisible.
+  onPrimary: '#062318',
   danger: '#FF4D4D',
   textMain: '#FFFFFF',
   textMuted: '#8F9B96',

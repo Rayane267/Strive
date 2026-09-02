@@ -27,9 +27,9 @@ import { useAuth } from '../context/AuthContext';
 import { Toast, useToast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import {
-  buyPlus,
+  buySubscription,
   restorePurchases,
-  getPlusPackages,
+  getSubscriptionPackages,
   checkTrialEligibility,
   isIAPAvailable,
   IAP_PRODUCTS,
@@ -47,6 +47,11 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 type Cycle = 'monthly' | 'yearly';
 
+/// Le palier qu'on VEND sur cet écran, distinct de celui que le chauffeur porte
+/// déjà (`tier`). Deux notions qui se confondaient tant qu'il n'y avait qu'un
+/// palier payant.
+type SellTier = 'plus' | 'premium';
+
 const TRIAL_DAYS = 7;
 
 /// Montants de repli, en clair, quand le store ne répond pas.
@@ -59,7 +64,24 @@ const TRIAL_DAYS = 7;
 ///
 /// ⚠️ À garder synchro avec les deux clés i18n ci-dessus. Le store reste la
 /// source de vérité : ces valeurs ne servent QUE quand il ne répond pas.
-const FALLBACK_AMOUNT: Record<Cycle, number> = { monthly: 9.99, yearly: 89.99 };
+const FALLBACK_AMOUNT: Record<SellTier, Record<Cycle, number>> = {
+  plus:    { monthly: 9.99,  yearly: 89.99 },
+  premium: { monthly: 19.99, yearly: 179.99 },
+};
+
+/// Le SKU derrière chaque combinaison palier × cycle. Une table plutôt que deux
+/// ternaires imbriqués : c'est la seule chose qui relie l'écran au store, et
+/// elle doit se relire d'un coup d'œil.
+const PRODUCT_ID: Record<SellTier, Record<Cycle, string>> = {
+  plus: {
+    monthly: IAP_PRODUCTS.PLUS_MONTHLY,
+    yearly:  IAP_PRODUCTS.PLUS_YEARLY,
+  },
+  premium: {
+    monthly: IAP_PRODUCTS.PREMIUM_MONTHLY,
+    yearly:  IAP_PRODUCTS.PREMIUM_YEARLY,
+  },
+};
 
 /// Ce que Plus AJOUTE — et rien d'autre.
 ///
@@ -85,7 +107,25 @@ const FALLBACK_AMOUNT: Record<Cycle, number> = { monthly: 9.99, yearly: 89.99 };
 /// Les libellés sont volontairement COURTS — une ligne, lisible d'un coup d'œil.
 /// Les phrases explicatives de `feat.*` restent en base pour d'autres surfaces ;
 /// ici elles cassaient le rythme et repoussaient les formules hors de l'écran.
-const BENEFITS = ['scans', 'thresholds', 'traffic', 'fuel', 'history'] as const;
+///
+/// Premium ne RÉÉNUMÈRE PAS Plus : il le résume en une ligne (`allPlus`), puis
+/// liste ce qui lui est propre. Les sept lignes précédentes formaient un mur où
+/// les quatre qui justifient l'écart de prix se noyaient dans les trois que le
+/// chauffeur aurait de toute façon ; la ligne de résumé dit la même chose en un
+/// cinquième de la hauteur et laisse les quatre arguments seuls à l'écran.
+///
+/// Les deux listes gardent la MÊME LONGUEUR — cinq lignes chacune — donc la
+/// bascule de la pastille ne fait sauter ni les cartes de prix ni le CTA.
+const BENEFITS: Record<SellTier, readonly string[]> = {
+  plus:    ['scans', 'thresholds', 'traffic', 'fuel', 'history'],
+  premium: ['allPlus', 'scans', 'history', 'slots', 'support'],
+};
+
+/// Ce que Premium AJOUTE à Plus — la seule liste qui intéresse un abonné qui
+/// monte. Lui réafficher les sept lignes complètes l'obligerait à relire quatre
+/// avantages qu'il paie déjà pour trouver les trois nouveaux.
+const UPGRADE_BENEFITS = ['scans', 'history', 'slots', 'support'] as const;
+
 
 const FAQ_ITEMS = [1, 2, 3, 4] as const;
 
@@ -103,7 +143,7 @@ const ORBS = [
 const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   /// L'écran est le même quel qu'en soit le chemin, mais pas le moment. Arriver
   /// ici parce qu'on vient d'épuiser ses 30 scans offerts, ce n'est pas y venir
@@ -117,13 +157,64 @@ const SubscriptionScreen = () => {
   const tier = getEffectivePlanTier(profile);
   const isPlus = tier !== 'free';
 
+  /// Le MENSUEL par defaut — choix produit assume.
+  ///
+  /// Le bandeau vert et la coche suivent la selection : le defaut decide donc
+  /// de la carte que l'ecran met en avant. On garde le mensuel, dont le ticket
+  /// d'entree est bien plus facile a accepter pour un chauffeur — 9,99 EUR
+  /// contre 89,99 EUR d'un coup. La carte annuelle garde son economie affichee
+  /// pour ceux qui la cherchent, sans que l'ecran pousse dessus.
   const [cycle, setCycle] = useState<Cycle>('monthly');
+  const [sellTier, setSellTier] = useState<SellTier>('plus');
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [monthly, setMonthly] = useState<PlusPackage | null>(null);
-  const [yearly, setYearly] = useState<PlusPackage | null>(null);
+  const [packages, setPackages] = useState<
+    Record<SellTier, { monthly: PlusPackage | null; yearly: PlusPackage | null }>
+  >({ plus: { monthly: null, yearly: null }, premium: { monthly: null, yearly: null } });
+
   const [trialByProduct, setTrialByProduct] = useState<Record<string, boolean>>({});
   const [openedFaq, setOpenedFaq] = useState<number | null>(null);
+
+  /// Un abonné Plus a un palier au-dessus du sien.
+  /// C'est le seul cas où l'écran montre À LA FOIS la carte d'abonnement actif
+  /// et des formules — les deux répondent à des questions différentes :
+  /// « qu'est-ce que j'ai » et « qu'est-ce que je peux avoir en plus ».
+  const canUpgrade = tier === 'plus';
+
+  /// Un abonné qui monte n'a qu'une chose à acheter : le palier du dessus. La
+  /// pastille reste masquée — elle n'offrirait aucun choix — mais les prix, les
+  /// cartes et le SKU doivent déjà parler Premium.
+  useEffect(() => {
+    if (canUpgrade) setSellTier('premium');
+  }, [canUpgrade]);
+
+  /// Position et largeur MESURÉES de chaque segment de la pastille.
+  ///
+  /// « Plus » et « Premium » n'ont pas la même largeur : un curseur de taille
+  /// fixe aurait débordé du premier ou flotté dans le second. On lit donc la
+  /// géométrie réelle au premier rendu, ce qui laisse aussi les traductions
+  /// libres de changer de longueur.
+  const [tierLayout, setTierLayout] = useState<
+    Record<SellTier, { x: number; width: number }>
+  >({ plus: { x: 0, width: 0 }, premium: { x: 0, width: 0 } });
+
+  const tierMeasured = tierLayout.plus.width > 0 && tierLayout.premium.width > 0;
+
+  /// 0 = Plus, 1 = Premium. Le curseur GLISSE d'un segment à l'autre : c'est ce
+  /// qui fait comprendre qu'on bascule entre deux états d'une même chose, là où
+  /// un fond qui apparaît et disparaît donne deux boutons sans rapport.
+  const thumbAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(thumbAnim, {
+      toValue: sellTier === 'premium' ? 1 : 0,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      // `width` n'est pas animable par le driver natif, et mélanger les deux
+      // pilotes sur la même vue produit des sauts d'une frame. Tout passe donc
+      // par le driver JS — la vue est minuscule, ça reste fluide.
+      useNativeDriver: false,
+    }).start();
+  }, [sellTier, thumbAnim]);
 
   // Hero orb float animation
   const orbAnim = useRef(new Animated.Value(0)).current;
@@ -141,7 +232,7 @@ const SubscriptionScreen = () => {
   // CTA pulse
   const ctaScale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (purchasing || isPlus) return;
+    if (purchasing || (isPlus && !canUpgrade)) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(ctaScale, { toValue: 1.035, duration: 1000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
@@ -150,7 +241,7 @@ const SubscriptionScreen = () => {
     );
     loop.start();
     return () => loop.stop();
-  }, [ctaScale, purchasing, isPlus]);
+  }, [ctaScale, purchasing, isPlus, canUpgrade]);
 
   // Crown glow pulse
   const glowAnim = useRef(new Animated.Value(0.6)).current;
@@ -168,25 +259,35 @@ const SubscriptionScreen = () => {
     let cancelled = false;
     (async () => {
       const [pkgs, elig] = await Promise.all([
-        getPlusPackages(),
-        checkTrialEligibility([IAP_PRODUCTS.PLUS_MONTHLY, IAP_PRODUCTS.PLUS_YEARLY]),
+        getSubscriptionPackages(),
+        checkTrialEligibility([
+          IAP_PRODUCTS.PLUS_MONTHLY,
+          IAP_PRODUCTS.PLUS_YEARLY,
+          IAP_PRODUCTS.PREMIUM_MONTHLY,
+          IAP_PRODUCTS.PREMIUM_YEARLY,
+        ]),
       ]);
       if (cancelled) return;
-      setMonthly(pkgs.monthly);
-      setYearly(pkgs.yearly);
+      setPackages(pkgs);
       setTrialByProduct(elig);
     })();
     return () => { cancelled = true; };
   }, []);
 
+  const pkgOf = (ti: SellTier, cy: Cycle) =>
+    cy === 'yearly' ? packages[ti].yearly : packages[ti].monthly;
+
   const rawOf = (cy: Cycle) =>
-    (cy === 'yearly' ? yearly : monthly)?.rawPrice || FALLBACK_AMOUNT[cy];
+    pkgOf(sellTier, cy)?.rawPrice || FALLBACK_AMOUNT[sellTier][cy];
   const currencyOf = (cy: Cycle) =>
-    (cy === 'yearly' ? yearly : monthly)?.currencyCode || 'EUR';
+    pkgOf(sellTier, cy)?.currencyCode || 'EUR';
 
   const money = (amount: number, currency: string): string => {
     try {
-      return new Intl.NumberFormat(undefined, {
+      // La locale de l'APP, pas celle de l'appareil : un téléphone en anglais
+      // affichait « €239.88 » juste à côté du « 179,99 € » venu des traductions,
+      // deux formats de la même monnaie dans la même carte.
+      return new Intl.NumberFormat(i18n.language, {
         style: 'currency', currency, maximumFractionDigits: 2,
       }).format(amount);
     } catch {
@@ -210,17 +311,24 @@ const SubscriptionScreen = () => {
     return money(cy === 'yearly' ? raw / 52 : (raw * 12) / 52, currencyOf(cy));
   };
 
-  const activeProductId = cycle === 'yearly' ? IAP_PRODUCTS.PLUS_YEARLY : IAP_PRODUCTS.PLUS_MONTHLY;
+  const activeProductId = PRODUCT_ID[sellTier][cycle];
 
   // Éligibilité essai : par produit. Le CTA reflète le cycle sélectionné ;
   // le bandeau de chaque carte reflète l'éligibilité de SON produit.
   const trialEligible = !!trialByProduct[activeProductId];
-  const isTrial = (cy: Cycle) =>
-    !!trialByProduct[cy === 'yearly' ? IAP_PRODUCTS.PLUS_YEARLY : IAP_PRODUCTS.PLUS_MONTHLY];
+  const isTrial = (cy: Cycle) => !!trialByProduct[PRODUCT_ID[sellTier][cy]];
 
   const priceOf = (cy: Cycle) =>
-    (cy === 'yearly' ? yearly : monthly)?.priceString ??
-    t(cy === 'yearly' ? 'subscription.yearlyFallbackPrice' : 'subscription.monthlyFallbackPrice');
+    pkgOf(sellTier, cy)?.priceString ??
+    t(
+      sellTier === 'premium'
+        ? cy === 'yearly'
+          ? 'subscription.premiumYearlyFallbackPrice'
+          : 'subscription.premiumMonthlyFallbackPrice'
+        : cy === 'yearly'
+          ? 'subscription.yearlyFallbackPrice'
+          : 'subscription.monthlyFallbackPrice',
+    );
 
   const mainPriceText = priceOf(cycle);
 
@@ -234,15 +342,31 @@ const SubscriptionScreen = () => {
     if (!user || purchasing) return;
     setPurchasing(true);
     try {
-      const { entitlement } = await buyPlus(user.id, activeProductId);
+      const { entitlement } = await buySubscription(activeProductId);
       hapticSuccess();
       // Déblocage IMMÉDIAT : RevenueCat a confirmé l'achat → on débloque l'UI sans
       // attendre le webhook (lent en sandbox). La DB est réconciliée en arrière-plan.
       // Si RC ne remonte pas d'entitlement (mapping RC incomplet) mais que l'achat
-      // a réussi, on débloque quand même 'plus' — le produit acheté est un plan Plus.
-      markSubscribed(entitlement === 'premium' ? 'premium' : 'plus');
+      // Repli sur le palier VENDU, et non sur 'plus' en dur : quand RevenueCat
+      // ne remonte pas d'entitlement (mapping incomplet) après un achat Premium,
+      // débloquer 'plus' dégraderait le chauffeur au palier qu'il n'a pas pris.
+      const soldTier =
+        entitlement === 'premium' ? 'premium'
+        : entitlement === 'plus' ? 'plus'
+        : sellTier;
+      markSubscribed(soldTier);
       navigation.goBack();
-      waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free', { maxWaitMs: 30000 })
+
+      // La condition d'attente dépend d'OÙ l'on partait. « different de free »
+      // est déjà vrai pour un abonné Plus qui monte : la promesse se résolvait
+      // instantanément, sur l'ancien palier, et le rafraîchissement tombait
+      // avant que le webhook n'ait écrit 'premium'. On attend donc le palier
+      // exact qu'on vient de vendre.
+      const reached = soldTier === 'premium'
+        ? (p: { subscription_tier: string }) => p.subscription_tier === 'premium'
+        : (p: { subscription_tier: string }) => p.subscription_tier !== 'free';
+
+      waitForProfileUpdate(user.id, reached, { maxWaitMs: 30000 })
         .then(p => { if (p) refreshProfile(); })
         .catch(() => {});
       return;
@@ -307,7 +431,49 @@ const SubscriptionScreen = () => {
 
   const storeLabel = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
 
-  const ctaLabel = trialEligible ? t('subscription.ctaTrial') : t('subscription.ctaSubscribe');
+  // « S'abonner » à quelqu'un qui est déjà abonné ne veut rien dire, et un
+  // abonné n'est de toute façon plus éligible à l'essai — un groupe
+  // d'abonnement Apple n'en accorde qu'un seul, quel que soit le palier.
+  const ctaLabel =
+    canUpgrade ? t('subscription.ctaUpgrade')
+    : trialEligible ? t('subscription.ctaTrial')
+    : t('subscription.ctaSubscribe');
+
+  const showBuyBar = !isPlus || canUpgrade;
+
+  /// Phrase sous le titre du hero. Vide sur le chemin d'achat — seuls l'abonné
+  /// actif et le chauffeur qui vient d'épuiser ses scans offerts en gardent une,
+  /// parce qu'elles nomment une situation et non un argument de vente.
+  const heroSubText =
+    isPlus ? t('subscription.heroSubActive')
+    : fromWelcomeEnd ? t('subscription.heroSubWelcomeEnd')
+    : '';
+
+  /// Quelle liste d'avantages, et écrite dans le vocabulaire de quel palier.
+  /// Un abonné voit ce qu'il A ; un visiteur, ce que la pastille désigne.
+  const benefitTier: SellTier =
+    isPlus ? (tier === 'premium' ? 'premium' : 'plus') : sellTier;
+  const benefitKeys = BENEFITS[benefitTier];
+
+  /// Toutes les lignes au meme poids. Une premiere version atenuait celles que
+  /// Premium partage avec Plus ; depuis qu'elles sont resumees en une seule
+  /// ligne (`allPlus`), il n'y a plus rien a distinguer — et griser cette ligne
+  /// de resume la faisait lire comme une restriction alors qu'elle annonce un
+  /// acquis.
+  const renderBenefits = (keys: readonly string[], copyTier: SellTier) => (
+    <View style={styles.benefits}>
+      {keys.map(k => (
+        <View key={k} style={styles.benefitRow}>
+          <View style={styles.check}>
+            <Feather name="check" size={13} color="#062318" />
+          </View>
+          <Text style={styles.benefitText}>
+            {t(`subscription.benefit.${copyTier}.${k}`)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
   const periodWord = cycle === 'yearly' ? t('subscription.periodYear') : t('subscription.periodMonth');
   const finePrint = trialEligible
     ? t('subscription.finePrintTrial', { days: TRIAL_DAYS, price: mainPriceText, period: periodWord })
@@ -336,7 +502,12 @@ const SubscriptionScreen = () => {
               ? t('subscription.trialStrip', { days: TRIAL_DAYS })
               : cy === 'monthly'
                 ? t('subscription.trust.commitment')
-                : ''}
+                // Le bandeau annuel etait vide a gauche, avec l'economie collee
+                // a droite. Le libelle comble ce vide et donne son argument a la
+                // carte annuelle — en gris, puisque le vert reste au mensuel.
+                // Claim factuel, verifiable au prix hebdomadaire juste en
+                // dessous : pas une preuve sociale inventee.
+                : t('subscription.bestValueStrip')}
           </Text>
           {cy === 'yearly' && savedAmount > 0 && (
             <Text style={[styles.stripeBadge, selected && styles.stripeBadgeOn]}>
@@ -416,33 +587,98 @@ const SubscriptionScreen = () => {
             </View>
           </View>
 
+          {/* La marque seule : le palier est porté par la pastille, deux lignes
+              plus bas. Laisser « STRIVE PLUS » ici donnerait deux étiquettes de
+              palier qui se contredisent dès qu'on touche la pastille. */}
           <Text style={styles.labelText}>{t('subscription.label')}</Text>
           <Text style={styles.heroTitle}>
             {isPlus ? t('subscription.heroTitleActive')
               : fromWelcomeEnd ? t('subscription.heroTitleWelcomeEnd')
               : t('subscription.heroTitle')}
           </Text>
-          <Text style={styles.heroSub}>
-            {isPlus ? t('subscription.heroSubActive')
-              : fromWelcomeEnd ? t('subscription.heroSubWelcomeEnd')
-              : t('subscription.heroSub')}
-          </Text>
+          {/* Plus de phrase d'accroche sur le chemin d'achat : le titre porte
+              déjà le message, et la pastille juste en dessous a besoin d'air
+              pour se voir. Les DEUX paliers en sont privés ensemble — n'en
+              garder qu'un faisait sauter la mise en page à chaque tap.
+              `heroSub` et `heroSubPremium` restent en base, prêts à revenir. */}
+          {heroSubText ? (
+            <Text style={styles.heroSub}>{heroSubText}</Text>
+          ) : null}
+
+          {/* ── PASTILLE DE PALIER ──
+              Sous la phrase, et au-dessus des avantages : tout ce qu'elle
+              change se trouve EN DESSOUS d'elle, donc la cause précède l'effet.
+              Placée plus bas, entre les avantages et les cartes, elle se lirait
+              comme un simple sélecteur de prix.
+
+              Elle ne s'affiche pas pour un abonné : il ne choisit plus. */}
+          {!isPlus && (
+            <View style={styles.tierPill}>
+              {/* Le curseur, sous les libellés. Rendu seulement une fois les deux
+                  segments mesurés : autrement il apparaîtrait à zéro puis
+                  sauterait à sa place au premier layout. */}
+              {tierMeasured && (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.tierThumb,
+                    {
+                      transform: [
+                        {
+                          translateX: thumbAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [tierLayout.plus.x, tierLayout.premium.x],
+                          }),
+                        },
+                      ],
+                      width: thumbAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [tierLayout.plus.width, tierLayout.premium.width],
+                      }),
+                    },
+                  ]}
+                />
+              )}
+
+              {(['plus', 'premium'] as SellTier[]).map(ti => {
+                const on = sellTier === ti;
+                return (
+                  <TouchableOpacity
+                    key={ti}
+                    style={styles.tierBtn}
+                    onLayout={e => {
+                      const { x, width } = e.nativeEvent.layout;
+                      setTierLayout(prev =>
+                        prev[ti].x === x && prev[ti].width === width
+                          ? prev
+                          : { ...prev, [ti]: { x, width } },
+                      );
+                    }}
+                    onPress={() => { hapticLight(); setSellTier(ti); }}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.tierTxt, on && styles.tierTxtOn]}>
+                      {t(`subscription.tier.${ti}`)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
-        {/* ── CE QUE ÇA APPORTE ── */}
-        <View style={styles.benefits}>
-          {BENEFITS.map(k => (
-            <View key={k} style={styles.benefitRow}>
-              <View style={styles.check}>
-                <Feather name="check" size={13} color="#062318" />
-              </View>
-              <Text style={styles.benefitText}>{t(`subscription.benefit.${k}`)}</Text>
-            </View>
-          ))}
-        </View>
+        {/* ── CE QUE ÇA APPORTE ──
+            Chez un abonné qui peut monter, la liste descend sous la carte
+            d'abonnement : il doit d'abord voir ce qu'il a, ensuite ce qui
+            s'ajoute. Ici elle serait lue comme l'inventaire de son propre
+            abonnement. */}
+        {!canUpgrade && renderBenefits(benefitKeys, benefitTier)}
 
         {isPlus ? (
           /* ── ABONNÉ ACTIF ── */
+          <>
           <View style={styles.activeCard}>
             <SafeGradient
               colors={['rgba(0,230,118,0.12)', 'rgba(0,230,118,0.03)']}
@@ -470,6 +706,36 @@ const SubscriptionScreen = () => {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* ── MONTER EN PREMIUM ── */}
+          {canUpgrade && (
+            <>
+              <View style={styles.upgradeHead}>
+                <Text style={styles.upgradeTitle}>{t('subscription.upgradeTitle')}</Text>
+                <Text style={styles.upgradeSub}>{t('subscription.upgradeSub')}</Text>
+              </View>
+
+              {renderBenefits(UPGRADE_BENEFITS, 'premium')}
+
+              <View style={styles.plans}>
+                {renderPlan('yearly')}
+                {renderPlan('monthly')}
+              </View>
+
+              {/* Le frein d'un abonné qui monte n'est pas « vais-je être
+                  facturé aujourd'hui » mais « vais-je payer deux fois ». Les
+                  quatre SKU vivant dans le même groupe d'abonnement, le store
+                  convertit et déduit le temps déjà payé : c'est ça qu'il faut
+                  lui dire, pas la phrase d'essai gratuit. */}
+              <View style={styles.reassure}>
+                <Feather name="shield" size={14} color={colors.primary} />
+                <Text style={styles.reassureText}>
+                  {t('subscription.upgradeProrata', { store: storeLabel })}
+                </Text>
+              </View>
+            </>
+          )}
+          </>
         ) : (
           <>
             {/* ── FORMULES ── */}
@@ -507,11 +773,11 @@ const SubscriptionScreen = () => {
           })}
         </View>
 
-        <View style={isPlus ? styles.spacerActive : styles.spacerBuy} />
+        <View style={showBuyBar ? styles.spacerBuy : styles.spacerActive} />
       </ScrollView>
 
       {/* ── BARRE D'ACHAT ── */}
-      {!isPlus && (
+      {showBuyBar && (
         <SafeGradient
           colors={[`${colors.background}00`, colors.background, colors.background]}
           style={styles.stickyBottom}
@@ -616,7 +882,10 @@ const styles = StyleSheet.create({
   },
 
   labelText: {
-    color: colors.primary, fontSize: 11, fontWeight: '900',
+    // Blanc et non vert : le vert est devenu la couleur du palier sélectionné
+    // dans la pastille, deux lignes plus bas. Le garder ici mettait deux verts
+    // dans le même bloc, dont un qui ne désigne rien.
+    color: colors.textMain, fontSize: 11, fontWeight: '900',
     letterSpacing: 3, marginBottom: 10,
   },
   heroTitle: {
@@ -627,6 +896,66 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)', fontSize: 15,
     lineHeight: 22, textAlign: 'center', maxWidth: 300,
   },
+
+  // ── Montée en Premium ──
+  upgradeHead: { marginHorizontal: 22, marginTop: 30, marginBottom: 16 },
+  upgradeTitle: {
+    color: colors.textMain,
+    fontSize: 19,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  upgradeSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+
+  // ── Pastille de palier ──
+  // Un rail sombre et deux segments : le même geste que le sélecteur de cycle
+  // plus bas, en plus petit, pour qu'on comprenne sans explication que c'est
+  // un choix et non un bouton d'action.
+  tierPill: {
+    flexDirection: 'row',
+    marginTop: 18,
+    padding: 4,
+    // Entièrement arrondi : la pastille se lit comme un interrupteur, pas comme
+    // deux onglets. Un rayon intermédiaire la faisait ressembler aux cartes de
+    // formules plus bas, qui elles ne se choisissent pas du même geste.
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  tierBtn: {
+    paddingHorizontal: 34,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  // Le curseur qui glisse. En absolu DANS le rail, décalé de son padding : les
+  // `x` mesurés partent du bord du rail, pas de sa zone de contenu.
+  tierThumb: {
+    position: 'absolute',
+    left: 0,
+    top: 4,
+    bottom: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,230,118,0.20)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.44)',
+  },
+  tierTxt: {
+    // Ecart creuse entre actif et inactif : le libelle actif passe en BLANC
+    // pur, l'inactif descend a 0,42. Le vert reste au curseur, aux coches et
+    // au CTA — un libelle vert sur un curseur vert donnait le composant le
+    // moins affirme de l'ecran pour le choix le plus structurant.
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 14.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  tierTxtOn: { color: colors.textMain },
 
   // ── Bénéfices ──
   benefits: { marginHorizontal: 22, gap: 13, marginBottom: 26 },
@@ -761,7 +1090,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 22, paddingTop: 26,
   },
   ctaTouch: {
-    borderRadius: 18, overflow: 'hidden', marginBottom: 12,
+    borderRadius: 999, overflow: 'hidden', marginBottom: 12,
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22 },
       android: { elevation: 14 },
@@ -771,7 +1100,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     gap: 10, paddingVertical: 19,
   },
-  ctaText: { color: '#062318', fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
+  ctaText: { color: colors.onPrimary, fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
 
   footer: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',

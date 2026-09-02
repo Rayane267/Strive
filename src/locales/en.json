@@ -350,7 +350,12 @@
     "alerts": {
       "premiumTitle": "Plus Access",
       "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
-      "limitText": "7 days maximum — selection restarted from this date"
+      "limitText": "{{days}} days maximum — unlimited history is a Premium feature"
+    },
+    "earningsBy": {
+      "day": "Earnings per day",
+      "week": "Earnings per week",
+      "month": "Earnings per month"
     }
   },
   "history": {
@@ -371,7 +376,7 @@
     "acceptRate": "Accept. rate",
     "filterAll": "All · {{count}}",
     "selectDates": "Select date range",
-    "upgradeForHistory": "Upgrade to Plus to see your full history",
+    "upgradeForHistory": "Upgrade to Plus to explore your past days",
     "status": {
       "ACCEPTED": "ACCEPTED",
       "DECLINED": "DECLINED"
@@ -416,9 +421,8 @@
     "enableTripId": "Enable Trip Identifier",
     "enableTripIdSub": "Analyze offers via the AssistiveTouch shortcut",
     "minimums": "Your minimums",
-    "minHr": "Minimum $/hr",
-    "minKm": "Minimum $/km",
-    "thresholdLock": "Customize your thresholds with Strive Plus",
+    "minHr": "Minimum €/hr",
+    "minKm": "Minimum €/km",
     "dayReset": "Day reset time",
     "dayResetSub": "Time at which your daily stats reset",
     "dayReset4am": "Reset at 4 AM",
@@ -443,7 +447,9 @@
     "languageDevice": "Device language",
     "pushDeniedTitle": "Notifications denied",
     "pushDeniedBody": "You declined notifications for Strive. iOS won't ask again — turn them on in your device Settings.",
-    "openSettings": "Open Settings"
+    "openSettings": "Open Settings",
+    "thresholdLockCta": "Set your own with Plus",
+    "pushBlocked": "Blocked in your phone settings — tap to re-enable"
   },
   "upgrade": {
     "title": "Upgrade to Pro",
@@ -718,6 +724,7 @@
   "support": {
     "title": "My tickets",
     "subtitle": "Strive support",
+    "priorityBadge": "Priority",
     "menuSub": "Contact support, track your requests",
     "empty": "No tickets yet",
     "emptyHint": "A question or an issue? Open a ticket, we reply fast.",
@@ -809,7 +816,7 @@
     "title": "Profile"
   },
   "subscription": {
-    "label": "STRIVE PLUS",
+    "label": "STRIVE",
     "heroTitle": "Know.\nDecide. Earn.",
     "heroSub": "Not all rides are equal. With Strive Plus, know before you accept.",
     "values": {
@@ -845,7 +852,7 @@
     "yearlyAccess": "YEARLY ACCESS",
     "monthlyAccess": "MONTHLY ACCESS",
     "heroTitleActive": "Strive Plus active",
-    "heroSubActive": "You're enjoying all the benefits. Manage your subscription below.",
+    "heroSubActive": "Your subscription is active. Manage it below.",
     "activeTitle": "Active subscription",
     "activeSub": "{{plan}} plan",
     "manage": "Manage my subscription",
@@ -950,15 +957,36 @@
     "finePrintTrial": "{{days}} days free, then {{price}} per {{period}}. Renews automatically.",
     "finePrintNoTrial": "{{price}} per {{period}}. Renews automatically, cancel anytime.",
     "benefit": {
-      "scans": "30 scans a day instead of 3",
-      "thresholds": "Your own €/h and €/km thresholds",
-      "traffic": "€/h based on real traffic, not straight-line",
-      "fuel": "Your model's fuel cost deducted",
-      "history": "7 days of history and stats"
+      "plus": {
+        "scans": "30 scans a day instead of 3",
+        "thresholds": "Your own €/h and €/km thresholds",
+        "traffic": "€/h based on real traffic, not straight-line",
+        "fuel": "Your model's fuel cost deducted",
+        "history": "Your stats over 7 days at a time"
+      },
+      "premium": {
+        "allPlus": "Everything in Plus",
+        "scans": "Unlimited scans",
+        "history": "Unlimited history and stats",
+        "slots": "Your best time slots, hour by hour",
+        "support": "Priority support"
+      }
     },
     "saveAmount": "SAVE {{amount}}",
     "heroTitleWelcomeEnd": "Your 30 free\nscans are gone.",
-    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 30 a day — every day."
+    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 30 a day — every day.",
+    "tier": {
+      "plus": "Plus",
+      "premium": "Premium"
+    },
+    "heroSubPremium": "No limits left, and the app tells you when to drive — not just which ride to take.",
+    "premiumMonthlyFallbackPrice": "€19.99",
+    "premiumYearlyFallbackPrice": "€179.99",
+    "upgradeTitle": "What Premium adds",
+    "upgradeSub": "You keep everything Plus already gives you.",
+    "upgradeProrata": "The change is immediate. {{store}} credits the time you already paid on Plus.",
+    "ctaUpgrade": "Upgrade to Premium",
+    "bestValueStrip": "Best value"
   },
   "network": {
     "offline": "No internet connection"
@@ -1143,5 +1171,36 @@
     "helloNamed": "Welcome, {{name}}.",
     "unit": "free scans",
     "a11y": "{{n}} free scans"
+  },
+  "bestHours": {
+    "title": "Best time slots",
+    "menuTitle": "Best time slots",
+    "cardTitle": "Your best time slots",
+    "cardSub": "When it rings, and when it pays",
+    "lockTitle": "Premium only",
+    "lockSub": "A grid of your last 90 days, hour by hour: when your phone rings most, and when your rides actually pay. It needs months of history to mean anything.",
+    "lockCta": "See Premium",
+    "metric": {
+      "offers": "It rings",
+      "hourlyRate": "It pays"
+    },
+    "hint": {
+      "offers": "The hours your phone rang most. Declined rides count: they show the work was there.",
+      "hourlyRate": "What your accepted rides really earned, fuel deducted, over the time actually spent driving."
+    },
+    "slot": "{{day}} {{hour}}:00–{{nextHour}}:00",
+    "detailOffers_one": "{{count}} ride",
+    "detailOffers_other": "{{count}} rides",
+    "perHour": "/h",
+    "noAccepted": "no accepted ride",
+    "tapHint": "Tap a cell to see that slot in detail.",
+    "top": {
+      "offers": "Your busiest slots",
+      "hourlyRate": "Your best paying slots"
+    },
+    "notEnoughSlots": "No slot reaches {{min}} rides yet — below that, a ranking rests on nothing.",
+    "empty": "Not enough data yet",
+    "emptyHint": "The grid needs around {{min}} scanned rides to mean anything. You are at {{current}}.",
+    "footnote": "Over the last {{days}} days · {{rides}} scanned rides. Declines count towards volume, never towards the hourly rate."
   }
 }

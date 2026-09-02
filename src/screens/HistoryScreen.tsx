@@ -37,9 +37,10 @@ import {
 } from '../utils/dateUtils';
 import {
   getEffectivePlanTier,
+  getMaxRangeSpanDays,
   FREE_THRESHOLDS,
 } from '../services/subscriptionService';
-import { effectiveFare } from '../services/ridesService';
+import { effectiveFare, fetchRidesInRange } from '../services/ridesService';
 import { Ride } from '../types/database';
 import { computeRideScore, rideScoreColor } from '../utils/qualityScore';
 import { withTimeout } from '../utils/withTimeout';
@@ -322,7 +323,10 @@ const HistoryScreen = () => {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
 
-  const isPremium = getEffectivePlanTier(profile) !== 'free';
+  const planTier = getEffectivePlanTier(profile);
+  // Payant = 'plus' OU 'premium' : c'est ce qui ouvre le sélecteur de dates.
+  // Jusqu'où il ouvre dépend du tier exact — cf. getMaxRangeSpanDays plus bas.
+  const isPaid = planTier !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
   // Défaut aligné sur FREE_THRESHOLDS (1.10 et non 1.2) : le tutoriel et le
@@ -356,17 +360,17 @@ const HistoryScreen = () => {
           // score affiché sur la carte d'une course est calculé sur d'autres
           // seuils que le verdict rendu au moment du scan.
           setThresholds({
-            minHourly: isPremium
+            minHourly: isPaid
               ? Number(data?.min_hourly_rate ?? 25) || 25
               : FREE_THRESHOLDS.hourly,
-            minKm: isPremium
+            minKm: isPaid
               ? Number(data?.min_km_rate ?? FREE_THRESHOLDS.km) ||
                 FREE_THRESHOLDS.km
               : FREE_THRESHOLDS.km,
           });
           setDateRange({ start: getDayStart(h), end: getDayStart(h) });
         });
-    }, [user, isPremium]),
+    }, [user, isPaid]),
   );
 
   const [rides, setRides] = useState<Ride[]>([]);
@@ -402,21 +406,13 @@ const HistoryScreen = () => {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
       rangeEnd.setHours(resetHour, 0, 0, 0);
 
-      const { data, error } = await withTimeout(
-        Promise.resolve(
-          supabase
-            .from('rides')
-            .select('*')
-            .eq('user_id', user.id)
-            .gte('created_at', rangeStart.toISOString())
-            .lte('created_at', rangeEnd.toISOString())
-            .order('created_at', { ascending: false }),
-        ),
-        10_000,
+      // 20 s et non 10 : une sélection Premium d'un an demande plusieurs
+      // pages, et un timeout trop court basculerait sur le cache local alors
+      // que la requête aboutissait.
+      const freshRides = await withTimeout(
+        fetchRidesInRange(user.id, rangeStart, rangeEnd),
+        20_000,
       );
-
-      if (error) throw error;
-      const freshRides = (data ?? []) as Ride[];
       setRides(freshRides);
       cacheRides(freshRides); // sauvegarde pour mode hors-ligne
     } catch (e) {
@@ -477,8 +473,9 @@ const HistoryScreen = () => {
       const diffDays = Math.ceil(
         Math.abs(end.getTime() - start.getTime()) / 86400000,
       );
-      if (diffDays > 6) {
-        setModalAlert(t('analytics.alerts.limitText', 'Max 7 jours.'));
+      const maxSpan = getMaxRangeSpanDays(planTier);
+      if (maxSpan !== null && diffDays > maxSpan) {
+        setModalAlert(t('analytics.alerts.limitText', { days: maxSpan + 1 }));
         setTempStart(day.dateString);
         return;
       }
@@ -639,7 +636,7 @@ const HistoryScreen = () => {
       </View>
 
       {/* ── DATE SELECTOR (Plus only) ── */}
-      {isPremium ? (
+      {isPaid ? (
         <TouchableOpacity
           style={styles.dateBtn}
           onPress={() => {
