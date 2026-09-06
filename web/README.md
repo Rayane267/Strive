@@ -33,18 +33,25 @@ app/
 
 ## Liste d'attente (`/waitlist`)
 
-Page « coming soon » autonome : badge, compte à rebours, carte d'inscription,
-réseaux sociaux, liens légaux.
+Page « coming soon » autonome, calquée sur la référence envoyée par le produit :
+fond noir + grain, halo lumineux **rotatif** autour du badge, de la carte et du
+champ e-mail (conic-gradient en rotation masqué par le calque de contenu), titre
+en dégradé, compte à rebours, carte à liseré haut, CTA blanc lumineux, écran de
+succès (check animé + étincelles) et bascule du badge en « Inscrit ✅ ».
+Typo Inter. Styles isolés dans `app/waitlist/waitlist.css` — le reste du site
+garde sa DA verte.
 
 - **Date d'ouverture** : `NEXT_PUBLIC_LAUNCH_DATE` (ISO 8601 avec fuseau, ex.
-  `2026-10-01T09:00:00+02:00`). Valeur par défaut dans `app/waitlist/page.tsx`.
+  `2026-10-01T00:00:00+02:00`). Valeur par défaut dans `app/waitlist/page.tsx`.
+- **Anti-bot** : champ honeypot `company` (un bot qui le remplit voit un faux
+  succès, rien n'est enregistré).
 - **Backend** : migration `supabase/migrations/20260906_waitlist.sql` — table
   `public.waitlist` (RLS : lecture admin uniquement, aucun accès direct anon) et
   deux RPC `SECURITY DEFINER` :
   - `join_waitlist(p_email, p_source, p_locale, p_referrer)` → `{ position,
     already_registered, total }`, valide le format, refuse les e-mails jetables,
     dé-duplique sur l'e-mail normalisé (alias Gmail inclus).
-  - `waitlist_count()` → compteur public affiché sous le formulaire.
+  - `waitlist_count()` → compteur public.
 - **Env requis** : `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - **Export des inscrits** : `select * from public.waitlist order by created_at;`
   depuis un compte `profiles.is_admin = true` (ou le service role).
