@@ -1,162 +1,410 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Liste d'attente — géométrie et ombrages calqués sur la référence
-   (halo au-dessus du badge, titre dégradé, carte à liseré lumineux, pilules
-   input + CTA avec glow), habillés de la palette Strive.
+   Liste d'attente — structure et classes calquées sur la référence.
+   Halo lumineux qui tourne autour du badge, de la carte et du champ e-mail
+   (conic-gradient en rotation, recouvert par le calque de contenu → il ne
+   reste qu'un liseré de 1px qui « tourne »).
+   Habillage : palette Strive (canvas quasi-noir, vert signal).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .wl {
+  --wl-fg: var(--color-fg);
+  --wl-muted: var(--color-muted);
+  --wl-dim: var(--color-faint);
+  --wl-signal: var(--color-signal);
+  --wl-rim: rgba(233, 245, 238, 0.12);
+  --wl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+
+  position: relative;
+  min-height: 100dvh;
   background: var(--color-canvas);
-  color: var(--color-fg);
-  font-family: var(--font-body);
+  color: var(--wl-fg);
+  font-family: var(--wl-font);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
 }
 
-/* Halo diffus derrière le badge (le « spot » du haut de page) */
-.wl-halo {
-  position: absolute;
-  left: 50%;
-  top: -4rem;
-  width: 42rem;
-  max-width: 135vw;
-  height: 28rem;
-  transform: translateX(-50%);
+/* Fond : noir profond + halo diffus derrière le badge */
+.wl-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 46% 46% at 50% 50%, rgba(0, 230, 118, 0.16), transparent 70%),
-    radial-gradient(ellipse 30% 34% at 50% 46%, rgba(233, 245, 238, 0.10), transparent 72%);
-  filter: blur(10px);
+    radial-gradient(34rem 20rem at 50% -2rem, rgba(0, 230, 118, 0.16), transparent 68%),
+    radial-gradient(26rem 16rem at 50% -1rem, rgba(233, 245, 238, 0.07), transparent 70%),
+    radial-gradient(60rem 40rem at 50% 120%, rgba(0, 230, 118, 0.05), transparent 70%),
+    var(--color-canvas);
 }
 
-/* Pilule « Liste d'attente » : liseré haut lumineux + halo extérieur */
-.wl-badge {
+/* Grain très léger */
+.wl-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.wl-screen {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+.wl-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1.1rem 2rem;
+  text-align: center;
+}
+
+/* ── Liseré lumineux rotatif ─────────────────────────────────────────────── */
+@keyframes wl-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.wl-badge-spin,
+.wl-email-spin,
+.wl-card-spin,
+.wl-card-spin-blur {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 244deg,
+    rgba(0, 230, 118, 0.55) 312deg,
+    rgba(0, 230, 118, 0.95) 334deg,
+    #d8ffe9 344deg,
+    rgba(0, 230, 118, 0.8) 355deg,
+    transparent 360deg
+  );
+}
+
+/* ── Badge « Liste d'attente » ── */
+.wl-badge-wrap {
   position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  border-radius: 9999px;
-  border: 1px solid rgba(233, 245, 238, 0.14);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
-  padding: 0.6rem 1.35rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26),
-    0 0 44px -10px rgba(0, 230, 118, 0.55);
 }
+.wl-badge-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22rem;
+  height: 13rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(0, 230, 118, 0.32), transparent 70%),
+    radial-gradient(ellipse 26% 28% at 50% 50%, rgba(233, 245, 238, 0.16), transparent 72%);
+  filter: blur(12px);
+}
+.wl-badge {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  padding: 1px;
+  background: var(--wl-rim);
+}
+.wl-badge-spin {
+  width: 190%;
+  animation: wl-spin 3.6s linear infinite;
+}
+.wl-badge-label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #14201a, #070c09);
+  padding: 0.62rem 1.45rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.wl-badge-text {
+  grid-area: 1 / 1;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  white-space: nowrap;
+}
+.wl-badge-text.is-ok { opacity: 0; transform: translateY(7px); }
+.is-done .wl-badge-text.is-wait { opacity: 0; transform: translateY(-7px); }
+.is-done .wl-badge-text.is-ok { opacity: 1; transform: none; }
 
-/* Titre : plein à gauche, qui s'éteint vers la droite (dégradé de la réf.) */
+/* ── Titre ── */
 .wl-title {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.94;
-  background: linear-gradient(102deg, #ffffff 28%, #b9c2bc 60%, #6d766f 100%);
+  margin-top: 2.1rem;
+  font-size: clamp(2.5rem, 11vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  background: linear-gradient(100deg, #ffffff 30%, #cfdad4 56%, #7d8a83 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 /* ── Compte à rebours ── */
-.wl-digit {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-fg);
+.wl-countdown {
+  margin-top: 1.9rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.35rem;
 }
-.wl-unit-label {
-  color: var(--color-faint);
+.wl-cd-cell {
+  display: flex;
+  width: 4rem;
+  flex-direction: column;
+  align-items: center;
+}
+.wl-cd-num {
+  font-size: 1.95rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.wl-cd-label {
+  margin-top: 0.65rem;
   font-size: 0.72rem;
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--wl-muted);
 }
-.wl-colon {
+.wl-cd-sep {
   color: rgba(233, 245, 238, 0.22);
-  font-weight: 500;
+  font-size: 1.35rem;
+  line-height: 1.35;
 }
 
-/* ── Carte : surface sombre bombée + liseré lumineux sur l'arête haute ── */
+/* ── Carte (coque à liseré rotatif + halo flou) ── */
+.wl-card-shell {
+  position: relative;
+  margin-top: 2.9rem;
+  width: 100%;
+  max-width: 26.5rem;
+  overflow: hidden;
+  border-radius: 2.1rem;
+  padding: 1px;
+  background: rgba(233, 245, 238, 0.08);
+}
+.wl-card-spin { width: 155%; animation: wl-spin 7s linear infinite; }
+.wl-card-spin-blur {
+  width: 155%;
+  filter: blur(16px);
+  opacity: 0.55;
+  animation: wl-spin 7s linear infinite;
+}
 .wl-card {
   position: relative;
-  border-radius: 2rem;
-  border: 1px solid rgba(233, 245, 238, 0.09);
-  background: linear-gradient(180deg, #1b2621 0%, #131b17 55%, #0e1411 100%);
-  box-shadow:
-    0 44px 100px -55px rgba(0, 0, 0, 1),
-    0 0 90px -50px rgba(0, 230, 118, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #1c2a23 0%, #141d18 45%, #0d1310 100%);
+  padding: 2rem 1.6rem 1.9rem;
+  box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 1), 0 0 80px -50px rgba(0, 230, 118, 0.45);
 }
-.wl-card::before {
-  content: '';
+.wl-card-edge {
   position: absolute;
   top: 0;
-  left: 18%;
-  right: 18%;
+  left: 22%;
+  right: 22%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(233, 245, 238, 0.6), transparent);
+  background: linear-gradient(90deg, transparent, rgba(233, 245, 238, 0.55), rgba(0, 230, 118, 0.75), rgba(233, 245, 238, 0.55), transparent);
 }
-
-/* ── Champ e-mail : pilule creusée, liseré haut ── */
-.wl-input {
-  width: 100%;
-  border-radius: 9999px;
-  border: 1px solid rgba(233, 245, 238, 0.10);
-  background: linear-gradient(180deg, #101815 0%, #0a100d 100%);
-  padding: 1.15rem 1.6rem;
-  font-size: 1rem;
-  color: var(--color-fg);
-  outline: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+.wl-card-glow {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: -45%;
+  height: 70%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 50% 50% at 50% 100%, rgba(0, 230, 118, 0.14), transparent 70%);
 }
-.wl-input::placeholder { color: var(--color-faint); }
-.wl-input:focus {
-  border-color: rgba(0, 230, 118, 0.45);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 4px rgba(0, 230, 118, 0.10);
-}
-
-/* ── CTA : pilule pleine qui éclaire la carte (glow de la réf.) ── */
-.wl-btn {
-  width: 100%;
-  border-radius: 9999px;
-  background: var(--color-signal);
-  color: #05140c;
-  padding: 1.15rem 1.6rem;
-  font-size: 1.05rem;
+.wl-card h2 {
+  font-size: clamp(1.35rem, 5.6vw, 1.6rem);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  box-shadow:
-    0 0 40px -4px rgba(0, 230, 118, 0.6),
-    0 0 90px -12px rgba(0, 230, 118, 0.45);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
 }
-.wl-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow:
-    0 0 54px -2px rgba(0, 230, 118, 0.75),
-    0 0 110px -10px rgba(0, 230, 118, 0.55);
+.wl-card-copy {
+  margin: 0.85rem auto 0;
+  max-width: 21rem;
+  font-size: clamp(0.95rem, 4vw, 1.02rem);
+  line-height: 1.5;
+  color: var(--wl-muted);
 }
-.wl-btn:disabled { opacity: 0.55; }
 
-/* ── Boutons sociaux ── */
-.wl-social {
+/* ── Formulaire ── */
+.wl-form { margin-top: 1.6rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.wl-email-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  padding: 1px;
+  background: var(--wl-rim);
+}
+.wl-email-spin { width: 170%; animation: wl-spin 4.4s linear infinite; }
+.wl-email-wrap input {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #101a15, #080d0a);
+  padding: 1.12rem 1.5rem;
+  font-family: inherit;
+  font-size: 1.02rem;
+  color: var(--wl-fg);
+  outline: none;
+}
+.wl-email-wrap input::placeholder { color: var(--wl-dim); }
+
+.wl-submit {
+  position: relative;
   display: flex;
-  height: 3.4rem;
-  width: 3.4rem;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  border: 1px solid rgba(233, 245, 238, 0.09);
-  background: rgba(233, 245, 238, 0.04);
-  color: var(--color-muted);
+  background: var(--wl-signal);
+  color: #05140c;
+  padding: 1.15rem 1.5rem;
+  font-family: inherit;
+  font-size: 1.06rem;
+  font-weight: 700;
+  box-shadow: 0 0 34px -2px rgba(0, 230, 118, 0.6), 0 0 80px -10px rgba(0, 230, 118, 0.45);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+.wl-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 46px 0 rgba(0, 230, 118, 0.75), 0 0 100px -8px rgba(0, 230, 118, 0.55);
+}
+.wl-submit:disabled { opacity: 0.7; }
+.wl-submit-loader {
+  position: absolute;
+  height: 1.15rem;
+  width: 1.15rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(5, 20, 12, 0.25);
+  border-top-color: #05140c;
+  opacity: 0;
+  animation: wl-loader 0.7s linear infinite;
+}
+@keyframes wl-loader { to { transform: rotate(360deg); } }
+.wl-submit.is-loading .wl-submit-label { opacity: 0; }
+.wl-submit.is-loading .wl-submit-loader { opacity: 1; }
+
+.wl-status { margin-top: 0.2rem; font-size: 0.9rem; color: var(--color-danger); min-height: 1.2em; }
+
+/* ── Écran de succès ── */
+.wl-card-done { padding: 0.6rem 0 0.3rem; }
+.wl-check-wrap {
+  position: relative;
+  margin: 0 auto;
+  height: 5.5rem;
+  width: 5.5rem;
+  display: grid;
+  place-items: center;
+}
+.wl-check {
+  height: 3.9rem;
+  width: 3.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: var(--wl-signal);
+  box-shadow: 0 0 40px rgba(0, 230, 118, 0.55);
+  animation: wl-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wl-check svg { height: 2.2rem; width: 2.2rem; }
+.wl-check-mark {
+  stroke: #05140c;
+  stroke-dasharray: 46;
+  stroke-dashoffset: 46;
+  animation: wl-draw 0.5s 0.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes wl-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+@keyframes wl-draw { to { stroke-dashoffset: 0; } }
+.wl-spark {
+  position: absolute;
+  height: 5px;
+  width: 5px;
+  border-radius: 9999px;
+  background: var(--wl-signal);
+  opacity: 0;
+  animation: wl-spark 0.75s ease-out forwards;
+  animation-delay: calc(0.22s + var(--i) * 0.045s);
+}
+@keyframes wl-spark {
+  0%   { opacity: 0; transform: rotate(calc(var(--i) * 60deg)) translateY(-1.1rem) scale(0.4); }
+  35%  { opacity: 1; }
+  100% { opacity: 0; transform: rotate(calc(var(--i) * 60deg)) translateY(-2.9rem) scale(0.9); }
+}
+.wl-congrats {
+  margin-top: 1.1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--wl-signal);
+}
+.wl-card-done h2 { margin-top: 0.5rem; }
+.wl-success-copy { margin-top: 0.7rem; }
+
+/* ── Pied de page ── */
+.wl-foot {
+  position: relative;
+  z-index: 2;
+  padding: 0 1.1rem 2.4rem;
+  text-align: center;
+}
+.wl-social { display: flex; justify-content: center; gap: 0.8rem; }
+.wl-social a {
+  display: flex;
+  height: 3.1rem;
+  width: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--color-surface, #15241c);
+  color: var(--wl-muted);
+  border: 1px solid rgba(233, 245, 238, 0.07);
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
-.wl-social:hover {
-  background: rgba(233, 245, 238, 0.09);
-  color: var(--color-signal);
-  transform: translateY(-2px);
+.wl-social a:hover { background: #1b2f24; color: var(--wl-signal); transform: translateY(-2px); }
+.wl-legal {
+  margin-top: 1.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.85rem;
+  font-size: 1rem;
+  color: var(--wl-muted);
+}
+.wl-legal a { color: var(--wl-muted); transition: color 0.2s ease; }
+.wl-legal a:hover { color: var(--wl-signal); }
+.wl-legal span { color: rgba(233, 245, 238, 0.22); }
+
+.visually-hidden {
+  position: absolute !important;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.wl-foot-link { color: var(--color-faint); transition: color 0.2s ease; }
-.wl-foot-link:hover { color: var(--color-signal); }
+@media (prefers-reduced-motion: reduce) {
+  .wl-badge-spin, .wl-email-spin, .wl-card-spin, .wl-card-spin-blur,
+  .wl-spark, .wl-check, .wl-submit-loader { animation: none; }
+  .wl-check-mark { animation: none; stroke-dashoffset: 0; }
+}
