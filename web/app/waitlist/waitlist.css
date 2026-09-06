@@ -1,0 +1,162 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Liste d'attente — géométrie et ombrages calqués sur la référence
+   (halo au-dessus du badge, titre dégradé, carte à liseré lumineux, pilules
+   input + CTA avec glow), habillés de la palette Strive.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.wl {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-body);
+}
+
+/* Halo diffus derrière le badge (le « spot » du haut de page) */
+.wl-halo {
+  position: absolute;
+  left: 50%;
+  top: -4rem;
+  width: 42rem;
+  max-width: 135vw;
+  height: 28rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 46% 46% at 50% 50%, rgba(0, 230, 118, 0.16), transparent 70%),
+    radial-gradient(ellipse 30% 34% at 50% 46%, rgba(233, 245, 238, 0.10), transparent 72%);
+  filter: blur(10px);
+}
+
+/* Pilule « Liste d'attente » : liseré haut lumineux + halo extérieur */
+.wl-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(233, 245, 238, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
+  padding: 0.6rem 1.35rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 0 44px -10px rgba(0, 230, 118, 0.55);
+}
+
+/* Titre : plein à gauche, qui s'éteint vers la droite (dégradé de la réf.) */
+.wl-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+  background: linear-gradient(102deg, #ffffff 28%, #b9c2bc 60%, #6d766f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Compte à rebours ── */
+.wl-digit {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+}
+.wl-unit-label {
+  color: var(--color-faint);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.wl-colon {
+  color: rgba(233, 245, 238, 0.22);
+  font-weight: 500;
+}
+
+/* ── Carte : surface sombre bombée + liseré lumineux sur l'arête haute ── */
+.wl-card {
+  position: relative;
+  border-radius: 2rem;
+  border: 1px solid rgba(233, 245, 238, 0.09);
+  background: linear-gradient(180deg, #1b2621 0%, #131b17 55%, #0e1411 100%);
+  box-shadow:
+    0 44px 100px -55px rgba(0, 0, 0, 1),
+    0 0 90px -50px rgba(0, 230, 118, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.wl-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(233, 245, 238, 0.6), transparent);
+}
+
+/* ── Champ e-mail : pilule creusée, liseré haut ── */
+.wl-input {
+  width: 100%;
+  border-radius: 9999px;
+  border: 1px solid rgba(233, 245, 238, 0.10);
+  background: linear-gradient(180deg, #101815 0%, #0a100d 100%);
+  padding: 1.15rem 1.6rem;
+  font-size: 1rem;
+  color: var(--color-fg);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.wl-input::placeholder { color: var(--color-faint); }
+.wl-input:focus {
+  border-color: rgba(0, 230, 118, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 4px rgba(0, 230, 118, 0.10);
+}
+
+/* ── CTA : pilule pleine qui éclaire la carte (glow de la réf.) ── */
+.wl-btn {
+  width: 100%;
+  border-radius: 9999px;
+  background: var(--color-signal);
+  color: #05140c;
+  padding: 1.15rem 1.6rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 0 40px -4px rgba(0, 230, 118, 0.6),
+    0 0 90px -12px rgba(0, 230, 118, 0.45);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+.wl-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 54px -2px rgba(0, 230, 118, 0.75),
+    0 0 110px -10px rgba(0, 230, 118, 0.55);
+}
+.wl-btn:disabled { opacity: 0.55; }
+
+/* ── Boutons sociaux ── */
+.wl-social {
+  display: flex;
+  height: 3.4rem;
+  width: 3.4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(233, 245, 238, 0.09);
+  background: rgba(233, 245, 238, 0.04);
+  color: var(--color-muted);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.wl-social:hover {
+  background: rgba(233, 245, 238, 0.09);
+  color: var(--color-signal);
+  transform: translateY(-2px);
+}
+
+.wl-foot-link { color: var(--color-faint); transition: color 0.2s ease; }
+.wl-foot-link:hover { color: var(--color-signal); }

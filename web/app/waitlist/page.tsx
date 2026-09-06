@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Logo from '../components/Logo';
 import Countdown from './Countdown';
 import WaitlistForm from './WaitlistForm';
+import './waitlist.css';
 
 // Date d'ouverture : surchargeable sans redéploiement de code via l'env Vercel
 // NEXT_PUBLIC_LAUNCH_DATE (format ISO 8601 avec fuseau).
@@ -36,52 +37,42 @@ const SOCIALS = [
 
 export default function WaitlistPage() {
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden">
-      <div className="aurora-mesh" />
-      <div className="hero-bg absolute inset-0 -z-10" />
-      <div className="grid-lines pointer-events-none absolute inset-0 opacity-20" />
+    <main className="wl relative flex min-h-screen flex-col overflow-hidden">
+      <div className="wl-halo" />
 
-      <header className="relative z-10 flex justify-center px-5 pt-8">
-        <a href="/" aria-label="Accueil Strive">
+      <header className="relative z-10 flex justify-center px-5 pt-7">
+        <a href="/" aria-label="Accueil Strive" className="opacity-90 transition-opacity hover:opacity-100">
           <Logo />
         </a>
       </header>
 
-      <section className="relative z-10 flex flex-1 flex-col items-center justify-center px-5 py-14 text-center sm:py-20">
+      <section className="relative z-10 flex flex-1 flex-col items-center justify-center px-5 py-12 text-center">
         <div className="load-up" style={{ animationDelay: '40ms' }}>
-          <span className="glass inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-[12px] tracking-wide text-muted">
+          <span className="wl-badge">
             <span className="live-dot" />
-            <span className="text-fg">Liste d&apos;attente</span>
+            Liste d&apos;attente
           </span>
         </div>
 
         <h1
-          className="load-up mt-7 font-display text-[3.2rem] font-extrabold leading-[0.92] tracking-[-0.03em] sm:text-[6rem]"
+          className="wl-title load-up mt-8 text-[3.4rem] sm:text-[5.5rem]"
           style={{ animationDelay: '140ms' }}
         >
-          Bientôt{' '}
-          <span className="font-serif font-normal italic text-signal text-signal-glow">là.</span>
+          Bientôt là.
         </h1>
 
-        <p
-          className="load-up mt-5 max-w-md text-sm leading-relaxed text-muted sm:text-base"
-          style={{ animationDelay: '200ms' }}
-        >
-          L&apos;instrument des chauffeurs VTC ouvre bientôt. Les inscrits passent en premier.
-        </p>
-
-        <div className="load-up mt-11" style={{ animationDelay: '300ms' }}>
+        <div className="load-up mt-9 sm:mt-11" style={{ animationDelay: '260ms' }}>
           <Countdown target={LAUNCH_DATE} />
         </div>
 
         <div
-          className="load-up glass ring-signal mt-12 w-full max-w-md rounded-[2rem] p-7 sm:p-9"
-          style={{ animationDelay: '400ms' }}
+          className="wl-card load-up mt-11 w-full max-w-[27rem] p-8 sm:mt-14 sm:p-10"
+          style={{ animationDelay: '380ms' }}
         >
           <WaitlistForm />
         </div>
 
-        <div className="load-up mt-12 flex items-center gap-3" style={{ animationDelay: '520ms' }}>
+        <div className="load-up mt-12 flex items-center gap-3.5" style={{ animationDelay: '500ms' }}>
           {SOCIALS.map((s) => (
             <a
               key={s.label}
@@ -89,9 +80,9 @@ export default function WaitlistPage() {
               target="_blank"
               rel="noreferrer noopener"
               aria-label={s.label}
-              className="store-badge glass flex h-11 w-11 items-center justify-center rounded-full text-muted transition-colors hover:text-signal"
+              className="wl-social"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
                 <path d={s.path} />
               </svg>
             </a>
@@ -99,12 +90,12 @@ export default function WaitlistPage() {
         </div>
       </section>
 
-      <footer className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-5 pb-10 font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
-        <a href="/privacy" className="transition-colors hover:text-signal">Confidentialité</a>
-        <span className="text-line">·</span>
-        <a href="/terms" className="transition-colors hover:text-signal">Conditions</a>
-        <span className="text-line">·</span>
-        <a href="mailto:contact@striveapp.fr" className="transition-colors hover:text-signal">Support</a>
+      <footer className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-5 pb-10 text-[15px]">
+        <a href="/privacy" className="wl-foot-link">Confidentialité</a>
+        <span className="text-faint/50">·</span>
+        <a href="/terms" className="wl-foot-link">Conditions</a>
+        <span className="text-faint/50">·</span>
+        <a href="mailto:contact@striveapp.fr" className="wl-foot-link">Support</a>
       </footer>
     </main>
   );
