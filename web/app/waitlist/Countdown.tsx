@@ -34,19 +34,17 @@ export default function Countdown({ target }: { target: string }) {
   }, [target]);
 
   return (
-    <div className="flex items-start justify-center gap-2 sm:gap-4" aria-live="off">
+    <div className="flex items-start justify-center">
       {UNITS.map((u, i) => (
         <div key={u.key} className="flex items-start">
-          <div className="w-[4.2rem] text-center sm:w-24">
-            <div className="font-display text-4xl font-extrabold tabular-nums tracking-tight text-fg sm:text-6xl">
+          <div className="w-[4.6rem] text-center sm:w-28">
+            <div className="wl-digit text-[2.6rem] leading-none sm:text-[3.5rem]">
               {left ? String(left[u.key]).padStart(2, '0') : '--'}
             </div>
-            <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-faint sm:text-[11px]">
-              {u.label}
-            </div>
+            <div className="wl-unit-label mt-3">{u.label}</div>
           </div>
           {i < UNITS.length - 1 && (
-            <span className="mt-1 font-display text-3xl font-light text-line sm:mt-0 sm:text-5xl">:</span>
+            <span className="wl-colon text-[2rem] leading-none sm:text-[2.6rem]">:</span>
           )}
         </div>
       ))}
