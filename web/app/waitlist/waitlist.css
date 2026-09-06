@@ -366,22 +366,7 @@
   padding: 0 1.1rem 2.4rem;
   text-align: center;
 }
-.wl-social { display: flex; justify-content: center; gap: 0.8rem; }
-.wl-social a {
-  display: flex;
-  height: 3.1rem;
-  width: 3.1rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: var(--color-surface, #15241c);
-  color: var(--wl-muted);
-  border: 1px solid rgba(233, 245, 238, 0.07);
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
-}
-.wl-social a:hover { background: #1b2f24; color: var(--wl-signal); transform: translateY(-2px); }
 .wl-legal {
-  margin-top: 1.9rem;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
