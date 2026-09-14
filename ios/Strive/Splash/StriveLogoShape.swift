@@ -51,20 +51,22 @@ struct StriveBarShape: Shape {
     let index: Int
 
     func path(in rect: CGRect) -> Path {
-        let m = StriveLogoMetrics
-        guard m.barOrigins.indices.contains(index) else { return Path() }
+        // `typealias` et non `let` : `StriveLogoMetrics` est un enum sans cas,
+        // c'est-à-dire un espace de noms — il ne s'affecte pas à une variable.
+        typealias M = StriveLogoMetrics
+        guard M.barOrigins.indices.contains(index) else { return Path() }
 
         // Le logo reste carré et centré, quelle que soit la boîte qu'on lui donne.
         let side = min(rect.width, rect.height)
-        let scale = side / m.canvas
+        let scale = side / M.canvas
         let dx = rect.minX + (rect.width - side) / 2
         let dy = rect.minY + (rect.height - side) / 2
 
-        let origin = m.barOrigins[index]
+        let origin = M.barOrigins[index]
         let x = dx + origin.x * scale
         let y = dy + origin.y * scale
-        let w = m.barSize.width * scale
-        let h = m.barSize.height * scale
+        let w = M.barSize.width * scale
+        let h = M.barSize.height * scale
         let r = h / 2
 
         var path = Path()
