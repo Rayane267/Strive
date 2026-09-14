@@ -11,9 +11,16 @@
   le ferait disparaître au démarrage de l'animation pour réapparaître en fondu —
   exactement le saut que cette continuité sert à éviter.
 
+  ⚠️ LA TUILE EST UNE IMAGE, et ce n'est pas un choix esthétique. Un écran de
+  lancement REFUSE les attributs runtime : une vue colorée arrondie par
+  `layer.cornerRadius` fait échouer la compilation du storyboard
+  (« Launch screens may not contain user-defined runtime attributes »), donc le
+  build entier. `SplashTile` est une superellipse n=5 — la forme des icônes iOS,
+  celle du vrai logo, et ce que `RoundedRectangle(style: .continuous)` approxime
+  côté SwiftUI.
+
   Les valeurs doivent rester d'accord avec `StriveSplashView` :
-    tuile 120 × 120, rayon 30 (0,25 du côté), #1C2E24
-    fond #0A120E
+    tuile 120 × 120, #1C2E24 · fond #0A120E
     centre décalé de -57 : la pile logo + wordmark (120 + 28 + 67) est centrée
     puis remontée de 9,6 pt, ce qui place le centre du logo à -57 du centre.
 -->
@@ -34,19 +41,13 @@
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="tiL-e0-001">
+                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleAspectFit" image="SplashTile" translatesAutoresizingMaskIntoConstraints="NO" id="tiL-e0-001">
                                 <rect key="frame" x="127.5" y="276.5" width="120" height="120"/>
-                                <color key="backgroundColor" red="0.10980392156862745" green="0.1803921568627451" blue="0.1411764705882353" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="120" id="tiL-W1-002"/>
                                     <constraint firstAttribute="height" constant="120" id="tiL-H1-003"/>
                                 </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="30"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
-                            </view>
+                            </imageView>
                         </subviews>
                         <color key="backgroundColor" red="0.039215686274509803" green="0.070588235294117647" blue="0.054901960784313725" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
@@ -61,4 +62,7 @@
             <point key="canvasLocation" x="52.173913043478265" y="375"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="SplashTile" width="120" height="120"/>
+    </resources>
 </document>
