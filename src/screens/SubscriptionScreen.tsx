@@ -17,7 +17,7 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -148,6 +148,7 @@ const ORBS = [
 const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
 
   /// L'écran est le même quel qu'en soit le chemin, mais pas le moment. Arriver
@@ -559,13 +560,21 @@ const SubscriptionScreen = () => {
 
       <TouchableOpacity
         onPress={() => navigation.canGoBack() && navigation.goBack()}
-        style={styles.closeBtn}
+        style={[styles.closeBtn, { top: insets.top + space.sm }]}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Feather name="x" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* `edges={['bottom']}` laisse le fond passer sous la barre de statut —
+          c'est voulu, la teinte doit monter jusqu'en haut. Mais le CONTENU, lui,
+          démarrait à 48 px du bord : sur un iPhone à Dynamic Island (59 px de
+          zone sûre) la pastille du logo passait dessous. On reprend donc l'encart
+          ici, sur le seul contenu. */}
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* ── HERO ── */}
         <View style={styles.hero}>
@@ -848,7 +857,8 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: space.xl },
 
   closeBtn: {
-    position: 'absolute', top: 54, right: 20, zIndex: 20,
+    // `top` est posé au rendu, à partir de la zone sûre.
+    position: 'absolute', right: 20, zIndex: 20,
     width: 34, height: 34, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.07)',
     justifyContent: 'center', alignItems: 'center',
@@ -857,7 +867,10 @@ const styles = StyleSheet.create({
 
   // ── Hero ──
   hero: {
-    paddingHorizontal: space.xl, paddingTop: space.xxxl, paddingBottom: space.xxl,
+    // `xl` et non `xxxl` : l'encart de zone sûre porté par `scroll` fournit
+    // désormais l'essentiel de la respiration du haut, et la cumuler avec 48 px
+    // repoussait le logo trop bas sur les appareils à encoche.
+    paddingHorizontal: space.xl, paddingTop: space.xl, paddingBottom: space.xxl,
     overflow: 'hidden', alignItems: 'center',
   },
   heroGlow: {

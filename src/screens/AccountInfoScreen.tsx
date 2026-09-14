@@ -335,7 +335,14 @@ const AccountInfoScreen = () => {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          // Sans ça, le premier appui sur « Enregistrer » ne sert qu'à fermer le
+          // clavier : le geste est avalé et il faut taper deux fois, juste après
+          // avoir saisi le champ qu'on veut justement enregistrer.
+          keyboardShouldPersistTaps="handled"
+        >
 
           {/* ── AVATAR SECTION ── */}
           <View style={styles.avatarSection}>

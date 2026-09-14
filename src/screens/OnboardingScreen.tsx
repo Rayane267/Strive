@@ -764,8 +764,17 @@ const OnboardingScreen = ({
    * traduits et donnait des cibles tactiles étroites — or l'app se remplit
    * souvent d'une main, à l'arrêt entre deux courses. Une colonne unique lit
    * mieux et se tape sans viser.
+   *
+   * FONCTION DE RENDU, PAS COMPOSANT — et ça n'est pas un détail de style. Un
+   * composant déclaré dans le corps de l'écran change d'identité à chaque
+   * rendu : React démonte alors tout le sous-arbre au lieu de le mettre à jour.
+   * Le `TextInput` de « Autre » était donc recréé à chaque frappe — clavier
+   * refermé, `onEndEditing` déclenché par le démontage, saisie repliée sur la
+   * carte « Autre » au premier caractère. Appelée comme une fonction, la liste
+   * s'insère dans l'arbre du parent et le champ garde sa place, son focus et
+   * son texte.
    */
-  const OptionList = ({
+  const renderOptionList = ({
     choices,
     value,
     onPick,
@@ -787,6 +796,21 @@ const OnboardingScreen = ({
   }) => {
     const onAnOption = choices.some(c => c !== null && c === value);
     const optionHeight = computeOptionHeight(viewportH, headH, choices.length);
+    // Une fois le chiffre validé, la carte PORTE ce chiffre au lieu de
+    // retomber sur « Autre » : sinon la réponse que le chauffeur vient de taper
+    // disparaît de l'écran à l'instant où il la valide, et seul un surlignage
+    // lui dit qu'elle a été prise. Il ne peut plus la relire ni la vérifier
+    // sans rouvrir la saisie.
+    const otherLabel =
+      value !== null && !onAnOption
+        ? isPercent
+          ? `${Math.round(value * 100)} %`
+          : labelFor
+          ? labelFor(value)
+          : value === 0 && zeroLabel
+          ? zeroLabel
+          : `${value}${unit ?? ''}`
+        : t('onboarding.other');
     return (
       <>
         <View style={styles.optionList}>
@@ -886,7 +910,7 @@ const OnboardingScreen = ({
                   style={[styles.optionTxt, active && styles.optionTxtActive]}
                 >
                   {isOther
-                    ? t('onboarding.other')
+                    ? otherLabel
                     : labelFor
                     ? labelFor(c as number)
                     : c === 0 && zeroLabel
@@ -925,65 +949,53 @@ const OnboardingScreen = ({
         );
 
       case 'hours':
-        return (
-          <OptionList
-            choices={HOURS_CHOICES}
-            value={weeklyHours}
-            onPick={setWeeklyHours}
-            unit=" h"
-          />
-        );
+        return renderOptionList({
+          choices: HOURS_CHOICES,
+          value: weeklyHours,
+          onPick: setWeeklyHours,
+          unit: ' h',
+        });
 
       case 'goal':
-        return (
-          <OptionList
-            choices={GOAL_CHOICES}
-            value={monthlyGoal}
-            onPick={setMonthlyGoal}
-            labelFor={v => formatEuros(v)}
-          />
-        );
+        return renderOptionList({
+          choices: GOAL_CHOICES,
+          value: monthlyGoal,
+          onPick: setMonthlyGoal,
+          labelFor: v => formatEuros(v),
+        });
 
       case 'costs':
-        return (
-          <OptionList
-            choices={COSTS_CHOICES}
-            value={fixedCosts}
-            onPick={setFixedCosts}
-            zeroLabel={t('onboarding.costs.none')}
-            labelFor={v =>
-              v === 0 ? t('onboarding.costs.none') : formatEuros(v)
-            }
-          />
-        );
+        return renderOptionList({
+          choices: COSTS_CHOICES,
+          value: fixedCosts,
+          onPick: setFixedCosts,
+          zeroLabel: t('onboarding.costs.none'),
+          labelFor: v => (v === 0 ? t('onboarding.costs.none') : formatEuros(v)),
+        });
 
       case 'status':
-        return (
-          <OptionList
-            choices={STATUS_CHOICES}
-            value={socialRate}
-            onPick={setSocialRate}
-            isPercent
-            labelFor={v =>
-              v === SOCIAL_RATES.auto_entrepreneur
-                ? t('onboarding.status.auto')
-                : v === SOCIAL_RATES.societe
-                ? t('onboarding.status.company')
-                : t('onboarding.status.employee')
-            }
-            // Le taux AVEC sa base. Les deux chiffres ne portent pas sur la même
-            // chose — 21 % du chiffre d'affaires contre 45 % de la rémunération —
-            // et posés nus côte à côte ils feraient conclure que la société coûte
-            // deux fois plus cher, ce qui est faux.
-            subFor={v =>
-              v === SOCIAL_RATES.auto_entrepreneur
-                ? t('onboarding.status.autoSub')
-                : v === SOCIAL_RATES.societe
-                ? t('onboarding.status.companySub')
-                : t('onboarding.status.employeeSub')
-            }
-          />
-        );
+        return renderOptionList({
+          choices: STATUS_CHOICES,
+          value: socialRate,
+          onPick: setSocialRate,
+          isPercent: true,
+          labelFor: v =>
+            v === SOCIAL_RATES.auto_entrepreneur
+              ? t('onboarding.status.auto')
+              : v === SOCIAL_RATES.societe
+              ? t('onboarding.status.company')
+              : t('onboarding.status.employee'),
+          // Le taux AVEC sa base. Les deux chiffres ne portent pas sur la même
+          // chose — 21 % du chiffre d'affaires contre 45 % de la rémunération —
+          // et posés nus côte à côte ils feraient conclure que la société coûte
+          // deux fois plus cher, ce qui est faux.
+          subFor: v =>
+            v === SOCIAL_RATES.auto_entrepreneur
+              ? t('onboarding.status.autoSub')
+              : v === SOCIAL_RATES.societe
+              ? t('onboarding.status.companySub')
+              : t('onboarding.status.employeeSub'),
+        });
 
       case 'computing':
         return (
