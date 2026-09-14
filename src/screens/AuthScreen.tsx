@@ -412,7 +412,6 @@ const AuthScreen = () => {
           />
           <View style={styles.wordmarkWrap}>
             <Text style={styles.wordmark}>Strive</Text>
-            <View style={styles.wordmarkLine} />
           </View>
         </View>
 
@@ -523,13 +522,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.textMain,
     letterSpacing: -1.5,
-  },
-  wordmarkLine: {
-    width: 60,
-    height: 3,
-    borderRadius: radius.xs,
-    backgroundColor: colors.primary,
-    marginTop: space.sm,
   },
   actions: { paddingBottom: space.xxl, gap: space.md },
   loadingWrap: {

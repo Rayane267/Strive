@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import BrandLoader from './BrandLoader';
@@ -18,21 +18,66 @@ import BrandLoader from './BrandLoader';
  *
  * Seul le loader apparaît en fondu — il n'existe pas dans la vue native, et sa
  * place en bas d'écran le rend inoffensif pour la continuité.
+ *
+ * L'écran joue toujours sa séquence en entier : même session restaurée
+ * instantanément, on attend la fin de l'intro (puis du fade-out) avant de
+ * rendre la main. Si le boot traîne, le splash reste affiché.
  */
-const SplashScreen: React.FC = () => {
+const INTRO_DELAY = 400;
+const INTRO_DURATION = 500;
+const HOLD_DURATION = 700;
+const OUTRO_DURATION = 320;
+
+interface SplashScreenProps {
+  /** Passe à true quand l'app est prête à s'afficher (session/profil résolus). */
+  ready?: boolean;
+  /** Appelé une fois l'intro ET le fade-out terminés. */
+  onFinish?: () => void;
+}
+
+const SplashScreen: React.FC<SplashScreenProps> = ({ ready = false, onFinish }) => {
   const loaderFade = useRef(new Animated.Value(0)).current;
+  const screenFade = useRef(new Animated.Value(1)).current;
+  const [introDone, setIntroDone] = useState(false);
+
+  // Refs : les props peuvent changer en cours d'anim sans relancer la séquence.
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+  const finishedRef = useRef(false);
 
   useEffect(() => {
-    Animated.timing(loaderFade, {
-      toValue: 1,
-      duration: 500,
-      delay: 400,
-      useNativeDriver: true,
-    }).start();
+    const intro = Animated.sequence([
+      Animated.timing(loaderFade, {
+        toValue: 1,
+        duration: INTRO_DURATION,
+        delay: INTRO_DELAY,
+        useNativeDriver: true,
+      }),
+      Animated.delay(HOLD_DURATION),
+    ]);
+    intro.start(({ finished }) => {
+      if (finished) setIntroDone(true);
+    });
+    return () => intro.stop();
   }, [loaderFade]);
 
+  const finish = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    Animated.timing(screenFade, {
+      toValue: 0,
+      duration: OUTRO_DURATION,
+      useNativeDriver: true,
+    }).start(() => onFinishRef.current?.());
+  }, [screenFade]);
+
+  // Fade-out seulement quand l'intro est finie ET que l'app est prête.
+  useEffect(() => {
+    if (introDone && ready) finish();
+  }, [introDone, ready, finish]);
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: screenFade }]}>
       <View style={styles.brandWrap}>
         <Image
           source={require('../assets/strive-logo.png')}
@@ -45,7 +90,7 @@ const SplashScreen: React.FC = () => {
       <Animated.View style={[styles.loaderWrap, { opacity: loaderFade }]}>
         <BrandLoader size={9} />
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 };
 

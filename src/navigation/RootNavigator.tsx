@@ -60,6 +60,8 @@ const RootNavigator = () => {
   const { t } = useTranslation();
   const [tutorialChecked, setTutorialChecked] = useState(false);
   const [showTutorialFirst, setShowTutorialFirst] = useState(false);
+  // Le splash n'est retiré qu'une fois son animation jouée en entier.
+  const [splashDone, setSplashDone] = useState(false);
   // L'onboarding (objectif, heures, charges, statut) précède le tutoriel : il
   // produit le seuil de rentabilité, le tutoriel apprend ensuite le geste et fait
   // installer le raccourci. Deux clés distinctes — le tutoriel reste rejouable
@@ -81,8 +83,15 @@ const RootNavigator = () => {
     });
   }, [user, profile?.first_name]);
 
-  if (loading || (user && profile === null && !profileError) || (user && profile?.first_name && !tutorialChecked)) {
-    return <SplashScreen />;
+  const bootPending =
+    loading ||
+    (user && profile === null && !profileError) ||
+    (user && profile?.first_name && !tutorialChecked);
+
+  if (!splashDone || bootPending) {
+    return (
+      <SplashScreen ready={!bootPending} onFinish={() => setSplashDone(true)} />
+    );
   }
 
   if (user && profileError) {
