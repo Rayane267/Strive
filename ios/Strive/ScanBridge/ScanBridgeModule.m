@@ -74,6 +74,8 @@ RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
                   minKmRate:(nonnull NSNumber *)minKmRate
                   includePickup:(BOOL)includePickup)
 
+RCT_EXTERN_METHOD(hideSplash)
+
 RCT_EXTERN_METHOD(setFuelDeduction:(BOOL)enabled
                   fuelCostPerKm:(nonnull NSNumber *)fuelCostPerKm)
 

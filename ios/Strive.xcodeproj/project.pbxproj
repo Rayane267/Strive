@@ -20,6 +20,8 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		AA00010000000000000000A2 /* ScanBridgeModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00010000000000000000A1 /* ScanBridgeModule.swift */; };
+		FA00010000000000000000A2 /* StriveLogoShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00010000000000000000A1 /* StriveLogoShape.swift */; };
+		FA00020000000000000000A2 /* StriveSplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00020000000000000000A1 /* StriveSplashView.swift */; };
 		AA00020000000000000000A2 /* ScanBridgeModule.m in Sources */ = {isa = PBXBuildFile; fileRef = AA00020000000000000000A1 /* ScanBridgeModule.m */; };
 		AA00030000000000000000A2 /* VisionOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00030000000000000000A1 /* VisionOCRService.swift */; };
 		AA00040000000000000000A2 /* GeminiVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00040000000000000000A1 /* GeminiVisionService.swift */; };
@@ -94,6 +96,8 @@
 		7FD0B9D4B205952A18B21621 /* Pods-Strive.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Strive.release.xcconfig"; path = "Target Support Files/Pods-Strive/Pods-Strive.release.xcconfig"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Strive/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		AA00010000000000000000A1 /* ScanBridgeModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBridgeModule.swift; sourceTree = "<group>"; };
+		FA00010000000000000000A1 /* StriveLogoShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StriveLogoShape.swift; sourceTree = "<group>"; };
+		FA00020000000000000000A1 /* StriveSplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StriveSplashView.swift; sourceTree = "<group>"; };
 		AA00020000000000000000A1 /* ScanBridgeModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ScanBridgeModule.m; sourceTree = "<group>"; };
 		AA00030000000000000000A1 /* VisionOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRService.swift; sourceTree = "<group>"; };
 		AA00040000000000000000A1 /* GeminiVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiVisionService.swift; sourceTree = "<group>"; };
@@ -175,6 +179,7 @@
 			isa = PBXGroup;
 			children = (
 				AA00060000000000000000A1 /* ScanBridge */,
+				FA00060000000000000000A1 /* Splash */,
 				DD00060000000000000000A1 /* Scanner */,
 				EE00030000000000000000A1 /* LiveActivity */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -250,6 +255,16 @@
 				694825B92FC33BF500CC8F7E /* StriveWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FA00060000000000000000A1 /* Splash */ = {
+			isa = PBXGroup;
+			children = (
+				FA00010000000000000000A1 /* StriveLogoShape.swift */,
+				FA00020000000000000000A1 /* StriveSplashView.swift */,
+			);
+			name = Splash;
+			path = Strive/Splash;
 			sourceTree = "<group>";
 		};
 		AA00060000000000000000A1 /* ScanBridge */ = {
@@ -587,6 +602,8 @@
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				AA00010000000000000000A2 /* ScanBridgeModule.swift in Sources */,
+				FA00010000000000000000A2 /* StriveLogoShape.swift in Sources */,
+				FA00020000000000000000A2 /* StriveSplashView.swift in Sources */,
 				AA00020000000000000000A2 /* ScanBridgeModule.m in Sources */,
 				AA00030000000000000000A2 /* VisionOCRService.swift in Sources */,
 				AA00040000000000000000A2 /* GeminiVisionService.swift in Sources */,

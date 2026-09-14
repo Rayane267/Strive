@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Palette du splash. Jumelle de `src/theme/colors.ts` et du `LaunchScreen`.
 ///
@@ -164,3 +165,70 @@ struct StriveSplashView_Previews: PreviewProvider {
     }
 }
 #endif
+
+
+/// Le porteur du splash : il le pose au-dessus de tout, et il sait s'effacer.
+///
+/// POSÉ SUR LA FENÊTRE, pas sur la rootView. React Native REMPLACE
+/// `window.rootViewController` quand il monte la sienne : un overlay attaché au
+/// contrôleur d'alors disparaîtrait au moment précis où il doit encore couvrir.
+/// En sous-vue de la fenêtre, il survit à l'échange.
+///
+/// LE GARDE-FOU N'EST PAS DÉCORATIF. Le retrait dépend d'un signal venu du JS,
+/// donc d'un pont qui peut ne jamais démarrer — bundle absent, crash au boot,
+/// Metro injoignable en dev. Un splash natif qui reste collé, c'est une app
+/// morte à l'écran, et un rejet en review. Au bout de `maxLifetime` il s'en va
+/// de lui-même, quoi qu'il arrive.
+@objc final class StriveSplashOverlay: NSObject {
+
+  /// Au-delà, on s'efface sans attendre le JS.
+  private static let maxLifetime: TimeInterval = 6
+
+  private static var hosting: UIViewController?
+  /// Empêche une réinstallation après coup : `startReactNativeIfNeeded` est
+  /// idempotent mais appelé depuis trois endroits, et un retour au premier plan
+  /// ne doit pas rejouer le splash.
+  private static var finished = false
+
+  @objc static func install(over window: UIWindow) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { install(over: window) }
+      return
+    }
+    guard hosting == nil, !finished else { return }
+
+    let host = UIHostingController(rootView: StriveSplashView())
+    host.view.frame = window.bounds
+    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    // Opaque : la rootView de React Native se monte DERRIÈRE pendant ce
+    // temps-là, et on ne doit pas la voir apparaître par transparence.
+    host.view.backgroundColor = UIColor(
+      red: 10 / 255, green: 18 / 255, blue: 14 / 255, alpha: 1
+    )
+    // Aucun geste ne doit atteindre l'app tant que le splash couvre l'écran.
+    host.view.isUserInteractionEnabled = true
+
+    window.addSubview(host.view)
+    hosting = host
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + maxLifetime) { dismiss() }
+  }
+
+  /// Appelable plusieurs fois sans dommage : le JS et le garde-fou peuvent
+  /// arriver dans n'importe quel ordre.
+  @objc static func dismiss() {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { dismiss() }
+      return
+    }
+    finished = true
+    guard let host = hosting else { return }
+    hosting = nil
+
+    UIView.animate(
+      withDuration: 0.28,
+      animations: { host.view.alpha = 0 },
+      completion: { _ in host.view.removeFromSuperview() }
+    )
+  }
+}

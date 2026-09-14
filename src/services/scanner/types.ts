@@ -114,6 +114,12 @@ export interface ScannerService {
    *  est pré-calculé côté JS (conso × prix du jour) : le natif n'a ni le type de
    *  carburant ni le tarif à la pompe. Affichage seul — le verdict, les €/h,
    *  les €/km et le tarif enregistré restent bruts. */
+  /**
+   * Retire le splash natif iOS. À appeler quand l'app a enfin quelque chose à
+   * montrer — sinon le natif s'efface seul au bout de 6 s. Sans effet sur
+   * Android, qui n'a pas de splash natif animé.
+   */
+  hideSplash(): void;
   setFuelDeduction(enabled: boolean, fuelCostPerKm: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   setTomTomApiKey(key: string): void;

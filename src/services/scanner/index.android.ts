@@ -40,6 +40,8 @@ export const scannerService: ScannerService = {
   setPreferences: (includePickup: boolean) => ScanBridge.setPreferences(includePickup),
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
+  // Pas de splash natif animé sur Android : le bootsplash suffit.
+  hideSplash: () => {},
   setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) =>
     ScanBridge.setFuelDeduction?.(enabled, fuelCostPerKm),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),

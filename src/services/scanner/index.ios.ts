@@ -94,6 +94,9 @@ export const scannerService: ScannerService = {
     ScanBridge?.setScannerPreferences(minHr, minKm, includePickup);
   },
 
+  hideSplash: () => {
+    ScanBridge?.hideSplash?.();
+  },
   setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) => {
     ScanBridge?.setFuelDeduction?.(enabled, fuelCostPerKm);
   },

@@ -7,6 +7,7 @@ import {
 } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RNBootSplash from 'react-native-bootsplash';
+import { scannerService } from './src/services/scanner';
 import * as Sentry from '@sentry/react-native';
 import RootNavigator from './src/navigation/RootNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
@@ -90,6 +91,11 @@ const AppContent = () => {
           // n'est pas rattaché aux événements qui s'y produisent.
           navigationIntegration.registerNavigationContainer(navigationRef);
           RNBootSplash.hide({ fade: true });
+          // Le splash natif iOS s'efface au même instant : la navigation est
+          // montée, donc il y a enfin quelque chose derrière. `SplashScreen.tsx`
+          // prend le relais si la session est encore en cours de restauration —
+          // même composition, la bascule ne se voit pas.
+          try { scannerService.hideSplash(); } catch {}
         }}
       >
         <RootNavigator />

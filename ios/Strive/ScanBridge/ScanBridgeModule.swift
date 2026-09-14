@@ -786,6 +786,13 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Retire le splash natif. Appelé par le JS quand la navigation est montée,
+  /// c'est-à-dire quand il y a enfin quelque chose à montrer derrière.
+  /// Idempotent, et doublé d'un garde-fou de 6 s côté natif.
+  @objc func hideSplash() {
+    StriveSplashOverlay.dismiss()
+  }
+
   /// Purge le cache de géocodage local (adresses = PII). Appelé par le JS au
   /// logout et après suppression de compte — l'effacement RGPD couvre aussi le
   /// cache sur l'appareil, hors de portée de la RPC serveur delete_account.

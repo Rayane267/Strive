@@ -129,6 +129,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       in: window,
       launchOptions: launchOptions
     )
+
+    // Le splash animé, posé PAR-DESSUS la rootView que React Native vient de
+    // monter. Il reprend l'image du LaunchScreen — fond, tuile vide — et trace
+    // le logo pendant le boot du pont.
+    //
+    // Jamais sur un lancement en arrière-plan : ce chemin (raccourci de scan)
+    // sort plus haut sans jamais arriver ici, et il n'a pas d'écran.
+    //
+    // Le retrait vient du JS (`ScanBridge.hideSplash`, appelé quand la
+    // navigation est prête), avec un garde-fou de 6 s côté natif.
+    StriveSplashOverlay.install(over: window)
   }
 
   func applicationWillEnterForeground(_ application: UIApplication) {
