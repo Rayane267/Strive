@@ -64,7 +64,7 @@ export const ALL_PLANS: Plan[] = [
     suffix: { monthly: '/mois', yearly: '/an' },
     note: { monthly: 'Sans engagement', yearly: 'soit 7,49 € par mois' },
     points: [
-      '30 scans par jour',
+      '20 scans par jour',
       'Tes seuils €/h et €/km, pas les nôtres',
       'Carburant déduit selon ton modèle',
       "7 jours d'historique et de stats",

@@ -29,6 +29,12 @@ import { colors } from '../theme/colors';
 import AvatarView from '../components/AvatarView';
 import { Skeleton } from '../components/Skeleton';
 import { hapticSuccess, hapticError } from '../utils/haptics';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 import {
   dialForValue,
   expectedLengths,
@@ -278,6 +284,10 @@ const AccountInfoScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+            l'encoche, et `container` porte la meme couleur que son sommet : la
+            bande de statut se confond avec lui au lieu de faire un bandeau. */}
+        <ScreenField />
         {/* Header statique — seul le contenu chargé est en skeleton. */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -381,7 +391,7 @@ const AccountInfoScreen = () => {
           </View>
 
           {/* ── DONNÉES & CONFIDENTIALITÉ ── */}
-          <View style={[styles.formCard, { marginTop: 18 }]}>
+          <View style={[styles.formCard, { marginTop: space.lg }]}>
             <View style={styles.formHeader}>
               <Feather name="shield" size={15} color={colors.primary} />
               <Text style={styles.formHeaderText}>{t('accountInfo.privacy', 'DONNÉES & CONFIDENTIALITÉ')}</Text>
@@ -434,14 +444,14 @@ const AccountInfoScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
   },
   backBtn: {
     marginLeft: -10,
@@ -450,45 +460,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerCenter: { flex: 1, marginHorizontal: 14 },
+  headerCenter: { flex: 1, marginHorizontal: space.md },
   headerTitle: {
-    marginRight: 12,
+    marginRight: space.md,
     flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
+  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
   planBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edgeLit,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   planBadgePlus: { backgroundColor: colors.primary, borderColor: colors.primary },
   planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   planBadgeTextPlus: { color: colors.background },
 
-  scroll: { paddingHorizontal: 20, paddingBottom: 20 },
+  scroll: { paddingHorizontal: space.xl, paddingBottom: space.xl },
 
   // Avatar section
-  avatarSection: { alignItems: 'center', marginTop: 14, marginBottom: 28, gap: 10 },
-  profileName: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  avatarSection: { alignItems: 'center', marginTop: space.md, marginBottom: space.xl, gap: space.sm },
+  profileName: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: space.sm },
   profileEmail: { color: colors.textDimmed, fontSize: 13, fontWeight: '500' },
 
   // Form card
   formCard: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    gap: 4,
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    gap: space.xs,
   },
   formHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: space.sm,
+    marginBottom: space.lg,
   },
   formHeaderText: {
     color: colors.textDimmed,
@@ -497,38 +507,38 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
 
-  inputGroup: { marginBottom: 14 },
+  inputGroup: { marginBottom: space.md },
   inputLabel: {
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: 7,
+    marginBottom: space.sm,
     textTransform: 'uppercase',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12,
+    borderRadius: radius.sm,
     height: 52,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   inputDisabled: { opacity: 0.5 },
   inputError: { borderColor: colors.danger },
-  fieldError: { color: colors.danger, fontSize: 11, fontWeight: '600', marginTop: 4 },
-  lockedNote: { color: colors.textMuted, fontSize: 11, marginTop: -8, marginBottom: 14, marginLeft: 2 },
-  inputIcon: { marginRight: 12 },
+  fieldError: { color: colors.danger, fontSize: 11, fontWeight: '600', marginTop: space.xs },
+  lockedNote: { color: colors.textMuted, fontSize: 11, marginTop: -8, marginBottom: space.md, marginLeft: space.tight },
+  inputIcon: { marginRight: space.md },
   input: { flex: 1, color: colors.textMain, fontSize: 15, height: '100%' },
 
   // Données & confidentialité
-  privacyNote: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginBottom: 14 },
+  privacyNote: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginBottom: space.md },
   deleteHistoryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 48, borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.4)',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
+    height: 48, borderRadius: radius.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.alert,
     backgroundColor: 'rgba(255,77,77,0.08)',
   },
   deleteHistoryText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
@@ -539,20 +549,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 17,
-    borderRadius: 16,
-    marginTop: 18,
-    marginBottom: 20,
-    gap: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    paddingVertical: space.lg,
+    borderRadius: radius.md,
+    marginTop: space.lg,
+    marginBottom: space.xl,
+    gap: space.sm,
+        ...elevation.resting.shadow,
   },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   saveBtnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
-  skeletonLabel: { marginBottom: 7 },
+  skeletonLabel: { marginBottom: space.sm },
 
 });
 

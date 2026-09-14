@@ -556,6 +556,57 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  // MARK: - Bord bas adouci des ScrollView (iOS 26)
+
+  /// Classe des ScrollView de React Native sous Fabric. Résolue par son nom :
+  /// son en-tête vit dans la partie C++ de RN, hors de portée de Swift.
+  private static let reactScrollViewClass: AnyClass? = NSClassFromString("RCTEnhancedScrollView")
+
+  /// Pose l'effet de bord doux d'iOS 26 sur les ScrollView de React Native.
+  ///
+  /// `.scrollEdgeEffectStyle(.soft, for: .all)` ne peut pas servir ici : c'est un
+  /// modificateur SwiftUI, il descend par l'environnement SwiftUI, et les vues de
+  /// React Native sont des vues UIKit posées hors de tout `UIHostingController`.
+  /// Aucune valeur d'environnement ne peut les atteindre.
+  ///
+  /// Mais l'effet n'est pas une fonctionnalité SwiftUI. Le modificateur ne fait
+  /// que régler `UIScrollView.bottomEdgeEffect`, et `RCTEnhancedScrollView` hérite
+  /// de `UIScrollView` : la propriété est déjà là, sur nos vues, il suffit d'y
+  /// toucher.
+  ///
+  /// Le balayage reproduit la sémantique du modificateur SwiftUI — posé une fois
+  /// à la racine, chaque écran en hérite. L'opération est idempotente, la rejouer
+  /// à chaque changement d'onglet n'accumule rien.
+  @objc func applySoftScrollEdges() {
+    // Rendre la main avant de parcourir : un écran qui vient d'être poussé n'a
+    // pas encore sa ScrollView dans la fenêtre quand JS appelle. Ce n'est pas
+    // une temporisation à l'aveugle, c'est attendre la fin de la transaction de
+    // montage de Fabric, qui se termine sur ce même tour de boucle.
+    DispatchQueue.main.async {
+      guard #available(iOS 26.0, *) else { return }
+      guard let scrollViewClass = ScanBridgeModule.reactScrollViewClass else { return }
+      for window in ScanBridgeModule.activeWindows {
+        ScanBridgeModule.applySoftBottomEdge(in: window, matching: scrollViewClass)
+      }
+    }
+  }
+
+  @available(iOS 26.0, *)
+  private static func applySoftBottomEdge(in view: UIView, matching scrollViewClass: AnyClass) {
+    if let scrollView = view as? UIScrollView, scrollView.isKind(of: scrollViewClass) {
+      scrollView.bottomEdgeEffect.style = .soft
+    }
+    for subview in view.subviews {
+      applySoftBottomEdge(in: subview, matching: scrollViewClass)
+    }
+  }
+
+  private static var activeWindows: [UIWindow] {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+  }
+
   /// Ouvre les réglages de notification DE L'APP, et pas sa fiche générale.
   ///
   /// `openNotificationSettingsURLString` est publique depuis **iOS 16.0** : c'est

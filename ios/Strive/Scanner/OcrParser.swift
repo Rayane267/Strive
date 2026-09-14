@@ -119,11 +119,20 @@ final class OcrParser {
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
   private static let durationHourRegex = try! NSRegularExpression(
     pattern: #"(\d{1,2})\s*h\s*(\d{1,2})?\s*(?:min)?"#, options: .caseInsensitive)
+  // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min".
+  //
+  // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
+  // écartait le format réellement affiché par l'app Uber FR : "11 min (à 2,6 km)".
+  // Le « à » suffisait à faire échouer le match — l'approche n'était donc JAMAIS
+  // reconnue sur une offre Uber française, et ses km/min ne rentraient pas dans
+  // le total. Voir fixtures/ocr/core.json#uber-approach-longer-than-ride.
+  // La borne à 8 caractères garde le pont court : elle couvre " (à ", " · ",
+  // " away (" — pas " Course de ", qui relierait deux lignes distinctes.
   private static let pickupComboMinFirst = try! NSRegularExpression(
-    pattern: #"(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#,
+    pattern: #"(\d{1,3})\s*min[^0-9]{0,8}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#,
     options: .caseInsensitive)
   private static let pickupComboKmFirst = try! NSRegularExpression(
-    pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min"#,
+    pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9]{0,8}(\d{1,3})\s*min"#,
     options: .caseInsensitive)
 
   private func cleanNum(_ raw: String) -> String {
@@ -201,19 +210,48 @@ final class OcrParser {
 
     guard let distance = extractDistance(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
     else { return nil }
-    let duration = extractDuration(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock, courseDistanceKm: distance)
-
     if !isSane(fare: fare, distanceKm: distance) { return nil }
 
-    let pickup = extractPickupInfo(blocks: blocks, courseDistanceKm: distance)
+    // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
+    // écarter le combo qui la porte, sinon les minutes d'approche deviennent
+    // celles de la course (cf. son repli n°2).
+    let pickup = extractPickupInfo(blocks: blocks, courseDistanceKm: distance, screenHeight: screenHeight)
+    let duration = extractDuration(
+      blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock,
+      courseDistanceKm: distance, pickup: pickup
+    )
+
+    let pickupText = pickupAddrBlock.map {
+      mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight)
+    }
+    let destCandidate = destAddrBlock.map {
+      mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight)
+    }
+
+    // UNE ADRESSE DE PRISE EN CHARGE N'EST JAMAIS UNE ADRESSE D'ARRIVÉE.
+    //
+    // `dedupOverlappingAddresses` écarte déjà les candidats en doublon, mais il
+    // travaille sur les blocs AVANT recollage des continuations : deux ancres
+    // découpées différemment par l'OCR peuvent aboutir au même libellé final.
+    // Cette vérification-ci porte sur le résultat, elle ne peut donc pas être
+    // contournée par une variation de découpage.
+    //
+    // On préfère un champ VIDE à un champ faux. Une destination absente est
+    // visible, elle déclenche la capture diagnostique et n'induit personne en
+    // erreur ; une destination fausse est silencieuse, elle s'écrit en base et
+    // fausse le calcul économique sur lequel le chauffeur décide.
+    var destText = destCandidate
+    if let d = destCandidate, let p = pickupText, isSameAddress(d, p) {
+      destText = nil
+    }
 
     return ScanResultModel(
       platform: platform,
       fare: fare,
       distanceKm: distance,
       durationMin: duration,
-      pickupAddress: pickupAddrBlock.map { mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight) },
-      destinationAddress: destAddrBlock.map { mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight) },
+      pickupAddress: pickupText,
+      destinationAddress: destText,
       pickupDurationMin: pickup?.0,
       pickupDistanceKm: pickup?.1
     )
@@ -514,7 +552,10 @@ final class OcrParser {
 
   // MARK: - Duration extraction
 
-  private func extractDuration(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?, courseDistanceKm: Double) -> Int? {
+  private func extractDuration(
+    blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?,
+    courseDistanceKm: Double, pickup: (Int, Double)?
+  ) -> Int? {
     struct Cand { let value: Int; let km: Double?; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
@@ -570,9 +611,19 @@ final class OcrParser {
     //    distance de course (pas l'approche, dont le km est petit). Évite
     //    d'afficher le temps d'approche comme temps de course quand la course
     //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+    //    ⚠️ La tolérance est LARGE (plancher de 2 km) : sur une course courte,
+    //    le combo d'APPROCHE tombe dedans presque à coup sûr — 2,6 km d'approche
+    //    pour 2,3 km de course, c'est 0,3 d'écart. Ses minutes devenaient alors
+    //    la durée de course : 9 € pour « 11 min · 2,3 km » → 49 €/h affichés au
+    //    lieu de ~32, verdict vert sur une course qui ne l'était pas. Le combo
+    //    déjà identifié comme l'approche est donc écarté d'emblée.
     let tol = max(2.0, courseDistanceKm * 0.2)
     let courseCombo = candidates
       .filter { $0.km != nil && abs($0.km! - courseDistanceKm) <= tol }
+      .filter { c in
+        guard let p = pickup else { return true }
+        return !(c.value == p.0 && abs((c.km ?? 0) - p.1) < 0.01)
+      }
       .max(by: { ($0.km ?? 0) < ($1.km ?? 0) })
     if let c = courseCombo { return c.value }
     // 3. Aucune durée fiable (seules des approches/bandeaux) → nil : estimation
@@ -582,7 +633,7 @@ final class OcrParser {
 
   // MARK: - Pickup combo extraction
 
-  private func extractPickupInfo(blocks: [OcrTextBlock], courseDistanceKm: Double) -> (Int, Double)? {
+  private func extractPickupInfo(blocks: [OcrTextBlock], courseDistanceKm: Double, screenHeight: Int) -> (Int, Double)? {
     struct PickupMatch { let durationMin: Int; let distanceKm: Double; let y: Int }
     var matchesArr: [PickupMatch] = []
 
@@ -611,9 +662,18 @@ final class OcrParser {
       if mv < 1 || mv > 60 { continue }
       if kv < 0.1 || kv > 30.0 { continue }
       if abs(kv - courseDistanceKm) < 0.1 { continue }
-      // L'approche est toujours plus courte que la course → un combo dont le km
-      // ≥ distance de course est le bandeau nav (haut de l'écran), pas l'approche.
-      if kv >= courseDistanceKm { continue }
+      // L'APPROCHE N'EST PAS TOUJOURS PLUS COURTE QUE LA COURSE.
+      //
+      // Un `kv >= courseDistanceKm` écartait ici tout combo plus long que la
+      // course, au motif qu'il s'agissait du bandeau de navigation. C'est faux
+      // en ville : 2,6 km d'approche pour une course de 2,3 km est banal, et
+      // l'approche disparaissait alors du total — le chauffeur lisait « 11 min »
+      // sur une course annoncée « à 12 min » de lui.
+      // Le bandeau nav se distingue par sa POSITION, pas par ses kilomètres : il
+      // vit dans le quart haut de l'écran, la même bande que `findAddressBlocks`
+      // écarte déjà. Le combo de la course, lui, reste écarté par le test de
+      // distance juste au-dessus.
+      if block.box.centerY < Int(Double(screenHeight) * 0.25) { continue }
       matchesArr.append(PickupMatch(durationMin: mv, distanceKm: kv, y: block.box.centerY))
     }
 
@@ -750,16 +810,57 @@ final class OcrParser {
     return dedupOverlappingAddresses(candidates)
   }
 
+  /// Réduit un libellé d'adresse à ce qui permet de le comparer à un autre :
+  /// minuscules, et tout ce qui n'est ni lettre ni chiffre devient une coupure de
+  /// mot. Deux occurrences d'une même adresse ne sont pas ponctuées ni coupées de
+  /// la même façon par l'OCR — une comparaison brute échouerait toujours.
+  private func comparableAddress(_ s: String) -> String {
+    let kept = s.lowercased().map { ch -> Character in
+      (ch.isLetter || ch.isNumber) ? ch : " "
+    }
+    return String(kept).split(separator: " ").joined(separator: " ")
+  }
+
+  /// Deux libellés qui désignent le même lieu, à la mise en forme près.
+  ///
+  /// Le test est le PRÉFIXE et non l'égalité : l'une des deux occurrences
+  /// s'arrête souvent avant le code postal ou le pays. Un préfixe plutôt qu'une
+  /// inclusion, parce qu'un nom de voie court peut apparaître au milieu d'une
+  /// adresse sans rapport.
+  private func isSameAddress(_ a: String, _ b: String) -> Bool {
+    let x = comparableAddress(a)
+    let y = comparableAddress(b)
+    guard !x.isEmpty, !y.isEmpty else { return false }
+    return x.hasPrefix(y) || y.hasPrefix(x)
+  }
+
   private func dedupOverlappingAddresses(_ candidates: [OcrTextBlock]) -> [OcrTextBlock] {
     // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
     // courte soit reconnue comme préfixe de la version longue (cas Heetch).
     let texts = candidates.map { cleanAddressText($0.text).trimmingCharacters(in: .whitespacesAndNewlines) }
     return candidates.enumerated().compactMap { (i, b) in
       let mine = texts[i]
+      // Évincé par un candidat PLUS LONG qui commence par lui : la ligne courte
+      // est la version tronquée de la longue (cas Heetch).
       let hasLonger = candidates.indices.contains { j in
         j != i && texts[j].count > mine.count && texts[j].hasPrefix(mine)
       }
-      return hasLonger ? nil : b
+      // Évincé par un candidat IDENTIQUE placé avant lui.
+      //
+      // Le test de longueur ci-dessus ne peut rien voir sur deux textes égaux,
+      // et c'est ce trou qui laissait passer les DEUX occurrences. Plusieurs
+      // écrans Uber affichent l'adresse de départ deux fois : le second slot
+      // adresse était donc pris par la répétition du départ, et la destination
+      // réelle, qui vient après le « Course de X km », n'était jamais lue.
+      //
+      // Constaté sur six courses consécutives dont le prix, la distance et la
+      // durée variaient tous, alors que la destination enregistrée restait
+      // identique au caractère près — parce qu'elle décrivait la position du
+      // chauffeur et non celle du client.
+      let isLaterDuplicate = candidates.indices.contains { j in
+        j < i && texts[j] == mine
+      }
+      return (hasLonger || isLaterDuplicate) ? nil : b
     }
   }
 

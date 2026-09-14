@@ -30,12 +30,12 @@ const allFaqs: FaqItem[] = [
   {
     q: 'Combien de scans par jour ?',
     a: PREMIUM_LIVE
-      ? '3 scans par jour en gratuit, 30 par jour avec Strive Plus, et sans limite avec Strive Premium.'
-      : '3 scans par jour en gratuit, 30 par jour avec Strive Plus.',
+      ? '3 scans par jour en gratuit, 20 par jour avec Strive Plus, et sans limite avec Strive Premium.'
+      : '3 scans par jour en gratuit, 20 par jour avec Strive Plus.',
   },
   {
     q: 'Quelle différence entre Plus et Premium ?',
-    a: "Plus donne 30 scans par jour et 7 jours d'historique — le bon plan pour une journée de service normale. Premium retire les deux plafonds : scans illimités et historique complet. Tout le reste est identique.",
+    a: "Plus donne 20 scans par jour et 7 jours d'historique — le bon plan pour une journée de service normale. Premium retire les deux plafonds : scans illimités et historique complet. Tout le reste est identique.",
     premiumOnly: true,
   },
   {

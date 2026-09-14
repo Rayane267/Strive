@@ -16,10 +16,15 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { useAuth } from '../context/AuthContext';
 import { SCAN_PACKS, getEffectivePlanTier } from '../services/subscriptionService';
 import { buyScanPack, restorePurchases, getStorePrices, isIAPAvailable } from '../services/iapService';
 import { waitForProfileUpdate } from '../services/profileService';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 // Flip à `true` quand la boutique sera prête. Tant que false, l'onglet reste
 // visible mais affiche un placeholder "Bientôt disponible".
@@ -97,15 +102,19 @@ const ShopScreen = () => {
   if (!SHOP_AVAILABLE) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+            l'encoche, et `container` porte la meme couleur que son sommet : la
+            bande de statut se confond avec lui au lieu de faire un bandeau. */}
+        <ScreenField />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{t('shop.title')}</Text>
         </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: tabBarHeight }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xxl, paddingBottom: tabBarHeight }}>
           <MaterialCommunityIcons name="storefront-outline" size={72} color={colors.primary} />
-          <Text style={{ color: colors.textMain, fontSize: 22, fontWeight: 'bold', marginTop: 20, textAlign: 'center' }}>
+          <Text style={{ color: colors.textMain, fontSize: 22, fontWeight: 'bold', marginTop: space.xl, textAlign: 'center' }}>
             {t('shop.comingSoonTitle', 'Bientôt disponible')}
           </Text>
-          <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 10, textAlign: 'center', lineHeight: 21 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: space.sm, textAlign: 'center', lineHeight: 21 }}>
             {t('shop.comingSoonSub', 'La boutique de crédits sera bientôt accessible.')}
           </Text>
         </View>
@@ -178,7 +187,7 @@ const ShopScreen = () => {
                 <View style={styles.packDivider} />
 
                 {isPurchasing ? (
-                  <ActivityIndicator size="small" color={isBestValue ? colors.background : colors.primary} style={{ marginTop: 8 }} />
+                  <ActivityIndicator size="small" color={isBestValue ? colors.background : colors.primary} style={{ marginTop: space.sm }} />
                 ) : (
                   <Text style={[styles.packPrice, isBestValue && styles.packPriceHighlight]}>
                     {getPriceLabel(pack)}
@@ -199,7 +208,7 @@ const ShopScreen = () => {
             <View style={styles.infoIcon}><Feather name="clock" size={16} color={colors.primary} /></View>
             <Text style={styles.infoText}>{t('shop.info2')}</Text>
           </View>
-          <View style={[styles.infoRow, { marginBottom: 0 }]}>
+          <View style={[styles.infoRow, { marginBottom: space.tight }]}>
             <View style={styles.infoIcon}><Feather name="trending-up" size={16} color={colors.primary} /></View>
             <Text style={styles.infoText}>{t('shop.info3')}</Text>
           </View>
@@ -235,82 +244,87 @@ const ShopScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 15,
+    paddingHorizontal: space.xl, paddingVertical: space.lg,
   },
   headerTitle: { color: colors.textMain, fontSize: 18, fontWeight: 'bold' },
-  scrollContent: { paddingHorizontal: 20 },
+  scrollContent: { paddingHorizontal: space.xl },
 
   balanceCard: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: colors.surface, borderRadius: 16, padding: 20, marginBottom: 28,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
+    overflow: 'hidden',
   },
-  balanceLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  balanceLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   balanceTextWrap: {},
-  balanceLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 4 },
+  balanceLabel: { color: colors.textMuted, fontSize: 12, marginBottom: space.xs },
   balanceValue: { color: colors.textMain, fontSize: 22, fontWeight: 'bold' },
-  tierBadge: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  tierBadgePlus: { backgroundColor: 'rgba(0,230,118,0.15)', borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)' },
+  tierBadge: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.lg },
+  tierBadgePlus: { backgroundColor: 'rgba(0,230,118,0.15)', borderWidth: strokeWidth.control, borderColor: stroke.edge },
   tierBadgePremium: { backgroundColor: colors.primary },
   tierBadgeText: { color: colors.textMain, fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
 
-  sectionTitle: { color: colors.textMuted, fontSize: 12, fontWeight: 'bold', letterSpacing: 1, marginBottom: 6 },
-  sectionSubtitle: { color: colors.textMuted, fontSize: 13, marginBottom: 20, lineHeight: 18 },
+  sectionTitle: { color: colors.textMuted, fontSize: 12, fontWeight: 'bold', letterSpacing: 1, marginBottom: space.sm },
+  sectionSubtitle: { color: colors.textMuted, fontSize: 13, marginBottom: space.xl, lineHeight: 18 },
 
-  packsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
+  packsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.xl },
   packCard: {
-    width: '47%', backgroundColor: colors.surface, borderRadius: 16, padding: 18,
-    alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     position: 'relative', overflow: 'visible',
   },
   packCardHighlight: { backgroundColor: colors.primary, borderColor: colors.primary },
   bestValueBadge: {
     position: 'absolute', top: -10, backgroundColor: '#FFCA28',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+    paddingHorizontal: space.sm, paddingVertical: space.tight, borderRadius: radius.sm,
   },
   bestValueText: { color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
   savingsBadge: {
     position: 'absolute', top: 10, right: 10,
-    backgroundColor: 'rgba(0,230,118,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    backgroundColor: 'rgba(0,230,118,0.2)', paddingHorizontal: space.sm, paddingVertical: space.tight, borderRadius: radius.xs,
   },
   savingsText: { color: colors.primary, fontSize: 10, fontWeight: 'bold' },
   packIconWrap: {
-    width: 52, height: 52, borderRadius: 14,
-    backgroundColor: 'rgba(0,230,118,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+    width: 52, height: 52, borderRadius: radius.md,
+    backgroundColor: 'rgba(0,230,118,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: space.md,
   },
   packQuantity: { color: colors.textMain, fontSize: 36, fontWeight: '900', lineHeight: 40 },
   packQuantityHighlight: { color: colors.background },
-  packUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 12 },
+  packUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginBottom: space.md },
   packUnitHighlight: { color: 'rgba(0,0,0,0.7)' },
-  packDivider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 12 },
+  packDivider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: space.md },
   packPrice: { color: colors.textMain, fontSize: 18, fontWeight: '900' },
   packPriceHighlight: { color: colors.background },
 
   infoCard: {
-    backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginBottom: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    overflow: 'hidden',
   },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: space.md },
   infoIcon: {
-    width: 28, height: 28, borderRadius: 8,
+    width: 28, height: 28, borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)', justifyContent: 'center', alignItems: 'center',
-    marginRight: 12, flexShrink: 0,
+    marginRight: space.md, flexShrink: 0,
   },
   infoText: { color: colors.textMuted, fontSize: 13, lineHeight: 18, flex: 1 },
 
   upgradeBanner: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.primary, borderRadius: 16, padding: 18, gap: 14, marginBottom: 16,
+    backgroundColor: colors.primary, borderRadius: radius.md, padding: space.lg, gap: space.md, marginBottom: space.lg,
   },
-  upgradeBannerLogo: { width: 28, height: 28, borderRadius: 14 },
+  upgradeBannerLogo: { width: 28, height: 28, borderRadius: radius.full },
   upgradeBannerText: { flex: 1 },
-  upgradeBannerTitle: { color: colors.background, fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
+  upgradeBannerTitle: { color: colors.background, fontSize: 15, fontWeight: 'bold', marginBottom: space.tight },
   upgradeBannerSub: { color: 'rgba(0,0,0,0.6)', fontSize: 12 },
 
-  restoreBtn: { alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
+  restoreBtn: { alignItems: 'center', paddingVertical: space.md, marginBottom: space.xs },
   restoreText: { color: colors.textDimmed, fontSize: 13 },
 });
 

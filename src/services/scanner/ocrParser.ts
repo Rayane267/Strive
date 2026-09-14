@@ -42,8 +42,16 @@ const DURATION_REGEX = /(\d{1,3})\s*min/i;
 const EV_CONTEXT_REGEX =
   /(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)/i;
 // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min" avec séparateurs variés (•·-–—:, espaces)
-const PICKUP_COMBO_MIN_FIRST = /(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km/i;
-const PICKUP_COMBO_KM_FIRST  = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min/i;
+//
+// Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
+// écartait le format que l'app Uber FR utilise réellement : "11 min (à 2,6 km)".
+// Le « à » suffisait à faire échouer le match — l'approche n'était donc JAMAIS
+// reconnue sur une offre Uber française, et ses km/min ne rentraient pas dans
+// le total. Voir fixtures/ocr/core.json#uber-approach-longer-than-ride.
+// La borne à 8 caractères garde le pont court : elle couvre " (à ", " · ",
+// " away (" — pas " Course de ", qui relierait deux lignes distinctes.
+const PICKUP_COMBO_MIN_FIRST = /(\d{1,3})\s*min[^0-9]{0,8}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km/i;
+const PICKUP_COMBO_KM_FIRST  = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9]{0,8}(\d{1,3})\s*min/i;
 
 // Mots-clés de type voie — FR + EN — pour détecter les adresses
 // Mots de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs
@@ -142,7 +150,7 @@ export function parseBlocks(
 
   if (!isSane(fare, distanceKm)) return null;
 
-  const pickup = extractPickupInfo(blocks, distanceKm);
+  const pickup = extractPickupInfo(blocks, distanceKm, screenHeight);
 
   return {
     platform,
@@ -472,6 +480,7 @@ function extractDuration(
 function extractPickupInfo(
   blocks: TextBlock[],
   courseDistanceKm: number,
+  screenHeight: number,
 ): { durationMin: number; distanceKm: number } | null {
   const matches: { durationMin: number; distanceKm: number; y: number }[] = [];
 
@@ -497,6 +506,11 @@ function extractPickupInfo(
     if (minVal < 1 || minVal > 60) continue;          // pickup raisonnable
     if (kmVal < 0.1 || kmVal > 30) continue;
     if (Math.abs(kmVal - courseDistanceKm) < 0.1) continue; // c'est la course, pas le pickup
+    // Le bandeau de navigation ("12 min · 5,4 km") est un combo lui aussi. Il se
+    // distingue par sa POSITION — le quart haut de l'écran, la même bande que
+    // `findAddressBlocks` écarte déjà — et non par ses kilomètres : une approche
+    // plus longue que la course est banale en ville. Aligné Swift/Kotlin.
+    if (block.y < screenHeight * 0.25) continue;
 
     matches.push({ durationMin: minVal, distanceKm: kmVal, y: block.y });
   }

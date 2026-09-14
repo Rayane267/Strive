@@ -6,6 +6,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 
 interface DayData {
   label: string;      // ex: "Lun", "Mar"
@@ -77,17 +80,17 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    padding: space.xl,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   title: {
     color: colors.textMain,
     fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   chartArea: {
     flexDirection: 'row',
@@ -96,7 +99,7 @@ const styles = StyleSheet.create({
   yAxis: {
     width: 40,
     justifyContent: 'space-between',
-    paddingBottom: 24,
+    paddingBottom: space.xl,
   },
   yLabel: {
     color: colors.textDimmed,
@@ -107,8 +110,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingBottom: 24,
-    gap: 4,
+    paddingBottom: space.xl,
+    gap: space.xs,
   },
   gridLine: {
     position: 'absolute',
@@ -128,14 +131,14 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: '100%',
-    borderRadius: 6,
+    borderRadius: radius.xs,
     minHeight: 4,
   },
   barLabel: {
     color: colors.textDimmed,
     fontSize: 10,
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   barLabelToday: {
     color: colors.primary,
@@ -145,7 +148,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 9,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: space.tight,
     position: 'absolute',
     top: -14,
   },

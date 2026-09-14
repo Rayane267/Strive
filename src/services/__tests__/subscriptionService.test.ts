@@ -27,7 +27,7 @@ describe('getPlanLimits', () => {
 
   it('returns correct limits for plus tier', () => {
     const limits = getPlanLimits('plus');
-    expect(limits.dailyScans).toBe(30);
+    expect(limits.dailyScans).toBe(20);
     expect(limits.analyticsRangeDays).toBe(7);
   });
 
@@ -55,9 +55,9 @@ describe('getRemainingScans', () => {
   });
 
   it('returns remaining for plus tier', () => {
-    expect(getRemainingScans('plus', 10, 0)).toBe(20); // 30 daily - 10 used
-    expect(getRemainingScans('plus', 30, 0)).toBe(0);
-    expect(getRemainingScans('plus', 30, 5)).toBe(5); // quota exhausted + 5 extra
+    expect(getRemainingScans('plus', 10, 0)).toBe(10); // 20 daily - 10 used
+    expect(getRemainingScans('plus', 20, 0)).toBe(0);
+    expect(getRemainingScans('plus', 20, 5)).toBe(5); // quota exhausted + 5 extra
   });
 
   it('counts welcome credits alongside purchased ones', () => {

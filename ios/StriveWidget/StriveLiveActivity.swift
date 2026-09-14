@@ -171,7 +171,7 @@ struct StriveLiveActivity: Widget {
           Image(systemName: "lock.fill")
             .foregroundColor(lockGreen)
         } else if isRecap {
-          Text(String(format: "%.0f€", context.state.fare))
+          Text(striveFareText(context.state.fare))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
             .lineLimit(1)

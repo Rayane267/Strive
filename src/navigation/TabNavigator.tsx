@@ -12,9 +12,11 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
+import MaskedView from '@react-native-masked-view/masked-view';
 import SafeGradient from '../components/SafeGradient';
 import { colors } from '../theme/colors';
 import { hapticSelection } from '../utils/haptics';
+import { HAS_NATIVE_SCROLL_EDGE, applySoftScrollEdges } from '../utils/scrollEdge';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +51,20 @@ const INDICATOR_INSET_V = 5;
 const INDICATOR_INSET_H = 4;
 
 const INACTIVE_TINT = 'rgba(255,255,255,0.42)';
+
+// Hauteur fixe de la cellule : elle doit contenir l'icône remontée ET le
+// libellé, sinon l'onglet actif serait plus haut que ses voisins et toute la
+// rangée se décalerait à chaque changement d'onglet.
+const TAB_ITEM_HEIGHT = 40;
+const ICON_LIFT = 7;
+
+const PILL_HEIGHT = 62;
+// Retrait latéral de la capsule flottante.
+const BAR_INSET_H = 20;
+// Course du fondu au-dessus de la capsule : la hauteur sur laquelle le contenu
+// passe de net à flou. Trop court, on voit une bande ; trop long, la moitié de
+// l'écran est molle.
+const EDGE_FADE = 40;
 
 // Ressort du déplacement : arrivée franche, sans rebond — c'est l'étirement du
 // verre qui porte la matière, pas un dépassement de position.
@@ -102,6 +118,15 @@ const TabItem = ({
     inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp',
   });
 
+  // Le ressort dépasse 1 : sans `clamp`, l'icône monterait au-delà de sa place
+  // avant de redescendre. Le rebond est porté par l'échelle, pas par la position.
+  const iconLift = focus.interpolate({
+    inputRange: [0, 1], outputRange: [0, -ICON_LIFT], extrapolate: 'clamp',
+  });
+  const labelRise = focus.interpolate({
+    inputRange: [0, 1], outputRange: [4, 0], extrapolate: 'clamp',
+  });
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -126,35 +151,69 @@ const TabItem = ({
       <Animated.View
         style={[styles.itemInner, { transform: [{ scale: press }, { scale: popScale }] }]}
       >
-        <View>
+        <Animated.View style={{ transform: [{ translateY: iconLift }] }}>
           <Animated.View style={{ opacity: inactiveOpacity }}>
             {TAB_ICONS[route]?.(INACTIVE_TINT, 22)}
           </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, { opacity: activeOpacity }]}>
             {TAB_ICONS[route]?.(colors.primary, 22)}
           </Animated.View>
-        </View>
-        <View>
-          <Animated.Text
-            style={[styles.label, { color: INACTIVE_TINT, opacity: inactiveOpacity }]}
-            numberOfLines={1}
-          >
-            {label}
-          </Animated.Text>
-          <Animated.Text
-            style={[
-              styles.label, styles.labelOverlay,
-              { color: colors.primary, opacity: activeOpacity },
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Animated.Text>
-        </View>
+        </Animated.View>
+        {/* Seul l'onglet sélectionné porte son nom. Le libellé est en absolu :
+            il ne prend pas de place dans la colonne, donc son apparition ne
+            pousse pas l'icône — c'est `iconLift` qui décide du déplacement, et
+            la cellule garde la même hauteur d'un onglet à l'autre. */}
+        <Animated.Text
+          style={[
+            styles.label,
+            { opacity: activeOpacity, transform: [{ translateY: labelRise }] },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Animated.Text>
       </Animated.View>
     </TouchableOpacity>
   );
 };
+
+/**
+ * Bord bas adouci : le contenu se floute en approchant de la capsule au lieu
+ * d'être tranché net contre elle.
+ *
+ * C'est l'équivalent React Native de `.scrollEdgeEffectStyle(.soft)`, qui ne
+ * peut pas servir ici : ce modificateur est SwiftUI, or l'app est montée en
+ * UIKit et aucun écran n'a de `UINavigationBar` (tous en `headerShown: false`).
+ * Il n'y a rien à quoi l'accrocher.
+ *
+ * Le dégradé n'est pas posé PAR-DESSUS le flou, il EST le flou : c'est le masque
+ * qui décide de la quantité de flou visible à chaque hauteur. Un dégradé opaque
+ * posé dessus effacerait le contenu ; là il reste lisible, il perd seulement sa
+ * netteté — c'est toute la différence entre un fondu et un vrai bord doux.
+ */
+const ScrollEdgeBlur = ({ height, bottom }: { height: number; bottom: number }) => (
+  <MaskedView
+    style={[styles.edge, { height, bottom }]}
+    pointerEvents="none"
+    maskElement={
+      <SafeGradient
+        colors={['transparent', 'rgba(0,0,0,0.5)', '#000']}
+        locations={[0, 0.42, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    }
+  >
+    <BlurView
+      style={StyleSheet.absoluteFill}
+      blurType="chromeMaterialDark"
+      blurAmount={18}
+      // « Réduire la transparence » remplace le flou par un aplat. Le masque
+      // continue de l'éteindre vers le haut : ça reste un fondu, pas une barre
+      // posée en travers de l'écran.
+      reducedTransparencyFallbackColor={colors.background}
+    />
+  </MaskedView>
+);
 
 const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
@@ -184,6 +243,14 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
     }).start();
   }, [state.index, animIndex, targetIndex, reduceMotion]);
 
+  // L'effet natif se pose sur les ScrollView DÉJÀ montées. Les écrans d'onglets
+  // montent paresseusement : le premier passage sur Stats crée sa ScrollView
+  // après coup, elle n'aurait jamais reçu l'effet sans ce rappel. Sans effet sur
+  // les versions où le système ne le dessine pas.
+  useEffect(() => {
+    applySoftScrollEdges();
+  }, [state.index]);
+
   const indicatorX = animIndex.interpolate({
     inputRange: state.routes.map((_, i) => i),
     outputRange: state.routes.map((_, i) => i * tabWidth),
@@ -210,11 +277,20 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
     extrapolate: 'clamp',
   });
 
+  const barBottom = Math.max(insets.bottom, 16) + 8;
+
   return (
-    <View
-      style={[styles.wrapper, { bottom: Math.max(insets.bottom, 16) + 8 }]}
-      pointerEvents="box-none"
-    >
+    <View style={[styles.wrapper, { bottom: barBottom }]} pointerEvents="box-none">
+      {/* Repli pour les iOS antérieurs à 26, où le système ne dessine pas
+          l'effet lui-même. Premier enfant = dessiné sous la capsule. Il déborde
+          du wrapper vers le bas et sur les côtés : le contenu passe aussi dans
+          les marges, il doit s'y éteindre pareil. */}
+      {!HAS_NATIVE_SCROLL_EDGE && (
+        <ScrollEdgeBlur
+          height={barBottom + PILL_HEIGHT + EDGE_FADE}
+          bottom={-barBottom}
+        />
+      )}
       <View style={styles.pill}>
         <BlurView
           style={StyleSheet.absoluteFill}
@@ -348,13 +424,14 @@ const AndroidTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) =>
             accessibilityLabel={options.tabBarAccessibilityLabel}
           >
             {focused && <View style={styles.androidActiveIndicator} />}
-            {TAB_ICONS[route.name]?.(iconColor, 22)}
-            <Text
-              style={[styles.label, { color: iconColor }]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
+            <View style={focused ? styles.androidIconLifted : null}>
+              {TAB_ICONS[route.name]?.(iconColor, 22)}
+            </View>
+            {focused && (
+              <Text style={styles.androidLabel} numberOfLines={1}>
+                {label}
+              </Text>
+            )}
           </TouchableOpacity>
         );
       })}
@@ -407,14 +484,18 @@ const TabNavigator = () => {
   );
 };
 
-const PILL_HEIGHT = 62;
-
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: BAR_INSET_H,
+    right: BAR_INSET_H,
     alignItems: 'center',
+  },
+
+  edge: {
+    position: 'absolute',
+    left: -BAR_INSET_H,
+    right: -BAR_INSET_H,
   },
 
   pill: {
@@ -488,22 +569,22 @@ const styles = StyleSheet.create({
   // Porte les transformations : la cellule, elle, garde sa zone tactile pleine
   // hauteur — un doigt ne doit pas rater l'onglet parce que l'icône a rétréci.
   itemInner: {
+    width: '100%',
+    height: TAB_ITEM_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
   },
 
   label: {
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: 0.1,
-  },
-
-  // Le libellé actif se superpose exactement à l'inactif — les deux se croisent
-  // en opacité, sans décaler la mise en page.
-  labelOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    bottom: 1,
+    left: 0,
+    right: 0,
     textAlign: 'center',
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
 
   // Android classic tab bar
@@ -516,11 +597,24 @@ const styles = StyleSheet.create({
   },
   androidItem: {
     flex: 1,
+    height: TAB_ITEM_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 4,
     position: 'relative',
+  },
+  androidIconLifted: {
+    transform: [{ translateY: -ICON_LIFT }],
+  },
+  androidLabel: {
+    position: 'absolute',
+    bottom: 1,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
   androidActiveIndicator: {
     position: 'absolute',

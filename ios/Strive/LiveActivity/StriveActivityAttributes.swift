@@ -154,6 +154,25 @@ struct RideDecisionIntent: LiveActivityIntent {
 /// suspendue) que cet incrément natif existe pour couvrir.
 ///
 /// Le montant porté est le tarif AFFICHÉ (net de carburant si l'option est
+/// Le prix d'une course, tel qu'il doit s'afficher.
+///
+/// POURQUOI PAS `%.0f` PARTOUT. Toutes les surfaces de scan arrondissaient à
+/// l'euro. Tant que le tarif est brut ça ne se voit pas — les plateformes
+/// affichent des montants ronds. Mais dès que « Retirer le carburant du prix »
+/// est actif, le net tombe sur des centimes : une course à 20 € avec 0,39 € de
+/// carburant valait 19,61 €, que `%.0f` réaffichait… 20 €. La déduction était
+/// calculée, poussée, reçue — et effacée au dernier pixel. Le chauffeur ne
+/// pouvait qu'en conclure que l'option ne marchait pas.
+///
+/// L'euro rond reste affiché rond : la précision n'apparaît que lorsqu'elle
+/// porte une information.
+public func striveFareText(_ fare: Double) -> String {
+  let rounded = (fare * 100).rounded() / 100
+  return rounded == rounded.rounded()
+    ? String(format: "%.0f€", rounded)
+    : String(format: "%.2f€", rounded)
+}
+
 /// active), cohérent avec ce que la carte montre — `lastScanResult.fare` est
 /// brut et faisait monter les gains en brut sous un affichage net.
 func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {

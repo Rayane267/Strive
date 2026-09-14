@@ -2,6 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import BrandLoader from './BrandLoader';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
 
 /**
  * Splash de chargement affiché pendant la restauration de session.
@@ -51,17 +54,14 @@ const styles = StyleSheet.create({
     fontSize: 56,
     fontWeight: '900',
     letterSpacing: -2,
-    marginBottom: 14,
+    marginBottom: space.md,
   },
   accentBar: {
     width: 36,
     height: 3,
-    borderRadius: 2,
+    borderRadius: radius.xs,
     backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
+    ...elevation.resting.shadow,
   },
   loaderWrap: {
     position: 'absolute',

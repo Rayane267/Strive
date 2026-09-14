@@ -103,3 +103,7 @@ preview.tsx
 
 # Captures d ecran locales
 screenshots/
+
+.vercel
+
+.codex/

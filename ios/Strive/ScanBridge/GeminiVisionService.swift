@@ -267,12 +267,16 @@ final class GeminiVisionService {
     }
 
     // Approche : mêmes bornes que OcrParser.extractPickupInfo (1–60 min,
-    // 0,1–30 km, toujours plus courte que la course) → on rejette en bloc si
-    // l'une des deux est absente ou aberrante, sinon le total serait faux.
+    // 0,1–30 km) → on rejette en bloc si l'une des deux est absente ou
+    // aberrante, sinon le total serait faux.
+    // Le test « approche < course » a été RETIRÉ : 2,6 km d'approche pour une
+    // course de 2,4 km est banal en ville, et il faisait disparaître l'approche
+    // du total. Gemini renvoie des champs nommés — aucun risque de confondre
+    // l'approche avec un bandeau de navigation, contrairement à l'OCR.
     var pickupMin = (parsed["pickup_eta_min"] as? NSNumber)?.intValue
     var pickupKm = (parsed["pickup_distance_km"] as? NSNumber)?.doubleValue
     if let m = pickupMin, let k = pickupKm,
-       m >= 1, m <= 60, k >= 0.1, k <= 30.0, k < distanceKm {
+       m >= 1, m <= 60, k >= 0.1, k <= 30.0 {
       // valeurs plausibles → conservées
     } else {
       pickupMin = nil

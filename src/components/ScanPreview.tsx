@@ -31,6 +31,9 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { strokeWidth } from '../theme/stroke';
 
 export const PREVIEW_DATA = [
   { hourly: 57, fare: 17, km: '3.15', duration: 18, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
@@ -112,16 +115,16 @@ const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
 const styles = StyleSheet.create({
   dynamicIsland: {
     width: '100%',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
     backgroundColor: 'rgba(0,0,0,0.92)',
-    gap: 16,
+    gap: space.lg,
   },
   diRowTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
   },
   diPlatform: {
     color: 'rgba(255,255,255,0.75)',
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
   diHourly: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 2,
+    gap: space.tight,
   },
   diHourlyValue: {
     color: '#FFFFFF',
@@ -145,10 +148,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   diFarePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.full,
+    borderWidth: strokeWidth.control,
   },
   diFarePillTxt: {
     color: '#FFFFFF',
@@ -158,7 +161,7 @@ const styles = StyleSheet.create({
   diKmRate: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: space.xs,
   },
   diKmRateTxt: {
     color: '#FFFFFF',
@@ -168,12 +171,12 @@ const styles = StyleSheet.create({
   diRouteRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: space.md,
   },
   diRouteCircle: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -186,13 +189,13 @@ const styles = StyleSheet.create({
   diRouteLine: {
     height: 4,
     width: '100%',
-    borderRadius: 2,
+    borderRadius: radius.xs,
   },
   diRouteDot: {
     position: 'absolute',
     width: 11,
     height: 11,
-    borderRadius: 5.5,
+    borderRadius: radius.full,
   },
   diRouteStats: {
     alignItems: 'flex-end',
@@ -214,14 +217,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 16,
-    marginBottom: 6,
+    gap: space.sm,
+    marginTop: space.lg,
+    marginBottom: space.sm,
   },
   previewVerdictDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.full,
   },
   previewVerdictTxt: {
     fontSize: 14,
@@ -232,24 +235,24 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 12,
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: space.md,
     lineHeight: 17,
   },
   previewDots: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: space.sm,
+    marginBottom: space.xs,
   },
   previewDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   block: {
     width: '100%',
-    marginTop: 14,
+    marginTop: space.md,
     alignItems: 'stretch',
   },
 });

@@ -20,6 +20,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { formatTimeAgo } from '../utils/dateUtils';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import {
@@ -39,6 +43,9 @@ import {
 } from '../services/scanFailureService';
 import BrandLoader from '../components/BrandLoader';
 import ListItemEntrance from '../components/ListItemEntrance';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
 const STATUS_META: Record<
   TicketStatus,
@@ -210,7 +217,11 @@ const SupportTicketsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
+      <AnimatedEntrance step={0} style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
@@ -219,10 +230,10 @@ const SupportTicketsScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{t('support.title', 'Mes tickets')}</Text>
         <View style={{ width: 38 }} />
-      </View>
+      </AnimatedEntrance>
 
       {loading ? (
-        <BrandLoader style={{ marginTop: 60 }} />
+        <BrandLoader style={{ marginTop: space.xxxl }} />
       ) : (
         <FlatList
           data={filter ? tickets.filter(x => x.category === filter) : tickets}
@@ -495,13 +506,13 @@ const SupportTicketsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
   },
   backBtn: {
     marginLeft: -10,
@@ -510,31 +521,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerCenter: { flex: 1, marginHorizontal: 14 },
+  headerCenter: { flex: 1, marginHorizontal: space.md },
   headerTitle: {
-    marginRight: 12,
+    marginRight: space.md,
     flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
+  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
 
   list: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
+    paddingBottom: space.xl,
     flexGrow: 1,
   },
   ticketCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   ticketTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: space.sm,
   },
   ticketSubject: {
     color: colors.textMain,
@@ -543,32 +554,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
   },
   statusText: { fontSize: 11, fontWeight: '800' },
   ticketBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: space.sm,
   },
   ticketTime: { color: colors.textDimmed, fontSize: 12 },
-  ticketBottomRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ticketBottomRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   // Pastille « Prioritaire » : la seule preuve visible que Premium change
   // quelque chose au support. Discrète — c'est une confirmation, pas une pub.
   prioBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 7,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.tight,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.22)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   prioBadgeTxt: {
     color: colors.primary,
@@ -587,19 +598,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 56,
-    gap: 10,
+    paddingTop: space.xxxl,
+    gap: space.sm,
   },
   emptyIcon: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
     width: 68,
     height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.surface,
+    borderRadius: radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    marginBottom: space.md,
+    borderColor: stroke.active,
+    overflow: 'hidden',
   },
   emptyTitle: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
   emptyHint: {
@@ -613,21 +625,17 @@ const styles = StyleSheet.create({
   // Plus d'air en bas qu'en haut : le bouton est le dernier élément de l'écran,
   // et l'encoche gérée par SafeAreaView ne suffit pas à le décoller
   // visuellement du bord.
-  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18 },
+  footer: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.lg },
   newBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: colors.primary,
-    paddingVertical: 16,
+    paddingVertical: space.lg,
     // Capsule pleine, comme « Enregistrer » et le CTA du paywall.
-    borderRadius: 999,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    borderRadius: radius.full,
+    ...elevation.resting.shadow,
   },
   newBtnText: {
     color: colors.onPrimary,
@@ -640,62 +648,63 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    padding: 20,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.lg,
+    padding: space.xl,
+    overflow: 'hidden',
   },
   modalTitle: {
     color: colors.textMain,
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   inputLabel: {
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
-    marginBottom: 7,
-    marginTop: 4,
+    marginBottom: space.sm,
+    marginTop: space.xs,
   },
   input: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     color: colors.textMain,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
     fontSize: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
-  inputMultiline: { height: 120, marginBottom: 4 },
+  inputMultiline: { height: 120, marginBottom: space.xs },
   sendBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.primary,
-    paddingVertical: 15,
-    borderRadius: 14,
-    marginTop: 16,
+    paddingVertical: space.lg,
+    borderRadius: radius.full,
+    marginTop: space.lg,
   },
   // ── Formulaire : catégorie, sous-catégorie, code d'erreur ──────────────────
   // Le formulaire est devenu plus haut que l'écran sur les petits modèles :
   // il défile à l'intérieur de la carte, le bouton d'envoi reste en dehors pour
   // ne jamais sortir du champ de vision.
   composeScroll: { maxHeight: 380 },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.xs },
   chip: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 11,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   chipActive: {
     backgroundColor: colors.primary + '1C',
@@ -706,14 +715,14 @@ const styles = StyleSheet.create({
   errRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
-    paddingVertical: 11,
-    paddingHorizontal: 13,
-    borderRadius: 12,
-    marginBottom: 7,
+    gap: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
+    borderRadius: radius.sm,
+    marginBottom: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   errRowActive: {
     backgroundColor: colors.primary + '12',
@@ -724,18 +733,18 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 11.5,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: space.tight,
   },
   // Pastille de catégorie sur la carte d'un ticket + filtre de la liste.
   catBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 7,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.tight,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    marginTop: 6,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginTop: space.sm,
   },
   catBadgeTxt: {
     color: colors.textMuted,
@@ -744,10 +753,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   filterRow: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: space.xl,
+    paddingBottom: space.sm,
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
   },
   sendBtnText: { color: colors.background, fontSize: 15, fontWeight: '800' },
 });

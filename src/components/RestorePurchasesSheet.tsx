@@ -16,6 +16,8 @@ import { colors } from '../theme/colors';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { restorePurchases } from '../services/iapService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 /**
  * Résultat d'une restauration d'achats, en feuille montant du bas.
@@ -152,43 +154,43 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceLight,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
   },
   handle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.xs,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
 
   headRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
   iconBadge: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   title: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
-  message: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginTop: 6 },
+  message: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginTop: space.sm },
 
   okBtn: {
     height: 58,
-    borderRadius: 29,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 26,
+    marginTop: space.xl,
   },
   okBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.08)' },
   okText: { color: colors.background, fontSize: 17, fontWeight: '800', letterSpacing: 0.2 },

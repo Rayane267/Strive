@@ -168,8 +168,16 @@ object OcrParser {
     )
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
-    private val PICKUP_COMBO_MIN_FIRST = Regex("""(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
-    private val PICKUP_COMBO_KM_FIRST  = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
+    //
+    // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
+    // écartait le format réellement affiché par l'app Uber FR : "11 min (à 2,6 km)".
+    // Le « à » suffisait à faire échouer le match — l'approche n'était donc JAMAIS
+    // reconnue sur une offre Uber française, et ses km/min ne rentraient pas dans
+    // le total. Voir fixtures/ocr/core.json#uber-approach-longer-than-ride.
+    // La borne à 8 caractères garde le pont court : elle couvre " (à ", " · ",
+    // " away (" — pas " Course de ", qui relierait deux lignes distinctes.
+    private val PICKUP_COMBO_MIN_FIRST = Regex("""(\d{1,3})\s*min[^0-9]{0,8}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
+    private val PICKUP_COMBO_KM_FIRST  = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9]{0,8}(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
 
     /** Supprime tous les espaces internes et remplace virgule par point — prêt pour toDouble(). */
     private fun cleanNum(raw: String) = raw.replace("\\s+".toRegex(), "").replace(',', '.')
@@ -242,19 +250,41 @@ object OcrParser {
         }
 
         val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock) ?: return null
-        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock, distance)
 
         if (!isSane(fare, distance)) return null
 
-        val pickup = extractPickupInfo(blocks, distance)
+        // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
+        // écarter le combo qui la porte, sinon les minutes d'approche deviennent
+        // celles de la course (cf. son repli n°2).
+        val pickup = extractPickupInfo(blocks, distance, screenHeight)
+        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock, distance, pickup)
+
+        val pickupText = pickupAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) }
+        val destCandidate = destAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) }
+
+        // UNE ADRESSE DE PRISE EN CHARGE N'EST JAMAIS UNE ADRESSE D'ARRIVÉE.
+        //
+        // `dedupOverlappingAddresses` écarte déjà les candidats en doublon, mais
+        // il travaille sur les blocs AVANT recollage des continuations : deux
+        // ancres découpées différemment par l'OCR peuvent aboutir au même libellé
+        // final. Cette vérification-ci porte sur le résultat, elle ne peut donc
+        // pas être contournée par une variation de découpage.
+        //
+        // On préfère un champ VIDE à un champ faux. Une destination absente est
+        // visible, elle déclenche la capture diagnostique et n'induit personne en
+        // erreur ; une destination fausse est silencieuse, elle s'écrit en base et
+        // fausse le calcul économique sur lequel le chauffeur décide.
+        val destText =
+            if (destCandidate != null && pickupText != null && isSameAddress(destCandidate, pickupText)) null
+            else destCandidate
 
         return ScanResult(
             platform = platform,
             fare = fare,
             distanceKm = distance,
             durationMin = duration,
-            pickupAddress = pickupAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) },
-            destinationAddress = destAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) },
+            pickupAddress = pickupText,
+            destinationAddress = destText,
             pickupDurationMin = pickup?.first,
             pickupDistanceKm = pickup?.second,
         )
@@ -660,6 +690,7 @@ object OcrParser {
         pickupAddr: Text.TextBlock?,
         destAddr: Text.TextBlock?,
         courseDistanceKm: Double,
+        pickup: Pair<Int, Double>?,
     ): Int? {
         data class Cand(val value: Int, val km: Double?, val y: Int, val isPickupCombo: Boolean)
         val candidates = mutableListOf<Cand>()
@@ -702,9 +733,17 @@ object OcrParser {
         //    distance de course (pas l'approche, dont le km est petit). Évite
         //    d'afficher le temps d'approche comme temps de course quand la course
         //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+        //    ⚠️ La tolérance est LARGE (plancher de 2 km) : sur une course courte,
+        //    le combo d'APPROCHE tombe dedans presque à coup sûr — 2,6 km
+        //    d'approche pour 2,3 km de course, c'est 0,3 d'écart. Ses minutes
+        //    devenaient alors la durée de course : 9 € pour « 11 min · 2,3 km »
+        //    → 49 €/h affichés au lieu de ~32, verdict vert sur une course qui ne
+        //    l'était pas. Le combo déjà identifié comme l'approche est donc
+        //    écarté d'emblée.
         val tol = maxOf(2.0, courseDistanceKm * 0.2)
         val courseCombo = candidates
             .filter { it.km != null && Math.abs(it.km!! - courseDistanceKm) <= tol }
+            .filter { c -> pickup == null || !(c.value == pickup.first && Math.abs((c.km ?: 0.0) - pickup.second) < 0.01) }
             .maxByOrNull { it.km!! }
         if (courseCombo != null) return courseCombo.value
         // 3. Aucune durée fiable (seules des approches/bandeaux) → null : le calcul
@@ -717,6 +756,7 @@ object OcrParser {
     private fun extractPickupInfo(
         blocks: List<Text.TextBlock>,
         courseDistanceKm: Double,
+        screenHeight: Int,
     ): Pair<Int, Double>? {
         data class PickupMatch(val durationMin: Int, val distanceKm: Double, val y: Int)
         val matches = mutableListOf<PickupMatch>()
@@ -744,12 +784,19 @@ object OcrParser {
             if (mv !in 1..60) continue
             if (kv !in 0.1..30.0) continue
             if (Math.abs(kv - courseDistanceKm) < 0.1) continue // c'est la course
-            // L'approche est toujours plus courte que la course → un combo dont le
-            // km ≥ distance de course est le bandeau nav (haut de l'écran), pas
-            // l'approche. L'exclure évite de gonfler durée/distance totales.
-            if (kv >= courseDistanceKm) continue
-
+            // L'APPROCHE N'EST PAS TOUJOURS PLUS COURTE QUE LA COURSE.
+            //
+            // Un `kv >= courseDistanceKm` écartait ici tout combo plus long que la
+            // course, au motif qu'il s'agissait du bandeau de navigation. C'est
+            // faux en ville : 2,6 km d'approche pour une course de 2,3 km est
+            // banal, et l'approche disparaissait alors du total — le chauffeur
+            // lisait « 11 min » sur une course annoncée « à 12 min » de lui.
+            // Le bandeau nav se distingue par sa POSITION, pas par ses kilomètres :
+            // il vit dans le quart haut de l'écran, la même bande que
+            // `findAddressBlocks` écarte déjà. Le combo de la course, lui, reste
+            // écarté par le test de distance juste au-dessus.
             val y = block.boundingBox?.centerY() ?: 0
+            if (y < screenHeight * 0.25) continue
             matches.add(PickupMatch(mv, kv, y))
         }
 
@@ -924,15 +971,61 @@ object OcrParser {
      * Si un candidat est préfixe d'un autre, on garde le plus long — l'info code
      * postal + ville est précieuse pour le géocodage TomTom.
      */
+    /**
+     * Réduit un libellé d'adresse à ce qui permet de le comparer à un autre :
+     * minuscules, et tout ce qui n'est ni lettre ni chiffre devient une coupure
+     * de mot. Deux occurrences d'une même adresse ne sont pas ponctuées ni
+     * coupées de la même façon par l'OCR.
+     */
+    private fun comparableAddress(s: String): String =
+        s.lowercase()
+            .map { if (it.isLetterOrDigit()) it else ' ' }
+            .joinToString("")
+            .split(' ')
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+
+    /**
+     * Deux libellés qui désignent le même lieu, à la mise en forme près.
+     *
+     * Le test est le PRÉFIXE et non l'égalité : l'une des deux occurrences
+     * s'arrête souvent avant le code postal ou le pays.
+     */
+    private fun isSameAddress(a: String, b: String): Boolean {
+        val x = comparableAddress(a)
+        val y = comparableAddress(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        return x.startsWith(y) || y.startsWith(x)
+    }
+
     private fun dedupOverlappingAddresses(candidates: List<Text.TextBlock>): List<Text.TextBlock> {
         // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
         // courte soit bien reconnue comme préfixe de la version longue (cas Heetch).
         val texts = candidates.map { cleanAddressText(it.text).trim() }
         return candidates.filterIndexed { i, _ ->
             val mine = texts[i]
-            candidates.indices.none { j ->
+            // Évincé par un candidat PLUS LONG qui commence par lui : la ligne
+            // courte est la version tronquée de la longue (cas Heetch).
+            val hasLonger = candidates.indices.any { j ->
                 j != i && texts[j].length > mine.length && texts[j].startsWith(mine)
             }
+            // Évincé par un candidat IDENTIQUE placé avant lui.
+            //
+            // Le test de longueur ci-dessus ne peut rien voir sur deux textes
+            // égaux, et c'est ce trou qui laissait passer les DEUX occurrences.
+            // Plusieurs écrans Uber affichent l'adresse de départ deux fois : le
+            // second slot adresse était donc pris par la répétition du départ, et
+            // la destination réelle, qui vient après le « Course de X km »,
+            // n'était jamais lue.
+            //
+            // Constaté sur six courses consécutives dont le prix, la distance et
+            // la durée variaient tous, alors que la destination enregistrée
+            // restait identique au caractère près — parce qu'elle décrivait la
+            // position du chauffeur et non celle du client.
+            val isLaterDuplicate = candidates.indices.any { j ->
+                j < i && texts[j] == mine
+            }
+            !hasLonger && !isLaterDuplicate
         }
     }
 

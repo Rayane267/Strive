@@ -21,10 +21,13 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { strokeWidth } from '../theme/stroke';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import { registerPushToken, getNotificationStatus } from '../services/notificationService';
+import { registerPushToken, isPushEffectivelyOn } from '../services/notificationService';
 import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
 /// LE MÊME composant que la première page de l'onboarding, pas une imitation.
 /// Son propre commentaire est formel : ces chiffres sont la vitrine du produit
@@ -35,6 +38,8 @@ import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
 /// mauvaise.
 import ScanPreview from '../components/ScanPreview';
 import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 const { width, height } = Dimensions.get('window');
 
@@ -256,11 +261,11 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   /// l'enregistrement) laisserait le chauffeur sans verdict alors que l'écran
   /// afficherait un vert rassurant. Les deux doivent tenir.
   const refreshNotifStatus = useCallback(async () => {
-    const [status, token] = await Promise.all([
-      getNotificationStatus(),
-      AsyncStorage.getItem('@strive_fcm_token'),
-    ]);
-    setNotifGranted(status === 'granted' && !!token);
+    // Même raisonnement que l'interrupteur du Profil, et il vaut surtout ici :
+    // un `unknown` au démarrage à froid remettait l'étape en « à activer » alors
+    // que la permission était accordée, et le bouton ne pouvait plus rien
+    // afficher puisque le système ne repose jamais sa fenêtre.
+    setNotifGranted(await isPushEffectivelyOn());
   }, []);
 
   useEffect(() => {
@@ -309,7 +314,18 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
           { text: t('preferences.openSettings'), onPress: () => openSettingsFor('notifications') },
         ],
       );
+      return;
     }
+
+    // `error` : l'autorisation a pu être accordée, mais aucun jeton n'a pu être
+    // obtenu — réseau coupé, APNs pas encore prêt. `notifGranted` exige les
+    // deux, le bouton restait donc orange SANS RIEN DIRE, ce qui se lit comme un
+    // bouton mort. Le chauffeur doit savoir qu'il n'a qu'à réessayer.
+    if (result === 'error') {
+      Alert.alert(t('common.error'), t('tutorial.iosInstall.notifErrorBody'));
+    }
+    // `unavailable` : Firebase Messaging absent (simulateur, build sans Google
+    // Play Services). C'est un environnement, pas un refus — on se tait.
   }, [user?.id, refreshNotifStatus, t]);
 
   const isLast = currentIndex === STEPS.length - 1;
@@ -792,6 +808,10 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
 
       {/* Chevron · progression · Passer — la barre de l'onboarding, à
           l'identique, avec « Passer » en plus. Le retour compte ici :
@@ -861,16 +881,16 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 const PAD = 26;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   // ── En-tête ────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 14,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   // Réserve la place du chevron sur la première slide : sans elle, la barre
   // sauterait de 24 px au passage à la deuxième.
@@ -881,13 +901,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 8,
     backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 4,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: A,
-    borderRadius: 4,
+    borderRadius: radius.xs,
   },
   skip: {
     color: colors.textMuted,
@@ -911,7 +931,7 @@ const styles = StyleSheet.create({
     paddingTop: SLIDE_PAD_TOP,
     paddingBottom: SLIDE_PAD_BOTTOM,
   },
-  slideContentCentered: { justifyContent: 'center', paddingBottom: 64 },
+  slideContentCentered: { justifyContent: 'center', paddingBottom: space.xxxl },
   /// PAGE DE GARDE UNIQUEMENT. L'alignement à gauche est la règle du reste de
   /// l'écran, parce qu'on y exécute des consignes en les lisant. « Bienvenue »
   /// n'en est pas une : ni étape, ni chemin, ni bouton à trouver — juste un nom
@@ -923,8 +943,8 @@ const styles = StyleSheet.create({
   iconLogo: {
     width: 60,
     height: 60,
-    borderRadius: 17,
-    marginBottom: 22,
+    borderRadius: radius.md,
+    marginBottom: space.xl,
   },
 
   title: {
@@ -933,7 +953,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -0.9,
     lineHeight: 37,
-    marginBottom: 12,
+    marginBottom: space.md,
     textAlign: 'center',
   },
   desc: {
@@ -947,14 +967,14 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 14,
     lineHeight: 21,
-    marginTop: 18,
+    marginTop: space.lg,
     textAlign: 'center',
   },
 
-  block: { marginTop: 32 },
+  block: { marginTop: space.xxl },
   /// Les rangées portent leur propre `paddingVertical` : sans ce retrait, le
   /// premier filet tomberait trop bas et la liste paraîtrait décrochée du titre.
-  blockList: { marginTop: 16 },
+  blockList: { marginTop: space.lg },
 
   // ── Étape numérotée ────────────────────────────────────────────────────────
   // Vert plein, chiffre sombre. Le gris moyen d'un premier essai les faisait
@@ -966,11 +986,11 @@ const styles = StyleSheet.create({
   stepNum: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: radius.full,
     backgroundColor: A,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: space.tight,
   },
   stepNumTxt: {
     color: colors.background,
@@ -981,11 +1001,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 3,
+    marginTop: space.tight,
   },
 
   // ── Antisèche : la boucle du quotidien ─────────────────────────────────────
-  loopRow: { flexDirection: 'row', gap: 14 },
+  loopRow: { flexDirection: 'row', gap: space.md },
   loopRail: { alignItems: 'center', width: 26 },
   /// `flex: 1` : le trait prend exactement la hauteur du texte de son étape, donc
   /// il touche toujours la pastille suivante, quel que soit le nombre de lignes.
@@ -993,12 +1013,12 @@ const styles = StyleSheet.create({
     flex: 1,
     width: 2,
     minHeight: 12,
-    marginVertical: 6,
-    borderRadius: 1,
+    marginVertical: space.sm,
+    borderRadius: radius.xs,
     backgroundColor: HAIRLINE,
   },
-  loopTexts: { flex: 1, paddingBottom: 20 },
-  loopTextsLast: { paddingBottom: 0 },
+  loopTexts: { flex: 1, paddingBottom: space.xl },
+  loopTextsLast: { paddingBottom: space.tight },
   /// Un cran au-dessus des étapes d'installation : c'est le dernier écran qu'on
   /// regarde avant de rouler, et le seul qu'on relira au volant.
   loopTitle: {
@@ -1012,9 +1032,9 @@ const styles = StyleSheet.create({
   /// déjà le sien (l'îlot dynamique), en ajouter un ferait une carte dans une
   /// carte. Léger retrait à droite pour qu'elle ne file pas jusqu'au bord.
   verdictSlot: {
-    marginTop: 14,
-    marginBottom: 4,
-    paddingRight: 4,
+    marginTop: space.md,
+    marginBottom: space.xs,
+    paddingRight: space.xs,
   },
   verdictScaler: {
     position: 'absolute',
@@ -1030,13 +1050,13 @@ const styles = StyleSheet.create({
   // libellé centré, aucune icône.
   cta: {
     height: 54,
-    borderRadius: 27,
+    borderRadius: radius.lg,
     backgroundColor: A,
     alignItems: 'center',
     justifyContent: 'center',
     // 6 px collaient le bouton à la phrase qui l'explique : on lisait un bloc
     // compact au lieu d'une consigne suivie de son action.
-    marginTop: 14,
+    marginTop: space.md,
   },
   ctaTxt: {
     color: colors.background,
@@ -1046,14 +1066,14 @@ const styles = StyleSheet.create({
   /** Action accomplie et vérifiée : plus rien à faire, le bouton s'éteint. */
   ctaDone: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: strokeWidth.control,
     borderColor: A + '55',
   },
   ctaDoneTxt: { color: A },
   /** Action déjà lancée mais non confirmée : reste disponible, sans insister. */
   ctaGhost: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: strokeWidth.control,
     borderColor: HAIRLINE,
   },
   ctaGhostTxt: { color: colors.textMuted },
@@ -1061,8 +1081,8 @@ const styles = StyleSheet.create({
   confirmedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
+    gap: space.sm,
+    marginTop: space.md,
   },
   confirmedTxt: {
     color: A,
@@ -1074,8 +1094,8 @@ const styles = StyleSheet.create({
   recapRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 13,
-    paddingVertical: 14,
+    gap: space.md,
+    paddingVertical: space.md,
   },
   // Filets entre les rangées : quatre paragraphes séparés par du vide flottaient
   // sans structure. Avec eux, ça se lit comme la liste de contrôle que c'est.
@@ -1087,7 +1107,7 @@ const styles = StyleSheet.create({
   recapHead: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 10,
+    gap: space.sm,
   },
   recapTitle: {
     flex: 1,
@@ -1114,13 +1134,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 10,
-    marginTop: 10,
-    paddingLeft: 8,
-    paddingRight: 16,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
+    gap: space.sm,
+    marginTop: space.sm,
+    paddingLeft: space.sm,
+    paddingRight: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: strokeWidth.control,
     borderColor: HAIRLINE,
   },
   shortcutChipIcon: {
@@ -1139,7 +1159,7 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 6,
+    marginTop: space.sm,
   },
 
   // ── Vidéo AssistiveTouch ───────────────────────────────────────────────────
@@ -1159,7 +1179,7 @@ const styles = StyleSheet.create({
     height: height * 0.28,
     aspectRatio: 9 / 19.5,
     alignSelf: 'center',
-    borderRadius: 20,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: '#000',
     marginBottom: VIDEO_GAP,
@@ -1169,9 +1189,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    gap: 6,
+    gap: space.sm,
     marginTop: -10,
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   videoReplayTxt: {
     color: colors.textMuted,
@@ -1182,15 +1202,15 @@ const styles = StyleSheet.create({
   // ── Pied de page ───────────────────────────────────────────────────────────
   footer: {
     paddingHorizontal: PAD,
-    paddingBottom: 20,
-    paddingTop: 8,
+    paddingBottom: space.xl,
+    paddingTop: space.sm,
   },
   // MEMES MESURES que `cta`, la pilule des étapes : hauteur, rayon, taille de
   // texte. Deux boutons de tailles différentes empilés dans la même colonne se
   // lisaient comme deux composants sans rapport.
   footerCta: {
     height: 54,
-    borderRadius: 27,
+    borderRadius: radius.lg,
     backgroundColor: A,
     alignItems: 'center',
     justifyContent: 'center',

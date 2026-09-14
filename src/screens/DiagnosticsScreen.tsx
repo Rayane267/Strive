@@ -37,12 +37,18 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { strokeWidth } from '../theme/stroke';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { scannerService } from '../services/scanner';
 import { hapticLight } from '../utils/haptics';
 import { resetSignupCounters } from '../utils/deviceId';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
 type Failure = {
   id: number;
@@ -186,7 +192,11 @@ const DiagnosticsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
+      <AnimatedEntrance step={0} style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.canGoBack() && navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -197,7 +207,7 @@ const DiagnosticsScreen = () => {
         <TouchableOpacity onPress={share} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Feather name="share-2" size={20} color={colors.textMuted} />
         </TouchableOpacity>
-      </View>
+      </AnimatedEntrance>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ── Collecte ── */}
@@ -361,32 +371,32 @@ const DiagnosticsScreen = () => {
 const HAIRLINE = 'rgba(255,255,255,0.07)';
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, gap: 12,
+    paddingHorizontal: space.lg, paddingVertical: space.md, gap: space.md,
   },
   headerTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800', flex: 1 },
 
-  scroll: { paddingHorizontal: 16, paddingBottom: 40 },
+  scroll: { paddingHorizontal: space.lg, paddingBottom: space.xxl },
 
   sectionTitle: {
     color: colors.textDimmed, fontSize: 11, fontWeight: '800',
     letterSpacing: 1.4, textTransform: 'uppercase',
-    marginTop: 26, marginBottom: 10, marginLeft: 4,
+    marginTop: space.xl, marginBottom: space.sm, marginLeft: space.xs,
   },
   card: {
-    backgroundColor: colors.surface, borderRadius: 16,
-    borderWidth: 1, borderColor: HAIRLINE,
-    padding: 16,
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: strokeWidth.control, borderColor: HAIRLINE,
+    padding: space.lg,
   },
   cardTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700' },
-  cardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 3 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  cardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: space.tight },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   switchTexts: { flex: 1 },
   note: {
     color: colors.textDimmed, fontSize: 12, lineHeight: 18,
-    marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: HAIRLINE,
+    marginTop: space.md, paddingTop: space.md, borderTopWidth: 1, borderTopColor: HAIRLINE,
   },
 
   mono: {
@@ -397,25 +407,25 @@ const styles = StyleSheet.create({
 
   clearBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 7, paddingVertical: 12, marginTop: 4,
+    gap: space.sm, paddingVertical: space.md, marginTop: space.xs,
   },
   clearTxt: { color: colors.textDimmed, fontSize: 13, fontWeight: '600' },
 
-  loader: { marginTop: 14 },
-  failRow: { paddingVertical: 12 },
+  loader: { marginTop: space.md },
+  failRow: { paddingVertical: space.md },
   failRowBorder: { borderTopWidth: 1, borderTopColor: HAIRLINE },
-  failHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  failHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   failReason: { color: colors.danger, fontSize: 14, fontWeight: '800' },
   failDate: { color: colors.textDimmed, fontSize: 11 },
-  failMeta: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
+  failMeta: { color: colors.textMuted, fontSize: 12, marginTop: space.tight },
   failDetail: {
-    color: colors.textDimmed, fontSize: 12, lineHeight: 18, marginTop: 4,
+    color: colors.textDimmed, fontSize: 12, lineHeight: 18, marginTop: space.xs,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   reload: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 16, marginTop: 18,
+    gap: space.sm, paddingVertical: space.lg, marginTop: space.lg,
   },
   reloadTxt: { color: colors.primary, fontSize: 14, fontWeight: '700' },
 });

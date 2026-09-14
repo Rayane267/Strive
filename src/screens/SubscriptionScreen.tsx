@@ -38,6 +38,11 @@ import {
 import { waitForProfileUpdate } from '../services/profileService';
 import { hapticSuccess, hapticError, hapticLight } from '../utils/haptics';
 import { getEffectivePlanTier } from '../services/subscriptionService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -91,7 +96,7 @@ const PRODUCT_ID: Record<SellTier, Record<Cycle, string>> = {
 /// aucune raison de payer, et lui apprend surtout qu'il n'a rien à gagner.
 ///
 /// Chaque ligne ci-dessous correspond à une restriction réelle du gratuit :
-///   • 3 scans/jour contre 15        (plan_limits, subscriptionService.ts)
+///   • 3 scans/jour contre 20        (plan_limits, subscriptionService.ts)
 ///   • seuils verrouillés aux défauts (4e04a19)
 ///   • carburant forcé à off          (PreferencesScreen)
 ///   • réglages véhicule verrouillés  (plusLocked sur CarSettings)
@@ -546,6 +551,10 @@ const SubscriptionScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       <StatusBar barStyle="light-content" />
 
       <TouchableOpacity
@@ -835,25 +844,25 @@ const SubscriptionScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingBottom: 20 },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scroll: { paddingBottom: space.xl },
 
   closeBtn: {
     position: 'absolute', top: 54, right: 20, zIndex: 20,
-    width: 34, height: 34, borderRadius: 17,
+    width: 34, height: 34, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.07)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
 
   // ── Hero ──
   hero: {
-    paddingHorizontal: 24, paddingTop: 60, paddingBottom: 30,
+    paddingHorizontal: space.xl, paddingTop: space.xxxl, paddingBottom: space.xxl,
     overflow: 'hidden', alignItems: 'center',
   },
   heroGlow: {
     position: 'absolute', top: -60, left: -40, right: -40, height: 420,
-    borderRadius: 200,
+    borderRadius: radius.full,
   },
   heroWarmGlow: {
     position: 'absolute', top: -20, left: SCREEN_W * 0.15,
@@ -864,16 +873,16 @@ const styles = StyleSheet.create({
   orbContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: 140 },
   orb: { position: 'absolute', backgroundColor: colors.primary },
 
-  crownRow: { marginBottom: 18 },
+  crownRow: { marginBottom: space.lg },
   crownOuter: { alignItems: 'center', justifyContent: 'center' },
   crownGlowRing: {
     position: 'absolute',
-    width: 80, height: 80, borderRadius: 40,
+    width: 80, height: 80, borderRadius: radius.full,
     backgroundColor: 'transparent',
-    borderWidth: 2, borderColor: 'rgba(0,255,140,0.3)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
   },
   crownBadge: {
-    width: 60, height: 60, borderRadius: 20,
+    width: 60, height: 60, borderRadius: radius.lg,
     justifyContent: 'center', alignItems: 'center',
     shadowColor: '#00FF8C',
     shadowOffset: { width: 0, height: 8 },
@@ -886,11 +895,11 @@ const styles = StyleSheet.create({
     // dans la pastille, deux lignes plus bas. Le garder ici mettait deux verts
     // dans le même bloc, dont un qui ne désigne rien.
     color: colors.textMain, fontSize: 11, fontWeight: '900',
-    letterSpacing: 3, marginBottom: 10,
+    letterSpacing: 3, marginBottom: space.sm,
   },
   heroTitle: {
     color: colors.textMain, fontSize: 30, fontWeight: '900',
-    lineHeight: 36, letterSpacing: -0.8, marginBottom: 10, textAlign: 'center',
+    lineHeight: 36, letterSpacing: -0.8, marginBottom: space.sm, textAlign: 'center',
   },
   heroSub: {
     color: 'rgba(255,255,255,0.55)', fontSize: 15,
@@ -898,7 +907,7 @@ const styles = StyleSheet.create({
   },
 
   // ── Montée en Premium ──
-  upgradeHead: { marginHorizontal: 22, marginTop: 30, marginBottom: 16 },
+  upgradeHead: { marginHorizontal: space.xl, marginTop: space.xxl, marginBottom: space.lg },
   upgradeTitle: {
     color: colors.textMain,
     fontSize: 19,
@@ -909,7 +918,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 4,
+    marginTop: space.xs,
   },
 
   // ── Pastille de palier ──
@@ -918,20 +927,20 @@ const styles = StyleSheet.create({
   // un choix et non un bouton d'action.
   tierPill: {
     flexDirection: 'row',
-    marginTop: 18,
-    padding: 4,
+    marginTop: space.lg,
+    padding: space.xs,
     // Entièrement arrondi : la pastille se lit comme un interrupteur, pas comme
     // deux onglets. Un rayon intermédiaire la faisait ressembler aux cartes de
     // formules plus bas, qui elles ne se choisissent pas du même geste.
-    borderRadius: 999,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   tierBtn: {
-    paddingHorizontal: 34,
-    paddingVertical: 9,
-    borderRadius: 999,
+    paddingHorizontal: space.xxl,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
   },
   // Le curseur qui glisse. En absolu DANS le rail, décalé de son padding : les
   // `x` mesurés partent du bord du rail, pas de sa zone de contenu.
@@ -940,10 +949,10 @@ const styles = StyleSheet.create({
     left: 0,
     top: 4,
     bottom: 4,
-    borderRadius: 999,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.20)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.44)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   tierTxt: {
     // Ecart creuse entre actif et inactif : le libelle actif passe en BLANC
@@ -958,22 +967,22 @@ const styles = StyleSheet.create({
   tierTxtOn: { color: colors.textMain },
 
   // ── Bénéfices ──
-  benefits: { marginHorizontal: 22, gap: 13, marginBottom: 26 },
-  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  benefits: { marginHorizontal: space.xl, gap: space.md, marginBottom: space.xl },
+  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   check: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 24, height: 24, borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    marginTop: 1,
+    marginTop: space.tight,
   },
   benefitText: { color: colors.textMain, fontSize: 15, fontWeight: '600', flex: 1, lineHeight: 21 },
   benefitStrong: { color: colors.primary, fontWeight: '800' },
 
   // ── Formules ──
-  plans: { marginHorizontal: 18, gap: 12, marginBottom: 18 },
+  plans: { marginHorizontal: space.lg, gap: space.md, marginBottom: space.lg },
   plan: {
-    borderRadius: 18, overflow: 'hidden',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: radius.md, overflow: 'hidden',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     backgroundColor: colors.surface,
   },
   planSelected: {
@@ -985,7 +994,7 @@ const styles = StyleSheet.create({
   },
   stripe: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 9,
+    paddingHorizontal: space.lg, paddingVertical: space.sm,
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   stripeOn: { backgroundColor: colors.primary },
@@ -996,14 +1005,14 @@ const styles = StyleSheet.create({
 
   planBody: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 16, gap: 12,
+    paddingHorizontal: space.lg, paddingVertical: space.lg, gap: space.md,
   },
   radioOff: {
-    width: 26, height: 26, borderRadius: 13,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+    width: 26, height: 26, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
   },
   radioOn: {
-    width: 26, height: 26, borderRadius: 13,
+    width: 26, height: 26, borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
@@ -1016,68 +1025,68 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   planPer: { color: colors.textDimmed, fontSize: 13, fontWeight: '700' },
-  planWeek: { color: colors.textDimmed, fontSize: 12, marginTop: 2, fontWeight: '500' },
+  planWeek: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight, fontWeight: '500' },
 
   // ── Réassurance ──
   reassure: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, marginBottom: 30,
+    gap: space.sm, marginBottom: space.xxl,
   },
   reassureText: { color: colors.textMuted, fontSize: 13.5, fontWeight: '600' },
 
   // ── Abonné actif ──
   activeCard: {
-    marginHorizontal: 18, marginBottom: 26,
-    borderRadius: 20, padding: 22,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
+    marginHorizontal: space.lg, marginBottom: space.xl,
+    borderRadius: radius.lg, padding: space.xl,
+    borderWidth: strokeWidth.control, borderColor: stroke.active,
     overflow: 'hidden',
   },
-  activeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  activeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm },
   activeCheckWrap: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 28, height: 28, borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
   activeCardTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  activeCardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 18 },
+  activeCardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: space.lg },
   manageBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: colors.surface,
-    paddingHorizontal: 18, paddingVertical: 14,
-    borderRadius: 14, alignSelf: 'stretch',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: space.lg, paddingVertical: space.md,
+    borderRadius: radius.md, alignSelf: 'stretch',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center',
   },
   manageBtnText: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
   cancelHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 14, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    marginTop: space.md, alignSelf: 'center',
   },
   cancelHintText: { color: colors.textDimmed, fontSize: 12 },
 
   // ── FAQ ──
   faqTitle: {
     color: colors.textMain, fontSize: 18, fontWeight: '900',
-    marginHorizontal: 22, marginBottom: 14, letterSpacing: -0.3,
+    marginHorizontal: space.xl, marginBottom: space.md, letterSpacing: -0.3,
   },
-  faqList: { marginHorizontal: 18, gap: 8 },
+  faqList: { marginHorizontal: space.lg, gap: space.sm },
   faqItem: {
-    backgroundColor: colors.surface, borderRadius: 14,
-    paddingHorizontal: 18, paddingVertical: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    paddingHorizontal: space.lg, paddingVertical: space.lg,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-  faqItemOpened: { borderColor: 'rgba(0,230,118,0.15)' },
-  faqQRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  faqItemOpened: { borderColor: stroke.edge },
+  faqQRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
   faqQ: { color: colors.textMain, fontSize: 14, fontWeight: '700', flex: 1, lineHeight: 20 },
   faqToggle: {
-    width: 26, height: 26, borderRadius: 13,
+    width: 26, height: 26, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center', alignItems: 'center',
   },
   faqToggleOpen: { backgroundColor: colors.primary },
   faqA: {
     color: colors.textMuted, fontSize: 13, lineHeight: 20,
-    marginTop: 12, paddingTop: 12,
+    marginTop: space.md, paddingTop: space.md,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
   },
 
@@ -1087,10 +1096,10 @@ const styles = StyleSheet.create({
   // ── Barre d'achat ──
   stickyBottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingBottom: 22, paddingTop: 26,
+    paddingHorizontal: space.xl, paddingBottom: space.xl, paddingTop: space.xl,
   },
   ctaTouch: {
-    borderRadius: 999, overflow: 'hidden', marginBottom: 12,
+    borderRadius: radius.full, overflow: 'hidden', marginBottom: space.md,
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22 },
       android: { elevation: 14 },
@@ -1098,20 +1107,20 @@ const styles = StyleSheet.create({
   },
   ctaGradient: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 10, paddingVertical: 19,
+    gap: space.sm, paddingVertical: space.xl,
   },
   ctaText: { color: colors.onPrimary, fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
 
   footer: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 10, marginBottom: 8,
+    gap: space.sm, marginBottom: space.sm,
   },
   footerSep: { color: 'rgba(255,255,255,0.15)', fontSize: 12 },
   footerLink: { color: colors.textDimmed, fontSize: 12 },
   footerLinkUnderline: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
   finePrint: {
     color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 15,
-    textAlign: 'center', paddingHorizontal: 8,
+    textAlign: 'center', paddingHorizontal: space.sm,
   },
 });
 

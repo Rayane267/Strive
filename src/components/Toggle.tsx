@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { elevation } from '../theme/elevation';
 
 /**
  * Interrupteur en pilule, identique sur iOS et Android.
@@ -86,11 +87,7 @@ const styles = StyleSheet.create({
     height: THUMB,
     borderRadius: THUMB / 2,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
+    ...elevation.resting.shadow,
   },
   disabled: { opacity: 0.4 },
 });

@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, View, ViewStyle } from 'react-native';
 import SafeGradient from './SafeGradient';
 import { colors } from '../theme/colors';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { radius } from '../theme/radius';
 
 /**
  * Anneau lumineux qui tourne autour de son contenu.
@@ -93,7 +94,7 @@ const OrbitRing = ({
 
 const styles = StyleSheet.create({
   wrap: {
-    borderRadius: 999,
+    borderRadius: radius.full,
     overflow: 'hidden',
     // Sur fond sombre, le liseré au repos est un blanc très discret : l'anneau
     // doit rester visible même quand le segment vert n'est pas passé dessus.

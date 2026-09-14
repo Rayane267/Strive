@@ -15,6 +15,10 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react-native';
@@ -25,11 +29,30 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { Toast, useToast } from '../components/Toast';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
 const YEARS = Array.from({ length: 17 }, (_, i) =>
   (new Date().getFullYear() - i).toString(),
 );
 
+/**
+ * Liste déroulante qui accepte AUSSI ce qui n'y figure pas.
+ *
+ * `vehicles_db` ne contiendra jamais tout : une marque d'import, un utilitaire,
+ * un modèle sorti après le dernier remplissage de la table. La marque étant
+ * obligatoire à l'enregistrement, le chauffeur dont le véhicule manquait tapait
+ * son nom, lisait « Aucun résultat », et n'avait AUCUN moyen de garder ce qu'il
+ * venait d'écrire. L'écran entier lui était fermé, avec lui la déduction
+ * carburant et le coût réel de ses courses.
+ *
+ * Dès que la saisie ne correspond à aucune entrée, une première ligne propose
+ * donc de la prendre telle quelle. C'est le même geste que choisir dans la
+ * liste — une ligne, un appui — et ça remplace l'ancien « Autre (saisir
+ * manuellement) », qui n'ouvrait aucune saisie : il enregistrait son propre
+ * libellé comme modèle.
+ */
 const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, isOpen, onOpen, zIndex }: any) => {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState(value);
@@ -39,6 +62,14 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
   const filteredData = (searchText === value || searchText === '')
     ? data
     : data.filter((item: string) => item.toLowerCase().includes(searchText.toLowerCase()));
+
+  // Deux caractères minimum : en dessous, la proposition s'afficherait dès la
+  // première lettre frappée, avant même que la liste ait eu le temps de filtrer.
+  const typed = searchText.trim();
+  const alreadyListed = data.some(
+    (item: string) => item.toLowerCase() === typed.toLowerCase(),
+  );
+  const canUseTyped = typed.length >= 2 && !alreadyListed;
 
   return (
     <View style={[styles.comboboxContainer, { zIndex }]}>
@@ -54,9 +85,9 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
           selectTextOnFocus
         />
         {isLoading ? (
-          <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: space.sm }} />
         ) : (
-          <TouchableOpacity onPress={onOpen} style={{ marginLeft: 8 }}>
+          <TouchableOpacity onPress={onOpen} style={{ marginLeft: space.sm }}>
             <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -64,19 +95,30 @@ const BoltCombobox = ({ data, value, onSelect, placeholder, label, isLoading, is
       {isOpen && (
         <View style={styles.listContainer}>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 220 }}>
-            {filteredData.length > 0 ? (
-              filteredData.map((item: string, index: number) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.listItem}
-                  onPress={() => { setSearchText(item); onSelect(item); Keyboard.dismiss(); }}
-                >
-                  <Text style={styles.listItemText}>{item}</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.noResultText}>{t('carSettings.noResult')}</Text>
+            {canUseTyped && (
+              <TouchableOpacity
+                style={[styles.listItem, styles.listItemTyped]}
+                onPress={() => { setSearchText(typed); onSelect(typed); Keyboard.dismiss(); }}
+              >
+                <Feather name="plus-circle" size={15} color={colors.primary} />
+                <Text style={styles.listItemTypedText} numberOfLines={1}>
+                  {t('carSettings.useTyped', { value: typed })}
+                </Text>
+              </TouchableOpacity>
             )}
+            {filteredData.length > 0
+              ? filteredData.map((item: string, index: number) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.listItem}
+                    onPress={() => { setSearchText(item); onSelect(item); Keyboard.dismiss(); }}
+                  >
+                    <Text style={styles.listItemText}>{item}</Text>
+                  </TouchableOpacity>
+                ))
+              : !canUseTyped && (
+                  <Text style={styles.noResultText}>{t('carSettings.noResult')}</Text>
+                )}
           </ScrollView>
         </View>
       )}
@@ -185,7 +227,10 @@ const CarSettingsScreen = () => {
       setIsLoadingModels(true);
       const { data, error } = await supabase.from('vehicles_db').select('model').eq('make', make).order('model', { ascending: true });
       if (error) __DEV__ && console.error('Erreur modèles :', error);
-      if (data) setAvailableModels([...Array.from(new Set(data.map(d => d.model))), t('carSettings.otherManual')]);
+      // Plus d'entrée « Autre » ajoutée à la liste : elle s'enregistrait
+      // elle-même comme modèle. La saisie libre passe par la ligne « Utiliser… »
+      // du combobox, qui rend la vraie valeur tapée.
+      if (data) setAvailableModels(Array.from(new Set(data.map(d => d.model))));
       setIsLoadingModels(false);
     };
     fetchModels();
@@ -259,16 +304,20 @@ const CarSettingsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       {/* ── HEADER ── */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t('common.back', 'Retour')}>
           <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{t('settings.title', 'Mon véhicule')}</Text>
         <PlanBadge />
-      </View>
+      </AnimatedEntrance>
 
       <View style={{ flex: 1, position: 'relative' }}>
         <ScrollView
@@ -314,7 +363,7 @@ const CarSettingsScreen = () => {
               />
 
               <View style={[styles.row, { zIndex: 2000 }]}>
-                <View style={{ flex: 1, marginRight: 10 }}>
+                <View style={{ flex: 1, marginRight: space.sm }}>
                   <BoltCombobox
                     label={t('settings.year', 'Année')}
                     placeholder="2022"
@@ -470,14 +519,14 @@ const CarSettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
   },
   backBtn: {
     marginLeft: -10,
@@ -486,98 +535,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerCenter: { flex: 1, marginHorizontal: 14 },
+  headerCenter: { flex: 1, marginHorizontal: space.md },
   headerTitle: {
-    marginRight: 12,
+    marginRight: space.md,
     flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
+  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
   planBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edgeLit,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   planBadgePlus: { backgroundColor: colors.primary, borderColor: colors.primary },
   planBadgeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   planBadgeTextPlus: { color: colors.background },
 
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: space.xl },
 
   sectionLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-    marginTop: 6,
+    gap: space.sm,
+    marginBottom: space.sm,
+    marginTop: space.sm,
   },
-  sectionAccent: { width: 3, height: 12, borderRadius: 2, backgroundColor: colors.primary },
+  sectionAccent: { width: 3, height: 12, borderRadius: radius.xs, backgroundColor: colors.primary },
   sectionLabelText: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, flex: 1 },
 
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    ...elevation.resting.shadow,
   },
-  cardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 14 },
+  cardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: space.md },
   row: { flexDirection: 'row' },
 
-  inputLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  inputLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginBottom: space.sm },
   input: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     color: colors.textMain,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radius.sm,
+    padding: space.md,
     fontSize: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     fontWeight: '600',
   },
 
   consRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  consLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  consLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md, flex: 1 },
   consIconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 11,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  consTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  consTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: space.tight },
   consSub: { color: colors.textMuted, fontSize: 12 },
   smallInput: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     color: colors.textMain,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
     fontSize: 16,
     fontWeight: '800',
     width: 78,
     textAlign: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
 
   proBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: space.xs,
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.tight,
+    borderRadius: radius.sm,
   },
   proBadgeText: { color: colors.background, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
@@ -585,14 +630,14 @@ const styles = StyleSheet.create({
   proIconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 11,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: space.md,
   },
-  proText: { flex: 1, paddingRight: 12 },
-  proTitle: { color: colors.textMuted, fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  proText: { flex: 1, paddingRight: space.md },
+  proTitle: { color: colors.textMuted, fontSize: 14, fontWeight: '700', marginBottom: space.tight },
   proSub: { color: colors.textDimmed, fontSize: 12 },
 
   saveBtn: {
@@ -600,29 +645,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 17,
-    borderRadius: 16,
-    marginTop: 6,
-    marginBottom: 20,
-    gap: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    paddingVertical: space.lg,
+    borderRadius: radius.full,
+    marginTop: space.sm,
+    marginBottom: space.xl,
+    gap: space.sm,
+    ...elevation.resting.shadow,
   },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   saveBtnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
 
-  comboboxContainer: { marginBottom: 14 },
+  comboboxContainer: { marginBottom: space.md },
   comboboxInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
     height: 50,
   },
   comboboxInputWrapperOpen: {
@@ -634,7 +675,7 @@ const styles = StyleSheet.create({
   comboboxInput: { flex: 1, color: colors.textMain, fontSize: 15, fontWeight: '600', height: '100%' },
   listContainer: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: strokeWidth.control,
     borderColor: colors.primary,
     borderTopWidth: 0,
     borderBottomLeftRadius: 12,
@@ -643,20 +684,23 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
+    ...elevation.resting.shadow,
   },
   listItem: {
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   listItemText: { color: colors.textMain, fontSize: 15 },
-  noResultText: { color: colors.textMuted, padding: 15, textAlign: 'center', fontStyle: 'italic' },
+  listItemTyped: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: 'rgba(0,230,118,0.07)',
+  },
+  listItemTypedText: { color: colors.primary, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  noResultText: { color: colors.textMuted, padding: space.lg, textAlign: 'center', fontStyle: 'italic' },
 });
 
 export default CarSettingsScreen;

@@ -21,6 +21,8 @@ import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { getEffectivePlanTier } from '../services/subscriptionService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 const PlanBadge: React.FC<{ style?: ViewStyle }> = ({ style }) => {
   const { t } = useTranslation();
@@ -44,14 +46,14 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: space.sm,
     backgroundColor: colors.surface,
-    paddingLeft: 4,
-    paddingRight: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingLeft: space.xs,
+    paddingRight: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.full,
   },
-  logo: { width: 22, height: 22, borderRadius: 11 },
+  logo: { width: 22, height: 22, borderRadius: radius.full },
   text: {
     color: colors.textMain,
     fontSize: 13,

@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -29,9 +28,15 @@ import Toggle from '../components/Toggle';
 import LanguageSheet from '../components/LanguageSheet';
 import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 import { supabase } from '../services/supabase';
-import { registerPushToken, unregisterPushToken, getNotificationStatus } from '../services/notificationService';
+import { registerPushToken, unregisterPushToken, getNotificationStatus, isPushEffectivelyOn } from '../services/notificationService';
 import { openSettingsFor } from '../utils/appSettings';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -169,11 +174,16 @@ const ProfileScreen = () => {
   const [pushBlocked, setPushBlocked] = useState(false);
 
   const refreshPushState = useCallback(async () => {
-    const [token, status] = await Promise.all([
-      AsyncStorage.getItem('@strive_fcm_token'),
+    // `isPushEffectivelyOn` et non `status === 'granted'` : au démarrage à
+    // froid, Firebase n'est pas toujours prêt et répond `unknown`. L'ancien test
+    // lisait ça comme un refus, donc l'interrupteur retombait sur « désactivé » à
+    // chaque lancement alors que le chauffeur n'avait rien changé. Le choix
+    // mémorisé comble ce trou ; un `denied` explicite du système reste maître.
+    const [on, status] = await Promise.all([
+      isPushEffectivelyOn(),
       getNotificationStatus(),
     ]);
-    setPushEnabled(!!token && status === 'granted');
+    setPushEnabled(on);
     // 'unknown' (Firebase indisponible) n'est PAS un refus : on ne bloque que
     // sur un 'denied' explicite, sinon un simulateur sans Google Play Services
     // afficherait un écran de blocage à tort.
@@ -545,15 +555,26 @@ const ProfileScreen = () => {
     </View>
   );
 
+  // Défilement de l'écran, lu par les surfaces de verre : le champ est fixe à
+  // l'appareil, c'est donc cette valeur qui leur dit où elles sont dans la lumière.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      {/* Posé en premier, donc derrière tout le reste. */}
+      <ScreenField />
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('profile.title')}</Text>
-      </View>
+      </AnimatedEntrance>
 
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
       >
         {/* ── PROFILE CARD ── */}
         <SafeGradient
@@ -707,7 +728,7 @@ const ProfileScreen = () => {
                   <Text style={styles.profileUpgradeTitle}>{t('profile.upgradeCardTitle')}</Text>
                   <Text style={styles.profileUpgradeSub}>{t('profile.upgradeCardSub')}</Text>
                 </View>
-                <Feather name="arrow-right" size={18} color={colors.primary} />
+                <Feather name="arrow-right" size={18} color={colors.textMuted} />
               </View>
             </SafeGradient>
           </TouchableOpacity>
@@ -717,7 +738,7 @@ const ProfileScreen = () => {
             classique, avec la langue courante affichée à droite. Deux langues
             seulement : le tap bascule directement plutôt que d'ouvrir une liste
             de deux entrées. */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.settings', 'Réglages')}</Text>
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.settings', 'Réglages')}</Text>
         {renderMenuGroup([
           {
             icon: 'translate',
@@ -756,7 +777,7 @@ const ProfileScreen = () => {
             de son propre statut. « Restaurer » reste dans les deux cas : c'est
             une exigence de l'App Store, et c'est aussi le recours d'un abonné
             que l'app croit gratuit. */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.subscription', 'Abonnement')}</Text>
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.subscription', 'Abonnement')}</Text>
         {renderMenuGroup([
           ...(isPlus ? [{
             icon: 'crown-outline',
@@ -779,12 +800,12 @@ const ProfileScreen = () => {
         ])}
 
         {/* ── SUPPORT ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.supportSection', 'Support')}</Text>
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.supportSection', 'Support')}</Text>
         {renderMenuGroup(resourceItems)}
 
         {/* Légal : deux liens qu'Apple exige d'atteindre depuis l'app, et qui
             étaient relégués en minuscules tout en bas de l'écran. */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.legal', 'Légal')}</Text>
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.legal', 'Légal')}</Text>
         {renderMenuGroup([
           {
             icon: 'file-document-outline',
@@ -800,7 +821,7 @@ const ProfileScreen = () => {
           },
         ])}
 
-        <Text style={[styles.sectionTitle, styles.dangerSectionTitle, { marginTop: 22 }]}>
+        <Text style={[styles.sectionTitle, styles.dangerSectionTitle, { marginTop: space.xl }]}>
           {t('profile.session', 'Session')}
         </Text>
 
@@ -849,7 +870,7 @@ const ProfileScreen = () => {
             support (`supportService`, `HelpScreen`) et aux traces de scan : le
             besoin réel — savoir sur quel build tourne un chauffeur qui signale
             un problème — est couvert sans occuper le pied de page. */}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
 
@@ -949,23 +970,25 @@ const ProfileScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  header: { paddingHorizontal: space.xl, paddingTop: space.sm, paddingBottom: space.md },
   headerTitle: { color: colors.textMain, fontSize: 28, fontWeight: '900' },
 
-  scrollContent: { paddingHorizontal: 20 },
+  scrollContent: { paddingHorizontal: space.xl },
 
   // Profile card
   profileCard: {
-    borderRadius: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
+    borderRadius: radius.lg,
+    marginBottom: space.xl,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     overflow: 'hidden',
   },
   profileContent: {
-    padding: 24,
+    padding: space.xl,
     alignItems: 'center',
   },
   profileShimmer: {
@@ -993,10 +1016,10 @@ const styles = StyleSheet.create({
     right: -40,
     width: 140,
     height: 140,
-    borderRadius: 70,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  avatarContainer: { marginBottom: 14 },
+  avatarContainer: { marginBottom: space.md },
   userName: {
     color: colors.textMain,
     fontSize: 20,
@@ -1006,10 +1029,10 @@ const styles = StyleSheet.create({
   userEmail: {
     color: colors.textDimmed,
     fontSize: 12,
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: space.xs,
+    marginBottom: space.md,
   },
-  tierBadgeSpacing: { marginTop: 4 },
+  tierBadgeSpacing: { marginTop: space.xs },
   tierBadgePlusText: {
     color: colors.background,
     fontSize: 11,
@@ -1017,71 +1040,63 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   upgradeBtnWrap: {
-    marginTop: 8,
-    borderRadius: 22, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 },
-      android: { elevation: 8 },
-    }),
+    marginTop: space.sm,
+    borderRadius: radius.lg, overflow: 'hidden',
+    ...elevation.resting.shadow,
   },
   upgradeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 22,
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.sm,
+    borderRadius: radius.lg,
   },
   upgradeBtnText: { color: '#062318', fontSize: 13, fontWeight: '900', letterSpacing: 0.3 },
 
   // Upgrade CTA card
   profileUpgradeCard: {
-    marginTop: 18, marginBottom: 18, borderRadius: 18, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
-      android: { elevation: 8 },
-    }),
+    marginTop: space.lg, marginBottom: space.lg, borderRadius: radius.md, overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   profileUpgradeGradient: {
-    borderRadius: 18, padding: 18,
-    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.md, padding: space.lg,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     overflow: 'hidden',
   },
   profileUpgradeGlow: {
     position: 'absolute', top: -20, right: -20,
-    width: 90, height: 90, borderRadius: 45,
+    width: 90, height: 90, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   // Le halo vert est conservé : il détachait la tuile du dégradé sombre de la
   // carte, et le logo en a autant besoin que la couronne.
   profileUpgradeLogo: {
-    width: 42, height: 42, borderRadius: 14,
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
-      android: { elevation: 6 },
-    }),
+    width: 42, height: 42, borderRadius: radius.md,
+    ...elevation.resting.shadow,
   },
-  upgradeBtnLogo: { width: 16, height: 16, borderRadius: 8 },
+  upgradeBtnLogo: { width: 16, height: 16, borderRadius: radius.full },
   profileUpgradeTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
-  profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
+  profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: space.tight, lineHeight: 16 },
 
   // Section title
   earnCard: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    // Mêmes fond, rayon et bordure que les groupes de menu : la carte était en
-    // blanc translucide, donc d'un gris légèrement différent de tout ce qui
-    // l'entoure — l'écart se voyait sans rien signifier.
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    marginBottom: 22,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.xl,
+    // Même matériau que les groupes de menu. La carte était en blanc
+    // translucide, donc d'un gris légèrement différent de tout ce qui l'entoure,
+    // et l'écart se voyait sans rien signifier.
+    borderRadius: radius.md,
+    marginBottom: space.xl,
+    overflow: 'hidden',
   },
   earnTexts: { flex: 1 },
   earnLabel: {
@@ -1091,7 +1106,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
-  earnAmountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6 },
+  earnAmountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: space.sm },
   earnWhole: {
     color: colors.textMain,
     fontSize: 34,
@@ -1107,7 +1122,7 @@ const styles = StyleSheet.create({
   earnBadge: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary + '1F',
@@ -1118,39 +1133,41 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
-    marginBottom: 10,
-    marginLeft: 4,
+    marginBottom: space.sm,
+    marginLeft: space.xs,
     textTransform: 'uppercase',
   },
   dangerSectionTitle: { color: colors.danger, opacity: 0.7 },
 
   // Menu group (iOS settings-like card)
+  // Le groupe entier est UNE surface, pas une par ligne : les séparateurs
+  // suffisent à découper, et une carte par ligne hacherait la liste.
   menuGroup: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   dangerGroup: {
     backgroundColor: 'rgba(255,77,77,0.04)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.18)',
+    borderRadius: radius.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
     overflow: 'hidden',
     // Dernier bloc de la page, et le seul à porter une bordure : les 16 px du
     // `paddingBottom` du ScrollView (la convention partagée avec Accueil,
     // Historique, Stats et Boutique) laissaient son trait rouge à ras de la
     // barre d'onglets. Le pied de page portait autrefois le numéro de version,
-    // qui faisait tampon ; il a été retiré, pas remplacé. 22 px = le rythme des
-    // sections (`marginTop: 22`), pour que le bas respire comme le reste.
-    marginBottom: 22,
+    // qui faisait tampon ; il a été retiré, pas remplacé. `space.xl` est le
+    // rythme des sections, pour que le bas respire comme le reste.
+    marginBottom: space.xl,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
   },
   menuRowDivider: {
     borderBottomWidth: 1,
@@ -1175,16 +1192,16 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: space.md,
   },
   menuIconWrapDanger: {
     width: 38,
     height: 38,
     backgroundColor: 'rgba(255,77,77,0.1)',
-    borderRadius: 10,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: space.md,
   },
   menuText: { flex: 1 },
   // 15/700, comme partout ailleurs dans l'app : `toggleTitle` de Preferences est
@@ -1194,31 +1211,31 @@ const styles = StyleSheet.create({
   //
   // Aucune `fontFamily` n'est posée nulle part dans le projet : le rendu est
   // déjà San Francisco sur iOS et Roboto sur Android.
-  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: space.tight },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
-  menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: 6 },
-  menuPlusBadge: { marginRight: 8 },
+  menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: space.sm },
+  menuPlusBadge: { marginRight: space.sm },
   newBadge: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   newBadgeText: { color: colors.background, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
 
   // Language
-  langRow: { flexDirection: 'row', gap: 10 },
+  langRow: { flexDirection: 'row', gap: space.sm },
   langBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.surface,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: space.md,
+    borderRadius: radius.full,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   langBtnActive: {
     borderColor: colors.primary,
@@ -1233,23 +1250,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 28,
-    marginBottom: 8,
+    gap: space.sm,
+    marginTop: space.xl,
+    marginBottom: space.sm,
   },
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
 
   deleteInput: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.35)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edgeLit,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
     color: colors.textMain,
     backgroundColor: 'rgba(239,68,68,0.05)',
-    marginBottom: 16,
+    marginBottom: space.lg,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,
@@ -1266,44 +1283,40 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
     width: '100%',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: radius.lg,
+    padding: space.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
   modalIconWrap: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,77,77,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
-  modalTitle: { color: colors.textMain, fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  modalTitle: { color: colors.textMain, fontSize: 20, fontWeight: 'bold', marginBottom: space.sm },
   modalMessage: {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 21,
-    marginBottom: 24,
+    marginBottom: space.xl,
   },
-  modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalBtns: { flexDirection: 'row', gap: space.md, width: '100%' },
   modalBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   modalBtnCancel: { backgroundColor: colors.surfaceLight },

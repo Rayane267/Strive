@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import i18n from '../i18n';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 interface Props {
   children: React.ReactNode;
@@ -51,14 +53,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: space.xxl,
   },
-  icon: { fontSize: 48, marginBottom: 16 },
+  icon: { fontSize: 48, marginBottom: space.lg },
   title: {
     color: colors.textMain,
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: space.md,
     textAlign: 'center',
   },
   message: {
@@ -66,13 +68,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 21,
-    marginBottom: 32,
+    marginBottom: space.xxl,
   },
   button: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingHorizontal: space.xxl,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
   },
   buttonText: {
     color: colors.background,

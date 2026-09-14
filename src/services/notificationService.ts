@@ -16,6 +16,58 @@ import { toLocalDateKey } from '../utils/dateUtils';
 const FCM_TOKEN_KEY = '@strive_fcm_token';
 const LAST_REMINDER_KEY = '@strive_last_reminder';
 
+/**
+ * Le choix du chauffeur, tel qu'il l'a exprimé, et non tel qu'on arrive à le
+ * relire.
+ *
+ * POURQUOI IL FAUT L'ÉCRIRE. `getNotificationStatus()` interroge Firebase, et
+ * Firebase n'est pas toujours joignable au démarrage à froid : `getApp()` lève
+ * avant son initialisation, la réponse est alors `unknown`. Les deux écrans qui
+ * s'en servaient exigeaient `=== 'granted'`, donc `unknown` valait NON —
+ * l'interrupteur du Profil et l'étape du tutoriel repassaient à « désactivé » à
+ * chaque lancement, alors que le système, lui, n'avait rien oublié.
+ *
+ * Ce drapeau est la mémoire de l'app. Il ne remplace jamais une réponse claire
+ * du système (`granted`/`denied` font foi) : il ne sert qu'à combler `unknown`.
+ */
+const PUSH_CHOICE_KEY = '@strive_push_choice';
+
+export type PushChoice = 'granted' | 'denied' | null;
+
+export async function getPushChoice(): Promise<PushChoice> {
+  try {
+    const v = await AsyncStorage.getItem(PUSH_CHOICE_KEY);
+    return v === 'granted' || v === 'denied' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+async function rememberPushChoice(choice: Exclude<PushChoice, null>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PUSH_CHOICE_KEY, choice);
+  } catch {}
+}
+
+/**
+ * Ce que l'app doit croire, en croisant le système et sa propre mémoire.
+ *
+ * `unknown` seul ne veut rien dire : il faut alors retomber sur le dernier choix
+ * connu plutôt que d'inventer un refus.
+ */
+export async function isPushEffectivelyOn(): Promise<boolean> {
+  const [status, choice, token] = await Promise.all([
+    getNotificationStatus(),
+    getPushChoice(),
+    AsyncStorage.getItem(FCM_TOKEN_KEY),
+  ]);
+  if (status === 'denied') return false;
+  if (status === 'granted') return !!token;
+  // `unknown` : le système ne répond pas. La mémoire tranche, et le jeton
+  // prouve qu'un enregistrement a réussi au moins une fois.
+  return choice === 'granted' && !!token;
+}
+
 interface NotificationPayload {
   title: string;
   body: string;
@@ -67,10 +119,15 @@ export async function registerPushToken(
       authStatus === fcm.AuthorizationStatus.AUTHORIZED ||
       authStatus === fcm.AuthorizationStatus.PROVISIONAL;
 
-    if (!enabled) return 'denied';
+    if (!enabled) {
+      await rememberPushChoice('denied');
+      return 'denied';
+    }
 
     const token = await fcm.getToken(messagingInstance);
     if (!token) return 'error';
+
+    await rememberPushChoice('granted');
 
     const cached = await AsyncStorage.getItem(FCM_TOKEN_KEY);
     if (cached === token) return 'granted';
@@ -272,6 +329,9 @@ export async function unregisterPushToken(userId: string): Promise<void> {
       .update({ fcm_token: null })
       .eq('id', userId);
     await AsyncStorage.removeItem(FCM_TOKEN_KEY);
+    // Couper l'interrupteur est une décision : sans ça, la mémoire dirait
+    // encore « accordé » et un démarrage sans Firebase rallumerait l'affichage.
+    await AsyncStorage.setItem(PUSH_CHOICE_KEY, 'denied');
   } catch (e) {
     __DEV__ && console.warn('[NOTIF] unregisterPushToken error:', e);
   }

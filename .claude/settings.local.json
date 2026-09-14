@@ -344,7 +344,8 @@
       "PowerShell(.\\\\android\\\\gradlew.bat -p android app:installDebug -PreactNativeDevServerPort=8081 --console=plain 2>&1 | Select-Object -Last 40)",
       "PowerShell(npx react-native start --port 8081)",
       "Bash(MSYS_NO_PATHCONV=1 adb shell screencap //sdcard/premium.png)",
-      "Bash(MSYS_NO_PATHCONV=1 adb pull //sdcard/premium.png '__TRACKED_VAR__\\\\premium.png')"
+      "Bash(MSYS_NO_PATHCONV=1 adb pull //sdcard/premium.png '__TRACKED_VAR__\\\\premium.png')",
+      "Bash(env)"
     ]
   },
   "enableAllProjectMcpServers": true,

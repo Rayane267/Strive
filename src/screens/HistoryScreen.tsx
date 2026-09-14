@@ -8,6 +8,7 @@ import React, {
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -47,6 +48,22 @@ import { withTimeout } from '../utils/withTimeout';
 import { cacheRides, getCachedRides } from '../services/offlineService';
 import { Skeleton } from '../components/Skeleton';
 import ListItemEntrance from '../components/ListItemEntrance';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
+
+/**
+ * `Animated.FlatList` perd le generique de la liste, donc `item` retombe en
+ * `any`. Le cast le retablit : la composante animee a la meme surface de
+ * props, elle sait seulement recevoir un `onScroll` pilote par `Animated.event`.
+ */
+const AnimatedFlatList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as typeof FlatList;
 
 LocaleConfig.locales['fr'] = {
   monthNames: [
@@ -132,7 +149,7 @@ LocaleConfig.locales['en'] = {
 };
 
 const PLATFORM_CONFIG: Record<string, { accent: string; label: string }> = {
-  UBER: { accent: '#FFFFFF', label: 'UBER' },
+  UBER: { accent: '#FFFFFF', label: 'Uber' },
   BOLT: { accent: '#34BB78', label: 'Bolt' },
   HEETCH: { accent: '#FF3B80', label: 'Heetch' },
 };
@@ -184,16 +201,8 @@ const RideCard = React.memo(
     const hasRoute = !!ride.pickup_address || !!ride.destination_address;
 
     return (
-      <View
-        style={[
-          styles.card,
-          isDeclined && styles.cardDeclined,
-          // La bordure murmure le verdict (le carré de score, lui, l'énonce) : ça
-          // remplace la barre latérale de 4 px, qui répétait la même information
-          // sous sa forme la plus convenue.
-          score != null && { borderColor: accentColor + '33' },
-        ]}
-      >
+      <View style={styles.card}>
+        {isDeclined && <View style={[StyleSheet.absoluteFill, styles.cardDeclined]} pointerEvents="none" />}
         <View style={styles.cardInner}>
           <View style={styles.cardTopRow}>
             <View style={styles.topLeft}>
@@ -319,6 +328,7 @@ type FilterType = 'all' | 'accepted' | 'declined';
 
 const HistoryScreen = () => {
   const { t, i18n } = useTranslation();
+  const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
@@ -559,7 +569,7 @@ const HistoryScreen = () => {
             name="chevron-down"
             size={13}
             color={colors.primary}
-            style={{ marginLeft: 6 }}
+            style={{ marginLeft: space.sm }}
           />
         </TouchableOpacity>
         <TouchableOpacity
@@ -630,10 +640,10 @@ const HistoryScreen = () => {
   const listHeader = (
     <View>
       {/* ── HEADER ── */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('history.title')}</Text>
         <Text style={styles.headerSub}>{todayDate}</Text>
-      </View>
+      </AnimatedEntrance>
 
       {/* ── DATE SELECTOR (Plus only) ── */}
       {isPaid ? (
@@ -867,18 +877,28 @@ const HistoryScreen = () => {
     </View>
   );
 
+  // Defilement de l ecran. Le champ est fixe a l appareil, donc c est cette
+  // valeur qui dit ou se trouve chaque surface dans la lumiere.
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
+      {/* Pose en premier, donc derriere tout le reste. */}
+      <ScreenField />
+      <AnimatedFlatList
         data={loading ? [] : filteredRides}
         keyExtractor={item => item.id}
         renderItem={renderRideCard}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{
           paddingBottom: tabBarHeight + 16,
-          paddingHorizontal: 20,
+          paddingHorizontal: space.xl,
         }}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1017,36 +1037,39 @@ const HistoryScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: 20 },
+  // Meme couleur que le sommet du champ : la bande sous l encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scroll: { paddingHorizontal: space.xl },
 
-  header: { paddingTop: 8, marginBottom: 16 },
+  header: { paddingTop: space.sm, marginBottom: space.lg },
   headerTitle: { color: colors.textMain, fontSize: 28, fontWeight: '900' },
   headerSub: {
     color: colors.textMuted,
     fontSize: 13,
-    marginTop: 4,
+    marginTop: space.xs,
     textTransform: 'capitalize',
   },
 
   // Date selector
   dateBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.md,
   },
-  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   dateBtnIcon: {
     width: 32,
     height: 32,
-    borderRadius: 9,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1062,15 +1085,15 @@ const styles = StyleSheet.create({
   upgradeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.15)',
+    borderRadius: radius.sm,
+    padding: space.md,
+    marginBottom: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
-  upgradeBannerLogo: { width: 18, height: 18, borderRadius: 9 },
+  upgradeBannerLogo: { width: 18, height: 18, borderRadius: radius.full },
   upgradeBannerText: {
     flex: 1,
     color: colors.textMuted,
@@ -1082,35 +1105,35 @@ const styles = StyleSheet.create({
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(255,77,77,0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
+    padding: space.md,
+    marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // Hero
   heroCard: {
-    borderRadius: 24,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    borderRadius: radius.lg,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     overflow: 'hidden',
     backgroundColor: '#0A150E',
   },
   heroContent: {
-    padding: 20,
+    padding: space.xl,
   },
   heroMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: space.xl,
+    gap: space.md,
   },
   heroLeft: { flex: 1, minWidth: 0 },
   heroLabel: {
@@ -1118,7 +1141,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,
-    marginBottom: 6,
+    marginBottom: space.sm,
   },
   heroAmount: {
     color: colors.textMain,
@@ -1133,23 +1156,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.3,
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   acceptBar: {
     width: 72,
     height: 4,
     backgroundColor: 'rgba(0,230,118,0.15)',
-    borderRadius: 2,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
-  acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
+  acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: radius.xs },
   heroSep: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.07)',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   heroStats: { flexDirection: 'row' },
-  heroStat: { flex: 1, alignItems: 'center', gap: 4 },
+  heroStat: { flex: 1, alignItems: 'center', gap: space.xs },
   heroStatVal: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
   heroStatLbl: {
     color: colors.textMuted,
@@ -1162,71 +1185,69 @@ const styles = StyleSheet.create({
   heroStatDiv: {
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    marginVertical: 4,
+    marginVertical: space.xs,
   },
 
   // Filter tabs
-  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  filterRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.lg },
   filterTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   filterTabActive: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: stroke.edgeLit,
   },
   filterTabActiveAccepted: {
     backgroundColor: 'rgba(0,230,118,0.1)',
-    borderColor: 'rgba(0,230,118,0.3)',
+    borderColor: stroke.active,
   },
   filterTabActiveDeclined: {
     backgroundColor: 'rgba(255,82,82,0.1)',
-    borderColor: 'rgba(255,82,82,0.3)',
+    borderColor: stroke.edgeLit,
   },
-  filterDot: { width: 6, height: 6, borderRadius: 3 },
+  filterDot: { width: 6, height: 6, borderRadius: radius.full },
   filterTabText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   filterTabTextActive: { color: colors.textMain },
   filterTabTextActiveAccepted: { color: '#00E676' },
   filterTabTextActiveDeclined: { color: '#FF5252' },
 
   // Ride card
+  // Le conteneur opaque de l'app : même fond et même liseré que le bloc
+  // « Passez en ligne pour scanner » du Dashboard, qui sert de référence.
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    marginBottom: 10,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
+    marginBottom: space.sm,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  // Course refusée : fond assombri (sans opacité) pour la repérer dans la liste.
-  cardDeclined: { backgroundColor: '#0E1613' },
-  cardInner: { padding: 14 },
+  // Course refusée : voile sombre posé sur la carte pour la repérer dans la
+  // liste. Teinté du haut du champ, pas d'un gris neutre.
+  cardDeclined: { backgroundColor: FIELD_TOP, opacity: 0.55 },
+  cardInner: { padding: space.md },
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: space.sm,
   },
   topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: space.sm,
     flexShrink: 1,
   },
-  platformDot: { width: 7, height: 7, borderRadius: 4 },
+  platformDot: { width: 7, height: 7, borderRadius: radius.full },
   platformName: {
     color: colors.textMain,
     fontSize: 12,
@@ -1239,8 +1260,8 @@ const styles = StyleSheet.create({
   rateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 11,
+    marginTop: space.md,
+    paddingTop: space.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
@@ -1250,35 +1271,37 @@ const styles = StyleSheet.create({
     width: 1,
     height: 18,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    marginRight: 14,
+    marginRight: space.md,
   },
 
   // Trajet : rail à gauche, adresses à droite.
   routeStrip: {
     flexDirection: 'row',
-    gap: 9,
-    marginTop: 11,
-    paddingTop: 11,
+    gap: space.sm,
+    marginTop: space.md,
+    paddingTop: space.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
-  routeRail: { alignItems: 'center', paddingTop: 5, paddingLeft: 1 },
-  routeDot: { width: 7, height: 7, borderRadius: 4 },
+  // Le 1 px de gauche est un calage OPTIQUE, pas du rythme : il centre le rail
+  // sur la colonne de pastilles. L echelle d espacement ne s y applique pas.
+  routeRail: { alignItems: 'center', paddingTop: space.xs, paddingLeft: 1 },
+  routeDot: { width: 7, height: 7, borderRadius: radius.full },
   routeLine: {
     width: 1,
     flex: 1,
     minHeight: 11,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 2,
+    marginVertical: space.tight,
   },
   routeEnd: {
     width: 5,
     height: 5,
-    borderRadius: 3,
-    borderWidth: 1,
+    borderRadius: radius.full,
+    borderWidth: strokeWidth.control,
     borderColor: colors.textDimmed,
   },
-  routeTexts: { flex: 1, gap: 4, minWidth: 0 },
+  routeTexts: { flex: 1, gap: space.xs, minWidth: 0 },
   routeText: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
   routeTextDest: { color: colors.textDimmed },
   timeMain: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
@@ -1286,7 +1309,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: space.md,
   },
   fareText: {
     color: '#FFFFFF',
@@ -1298,13 +1321,13 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: space.tight,
   },
   scoreBadge: {
     width: 60,
     height: 60,
-    borderRadius: 14,
-    borderWidth: 2,
+    borderRadius: radius.md,
+    borderWidth: strokeWidth.control,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1330,42 +1353,43 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
   },
   statusBadgeAccepted: {
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderColor: 'rgba(0,230,118,0.22)',
+    borderColor: stroke.edge,
   },
   statusBadgeDeclined: {
     backgroundColor: 'rgba(255,82,82,0.07)',
-    borderColor: 'rgba(255,82,82,0.18)',
+    borderColor: stroke.edgeLit,
   },
   statusBadgePending: {
     backgroundColor: 'rgba(255,179,0,0.08)',
-    borderColor: 'rgba(255,179,0,0.22)',
+    borderColor: stroke.edgeLit,
   },
   statusBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 
   // Loading skeleton
-  skeletonList: { gap: 12, marginTop: 4 },
+  skeletonList: { gap: space.md, marginTop: space.xs },
   skeletonRow: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    gap: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
-  skeletonRowText: { flex: 1, gap: 8 },
+  skeletonRowText: { flex: 1, gap: space.sm },
 
   // Empty state
-  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+  emptyState: { alignItems: 'center', paddingVertical: space.xxxl, gap: space.sm },
   emptyHint: {
     color: colors.textDimmed,
     fontSize: 12,
@@ -1373,26 +1397,27 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   emptyCta: {
-    marginTop: 14,
+    marginTop: space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
   },
   emptyCtaText: { color: colors.background, fontWeight: '700', fontSize: 13 },
   emptyIconWrap: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     width: 72,
     height: 72,
-    backgroundColor: colors.surface,
-    borderRadius: 36,
+    borderRadius: radius.full,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
+    marginBottom: space.lg,
   },
   emptyTitle: { color: colors.textMuted, fontSize: 14 },
 
@@ -1402,50 +1427,46 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: radius.lg,
+    padding: space.lg,
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+        ...elevation.raised.shadow,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: space.md,
   },
-  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   modalTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
   modalClose: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalPresets: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: space.sm,
+    marginBottom: space.md,
   },
   presetChip: {
     flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 8,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     alignItems: 'center',
   },
   presetChipText: {
@@ -1459,14 +1480,14 @@ const styles = StyleSheet.create({
   modalAlertRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: 'rgba(255,77,77,0.10)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.22)',
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    marginTop: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
   },
   modalAlertText: {
     color: colors.danger,
@@ -1479,27 +1500,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 10,
-    gap: 14,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   calMonthBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
   },
   calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
   yearNavBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1512,10 +1533,10 @@ const styles = StyleSheet.create({
   calNavBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1524,17 +1545,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   monthCell: {
     width: '30%',
-    paddingVertical: 14,
+    paddingVertical: space.md,
     alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 10,
+    borderRadius: radius.sm,
+    marginBottom: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   monthCellActive: {
     backgroundColor: colors.primary,

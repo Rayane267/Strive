@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Image } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors } from '../theme/colors';
+import { strokeWidth } from '../theme/stroke';
 
 // ── 6 AVATARS GÉNÉRIQUES (illustrations DiceBear lorelei — style dessin) ──
 // 3 hommes / 3 femmes
@@ -63,7 +64,7 @@ const AvatarView = ({ avatarId, size, borderColor }: AvatarViewProps) => {
           height: size,
           borderRadius: size / 2,
           overflow: 'hidden',
-          borderWidth: 2.5,
+          borderWidth: strokeWidth.control,
           borderColor: borderColor ?? colors.primary,
           backgroundColor: '#0a120e',
         }}
@@ -87,7 +88,7 @@ const AvatarView = ({ avatarId, size, borderColor }: AvatarViewProps) => {
         backgroundColor: colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2.5,
+        borderWidth: strokeWidth.control,
         borderColor: borderColor ?? colors.primary,
       }}
     >

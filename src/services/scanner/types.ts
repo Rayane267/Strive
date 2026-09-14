@@ -19,8 +19,22 @@ export interface ScanResult {
   /** Image JPEG compressée en base64 — servie par le natif pour alimenter le fallback LLM JS */
   imageBase64?: string;
   /** Dump JSON des blocs ML Kit/Vision pour diagnostic — émis en release pour
-   *  alimenter scan_debug quand une adresse manque. Format : [{text,x,y,w,h}]. */
+   *  alimenter scan_debug quand le parsing local n'a pas suffi (adresse
+   *  manquante, ou repli Gemini natif). Format : [{text,x,y,w,h}]. */
   debugBlocks?: string;
+  /**
+   * Le pipeline NATIF a-t-il dû appeler Gemini pour produire ce résultat ?
+   *
+   * À ne pas confondre avec le repli Gemini du JS (`geminiFallback.ts`), qui ne
+   * s'exécute que pour un scan lancé depuis le Dashboard. Les scans réels
+   * viennent du raccourci iOS ou de la bulle Android : eux appellent Gemini en
+   * natif, et sans ce drapeau la télémétrie enregistrait `gemini_fallback =
+   * false` sur 100 % des scans — une constante, pas une mesure.
+   *
+   * Absent des payloads produits par un bundle natif antérieur → traiter
+   * `undefined` comme `false`.
+   */
+  geminiUsed?: boolean;
   /** Hauteur de l'image OCR (px) — nécessaire pour rejouer un cas en fixture. */
   screenHeight?: number;
   /** Horodatage du scan (epoch s). Donnée, plus clé : il date la course (jour

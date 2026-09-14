@@ -89,10 +89,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
-    "subscriptionSub": "30 scans/day, live €/h...",
+    "subscriptionSub": "20 scans/day, live €/h...",
     "subscriptionSubActive": "Cancel, change plan...",
     "upgradeCardTitle": "Upgrade to Strive Plus",
-    "upgradeCardSub": "30 scans/day · Live €/h · No commitment",
+    "upgradeCardSub": "20 scans/day · Live €/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -259,7 +259,7 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 30 scans/day so you stop driving at a loss.",
+      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 20 scans/day so you stop driving at a loss.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
@@ -274,7 +274,7 @@
     "upgradeCard": {
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
-      "perk1": "30 scans/day",
+      "perk1": "20 scans/day",
       "perk2": "Live €/h",
       "perk3": "History"
     },
@@ -379,7 +379,8 @@
     "upgradeForHistory": "Upgrade to Plus to explore your past days",
     "status": {
       "ACCEPTED": "ACCEPTED",
-      "DECLINED": "DECLINED"
+      "DECLINED": "DECLINED",
+      "PENDING": "PENDING"
     },
     "changeMonth": "Change month"
   },
@@ -498,7 +499,7 @@
     "feat3Title": "Live API Data",
     "feat3Sub": "Sync with Waze/Google traffic",
     "save": "Save",
-    "otherManual": "Other (Enter manually)",
+    "useTyped": "Use “{{value}}”",
     "noResult": "No results",
     "errors": {
       "required": "Please fill in all required fields.",
@@ -577,6 +578,7 @@
       "notifS": "Without them, a scan can succeed and you'd never see it.",
       "notifCta": "Enable notifications",
       "notifDone": "Notifications enabled",
+      "notifErrorBody": "Couldn't finish turning them on. Check your connection and try again.",
       "shortcutT": "The shortcut",
       "shortcutS": "It does everything: the screenshot, the analysis, the verdict. Already set up — just add it.",
       "notifS_android": "That's how the verdict reaches you, with the Taken and Declined buttons. Without it, a successful scan may show you nothing.",
@@ -716,7 +718,7 @@
       "q9": "What is the ride quality score?",
       "a9": "A score out of 100 given to each ride by comparing its €/h and €/km to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
       "q10": "How many scans per day?",
-      "a10": "3 scans per day on the free plan, 30 per day with Strive Plus.",
+      "a10": "3 scans per day on the free plan, 20 per day with Strive Plus.",
       "q11": "How do I contact support?",
       "a11": "From Profile → My tickets: open a ticket and we reply right inside the app (you get a notification for every reply)."
     }
@@ -838,7 +840,7 @@
       }
     },
     "feat": {
-      "scan": "30 scans a day",
+      "scan": "20 scans a day",
       "scanText": "instead of 3 — enough to cover a full day's shift.",
       "threshold": "Your floor, not ours",
       "thresholdText": "you set the €/h at which a ride is worth taking.",
@@ -912,7 +914,7 @@
       "scans": {
         "label": "Daily scans",
         "free": "3 / day",
-        "plus": "30 / day"
+        "plus": "20 / day"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -958,7 +960,7 @@
     "finePrintNoTrial": "{{price}} per {{period}}. Renews automatically, cancel anytime.",
     "benefit": {
       "plus": {
-        "scans": "30 scans a day instead of 3",
+        "scans": "20 scans a day instead of 3",
         "thresholds": "Your own €/h and €/km thresholds",
         "traffic": "€/h based on real traffic, not straight-line",
         "fuel": "Your model's fuel cost deducted",
@@ -974,7 +976,7 @@
     },
     "saveAmount": "SAVE {{amount}}",
     "heroTitleWelcomeEnd": "Your 30 free\nscans are gone.",
-    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 30 a day — every day.",
+    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 20 a day — every day.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1202,5 +1204,61 @@
     "empty": "Not enough data yet",
     "emptyHint": "The grid needs around {{min}} scanned rides to mean anything. You are at {{current}}.",
     "footnote": "Over the last {{days}} days · {{rides}} scanned rides. Declines count towards volume, never towards the hourly rate."
+  },
+  "rideNetwork": {
+    "title": "Network",
+    "menuTitle": "Network",
+    "menuSub": "Pass a ride on, take one in",
+    "tab": {
+      "offer": "Offer",
+      "receive": "Receive"
+    },
+    "share": {
+      "driver": "Driver taking it",
+      "platform": "Strive"
+    },
+    "offer": {
+      "intro": "A client on the phone while you are already driving? Pass it to the network: a driver near you takes it, you keep 10% of the agreed price.",
+      "tripSection": "THE TRIP",
+      "pickupPlaceholder": "Pickup",
+      "dropoffPlaceholder": "Drop-off",
+      "fareSection": "AGREED PRICE",
+      "fareHint": "The price you just quoted the client. That is what gets split — nothing is added on top.",
+      "splitSection": "THE SPLIT",
+      "splitHint": "What that price becomes, before you publish.",
+      "shareYou": "You, for the referral",
+      "compareTitle": "FOR COMPARISON",
+      "compareBody": "On a classic platform the commission sits around {{rate}}%: {{amount}} taken out of this ride. Strive takes {{ours}}.",
+      "publish": "Publish to the network",
+      "missing": "Fill in the trip and the agreed price.",
+      "publishedTitle": "Ride published",
+      "publishedBody": "Visible to the {{drivers}} network drivers around the pickup.",
+      "publishedShare": "Your share if someone takes it: {{amount}}",
+      "publishAnother": "Offer another ride"
+    },
+    "receive": {
+      "howTitle": "How it works",
+      "how1": "A driver in the network passes you a ride they cannot take — they are already driving.",
+      "how2": "You see what you get before accepting: the agreed price, minus 10% for whoever brought it and 2% for Strive.",
+      "how3": "When you are the one passing a ride on, it works the other way: you get the 10% without leaving yours.",
+      "howGot": "Got it",
+      "nearby": "Rides nearby",
+      "nearbyCount_one": "{{count}} available",
+      "nearbyCount_other": "{{count}} available",
+      "toPickup": "{{km}} km · {{min}} min away",
+      "posted": "{{min}} min ago",
+      "net": "NET FOR YOU",
+      "grossNote": "Out of {{gross}} agreed · {{referrer}} to the driver who brought it · {{platform}} to Strive",
+      "verified": "Verified",
+      "broughtBy": "Passed you this ride",
+      "ridesShared_one": "{{count}} shared to the network",
+      "ridesShared_other": "{{count}} shared to the network",
+      "accept": "Accept · {{amount}}",
+      "acceptedNote": "Accepted. The client has been told, you get their number.",
+      "weekTitle": "THIS WEEK IN THE NETWORK",
+      "weekTaken": "Rides taken",
+      "weekReferral": "Referral commissions",
+      "weekMeta": "{{taken}} rides taken from the network · {{referred}} rides passed to other drivers."
+    }
   }
 }

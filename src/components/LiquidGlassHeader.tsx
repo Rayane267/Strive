@@ -11,6 +11,8 @@ import { BlurView } from '@react-native-community/blur';
 import SafeGradient from './SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors } from '../theme/colors';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
 
 interface Props {
   title: string;
@@ -81,11 +83,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    ...elevation.resting.shadow,
   },
   tint: {
     backgroundColor: 'rgba(10, 18, 14, 0.25)',
@@ -93,8 +91,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
+    paddingHorizontal: space.sm,
+    paddingBottom: space.md,
   },
   side: {
     width: 52,
@@ -119,7 +117,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     color: colors.textDimmed,
-    marginTop: 1,
+    marginTop: space.tight,
   },
   separator: {
     height: 0,

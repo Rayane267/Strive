@@ -13,7 +13,7 @@ export interface PlanLimits {
 // garder une UX correcte en degraded mode.
 const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
   free: { dailyScans: 3, analyticsRangeDays: 1 },
-  plus: { dailyScans: 30, analyticsRangeDays: 7 },
+  plus: { dailyScans: 20, analyticsRangeDays: 7 },
   premium: { dailyScans: null, analyticsRangeDays: null },
 };
 

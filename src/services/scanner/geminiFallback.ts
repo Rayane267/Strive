@@ -119,8 +119,11 @@ export async function extractWithGemini(base64Image: string): Promise<ScanResult
       Number.isFinite(Number(data.pickupDistanceKm)) ? Number(data.pickupDistanceKm) : undefined;
     const pickupOk =
       rawPickupMin != null && rawPickupMin >= 1 && rawPickupMin <= 60 &&
-      rawPickupKm != null && rawPickupKm >= 0.1 && rawPickupKm <= 30 &&
-      rawPickupKm < distanceKm;
+      rawPickupKm != null && rawPickupKm >= 0.1 && rawPickupKm <= 30;
+    // Le test « approche < course » a été RETIRÉ : 2,6 km d'approche pour une
+    // course de 2,4 km est banal en ville, et il faisait disparaître l'approche
+    // du total. Gemini renvoie des champs nommés — aucun risque de confondre
+    // l'approche avec un bandeau nav, contrairement à l'OCR.
 
     return {
       platform,

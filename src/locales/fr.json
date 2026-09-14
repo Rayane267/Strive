@@ -89,10 +89,10 @@
     "plus": "Membre Plus",
     "free": "Membre Gratuit",
     "upgradeLink": "Passer Plus →",
-    "subscriptionSub": "30 scans/jour, €/h en direct...",
+    "subscriptionSub": "20 scans/jour, €/h en direct...",
     "subscriptionSubActive": "Annuler, changer de formule...",
     "upgradeCardTitle": "Passez à Strive Plus",
-    "upgradeCardSub": "30 scans/jour · €/h en direct · Sans engagement",
+    "upgradeCardSub": "20 scans/jour · €/h en direct · Sans engagement",
     "verified": "PARTENAIRE VÉRIFIÉ",
     "emailLabel": "EMAIL",
     "phoneLabel": "TÉLÉPHONE",
@@ -259,7 +259,7 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 30 scans/jour pour ne plus rouler à perte.",
+      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 20 scans/jour pour ne plus rouler à perte.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
@@ -274,7 +274,7 @@
     "upgradeCard": {
       "title": "Arrêtez de rouler à perte",
       "sub": "Plus se rembourse en une seule course évitée",
-      "perk1": "30 scans/jour",
+      "perk1": "20 scans/jour",
       "perk2": "€/h en direct",
       "perk3": "Historique"
     },
@@ -379,7 +379,8 @@
     "upgradeForHistory": "Passez Plus pour explorer vos journées passées",
     "status": {
       "ACCEPTED": "ACCEPTÉE",
-      "DECLINED": "REFUSÉE"
+      "DECLINED": "REFUSÉE",
+      "PENDING": "EN ATTENTE"
     },
     "changeMonth": "Changer le mois"
   },
@@ -498,7 +499,7 @@
     "feat3Title": "Données API en direct",
     "feat3Sub": "Synchro avec trafic Waze/Google",
     "save": "Enregistrer",
-    "otherManual": "Autre (Saisir manuellement)",
+    "useTyped": "Utiliser « {{value}} »",
     "noResult": "Aucun résultat",
     "errors": {
       "required": "Veuillez remplir tous les champs obligatoires.",
@@ -577,6 +578,7 @@
       "notifS": "Sans elles, un scan peut réussir sans que vous le voyiez jamais.",
       "notifCta": "Activer les notifications",
       "notifDone": "Notifications activées",
+      "notifErrorBody": "Impossible de finir l'activation. Vérifiez votre connexion et réessayez.",
       "shortcutT": "Le raccourci",
       "shortcutS": "C'est lui qui fait tout : la capture, l'analyse, le verdict. Déjà réglé, il n'y a qu'à l'ajouter.",
       "notifS_android": "C'est par elles que le verdict arrive, avec les boutons Prise et Refusée. Sans ce réglage, un scan réussi peut ne rien vous montrer.",
@@ -716,7 +718,7 @@
       "q9": "C'est quoi le score qualité des courses ?",
       "a9": "Un score sur 100 attribué à chaque course en comparant ses €/h et €/km à vos seuils : vert au-dessus, orange proche, rouge en dessous. Dans les Stats, vous voyez aussi la qualité moyenne de vos courses acceptées.",
       "q10": "Combien de scans par jour ?",
-      "a10": "3 scans par jour avec le plan gratuit, 30 par jour avec Strive Plus.",
+      "a10": "3 scans par jour avec le plan gratuit, 20 par jour avec Strive Plus.",
       "q11": "Comment contacter le support ?",
       "a11": "Depuis Profil → Mes tickets : ouvrez un ticket et on vous répond directement dans l'app (vous recevez une notification à chaque réponse)."
     }
@@ -838,7 +840,7 @@
       }
     },
     "feat": {
-      "scan": "30 scans par jour",
+      "scan": "20 scans par jour",
       "scanText": "au lieu de 3 — de quoi tenir une journée complète de service.",
       "threshold": "Votre seuil, pas le nôtre",
       "thresholdText": "vous fixez le €/h à partir duquel une course vaut le coup.",
@@ -912,7 +914,7 @@
       "scans": {
         "label": "Scans journaliers",
         "free": "3 / jour",
-        "plus": "30 / jour"
+        "plus": "20 / jour"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -958,7 +960,7 @@
     "finePrintNoTrial": "{{price}} par {{period}}. Renouvellement automatique, annulable à tout moment.",
     "benefit": {
       "plus": {
-        "scans": "30 scans par jour au lieu de 3",
+        "scans": "20 scans par jour au lieu de 3",
         "thresholds": "Vos seuils €/h et €/km, pas les nôtres",
         "traffic": "Le €/h calculé sur le trafic réel",
         "fuel": "Le carburant de votre modèle déduit",
@@ -974,7 +976,7 @@
     },
     "saveAmount": "ÉCONOMISEZ {{amount}}",
     "heroTitleWelcomeEnd": "Vos 30 scans\nofferts sont finis.",
-    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 30 par jour — tous les jours.",
+    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 20 par jour — tous les jours.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1202,5 +1204,61 @@
     "empty": "Pas encore assez de données",
     "emptyHint": "Il faut environ {{min}} courses scannées pour que la grille veuille dire quelque chose. Vous en êtes à {{current}}.",
     "footnote": "Sur les {{days}} derniers jours · {{rides}} courses scannées. Les refus comptent dans le volume, jamais dans le taux horaire."
+  },
+  "rideNetwork": {
+    "title": "Réseau",
+    "menuTitle": "Réseau",
+    "menuSub": "Passer une course, en recevoir une",
+    "tab": {
+      "offer": "Proposer",
+      "receive": "Recevoir"
+    },
+    "share": {
+      "driver": "Chauffeur qui roule",
+      "platform": "Strive"
+    },
+    "offer": {
+      "intro": "Un client au téléphone, et tu es déjà en course ? Passe-la au réseau : un chauffeur autour de toi la prend, tu gardes 10 % du prix convenu.",
+      "tripSection": "LE TRAJET",
+      "pickupPlaceholder": "Prise en charge",
+      "dropoffPlaceholder": "Dépose",
+      "fareSection": "PRIX CONVENU",
+      "fareHint": "Le prix que tu viens d'annoncer au client. C'est lui qui est partagé — rien ne s'ajoute par-dessus.",
+      "splitSection": "RÉPARTITION",
+      "splitHint": "Ce que devient ce prix, avant que tu publies.",
+      "shareYou": "Toi, pour l'apport",
+      "compareTitle": "POUR COMPARAISON",
+      "compareBody": "Sur une plateforme classique, la commission tourne autour de {{rate}} % : {{amount}} prélevés sur cette course. Strive en prend {{ours}}.",
+      "publish": "Publier dans le réseau",
+      "missing": "Renseigne le trajet et le prix convenu.",
+      "publishedTitle": "Course publiée",
+      "publishedBody": "Visible par les {{drivers}} chauffeurs du réseau autour de la prise en charge.",
+      "publishedShare": "Ta part si elle est prise : {{amount}}",
+      "publishAnother": "Proposer une autre course"
+    },
+    "receive": {
+      "howTitle": "Comment ça marche",
+      "how1": "Un chauffeur du réseau te passe une course qu'il ne peut pas prendre — il roule déjà.",
+      "how2": "Tu vois ce que tu touches avant d'accepter : le prix convenu, moins 10 % pour celui qui l'a apportée et 2 % pour Strive.",
+      "how3": "Quand c'est toi qui apportes une course, c'est l'inverse : tu touches les 10 % sans quitter la tienne.",
+      "howGot": "J'ai compris",
+      "nearby": "Courses à proximité",
+      "nearbyCount_one": "{{count}} disponible",
+      "nearbyCount_other": "{{count}} disponibles",
+      "toPickup": "à {{km}} km · {{min}} min",
+      "posted": "il y a {{min}} min",
+      "net": "NET POUR TOI",
+      "grossNote": "Sur {{gross}} convenus · {{referrer}} à l'apporteur · {{platform}} à Strive",
+      "verified": "Vérifié",
+      "broughtBy": "T'a apporté cette course",
+      "ridesShared_one": "{{count}} apportée au réseau",
+      "ridesShared_other": "{{count}} apportées au réseau",
+      "accept": "Accepter · {{amount}}",
+      "acceptedNote": "Acceptée. Le client est prévenu, tu reçois son numéro.",
+      "weekTitle": "CETTE SEMAINE DANS LE RÉSEAU",
+      "weekTaken": "Courses prises",
+      "weekReferral": "Commissions d'apport",
+      "weekMeta": "{{taken}} courses prises au réseau · {{referred}} courses apportées à d'autres chauffeurs."
+    }
   }
 }

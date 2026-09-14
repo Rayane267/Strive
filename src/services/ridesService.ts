@@ -71,6 +71,20 @@ export async function fetchRidesInRange(
   return out;
 }
 
+/**
+ * Ramene une adresse sur une seule ligne.
+ *
+ * Les retours ligne viennent du recollage des blocs OCR. Ils n'ont de sens ni
+ * pour une valeur stockee, ni pour un geocodage, ni pour un affichage sur une
+ * ligne. Les espaces multiples sont ecrases au passage : deux blocs recolles
+ * laissent souvent un blanc de chaque cote de la couture.
+ */
+function oneLineAddress(addr?: string | null): string | null {
+  if (!addr) return null;
+  const flat = addr.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return flat.length > 0 ? flat : null;
+}
+
 export async function createRide(params: {
   userId: string;
   platform: 'UBER' | 'BOLT' | 'HEETCH' | 'UNKNOWN';
@@ -126,8 +140,15 @@ export async function createRide(params: {
       km_rate: params.kmRate,
       fuel_cost: params.fuelCost ?? null,
       net_profit: params.netProfit ?? null,
-      pickup_address: params.pickupAddress ?? null,
-      destination_address: params.destinationAddress ?? null,
+      // Une adresse tient sur UNE ligne en base.
+      //
+      // `mergeAddressContinuation` recolle les lignes de continuation avec un
+      // retour ligne, et documente lui-meme qu'il faut le convertir en espace.
+      // La conversion existe, mais dans `ScanProcessor` et seulement sur le
+      // chemin TomTom : quand TomTom est ecarte — cle absente, hors ligne,
+      // geocodage refuse — le texte brut arrivait ici avec ses retours ligne.
+      pickup_address: oneLineAddress(params.pickupAddress),
+      destination_address: oneLineAddress(params.destinationAddress),
       // 0 = payload sans scanTs (ancien build encore en file) → on n'écrit pas
       // une clé qui ne corrélera rien.
       scan_ts: params.scanTs ? params.scanTs : null,

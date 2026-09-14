@@ -116,6 +116,10 @@ RCT_EXTERN_METHOD(cancelLocalNotification:(NSString *)identifier)
 
 RCT_EXTERN_METHOD(selectionHaptic)
 
+// Bord bas adouci des ScrollView, iOS 26. Sans cet export l'implémentation Swift
+// reste invisible du JS et l'effet ne se pose jamais.
+RCT_EXTERN_METHOD(applySoftScrollEdges)
+
 RCT_EXTERN_METHOD(openNotificationSettings)
 
 @end

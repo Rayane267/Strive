@@ -365,7 +365,9 @@ class FloatingBubbleService : Service() {
                     resolveTomTomAndEmit(result, base64, debugBlocks, h)
                     scanInProgress = false
                 } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
-                    fallbackGemini(fullBitmap)
+                    // Les blocs partent avec : c'est un écran d'offre que le parser
+                    // local n'a pas su lire, donc exactement la fixture qui manque.
+                    fallbackGemini(fullBitmap, debugBlocks, h)
                 } else {
                     // Pré-filtre anti-pub : du texte a été lu mais aucun signal VTC
                     // (prix €, km/min, plateforme) → inutile de payer un appel Gemini.
@@ -383,7 +385,16 @@ class FloatingBubbleService : Service() {
             }
     }
 
-    private fun fallbackGemini(bitmap: Bitmap) {
+    /** `debugBlocks` / `screenHeight` : les blocs OCR du scan qui vient d'échouer,
+     *  quand il y en a. C'est le cas le PLUS intéressant à rejouer en fixture —
+     *  le parsing par règles n'a pas su lire un écran que Gemini, lui, a su lire.
+     *  Ils sont nuls quand l'OCR lui-même a échoué (`addOnFailureListener`) : il
+     *  n'y a alors aucun bloc à conserver. */
+    private fun fallbackGemini(
+        bitmap: Bitmap,
+        debugBlocks: String? = null,
+        screenHeight: Int = 0,
+    ) {
         if (GeminiVisionService.isReady) {
             showLoadingState()
             // On encode d'abord : si Gemini natif réussit on transmettra aussi
@@ -395,7 +406,7 @@ class FloatingBubbleService : Service() {
                     // B : on route le résultat Gemini par la MÊME résolution TomTom
                     // que l'OCR (adresses → vraie distance). Gemini peut désormais
                     // renvoyer pickup/destination → TomTom s'applique aussi ici.
-                    resolveTomTomAndEmit(result, base64, null)
+                    resolveTomTomAndEmit(result, base64, debugBlocks, screenHeight, geminiUsed = true)
                 } else {
                     mainHandler.post {
                         onScanError()
@@ -476,6 +487,7 @@ class FloatingBubbleService : Service() {
         base64: String,
         debugBlocks: String?,
         screenHeight: Int = 0,
+        geminiUsed: Boolean = false,
     ) {
         // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
         // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
@@ -505,7 +517,7 @@ class FloatingBubbleService : Service() {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
             mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, rideId) }
-            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs, rideId)
+            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
             return
         }
 
@@ -528,7 +540,7 @@ class FloatingBubbleService : Service() {
                 ocr
             }
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
-            ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId)
+            ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
         }
     }
 

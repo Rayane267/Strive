@@ -7,6 +7,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useTranslation } from 'react-i18next';
+import { space } from '../theme/spacing';
 
 const OfflineBanner: React.FC = React.memo(() => {
   const { isConnected } = useNetworkStatus();
@@ -27,10 +28,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: '#EF4444',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
   },
   text: {
     color: '#FFF',

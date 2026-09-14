@@ -25,7 +25,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     FirebaseApp.configure()
 
     // Push notifications
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+    //
+    // ⚠️ ON NE DEMANDE PAS L'AUTORISATION ICI. iOS n'affiche sa fenêtre qu'UNE
+    // FOIS par installation : la déclencher au lancement la brûlait sur l'écran
+    // de connexion, avant que le chauffeur ait la moindre raison de dire oui.
+    // Quoi qu'il réponde là, c'est définitif — et l'étape « Activez les
+    // notifications » du tutoriel n'affichait alors plus rien du tout, puisque
+    // `requestPermission` répond de mémoire. Le bouton paraissait mort.
+    //
+    // La demande appartient à `enableNotifications` (TutorialScreen), juste
+    // après l'explication de ce que la notification apporte. C'est ce que son
+    // commentaire annonce déjà — il fallait que ce soit vrai.
+    //
+    // `registerForRemoteNotifications` RESTE : il n'affiche aucune fenêtre, il
+    // ne fait qu'obtenir le jeton APNs, dont Firebase a besoin pour produire un
+    // jeton FCM quand l'autorisation arrivera.
     application.registerForRemoteNotifications()
     Messaging.messaging().delegate = self
 

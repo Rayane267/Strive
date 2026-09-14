@@ -87,7 +87,7 @@ export const appSchema = {
       price: 9.99,
       priceCurrency: 'EUR',
       description:
-        "30 scans par jour, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
+        "20 scans par jour, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
     },
     {
       '@type': 'Offer',

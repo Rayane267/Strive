@@ -9,7 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { Toast, useToast } from '../components/Toast';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 import BrandLoader from '../components/BrandLoader';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 const ResetPasswordScreen = () => {
   const { t } = useTranslation();
@@ -69,6 +74,10 @@ const ResetPasswordScreen = () => {
   if (hasSession === null) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+            l'encoche, et `container` porte la meme couleur que son sommet : la
+            bande de statut se confond avec lui au lieu de faire un bandeau. */}
+        <ScreenField />
         <BrandLoader size={12} />
       </SafeAreaView>
     );
@@ -136,21 +145,21 @@ const ResetPasswordScreen = () => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: colors.background,
-    paddingHorizontal: 24, justifyContent: 'center',
+    flex: 1, backgroundColor: FIELD_TOP,
+    paddingHorizontal: space.xl, justifyContent: 'center',
   },
-  form: { gap: 14 },
-  title: { color: colors.textMain, fontSize: 24, fontWeight: '900', marginBottom: 8 },
-  subtitle: { color: colors.textMuted, fontSize: 14, marginBottom: 16, lineHeight: 20 },
+  form: { gap: space.md },
+  title: { color: colors.textMain, fontSize: 24, fontWeight: '900', marginBottom: space.sm },
+  subtitle: { color: colors.textMuted, fontSize: 14, marginBottom: space.lg, lineHeight: 20 },
   input: {
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14,
+    borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.md,
     color: colors.textMain, fontSize: 15,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   btnPrimary: {
-    paddingVertical: 14, borderRadius: 14,
-    backgroundColor: colors.primary, alignItems: 'center', marginTop: 8,
+    paddingVertical: space.md, borderRadius: radius.md,
+    backgroundColor: colors.primary, alignItems: 'center', marginTop: space.sm,
   },
   btnDisabled: { opacity: 0.6 },
   btnPrimaryText: { color: colors.background, fontSize: 15, fontWeight: '700' },

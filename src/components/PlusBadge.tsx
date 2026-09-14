@@ -12,6 +12,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 const PlusBadge: React.FC<{ style?: object }> = ({ style }) => {
   const { t } = useTranslation();
@@ -36,9 +38,9 @@ const styles = StyleSheet.create({
     // l'ecran. Une pastille ne s'etire jamais : la contrainte est portee ici,
     // pas laissee a la charge de chaque appelant.
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.full,
     backgroundColor: colors.primarySoft,
   },
   text: {

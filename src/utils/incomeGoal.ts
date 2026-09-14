@@ -46,7 +46,9 @@ export const SOCIAL_RATES = {
   // fixes sont remontées au brut dans `deriveThreshold` pour ce statut.
   //
   // Un créateur sous ACRE paie environ 15,9 % la première année. On ne le
-  // demande pas : c'est à ça que sert « autre ».
+  // demande pas : l'onboarding ne propose plus de taux libre (un taux sans sa
+  // base n'est pas interprétable), donc il est compté à 21,2 %. Son seuil sort
+  // un peu haut — sens prudent — et le curseur de Préférences le corrige.
   auto_entrepreneur: 0.212,
   // Part de l'enveloppe de rémunération absorbée par les cotisations. En SASU,
   // 100 € de brut coûtent ~145 € et laissent ~78 € net, soit ~46 % de
@@ -144,8 +146,9 @@ export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
   // 7 764 € réels, soit 68,5 €/h au lieu de 59,5 €/h sur 130 heures. Le
   // chauffeur refusait des courses qui lui convenaient.
   //
-  // Statut inconnu (« autre », taux saisi à la main) → traitement
-  // auto-entrepreneur, celui d'origine : on ne devine pas un régime.
+  // Statut inconnu (« autre ») → traitement auto-entrepreneur, celui d'origine :
+  // on ne devine pas un régime. L'onboarding ne peut plus en produire, mais des
+  // profils créés avant en portent, et l'API reste ouverte.
   const chargesBeforeContributions = input.status === 'societe';
   const requiredRevenue = chargesBeforeContributions
     ? monthlyGoal / (1 - rate) + costs

@@ -17,6 +17,11 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -50,6 +55,10 @@ const HelpScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
 
       {/* Header */}
       <View style={styles.header}>
@@ -95,7 +104,7 @@ const HelpScreen = () => {
         </View>
 
         {/* Contact */}
-        <Text style={[styles.sectionLabel, { marginTop: 8 }]}>{t('help.contactTitle')}</Text>
+        <Text style={[styles.sectionLabel, { marginTop: space.sm }]}>{t('help.contactTitle')}</Text>
 
         <View style={styles.contactCard}>
           <View style={styles.contactIconWrap}>
@@ -117,13 +126,13 @@ const HelpScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
@@ -134,35 +143,35 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, alignItems: 'center' },
   headerTitle: {
-    marginRight: 12,
+    marginRight: space.md,
     flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  headerSub: { color: colors.textMuted, fontSize: 12, marginTop: space.tight },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: space.xl, paddingTop: space.xl, paddingBottom: space.xxl },
 
   sectionLabel: {
     color: colors.textDimmed,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
-    marginBottom: 12,
+    marginBottom: space.md,
   },
 
   faqCard: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: space.xl,
   },
   faqRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.lg,
+    gap: space.md,
   },
   faqQuestion: {
     color: colors.textMain,
@@ -175,29 +184,29 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 20,
-    paddingHorizontal: 18,
-    paddingBottom: 16,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.lg,
   },
   faqDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    marginHorizontal: 18,
+    marginHorizontal: space.lg,
   },
 
   contactCard: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: radius.lg,
+    padding: space.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
-    gap: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    gap: space.md,
   },
   contactIconWrap: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 60, height: 60, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   contactDesc: {
     color: colors.textMuted,
@@ -208,12 +217,12 @@ const styles = StyleSheet.create({
   contactBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 4,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
+    borderRadius: radius.sm,
+    marginTop: space.xs,
   },
   contactBtnText: {
     color: colors.background,

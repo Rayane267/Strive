@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
+import { stroke, strokeWidth } from '../theme/stroke';
 
 /**
  * Bloc de chargement gris (placeholder statique).
@@ -24,7 +25,7 @@ export const Skeleton = ({ width = '100%', height = 16, radius = 8, style }: Ske
 const styles = StyleSheet.create({
   block: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
 });

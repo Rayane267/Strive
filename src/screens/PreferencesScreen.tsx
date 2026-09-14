@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Switch,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
@@ -15,7 +14,12 @@ import Slider from '@react-native-community/slider';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import PlanBadge from '../components/PlanBadge';
+import Toggle from '../components/Toggle';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +31,9 @@ import { fetchFuelPrice } from '../services/fuelService';
 import BrandLoader from '../components/BrandLoader';
 import SafeGradient from '../components/SafeGradient';
 import PlusBadge from '../components/PlusBadge';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
 const PreferencesScreen = () => {
   const { t, i18n } = useTranslation();
@@ -201,11 +208,15 @@ const PreferencesScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
 
       {/* Chevron, titre et pastille sur une seule rangée. Le sous-titre
           « filtres de trajet » disparaît : il paraphrasait le titre sans rien
           ajouter. */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
@@ -213,7 +224,7 @@ const PreferencesScreen = () => {
           {t('preferences.title', 'Préférences')}
         </Text>
         <PlanBadge />
-      </View>
+      </AnimatedEntrance>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
@@ -234,12 +245,10 @@ const PreferencesScreen = () => {
                   <Text style={styles.toggleTitle}>{t('preferences.active', 'Trip ID actif')}</Text>
                   <Text style={styles.toggleSub}>{t('preferences.enableTripIdSub', 'Identification automatique des trajets scannés')}</Text>
                 </View>
-                <Switch
+                <Toggle
                   value={isActive}
                   onValueChange={setIsActive}
-                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-                  thumbColor={isActive ? colors.primary : colors.textDimmed}
-                  ios_backgroundColor="rgba(255,255,255,0.08)"
+                  accessibilityLabel={t('preferences.activeTitle', 'En service')}
                 />
               </View>
             </View>
@@ -373,12 +382,10 @@ const PreferencesScreen = () => {
               <Text style={styles.toggleTitle}>{t('preferences.dayReset4am', 'Reset à 4h du matin')}</Text>
               <Text style={styles.toggleSub}>{t('preferences.dayReset4amSub', 'Pour les chauffeurs de nuit : la journée commence à 4h locale au lieu de minuit')}</Text>
             </View>
-            <Switch
+            <Toggle
               value={dayResetHour === 4}
-              onValueChange={(v) => setDayResetHour(v ? 4 : 0)}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={dayResetHour === 4 ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
+              onValueChange={(v: boolean) => setDayResetHour(v ? 4 : 0)}
+              accessibilityLabel={t('preferences.dayReset', 'Journée de travail')}
             />
           </View>
 
@@ -392,12 +399,10 @@ const PreferencesScreen = () => {
               <Text style={styles.toggleTitle}>{t('preferences.includePickup', 'Inclure la prise en charge')}</Text>
               <Text style={styles.toggleSub}>{t('preferences.includePickupSub', 'Comptabiliser le trajet jusqu\'au client')}</Text>
             </View>
-            <Switch
+            <Toggle
               value={includePickup}
               onValueChange={setIncludePickup}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={includePickup ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
+              accessibilityLabel={t('preferences.includePickup', "Compter l'approche")}
             />
           </View>
 
@@ -425,13 +430,11 @@ const PreferencesScreen = () => {
               </View>
               <Text style={styles.toggleSub}>{t('preferences.deductFuelSub', 'Le prix affiché devient net du carburant estimé')}</Text>
             </View>
-            <Switch
+            <Toggle
               value={fuelToggleOn}
-              onValueChange={isPaid ? setDeductFuel : undefined}
+              onValueChange={setDeductFuel}
               disabled={!isPaid}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-              thumbColor={fuelToggleOn ? colors.primary : colors.textDimmed}
-              ios_backgroundColor="rgba(255,255,255,0.08)"
+              accessibilityLabel={t('preferences.deductFuel', 'Retirer le carburant du prix')}
             />
           </TouchableOpacity>
 
@@ -465,12 +468,10 @@ const PreferencesScreen = () => {
                   <Text style={styles.toggleTitle}>{t('preferences.resultMode', 'Dynamic Island')}</Text>
                   <Text style={styles.toggleSub}>{t('preferences.resultModeSub', 'Afficher le résultat dans la Dynamic Island. Désactivé = notification classique.')}</Text>
                 </View>
-                <Switch
+                <Toggle
                   value={useLiveActivity}
                   onValueChange={setUseLiveActivity}
-                  trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(0,230,118,0.35)' }}
-                  thumbColor={useLiveActivity ? colors.primary : colors.textDimmed}
-                  ios_backgroundColor="rgba(255,255,255,0.08)"
+                  accessibilityLabel={t('preferences.resultMode', 'Dynamic Island')}
                 />
               </View>
             </>
@@ -514,7 +515,7 @@ const PreferencesScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -527,8 +528,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
   },
   // Chevron nu plutôt qu'un carré bordé : le bouton retour n'a pas à peser
   // autant que le titre qu'il précède.
@@ -547,11 +548,11 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.6,
-    marginLeft: 4,
-    marginRight: 12,
+    marginLeft: space.xs,
+    marginRight: space.md,
   },
 
-  scroll: { paddingHorizontal: 20, paddingBottom: 50 },
+  scroll: { paddingHorizontal: space.xl, paddingBottom: space.xxxl },
 
   // Libellé de section en casse normale : les capitales espacées faisaient lire
   // une étiquette administrative là où il s'agit d'un simple intertitre. La
@@ -562,9 +563,9 @@ const styles = StyleSheet.create({
     // tombait sous le titre au lieu de se poser a cote, sur une ligne a elle.
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-    marginTop: 18,
+    gap: space.sm,
+    marginBottom: space.sm,
+    marginTop: space.lg,
   },
   sectionLabelText: {
     color: colors.textMuted,
@@ -576,21 +577,17 @@ const styles = StyleSheet.create({
   // Cards
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    ...elevation.resting.shadow,
   },
   cardDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    marginVertical: 16,
+    marginVertical: space.lg,
   },
 
   // Toggle rows
@@ -598,31 +595,31 @@ const styles = StyleSheet.create({
   toggleIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: space.md,
   },
-  toggleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  toggleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.tight },
   badgeInline: { alignSelf: 'center' },
-  toggleTextBlock: { flex: 1, paddingRight: 12 },
-  toggleTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  toggleTextBlock: { flex: 1, paddingRight: space.md },
+  toggleTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: space.tight },
   toggleSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
 
   // Avertissement « conso manquante » sous le toggle carburant.
   fuelWarning: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-    marginLeft: 54,
-    marginRight: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    gap: space.sm,
+    marginTop: space.sm,
+    marginLeft: space.xxxl,
+    marginRight: space.xs,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,183,77,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,183,77,0.25)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edgeLit,
   },
   fuelWarningTxt: {
     flex: 1,
@@ -635,16 +632,16 @@ const styles = StyleSheet.create({
   // Reset toggle
   resetToggleRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-    marginLeft: 54,
+    gap: space.sm,
+    marginTop: space.md,
+    marginLeft: space.xxxl,
   },
   resetOption: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: space.md,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     backgroundColor: 'rgba(255,255,255,0.03)',
     alignItems: 'center',
   },
@@ -662,18 +659,18 @@ const styles = StyleSheet.create({
   },
 
   // Sliders
-  sliderSection: { paddingBottom: 2 },
+  sliderSection: { paddingBottom: space.tight },
   sliderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
-  sliderLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sliderLabelRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   sliderIconWrap: {
     width: 30,
     height: 30,
-    borderRadius: 9,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
     // Neutre : un slider n'a pas d'état on/off, le vert ne signalerait rien ici.
@@ -682,18 +679,18 @@ const styles = StyleSheet.create({
   sliderLabel: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
   sliderValueBadge: {
     backgroundColor: 'rgba(0,230,118,0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.2)',
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   sliderValueText: { color: colors.primary, fontSize: 13, fontWeight: '900' },
   slider: { width: '100%', height: 40, marginVertical: -4 },
   sliderRange: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: space.tight,
   },
   sliderRangeText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
   // Contour vert, fond vide, libellé vert.
@@ -719,25 +716,21 @@ const styles = StyleSheet.create({
   // capsule au reste de l'app sans lui donner le poids d'un bouton primaire.
   thresholdUnlockWrap: {
     alignSelf: 'flex-start',
-    marginTop: 16,
-    borderRadius: 999,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
+    marginTop: space.lg,
+    borderRadius: radius.full,
+    ...elevation.resting.shadow,
   },
   thresholdUnlockCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 999,
+    gap: space.sm,
+    paddingVertical: space.md,
+    paddingHorizontal: space.xl,
+    borderRadius: radius.full,
     // Découpe le dégradé sur les coins ronds.
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.38)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   thresholdUnlockLink: {
     color: colors.textMain,
@@ -750,19 +743,19 @@ const styles = StyleSheet.create({
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
-    borderWidth: 1,
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.md,
+    marginBottom: space.md,
+    borderWidth: strokeWidth.control,
   },
   statusError: {
     backgroundColor: 'rgba(255,77,77,0.08)',
-    borderColor: 'rgba(255,77,77,0.25)',
+    borderColor: stroke.alert,
   },
   statusSuccess: {
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderColor: 'rgba(0,230,118,0.2)',
+    borderColor: stroke.edge,
   },
   statusText: { fontSize: 13, fontWeight: '600', flex: 1 },
 
@@ -772,17 +765,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 17,
+    paddingVertical: space.lg,
     // Entierement arrondi, comme les pastilles et le CTA du paywall.
-    borderRadius: 999,
-    marginTop: 6,
-    marginBottom: 20,
-    gap: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    borderRadius: radius.full,
+    marginTop: space.sm,
+    marginBottom: space.xl,
+    gap: space.sm,
+    ...elevation.resting.shadow,
   },
   saveBtnText: {
     color: colors.onPrimary,

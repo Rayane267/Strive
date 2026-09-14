@@ -27,6 +27,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { strokeWidth } from '../theme/stroke';
 import { hapticSuccess } from '../utils/haptics';
 import useReduceMotion from '../hooks/useReduceMotion';
 import { useAuth } from '../context/AuthContext';
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
   card: {
     alignItems: 'center',
     width: '100%', maxWidth: 460, alignSelf: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: space.xxl,
   },
   // Fenêtre du balayage : il ne doit traverser que l'emblème et le chiffre, pas
   // le paragraphe ni le bouton.
@@ -402,16 +405,16 @@ const styles = StyleSheet.create({
     // haut, pas le sujet de l'écran.
     width: 84, height: 84,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
   wave: {
     position: 'absolute',
-    width: 84, height: 84, borderRadius: 42,
-    borderWidth: 2, borderColor: colors.primary,
+    width: 84, height: 84, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: colors.primary,
   },
   spark: {
     position: 'absolute',
-    width: 7, height: 7, borderRadius: 4,
+    width: 7, height: 7, borderRadius: radius.full,
     backgroundColor: colors.primary,
   },
   disc: {
@@ -423,12 +426,12 @@ const styles = StyleSheet.create({
   logo: { width: 62, height: 62, resizeMode: 'contain' },
   giftBadge: {
     position: 'absolute', right: -10, bottom: -8,
-    width: 32, height: 32, borderRadius: 16,
+    width: 32, height: 32, borderRadius: radius.full,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.primary,
     // Le liseré reprend le fond de la page : il détache la pastille du disque
     // sans ajouter de couleur.
-    borderWidth: 3, borderColor: colors.background,
+    borderWidth: strokeWidth.control, borderColor: colors.background,
   },
   hello: {
     color: colors.textMain,
@@ -436,7 +439,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.2,
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: space.xs,
   },
   count: {
     color: colors.primary,
@@ -464,22 +467,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: space.sm,
   },
   ctaWrap: {
     width: '100%', maxWidth: 460, alignSelf: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: space.xxl,
     // 44 et non 30 : le bouton respire davantage qu'à l'origine sans quitter le
     // bloc. Aucun `paddingBottom` — il ne doit pas être ancré au bas de l'écran.
-    marginTop: 44,
+    marginTop: space.xxxl,
   },
   cta: {
     // Dégradé et non aplat : l'écran Profil traite déjà son bouton d'upgrade
     // ainsi. Un vert plein à côté d'un fond dégradé paraissait plat.
-    borderRadius: 16,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
-  ctaInner: { paddingVertical: 17, alignItems: 'center' },
+  ctaInner: { paddingVertical: space.lg, alignItems: 'center' },
   ctaPressed: { opacity: 0.85 },
   ctaText: { color: '#04120B', fontSize: 16, fontWeight: '700' },
 });

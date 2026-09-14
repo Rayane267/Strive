@@ -258,7 +258,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
           }
           self.geminiFallback(image: image) { recovered in
             if let recovered = recovered {
-              self.presentResult(recovered) { value in
+              self.presentResult(recovered, geminiUsed: true) { value in
                 once.resume(value)
                 sem.signal()
               }
@@ -307,6 +307,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// `waitForLiveActivity` récupérer une carte dans un process relancé à froid.
   private func presentResult(
     _ result: ScanProcessor.FinalResult,
+    geminiUsed: Bool = false,
     done: @escaping (String) -> Void
   ) {
     // TomTom et Gemini rappellent sur le main thread. `waitForLiveActivity()` ne
@@ -314,7 +315,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // la récupération de l'activité après un lancement à froid.
     if Thread.isMainThread {
       DispatchQueue.global(qos: .userInitiated).async {
-        self.presentResult(result, done: done)
+        self.presentResult(result, geminiUsed: geminiUsed, done: done)
       }
       return
     }
@@ -358,7 +359,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     if shown && Self.hasActiveCall() {
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
       sendLocalNotification(
-        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
+        title: "\(result.scan.platform.rawValue) · \(striveFareText(result.displayFare)) · \(verdict)",
         body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm",
                      result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
         category: "STRIVE_SCAN_RESULT", rideId: rideId,
@@ -410,7 +411,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         )
       }
       sendLocalNotification(
-        title: "\(result.scan.platform.rawValue) · \(String(format: "%.0f€", result.displayFare)) · \(verdict)",
+        title: "\(result.scan.platform.rawValue) · \(striveFareText(result.displayFare)) · \(verdict)",
         body: body,
         category: "STRIVE_SCAN_RESULT", rideId: rideId,
         // Le repli notification est justement le chemin emprunté quand la carte
@@ -425,7 +426,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
       result.scan.platform.rawValue, result.scan.fare, result.hourlyRate, result.kmRate
     )
-    saveResultForMainApp(result, rideId: rideId, scanTs: scanTs) { done(summary) }
+    saveResultForMainApp(result, rideId: rideId, scanTs: scanTs, geminiUsed: geminiUsed) { done(summary) }
   }
 
   /// « Scan échoué » : affiché DANS la Live Activity (ou notif si LA désactivée).
@@ -769,6 +770,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     _ result: ScanProcessor.FinalResult,
     rideId: String,
     scanTs: Double,
+    geminiUsed: Bool = false,
     done: @escaping () -> Void
   ) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
@@ -790,13 +792,29 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       // Tarif d'AFFICHAGE (net de carburant si l'option est active). `fare`
       // reste brut : c'est lui qui est enregistré en base.
       "displayFare": result.displayFare,
+      // Le parsing local a-t-il dû passer la main à Gemini ?
+      //
+      // Sans ce booléen, le JS ne voyait que SON propre fallback (celui de
+      // DashboardScreen), qui ne sert jamais quand le scan vient du raccourci :
+      // `scan_events` enregistrait donc `gemini_fallback = false` sur 100 % des
+      // scans — une constante, pas une mesure, et le coût unitaire de l'appel
+      // LLM restait invisible. Les ÉCHECS remontaient déjà (`logFailure`
+      // "gemini_ko") ; il manquait les réussites, seules à coûter un appel.
+      "geminiUsed": geminiUsed,
     ]
     if let pickup = result.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = result.scan.destinationAddress { body["destinationAddress"] = dest }
 
-    // Diagnostic parser — même règle que la Share Extension : blocs OCR joints
-    // seulement si une adresse manque (cf. saveSharedResult).
-    if result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+    // Diagnostic parser : blocs OCR joints quand le parsing local n'a pas suffi.
+    //
+    // La condition était « une adresse manque », et elle ne s'est JAMAIS
+    // déclenchée en production : le fallback Gemini natif remplit les adresses
+    // avant que ce code s'exécute, si bien que `scan_debug` est restée vide
+    // depuis sa création — et qu'aucun cas réel n'a jamais alimenté les
+    // fixtures. `geminiUsed` est le vrai signal : il désigne exactement les
+    // écrans que le parser par règles n'a pas su lire.
+    if geminiUsed
+      || result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
       || result.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
       let blocks = ScanProcessor.shared.lastBlocksJson {
       body["debugBlocks"] = blocks

@@ -11,6 +11,10 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { Ride } from '../types/database';
 import { effectiveFare } from '../services/ridesService';
 import { formatTimeAgo } from '../utils/dateUtils';
@@ -78,7 +82,7 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
         </View>
 
         <View style={styles.rideContent}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.xs }}>
             <Text style={styles.fareLabel}>{t('dashboard.estFare')}</Text>
             {!fareIsConfirmed && (
               <View style={styles.estBadge}>
@@ -157,36 +161,32 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
 const styles = StyleSheet.create({
   rideCard: {
     backgroundColor: '#111E18',
-    borderRadius: 22, marginBottom: 18,
+    borderRadius: radius.lg, marginBottom: space.lg,
     overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 12,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
   rideImageWrap: { height: 130, position: 'relative' },
   rideImage: { width: '100%', height: '100%' },
   imageBadgesRow: {
     position: 'absolute', top: 10, left: 10, right: 10,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
   },
   platformPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.6, shadowRadius: 6, elevation: 6,
   },
-  platformDot: { width: 8, height: 8, borderRadius: 4 },
+  platformDot: { width: 8, height: 8, borderRadius: radius.full },
   platformPillText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   ratePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
   },
   ratePillGood: {
     backgroundColor: colors.primary, borderColor: colors.primary,
@@ -204,46 +204,42 @@ const styles = StyleSheet.create({
   timeAgoPill: {
     marginLeft: 'auto',
     backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   timeAgoText: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '500' },
-  rideContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
-  fareLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '500', marginBottom: 2 },
-  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  fareValue: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, flexShrink: 1, marginRight: 8 },
-  tripMetrics: { flexDirection: 'row', gap: 16, alignItems: 'flex-end' },
+  rideContent: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.lg },
+  fareLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '500', marginBottom: space.tight },
+  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space.lg },
+  fareValue: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, flexShrink: 1, marginRight: space.sm },
+  tripMetrics: { flexDirection: 'row', gap: space.lg, alignItems: 'flex-end' },
   tripMetricCol: { alignItems: 'flex-start' },
-  tripMetricLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 4 },
-  tripMetricItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tripMetricLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: space.xs },
+  tripMetricItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   tripMetricText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  actionsRow: { flexDirection: 'row', gap: 10 },
+  actionsRow: { flexDirection: 'row', gap: space.sm },
   btnDecline: {
-    flex: 1, height: 54, borderRadius: 14,
-    borderWidth: 1.5, borderColor: 'rgba(255,90,90,0.45)',
+    flex: 1, height: 54, borderRadius: radius.md,
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
     backgroundColor: 'rgba(255,90,90,0.08)',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
   },
   btnDeclineText: { color: '#FF5A5A', fontSize: 16, fontWeight: '700' },
   btnAcceptGood: {
-    flex: 1, height: 54, borderRadius: 14,
+    flex: 1, height: 54, borderRadius: radius.md,
     backgroundColor: colors.primary,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55,
-    shadowRadius: 14,
-    elevation: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
+    ...elevation.raised.shadow,
   },
   btnAcceptTextGood: { color: colors.background, fontSize: 16, fontWeight: '800' },
   statusResult: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    paddingVertical: 12, gap: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', borderRadius: 12,
+    paddingVertical: space.md, gap: space.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge, borderRadius: radius.sm,
   },
   estBadge: {
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: radius.xs, paddingHorizontal: space.sm, paddingVertical: space.tight,
   },
   estBadgeText: { color: colors.textDimmed, fontSize: 10, fontWeight: '600' },
 });

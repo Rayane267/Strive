@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 /**
  * Choix de la langue, en feuille montant du bas.
@@ -189,41 +191,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceLight,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
   },
   handle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.xs,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
 
   headRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
   iconBadge: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   title: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
-  subtitle: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginTop: 6 },
+  subtitle: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginTop: space.sm },
 
-  options: { marginTop: 22, gap: 10 },
+  options: { marginTop: space.xl, gap: space.sm },
   // 56 px : la feuille se manipule d'une main, souvent en marchant.
   option: {
     height: 56,
-    borderRadius: 28,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',

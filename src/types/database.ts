@@ -79,5 +79,20 @@ export interface Ride {
    * `null` pour les courses créées avant la migration 20260816_rides_scan_ts.
    */
   scan_ts?: number | null;
+  /**
+   * Horodatage du geste du chauffeur (« Prise » / « Refusée »).
+   *
+   * `null` ne veut pas dire « pas encore décidée » : il veut dire « aucune
+   * décision explicite ». Une course clôturée par `close_pending_rides()` finit
+   * en `DECLINED` avec `decided_at` à `null` — c'est ce qui permet de séparer
+   * un refus d'un simple silence de fin de semaine.
+   *
+   * Écrite UNIQUEMENT par le trigger serveur `stamp_ride_decision` : ce que le
+   * client envoie dans cette colonne est ignoré. En lecture seule côté app.
+   *
+   * `null` aussi sur tout l'historique antérieur au 07/09/2026 — la donnée
+   * n'était pas enregistrée, et on ne l'a pas reconstituée.
+   */
+  decided_at?: string | null;   // ISO timestamptz
   created_at: string;
 }

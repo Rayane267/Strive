@@ -666,5 +666,210 @@
       "distanceKm": 8.2,
       "durationMin": 15
     }
+  },
+  {
+    "name": "uber-approach-longer-than-ride",
+    "description": "Offre Uber reelle : approche 2,6 km / 11 min pour une course de 2,3 km. L'approche est PLUS LONGUE que la course, ce qui est banal en ville. Elle doit rester l'approche (pickup*), et ses minutes ne doivent JAMAIS devenir la duree de course.",
+    "screenHeight": 1920,
+    "blocks": [
+      {
+        "text": "Uber",
+        "x": 60,
+        "y": 60,
+        "width": 160,
+        "height": 40
+      },
+      {
+        "text": "Electric",
+        "x": 80,
+        "y": 1030,
+        "width": 220,
+        "height": 46
+      },
+      {
+        "text": "Exclusivite",
+        "x": 330,
+        "y": 1030,
+        "width": 220,
+        "height": 46
+      },
+      {
+        "text": "9 €",
+        "x": 80,
+        "y": 1120,
+        "width": 160,
+        "height": 76
+      },
+      {
+        "text": "★ 4,72",
+        "x": 80,
+        "y": 1235,
+        "width": 160,
+        "height": 44
+      },
+      {
+        "text": "Montant net de frais",
+        "x": 270,
+        "y": 1235,
+        "width": 400,
+        "height": 44
+      },
+      {
+        "text": "11 min (à 2,6 km)",
+        "x": 130,
+        "y": 1350,
+        "width": 300,
+        "height": 40
+      },
+      {
+        "text": "29 Rue Jacques Ibert, 75017 Levallois-",
+        "x": 130,
+        "y": 1415,
+        "width": 640,
+        "height": 36
+      },
+      {
+        "text": "Perret, France",
+        "x": 130,
+        "y": 1455,
+        "width": 260,
+        "height": 36
+      },
+      {
+        "text": "Course de 2,3 km",
+        "x": 130,
+        "y": 1495,
+        "width": 300,
+        "height": 40
+      },
+      {
+        "text": "205 Rue du Faubourg Saint-Honore,",
+        "x": 130,
+        "y": 1560,
+        "width": 640,
+        "height": 36
+      },
+      {
+        "text": "75008 Paris, France",
+        "x": 130,
+        "y": 1600,
+        "width": 340,
+        "height": 36
+      },
+      {
+        "text": "Accepter",
+        "x": 300,
+        "y": 1710,
+        "width": 320,
+        "height": 60
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 9,
+      "distanceKm": 2.3,
+      "durationMin": null,
+      "pickupDurationMin": 11,
+      "pickupDistanceKm": 2.6
+    }
+  },
+  {
+    "name": "uber-approach-a-min-form-with-ev-banner",
+    "description": "Seconde forme FR de l'approche : 'a 4 min (0.9 km)' (le 'a' AVANT les minutes), la premiere etant '11 min (a 2,6 km)'. L'ecran porte aussi le bandeau '<1 km d'un point de recharge rapide' : ce km-la n'est ni la course ni l'approche.",
+    "screenHeight": 1920,
+    "blocks": [
+      {
+        "text": "14:19",
+        "x": 80,
+        "y": 40,
+        "width": 160,
+        "height": 40
+      },
+      {
+        "text": "UberX",
+        "x": 70,
+        "y": 1055,
+        "width": 200,
+        "height": 50
+      },
+      {
+        "text": "9 €",
+        "x": 70,
+        "y": 1150,
+        "width": 160,
+        "height": 80
+      },
+      {
+        "text": "★ 5,00",
+        "x": 70,
+        "y": 1275,
+        "width": 180,
+        "height": 48
+      },
+      {
+        "text": "Montant net de frais",
+        "x": 260,
+        "y": 1275,
+        "width": 400,
+        "height": 48
+      },
+      {
+        "text": "à 4 min (0.9 km)",
+        "x": 120,
+        "y": 1385,
+        "width": 300,
+        "height": 40
+      },
+      {
+        "text": "48 Av. Boileau, 94500 Champigny-sur-",
+        "x": 120,
+        "y": 1430,
+        "width": 640,
+        "height": 36
+      },
+      {
+        "text": "Marne, France",
+        "x": 120,
+        "y": 1470,
+        "width": 260,
+        "height": 36
+      },
+      {
+        "text": "Course de 5.8 km",
+        "x": 120,
+        "y": 1525,
+        "width": 300,
+        "height": 40
+      },
+      {
+        "text": "93160 Noisy-le-Grand, France",
+        "x": 120,
+        "y": 1568,
+        "width": 520,
+        "height": 36
+      },
+      {
+        "text": "<1 km d'un point de recharge rapide",
+        "x": 90,
+        "y": 1660,
+        "width": 640,
+        "height": 44
+      },
+      {
+        "text": "Je suis intéressé(e)",
+        "x": 280,
+        "y": 1795,
+        "width": 380,
+        "height": 60
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 9,
+      "distanceKm": 5.8,
+      "durationMin": null,
+      "pickupDurationMin": 4,
+      "pickupDistanceKm": 0.9
+    }
   }
 ]

@@ -6,7 +6,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
@@ -26,7 +25,15 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
+import { elevation, liveGlow } from '../theme/elevation';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { FIELD_TOP } from '../theme/field';
+import { stroke, strokeWidth } from '../theme/stroke';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 import { supabase } from '../services/supabase';
+import { RIDE_NETWORK_ENABLED } from '../services/networkDemo';
 import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
 import { computeWeeklyTease, WeeklyTease } from '../utils/weeklyTease';
 import { fetchParserConfig } from '../services/parserConfigService';
@@ -41,7 +48,7 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
 import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
-import { logScanDebug } from '../services/scanDebugService';
+import { logScanDebug, hasIncoherentAddresses } from '../services/scanDebugService';
 import { logScanFailure, rememberLastFailure } from '../services/scanFailureService';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
@@ -675,7 +682,11 @@ const DashboardScreen = () => {
         !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
 
       let result = nativeResult;
-      let usedGemini = false;
+      // Le natif a pu appeler Gemini AVANT de nous remettre le résultat (raccourci
+      // iOS, bulle Android) — c'est même le cas normal, le repli JS ci-dessous ne
+      // servant qu'aux scans lancés depuis le Dashboard. On part donc de ce que le
+      // natif rapporte, et le repli JS ne fait que s'y ajouter.
+      let usedGemini = nativeResult.geminiUsed === true;
       if (ocrLooksBad && nativeResult.imageBase64) {
         __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
         const gemini = await extractWithGemini(nativeResult.imageBase64);
@@ -817,7 +828,22 @@ const DashboardScreen = () => {
       // ne pas envoyer ses adresses sur le réseau pour se les faire refuser.
       const nativePickupMissing = !nativeResult.pickupAddress;
       const nativeDestMissing = !nativeResult.destinationAddress;
-      if (!preferences.scan_debug_opt_out && nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
+      // Les adresses PRÉSENTES mais fausses comptent autant que les absentes, et
+      // elles sont pires : elles écrivent une donnée erronée en base au lieu de
+      // laisser un trou. Le filet ne voyait que les trous.
+      const nativeIncoherent = hasIncoherentAddresses(nativeResult);
+      // `usedGemini` est le déclencheur qui manquait. La condition ne regardait
+      // que les adresses absentes ou incohérentes, et elle ne s'est jamais
+      // vérifiée en production : le repli Gemini NATIF comble les adresses avant
+      // que ce code s'exécute. Résultat, `scan_debug` est restée vide depuis sa
+      // création, et aucun cas de terrain n'a jamais alimenté `fixtures/ocr/`.
+      // Un appel à Gemini signale exactement l'écran que le parser par règles
+      // n'a pas su lire : c'est celui-là qu'il faut pouvoir rejouer.
+      if (
+        !preferences.scan_debug_opt_out
+        && nativeResult.debugBlocks
+        && (nativePickupMissing || nativeDestMissing || nativeIncoherent || usedGemini)
+      ) {
         logScanDebug({
           platform: nativeResult.platform,
           screenHeight: nativeResult.screenHeight ?? null,
@@ -1707,11 +1733,25 @@ const DashboardScreen = () => {
 
   const pendingRides = rides.filter(r => r.status === 'PENDING');
 
+  // Défilement de l'écran, partagé par toutes les surfaces de verre qu'il porte.
+  // Le champ étant fixe à l'appareil, c'est cette valeur qui dit à chaque surface
+  // où elle se trouve dans la lumière à un instant donné.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
+      {/* Posé en premier, donc derrière tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la même couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
+      <Animated.ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1727,7 +1767,7 @@ const DashboardScreen = () => {
             très gros. Le logo et le sous-titre « tableau de bord en direct »
             disaient au chauffeur où il était dans une app qu'il vient d'ouvrir
             lui-même — le titre le dit mieux et en un mot. */}
-        <View style={styles.header}>
+        <AnimatedEntrance step={0} style={styles.header}>
           {/* Les seuils d'acceptation sont le seul réglage qu'un chauffeur
               retouche vraiment, et il était à trois taps de profondeur. */}
           <TouchableOpacity
@@ -1782,9 +1822,11 @@ const DashboardScreen = () => {
               <MaterialCommunityIcons name="line-scan" size={21} color={colors.textMain} />
             </TouchableOpacity>
           )}
-        </View>
+        </AnimatedEntrance>
 
-        <Text style={styles.screenTitle}>{t('dashboard.home', 'Accueil')}</Text>
+        <AnimatedEntrance step={1}>
+          <Text style={styles.screenTitle}>{t('dashboard.home', 'Accueil')}</Text>
+        </AnimatedEntrance>
 
         {/* ── ONLINE TOGGLE ── */}
         <Animated.View
@@ -1860,7 +1902,7 @@ const DashboardScreen = () => {
             </Text>
           </View>
           {isSyncing ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: space.xs }} />
           ) : (
             <TouchableOpacity
               style={[styles.toggleBtn, isOnline && styles.toggleBtnActive]}
@@ -1888,18 +1930,18 @@ const DashboardScreen = () => {
           )}
         </View>
 
-        <View style={styles.statRow}>
+        <AnimatedEntrance step={1} focal style={styles.statRow}>
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
             <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
             <Text style={styles.statValue}>{stats.earnings}€</Text>
-            <MaterialCommunityIcons name="cash" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <MaterialCommunityIcons name="cash" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
           <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
             {/* En blanc comme les deux autres : le vert distinguait ce chiffre
                 sans raison, alors que les trois disent la même journée. */}
             <Text style={styles.statValue}>{stats.avgRate}€/h</Text>
-            <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <Feather name="trending-up" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
           <View
             style={styles.statCard}
@@ -1918,10 +1960,56 @@ const DashboardScreen = () => {
                 <Text style={styles.statCreditBonus}> +{bonusCredits}</Text>
               )}
             </Text>
-            <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <MaterialCommunityIcons name="qrcode-scan" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
-        </View>
+        </AnimatedEntrance>
 
+
+        {/* ── RÉSEAU ── */}
+        {/* En suspens pour la v1 (`RIDE_NETWORK_ENABLED`) : les courses sont
+            factices et le partage n'a pas de backend. Les deux routes ne sont
+            pas enregistrées non plus, voir RootNavigator.
+
+            Les deux sens sont côte à côte, et c'est le propos : ce que l'un
+            publie, l'autre le reçoit. Une seule entrée « Réseau » aurait caché
+            la moitié du mécanisme derrière un écran de plus. */}
+        {RIDE_NETWORK_ENABLED && (
+          <AnimatedEntrance step={2}>
+            <View style={styles.networkCard}>
+              <View style={styles.networkHead}>
+                <View style={styles.networkIcon}>
+                  <Feather name="share-2" size={16} color={colors.textMuted} />
+                </View>
+                <View style={styles.networkHeadText}>
+                  <Text style={styles.networkTitle}>{t('rideNetwork.menuTitle')}</Text>
+                  <Text style={styles.networkSub} numberOfLines={1}>
+                    {t('rideNetwork.menuSub')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.networkActions}>
+                <TouchableOpacity
+                  style={styles.networkBtn}
+                  onPress={() => navigation.navigate('NetworkOffer')}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Feather name="arrow-up-right" size={15} color={colors.textMain} />
+                  <Text style={styles.networkBtnText}>{t('rideNetwork.tab.offer')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.networkBtn}
+                  onPress={() => navigation.navigate('NetworkReceive')}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Feather name="arrow-down-left" size={15} color={colors.textMain} />
+                  <Text style={styles.networkBtnText}>{t('rideNetwork.tab.receive')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </AnimatedEntrance>
+        )}
 
         {/* Le bandeau orange « Passez en ligne pour activer le scanner » a été
             retiré : la barre juste au-dessus dit déjà qu'on est hors ligne, et
@@ -1994,7 +2082,6 @@ const DashboardScreen = () => {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.upgradeCardGradient}
             >
-              <View style={styles.upgradeCardGlow} />
               <View style={styles.upgradeCardTop}>
                 <Image
                   source={require('../assets/strive-logo.png')}
@@ -2004,22 +2091,22 @@ const DashboardScreen = () => {
                   <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
                   <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </View>
               <View style={styles.upgradeCardDivider} />
               <View style={styles.upgradeCardBottom}>
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="zap" size={12} color={colors.primary} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '30 scans/jour')}</Text>
+                  <Feather name="zap" size={12} color={colors.textMuted} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '20 scans/jour')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="trending-up" size={12} color={colors.primary} />
+                  <Feather name="trending-up" size={12} color={colors.textMuted} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', '€/h en direct')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="clock" size={12} color={colors.primary} />
+                  <Feather name="clock" size={12} color={colors.textMuted} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk3', 'Historique')}</Text>
                 </View>
               </View>
@@ -2029,7 +2116,7 @@ const DashboardScreen = () => {
 
         {/* ── RIDES ── */}
         {loading ? (
-          <BrandLoader style={{ marginTop: 30 }} />
+          <BrandLoader style={{ marginTop: space.xxl }} />
         ) : pendingRides.length > 0 ? (
           pendingRides.map((ride, rideIndex) => (
             <DashboardRideCard
@@ -2049,12 +2136,12 @@ const DashboardScreen = () => {
           </View>
         ) : (
           <View style={styles.waitingContainer}>
-            <MaterialCommunityIcons name="radar" size={32} color="rgba(0,230,118,0.3)" />
+            <MaterialCommunityIcons name="radar" size={32} color="rgba(255,255,255,0.18)" />
             <Text style={styles.waitingTitle}>{t('dashboard.waiting')}</Text>
           </View>
         )}
 
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ── PRICE CHECK CONFIRMATION MODAL ── */}
       <Modal
@@ -2200,8 +2287,10 @@ const DashboardScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 6 },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scrollContent: { paddingHorizontal: space.lg, paddingTop: space.sm },
 
   // HEADER
   // La pastille est centrée quoi qu'il arrive, et les deux boutons sont posés en
@@ -2211,7 +2300,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
 
   // Pastille de plan : le logo n'étiquette plus l'écran, il porte le statut de
@@ -2219,14 +2308,14 @@ const styles = StyleSheet.create({
   planPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.surface,
-    paddingLeft: 6,
-    paddingRight: 16,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingLeft: space.sm,
+    paddingRight: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
   },
-  planPillLogo: { width: 30, height: 30, borderRadius: 15 },
+  planPillLogo: { width: 30, height: 30, borderRadius: radius.full },
   planPillText: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
 
   // Le nom de l'écran en très gros : c'est lui qui situe, pas un logo.
@@ -2235,160 +2324,179 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -0.9,
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
 
   headerBtn: {
     position: 'absolute',
-    width: 44, height: 44, borderRadius: 22,
+    width: 44, height: 44, borderRadius: radius.full,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   headerBtnLeft: { left: 0 },
   headerBtnRight: { right: 0 },
   headerBtnActive: {
     backgroundColor: 'rgba(0,230,118,0.15)',
-    borderColor: colors.primary,
+    borderColor: stroke.active,
   },
 
   // ONLINE PILL
   onlinePill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: colors.surface,
-    borderRadius: 50, paddingVertical: 8, paddingLeft: 18, paddingRight: 8,
-    marginBottom: 22,
+    borderRadius: radius.full, paddingVertical: space.sm, paddingLeft: space.lg, paddingRight: space.sm,
+    marginBottom: space.xl,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    ...elevation.resting.shadow,
   },
   onlinePillActive: {
-    borderColor: 'rgba(0,230,118,0.4)',
+    borderColor: stroke.active,
     backgroundColor: '#0D1F17',
-    shadowOpacity: 0.2,
+    ...liveGlow,
   },
-  onlineLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onlineLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm },
   // Conteneur à la taille exacte du point : sert d'origine aux anneaux, qui n'en
   // sortent que par l'échelle et restent donc centrés dessus.
   onlineDotWrap: { width: 9, height: 9, alignItems: 'center', justifyContent: 'center' },
   onlineRing: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    borderRadius: radius.xs,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.active,
   },
-  onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
+  onlineDot: { width: 9, height: 9, borderRadius: radius.full, backgroundColor: colors.primary },
   onlineDotOff: { backgroundColor: '#3a3a3a' },
   onlineLabel: { flexShrink: 1, color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   onlineLabelOn: { color: colors.textMain },
   toggleBtn: {
     flexShrink: 0,
-    flexDirection: 'row', alignItems: 'center', gap: 7,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: colors.primary,
-    paddingVertical: 11, paddingHorizontal: 16, borderRadius: 50,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingVertical: space.md, paddingHorizontal: space.lg, borderRadius: radius.full,
+    ...elevation.resting.shadow,
   },
-  toggleBtnActive: { backgroundColor: 'rgba(0,230,118,0.5)', shadowOpacity: 0.2 },
+  toggleBtnActive: { backgroundColor: 'rgba(0,230,118,0.5)', ...liveGlow },
   toggleBtnText: { color: colors.background, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
 
   // SESSION
-  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
   sessionTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '700', letterSpacing: 1.8 },
   liveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: 'rgba(0,230,118,0.12)',
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    paddingHorizontal: space.md, paddingVertical: space.xs, borderRadius: radius.sm,
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.primary },
   liveText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
 
-  statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.xl },
+  // Le fond du bloc « Passez en ligne pour scanner », à l'identique.
+  //
+  // Le verre dérivait au GRIS : `ultraThinMaterialDark` éclaircit et désature ce
+  // qu'il traverse, et le voile vert pâle ne le rattrapait pas. À l'écran, la
+  // barre en ligne, les ronds d'en-tête, la pilule de plan et le bloc d'attente
+  // étaient tous sombres et verts — et ces trois tuiles étaient les SEULES
+  // surfaces claires et grises du Dashboard. C'est l'inverse de ce que le verre
+  // devait produire : au lieu d'appartenir au lieu, elles s'en détachaient.
+  //
+  // Elles reprennent donc le conteneur opaque de l'écran, avec son liseré. Le
+  // trait est cohérent ici : `stroke.ts` réserve le trait net à l'opaque, et
+  // c'est justement ce que ces tuiles redeviennent.
   statCard: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    borderRadius: radius.md,
+    padding: space.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
+  statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: space.sm },
   statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   statCreditBonus: { color: colors.primary, fontSize: 15, fontWeight: '800' },
-  statIcon: { position: 'absolute', top: 10, right: 10 },
+  // L icone accompagne le chiffre, elle ne le concurrence pas. A 32 px elle
+  // pesait autant que lui ; le contraste doit aller a la donnee.
+  statIcon: { position: 'absolute', top: space.md, right: space.md },
 
 
   // SECTION HEADER
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
   sectionTitle: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
+
+  // RÉSEAU — entrée vers les deux sens
+  networkCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.xl,
+  },
+  networkHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  networkIcon: {
+    width: 34, height: 34, borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  networkHeadText: { flex: 1, minWidth: 0 },
+  networkTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  networkSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
+  networkActions: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
+  networkBtn: {
+    flex: 1, height: 44, borderRadius: radius.full,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+  },
+  networkBtnText: { color: colors.textMain, fontSize: 14, fontWeight: '800' },
 
   // SCAN LIMIT (Plus tier — simple message)
   scanLimitCard: {
-    backgroundColor: colors.surface, borderRadius: 16, padding: 20,
-    alignItems: 'center', marginBottom: 18,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md, padding: space.xl,
+    alignItems: 'center', marginBottom: space.lg,
   },
-  scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
+  scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: space.xs, textAlign: 'center' },
   scanLimitText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20 },
-  teaseCard: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14 },
-  teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: 8 },
+  teaseCard: { borderWidth: 1, borderRadius: radius.md, padding: space.lg, marginBottom: space.md },
+  teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: space.xs },
+  teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: space.sm },
   teaseCta: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // UPGRADE CARD (Free tier — premium upsell)
   upgradeCard: {
-    marginBottom: 18, borderRadius: 18, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
-      android: { elevation: 8 },
-    }),
+    marginBottom: space.lg, borderRadius: radius.md, overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   upgradeCardGradient: {
-    borderRadius: 18, padding: 18,
-    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.md, padding: space.lg,
+    borderWidth: strokeWidth.surface, borderColor: stroke.edge,
     overflow: 'hidden',
   },
-  upgradeCardGlow: {
-    position: 'absolute', top: -30, right: -30,
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: 'rgba(0,230,118,0.08)',
-  },
   upgradeCardTop: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: space.md,
   },
   upgradeCardBadge: {
-    width: 36, height: 36, borderRadius: 12,
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
-      android: { elevation: 6 },
-    }),
+    width: 36, height: 36, borderRadius: radius.sm,
+    ...elevation.resting.shadow,
   },
   upgradeCardTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
-  upgradeCardSub: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  upgradeCardSub: { color: colors.textMuted, fontSize: 11, marginTop: space.tight },
   upgradeCardDivider: {
-    height: 1, backgroundColor: 'rgba(0,230,118,0.12)',
-    marginVertical: 14,
+    height: StyleSheet.hairlineWidth, backgroundColor: stroke.edge,
+    marginVertical: space.md,
   },
   upgradeCardBottom: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6,
+    gap: space.sm,
   },
-  upgradeCardPerk: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  upgradeCardPerk: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   upgradeCardPerkText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
-  upgradeCardPerkDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
+  upgradeCardPerkDot: { width: 3, height: 3, borderRadius: radius.full, backgroundColor: 'rgba(255,255,255,0.15)' },
 
   // WAITING
   // L'état vide est posé dans une carte plutôt que flotté sur le fond : sans
@@ -2397,10 +2505,10 @@ const styles = StyleSheet.create({
   waitingContainer: {
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-    gap: 12,
+    borderRadius: radius.lg,
+    paddingVertical: space.xxl,
+    paddingHorizontal: space.xl,
+    gap: space.md,
     // Même liseré que `scanLimitCard`, son équivalent en taille et en rôle.
     // C'était le seul grand bloc de l'écran sans contour : posé sur le fond, il
     // flottait sans arête pendant que tuiles et pastilles en avaient une.
@@ -2422,13 +2530,13 @@ const styles = StyleSheet.create({
   offlineHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(255,179,0,0.08)',
-    borderRadius: 12,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,179,0,0.2)',
-    padding: 14,
-    marginBottom: 12,
+    padding: space.md,
+    marginBottom: space.md,
   },
   offlineHintText: {
     flex: 1,
@@ -2441,13 +2549,13 @@ const styles = StyleSheet.create({
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(255,77,77,0.08)',
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14,
-    marginBottom: 12,
+    padding: space.md,
+    marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
@@ -2457,47 +2565,45 @@ const styles = StyleSheet.create({
   confirmCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    borderRadius: radius.lg,
+    paddingVertical: space.xxl,
+    paddingHorizontal: space.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    elevation: 10,
+    borderWidth: strokeWidth.surface,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
+  // L'anneau est neutre : c'est l'icône qu'il entoure qui porte l'accent, et
+  // elle seule. Deux verts concentriques ne disent pas deux fois la chose.
   confirmIconRing: {
     width: 64,
     height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0,230,118,0.1)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
   confirmTitle: {
     color: colors.textMain,
     fontSize: 20,
     fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: space.sm,
     letterSpacing: -0.3,
   },
   confirmSubtitle: {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: space.xl,
     lineHeight: 20,
   },
   confirmActions: {
     flexDirection: 'row',
-    gap: 14,
+    gap: space.md,
     width: '100%',
   },
   confirmBtnNo: {
@@ -2505,9 +2611,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,77,77,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,77,77,0.2)',
@@ -2522,15 +2628,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    ...elevation.resting.shadow,
   },
   confirmBtnYesText: {
     color: colors.background,
@@ -2543,13 +2645,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: space.xl,
   },
   modalCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: radius.lg,
+    padding: space.xl,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -2557,50 +2659,50 @@ const styles = StyleSheet.create({
   modalIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,215,0,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   modalTitle: {
     color: colors.textMain,
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
   modalSubtitle: {
     color: colors.textMuted,
     fontSize: 14,
-    marginBottom: 22,
+    marginBottom: space.xl,
     lineHeight: 20,
     textAlign: 'center',
   },
   modalInput: {
     backgroundColor: colors.background,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     color: colors.textMain,
     fontSize: 22,
     fontWeight: '700',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.xl,
     textAlign: 'center',
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 14,
+    gap: space.md,
     width: '100%',
   },
   modalBtnCancel: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
@@ -2613,15 +2715,11 @@ const styles = StyleSheet.create({
   },
   modalBtnConfirm: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: colors.primary,
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    ...elevation.resting.shadow,
   },
   modalBtnConfirmText: {
     color: colors.background,
@@ -2631,50 +2729,46 @@ const styles = StyleSheet.create({
   ratingCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 28,
-    padding: 32,
+    borderRadius: radius.lg,
+    padding: space.xxl,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.15)',
   },
   ratingEmoji: {
     fontSize: 48,
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   ratingStars: {
     fontSize: 28,
     letterSpacing: 4,
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   ratingTitle: {
     color: colors.textMain,
     fontSize: 20,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
   ratingMessage: {
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 21,
-    marginBottom: 24,
+    marginBottom: space.xl,
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: space.sm,
   },
   ratingBtnPrimary: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 16,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    ...elevation.resting.shadow,
   },
   ratingBtnPrimaryText: {
     color: '#000',
@@ -2682,8 +2776,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   ratingBtnSkip: {
-    marginTop: 14,
-    paddingVertical: 10,
+    marginTop: space.md,
+    paddingVertical: space.sm,
   },
   ratingBtnSkipText: {
     color: colors.textDimmed,

@@ -5,7 +5,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Modal,
   Pressable,
@@ -25,6 +24,13 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import { hapticSelection } from '../utils/haptics';
 import { getEffectivePlanTier, getMaxRangeSpanDays, FREE_THRESHOLDS, type PlanTier } from '../services/subscriptionService';
 import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
@@ -405,6 +411,7 @@ const AnalyticsScreen = () => {
       return;
     }
     setModalAlert('');
+    hapticSelection();
     if (selectionStep === 0) {
       setTempStart(day.dateString);
       setSelectionStep(1);
@@ -469,7 +476,7 @@ const AnalyticsScreen = () => {
         </TouchableOpacity>
         <TouchableOpacity style={styles.calMonthBtn} onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}>
           <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
-          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
+          <Feather name="chevron-down" size={13} color={colors.textMuted} style={{ marginLeft: space.sm }} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="chevron-right" size={18} color={colors.textMain} />
@@ -494,17 +501,28 @@ const AnalyticsScreen = () => {
     return h === 0 ? `${m}m` : `${h}h ${m}m`;
   };
 
+  // Défilement de l'écran, lu par les surfaces de verre : le champ est fixe à
+  // l'appareil, c'est donc cette valeur qui leur dit où elles sont dans la lumière.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Posé en premier, donc derrière tout le reste. */}
+      <ScreenField />
 
       {/* ── HEADER ── */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('analytics.title')}</Text>
-      </View>
+      </AnimatedEntrance>
 
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
 
@@ -518,7 +536,7 @@ const AnalyticsScreen = () => {
         }} activeOpacity={0.75}>
           <View style={styles.dateBtnLeft}>
             <View style={styles.dateBtnIcon}>
-              <Feather name="calendar" size={16} color={colors.primary} />
+              <Feather name="calendar" size={16} color={colors.textMuted} />
             </View>
             <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
           </View>
@@ -547,14 +565,14 @@ const AnalyticsScreen = () => {
             Visible pour tous, free compris : l'écran porte son propre mur
             Premium et montre ce qu'on achète. Le cacher ne vendrait rien. */}
         {!loading && (
-          <AnimatedEntrance delay={185} slideFrom="bottom">
+          <AnimatedEntrance step={4} slideFrom="bottom">
             <TouchableOpacity
               style={styles.slotsCard}
               onPress={() => navigation.navigate('BestHours')}
               activeOpacity={0.85}
             >
               <View style={styles.slotsIcon}>
-                <Feather name="clock" size={18} color={colors.primary} />
+                <Feather name="clock" size={18} color={colors.textMuted} />
               </View>
               <View style={styles.slotsText}>
                 <Text style={styles.slotsTitle}>{t('bestHours.cardTitle')}</Text>
@@ -596,7 +614,7 @@ const AnalyticsScreen = () => {
         ) : (
           <>
             {/* ── HERO PROFIT CARD ── */}
-            <AnimatedEntrance delay={0} slideFrom="bottom">
+            <AnimatedEntrance step={0} slideFrom="bottom">
             <View
               style={styles.heroCard}
               accessible
@@ -659,7 +677,7 @@ const AnalyticsScreen = () => {
             </AnimatedEntrance>
 
             {/* ── KPI ROW ── */}
-            <AnimatedEntrance delay={100} slideFrom="bottom">
+            <AnimatedEntrance step={1} slideFrom="bottom">
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 {Platform.OS === 'ios' ? (
@@ -712,13 +730,13 @@ const AnalyticsScreen = () => {
 
             {/* ── QUALITÉ DES COURSES + BILAN DE LA SEMAINE (cartes insight) ── */}
             {qualityScore && (
-              <AnimatedEntrance delay={150} slideFrom="bottom">
+              <AnimatedEntrance step={2} slideFrom="bottom">
                 <QualityScoreCard score={qualityScore} />
               </AnimatedEntrance>
             )}
 
             {isPaid && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
-              <AnimatedEntrance delay={175} slideFrom="bottom">
+              <AnimatedEntrance step={3} slideFrom="bottom">
                 <View style={styles.bilanCard}>
                   <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
                   {weeklyBilan.lossWeek > 0 && (
@@ -842,7 +860,7 @@ const AnalyticsScreen = () => {
                   <Text style={styles.upsellTitle}>{t('analytics.alerts.premiumTitle')}</Text>
                   <Text style={styles.upsellSub}>{t('analytics.alerts.premiumRequired')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           </>
@@ -873,8 +891,8 @@ const AnalyticsScreen = () => {
                       const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
                         && pickerYear === parseInt(currentMonth.split('-')[0]);
                       return (
+                        <AnimatedEntrance key={idx} step={Math.floor(idx / 3)} style={styles.monthCellSlot}>
                         <TouchableOpacity
-                          key={idx}
                           style={[styles.monthCell, active && styles.monthCellActive]}
                           onPress={() => {
                             setCurrentMonth(`${pickerYear}-${String(idx + 1).padStart(2, '0')}-01`);
@@ -883,6 +901,7 @@ const AnalyticsScreen = () => {
                         >
                           <Text style={[styles.monthCellText, active && styles.monthCellTextActive]}>{m}</Text>
                         </TouchableOpacity>
+                        </AnimatedEntrance>
                       );
                     })}
                   </View>
@@ -901,11 +920,13 @@ const AnalyticsScreen = () => {
                   markingType="period"
                   markedDates={getMarkedDates()}
                   theme={{
-                    calendarBackground: colors.surface,
+                    calendarBackground: 'transparent',
                     textSectionTitleColor: colors.textMuted,
                     todayTextColor: colors.primary,
                     dayTextColor: colors.textMain,
                     textDisabledColor: colors.surfaceLight,
+                    selectedDayBackgroundColor: colors.primary,
+                    selectedDayTextColor: colors.onPrimary,
                     textDayFontWeight: '500',
                     textDayHeaderFontWeight: '600',
                     textDayFontSize: 15,
@@ -927,99 +948,105 @@ const AnalyticsScreen = () => {
           </Pressable>
         </Modal>
 
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   errorCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,77,77,0.08)', borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14, marginBottom: 12,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.08)', borderRadius: radius.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.alert,
+    padding: space.md, marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   // Loading skeleton
-  skeletonWrap: { gap: 14, paddingTop: 4 },
+  skeletonWrap: { gap: space.md, paddingTop: space.xs },
   skeletonTilesRow: { flexDirection: 'row', justifyContent: 'space-between' },
 
   // Empty state (aucune course)
-  analyticsEmpty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 24, gap: 12 },
+  analyticsEmpty: { alignItems: 'center', paddingTop: space.xxxl, paddingHorizontal: space.xl, gap: space.md },
   analyticsEmptyIcon: {
-    width: 72, height: 72, borderRadius: 36,
+    width: 72, height: 72, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
+    borderWidth: strokeWidth.control, borderColor: stroke.active,
     justifyContent: 'center', alignItems: 'center',
   },
-  analyticsEmptyTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  analyticsEmptyTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800', textAlign: 'center', marginTop: space.xs },
   analyticsEmptyHint: { color: colors.textDimmed, fontSize: 13, textAlign: 'center', lineHeight: 19 },
   analyticsEmptyCta: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, marginTop: 8,
+    paddingHorizontal: space.xl, paddingVertical: space.md, borderRadius: radius.md, marginTop: space.sm,
   },
   analyticsEmptyCtaText: { color: colors.background, fontWeight: '800', fontSize: 14 },
 
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingVertical: 15 },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  header: { paddingHorizontal: space.xl, paddingVertical: space.lg },
   headerTitle: { color: colors.textMain, fontSize: 24, fontWeight: 'bold' },
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: space.xl },
   bilanCard: {
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderColor: 'rgba(0,230,118,0.25)',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    borderColor: stroke.edge,
+    borderWidth: strokeWidth.control,
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.md,
   },
-  bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: space.sm },
+  bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: space.xs },
   bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
 
   // Carte d'entrée vers les meilleurs créneaux. Volontairement plus sobre que
   // bilanCard : c'est une porte, pas un insight — elle ne doit pas disputer
   // l'attention aux chiffres de la période affichée.
   slotsCard: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.surface,
-    borderColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
+    gap: space.md,
+    borderRadius: radius.md,
+    padding: space.md,
+    marginBottom: space.md,
+    overflow: 'hidden',
   },
   slotsIcon: {
     width: 36,
     height: 36,
-    borderRadius: 11,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,230,118,0.10)',
   },
   slotsText: { flex: 1 },
   slotsTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
-  slotsSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
+  slotsSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
 
   // Date button
+  // Pilule et non carte : le selecteur de date est un CONTROLE, pas une surface
+  // de contenu, et `radius.full` le dit sans avoir a l'ecrire ailleurs.
   dateBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.full,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.lg,
+    overflow: 'hidden',
   },
-  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   dateBtnIcon: {
-    width: 32, height: 32, borderRadius: 9,
+    width: 32, height: 32, borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
   },
@@ -1027,17 +1054,13 @@ const styles = StyleSheet.create({
 
   // Hero card — liquid glass
   heroCard: {
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 16,
+    borderRadius: radius.lg,
+    padding: space.xl,
+    marginBottom: space.lg,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,230,118,0.28)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
   heroGlassTint: {
     backgroundColor: 'rgba(0, 230, 118, 0.07)',
@@ -1049,13 +1072,13 @@ const styles = StyleSheet.create({
     right: 20,
     height: 1,
     backgroundColor: 'rgba(0,230,118,0.35)',
-    borderRadius: 1,
+    borderRadius: radius.xs,
   },
   heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: space.sm,
   },
   heroLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
   heroBefore: { color: colors.textDimmed, fontSize: 11 },
@@ -1064,30 +1087,30 @@ const styles = StyleSheet.create({
     fontSize: 52,
     fontWeight: '900',
     letterSpacing: -2,
-    marginBottom: 6,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
   profitToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: space.sm,
+    marginBottom: space.md,
   },
   profitBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   profitBadgeActive: {
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderColor: 'rgba(0,230,118,0.2)',
+    borderColor: stroke.active,
   },
   profitBadgeText: {
     color: 'rgba(255,255,255,0.5)',
@@ -1102,32 +1125,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 18 },
+  heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: space.lg },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center' },
   heroStat: { flex: 1, alignItems: 'center' },
-  heroStatVal: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 3 },
+  heroStatVal: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: space.tight },
   heroStatLbl: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textAlign: 'center' },
   heroStatDiv: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.08)' },
 
   // KPI row — liquid glass
-  kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  kpiRow: { flexDirection: 'row', gap: space.md, marginBottom: space.lg },
   kpiCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    borderRadius: 18,
-    padding: 16,
+    gap: space.md,
+    borderRadius: radius.md,
+    padding: space.lg,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: stroke.edgeLit,
     borderLeftWidth: 2,
     borderLeftColor: colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...elevation.resting.shadow,
   },
   kpiGlassTint: {
     backgroundColor: 'rgba(10, 22, 15, 0.45)',
@@ -1139,84 +1158,85 @@ const styles = StyleSheet.create({
     right: 12,
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 1,
+    borderRadius: radius.xs,
   },
   kpiIconWrap: {
-    width: 44, height: 44, borderRadius: 13,
+    width: 44, height: 44, borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
   },
   kpiTextBlock: { flex: 1 },
-  kpiLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
+  kpiLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginBottom: space.xs },
   kpiValue: { color: colors.textMain, fontSize: 22, fontWeight: '900' },
 
   // Platform distribution
   distCard: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
+    padding: space.xl,
+    marginBottom: space.lg,
+    overflow: 'hidden',
   },
-  distTitle: { color: colors.textMain, fontSize: 15, fontWeight: 'bold', marginBottom: 16 },
+  distTitle: { color: colors.textMain, fontSize: 15, fontWeight: 'bold', marginBottom: space.lg },
 
   // Stacked combined bar
-  stackedBarWrap: { marginBottom: 22 },
+  stackedBarWrap: { marginBottom: space.xl },
   stackedBar: {
     flexDirection: 'row',
     height: 10,
-    borderRadius: 6,
+    borderRadius: radius.xs,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 10,
+    marginBottom: space.sm,
   },
-  stackedLegend: { flexDirection: 'row', gap: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  stackedLegend: { flexDirection: 'row', gap: space.lg },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  legendDot: { width: 8, height: 8, borderRadius: radius.full },
   legendText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
 
-  distList: { gap: 18 },
-  distItem: { gap: 10 },
+  distList: { gap: space.lg },
+  distItem: { gap: space.sm },
   distItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  distItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  distDot: { width: 10, height: 10, borderRadius: 5 },
+  distItemLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  distDot: { width: 10, height: 10, borderRadius: radius.full },
   distLabel: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
-  distItemRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  distItemRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   distEarning: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   distPctBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   distPctText: { fontSize: 12, fontWeight: '900' },
   distTrack: {
     height: 8,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 4,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
-  distFill: { height: 8, borderRadius: 4 },
+  distFill: { height: 8, borderRadius: radius.xs },
 
   // Upsell
   upsellCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderRadius: 16,
-    padding: 18,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
-    marginBottom: 8,
+    borderRadius: radius.md,
+    padding: space.lg,
+    gap: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.sm,
   },
-  upsellLogo: { width: 24, height: 24, borderRadius: 12 },
+  upsellLogo: { width: 24, height: 24, borderRadius: radius.full },
   upsellText: { flex: 1 },
-  upsellTitle: { color: colors.textMain, fontSize: 14, fontWeight: 'bold', marginBottom: 3 },
+  upsellTitle: { color: colors.textMain, fontSize: 14, fontWeight: 'bold', marginBottom: space.tight },
   upsellSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
 
   // Calendar modal
@@ -1225,56 +1245,53 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 16,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.lg,
+    padding: space.lg,
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
+    overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   calHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 10,
-    gap: 14,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   calMonthBtn: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.18)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+    paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.sm,
   },
   calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
   yearNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center', alignItems: 'center',
   },
   yearNavText: { color: colors.textMain, fontSize: 18, fontWeight: '800', lineHeight: 20 },
   calNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center', alignItems: 'center',
   },
 
   // Rouge `danger` de la palette, et non un orange pose a la main hors systeme.
   // Place sous le calendrier : voir le commentaire au point de rendu.
   modalAlertRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,77,77,0.10)', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9, marginTop: 12,
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)',
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.10)', borderRadius: radius.sm,
+    paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.md,
+    borderWidth: strokeWidth.control, borderColor: stroke.alert,
   },
   modalAlertText: { color: colors.danger, fontSize: 12, flex: 1, lineHeight: 17 },
 
@@ -1282,17 +1299,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: space.sm,
   },
+  // La cellule remplit sa fente : c'est `AnimatedEntrance` qui porte desormais
+  // la largeur, sinon l'animation envelopperait une cellule sans lui donner de
+  // place et la grille s'effondrerait sur une colonne.
+  monthCellSlot: { width: '30%', marginBottom: space.sm },
   monthCell: {
-    width: '30%',
-    paddingVertical: 14,
+    width: '100%',
+    paddingVertical: space.md,
     alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 10,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   monthCellActive: {
     backgroundColor: colors.primary,

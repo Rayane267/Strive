@@ -35,6 +35,10 @@ import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
@@ -51,6 +55,8 @@ import {
 } from '../services/subscriptionService';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import ScanPreview from '../components/ScanPreview';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 // Propositions rapides. `null` ouvre une saisie libre : taper une pastille bat
 // le clavier, mais on ne ferme jamais la porte au chiffre exact.
@@ -78,11 +84,24 @@ import ScanPreview from '../components/ScanPreview';
 const HOURS_CHOICES: (number | null)[] = [30, 35, 40, 45, 50, null];
 const GOAL_CHOICES: (number | null)[] = [1500, 2000, 2500, 3000, 3500, null];
 const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
+// Pas d'option « Autre » ici, contrairement aux trois étapes chiffrées.
+//
+// Ailleurs « Autre » demande un MONTANT, que le chauffeur connaît. Ici il
+// demandait un TAUX, et un taux sans sa base ne veut rien dire : 21,2 % portent
+// sur le chiffre d'affaires, 45 % sur la rémunération — l'écran le rappelle
+// sous chaque option. Le chiffre saisi à la main n'en désignait aucune, et
+// `deriveThreshold` le traitait alors en auto-entrepreneur faute de mieux.
+// L'option promettait donc une précision qu'elle ne pouvait pas tenir.
+//
+// Ce que ça coûte : le créateur sous ACRE (~15,9 % la première année) est
+// compté à 21,2 %. Son chiffre d'affaires requis monte, donc son seuil aussi —
+// il refusera quelques courses qu'il aurait pu prendre, jamais l'inverse. Et
+// c'est rattrapable d'un geste : le taux ne sert qu'à calculer le €/h de
+// départ, que le curseur de Préférences ajuste ensuite.
 const STATUS_CHOICES: (number | null)[] = [
   SOCIAL_RATES.auto_entrepreneur,
   SOCIAL_RATES.societe,
   SOCIAL_RATES.salarie,
-  null,
 ];
 
 /**
@@ -726,6 +745,11 @@ const OnboardingScreen = ({
   };
 
   const commitDraft = (apply: (v: number) => void, isPercent: boolean) => {
+    // `onSubmitEditing` et `onEndEditing` se suivent sur une même validation, et
+    // le bouton de validation ajoute un troisième chemin. Le champ fermé fait
+    // donc autorité : sans ce garde, un brouillon périmé pourrait écraser une
+    // réponse choisie entre-temps dans la liste.
+    if (editing === null) return;
     const raw = parseFloat(draft.replace(',', '.'));
     const value = isPercent ? raw / 100 : raw;
     if (Number.isFinite(value) && value >= 0) apply(value);
@@ -774,6 +798,64 @@ const OnboardingScreen = ({
             const active = isOther
               ? value !== null && !onAnOption
               : c === value;
+
+            // La saisie REMPLACE la carte « Autre », elle ne s'ajoute pas sous
+            // la liste.
+            //
+            // `computeOptionHeight` dimensionne les cartes pour que la liste
+            // tienne SANS DÉFILEMENT. Une ligne de plus en dessous — que le
+            // calcul ignorait — faisait déborder le contenu, et `autoFocus`
+            // déclenchait alors un défilement pour amener le champ à l'écran :
+            // la liste remontait à l'ouverture, redescendait à la fermeture, à
+            // chaque appui sur « Autre ».
+            //
+            // Occuper le même emplacement supprime la cause au lieu d'en
+            // compenser l'effet : la hauteur totale ne change plus d'un état à
+            // l'autre, donc il n'y a plus rien à faire défiler. Et le champ
+            // apparaît là où le doigt vient de taper.
+            if (isOther && editing === step) {
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.draftRow,
+                    optionHeight ? { height: optionHeight } : null,
+                  ]}
+                >
+                  <TextInput
+                    style={styles.draftInput}
+                    value={draft}
+                    onChangeText={setDraft}
+                    onSubmitEditing={() => commitDraft(onPick, !!isPercent)}
+                    onEndEditing={() => commitDraft(onPick, !!isPercent)}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    autoFocus
+                    selectTextOnFocus
+                    accessibilityLabel={t('onboarding.other')}
+                  />
+                  <Text style={styles.draftUnit}>
+                    {isPercent ? '%' : unit ?? ''}
+                  </Text>
+                  {/* Ce bouton n'est pas un doublon de la touche Retour : sur
+                      iOS, un `keyboardType="numeric"` n'EN A PAS.
+                      `returnKeyType="done"` et `onSubmitEditing` ne s'y
+                      déclenchent jamais — le chauffeur tapait son chiffre et se
+                      retrouvait sans rien pour valider. Android non plus n'a pas
+                      de touche fiable sur ce type de pavé. */}
+                  <TouchableOpacity
+                    onPress={() => commitDraft(onPick, !!isPercent)}
+                    style={styles.draftOk}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.confirm')}
+                  >
+                    <Feather name="check" size={18} color={colors.background} />
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
             return (
               <OptionCard
                 key={i}
@@ -823,23 +905,6 @@ const OnboardingScreen = ({
             );
           })}
         </View>
-        {editing === step ? (
-          <View style={styles.draftRow}>
-            <TextInput
-              style={styles.draftInput}
-              value={draft}
-              onChangeText={setDraft}
-              onSubmitEditing={() => commitDraft(onPick, !!isPercent)}
-              onEndEditing={() => commitDraft(onPick, !!isPercent)}
-              keyboardType="numeric"
-              returnKeyType="done"
-              autoFocus
-              selectTextOnFocus
-              accessibilityLabel={t('onboarding.other')}
-            />
-            <Text style={styles.draftUnit}>{isPercent ? '%' : unit ?? ''}</Text>
-          </View>
-        ) : null}
       </>
     );
   };
@@ -1171,6 +1236,10 @@ const OnboardingScreen = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       {/* Chevron de retour puis barre de progression pleine largeur. Pas de
           sortie : les cinq réponses produisent le seuil de rentabilité, et sans
           elles le reste de l'app n'a rien à calculer. */}
@@ -1201,6 +1270,12 @@ const OnboardingScreen = ({
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Décale le CONTENU (contentInset), pas la fenêtre : un
+        // `KeyboardAvoidingView` changerait la hauteur du ScrollView, donc
+        // relancerait `onLayout` → `setViewportH` → recalcul de la taille des
+        // options, et la liste sauterait pendant la frappe. L'inset laisse la
+        // mesure intacte.
+        automaticallyAdjustKeyboardInsets
         // Hauteur de la FENÊTRE, pas du contenu : c'est ce qui rend la mesure
         // utilisable pour dimensionner ce qu'on va y mettre.
         onLayout={e => setViewportH(e.nativeEvent.layout.height)}
@@ -1327,15 +1402,15 @@ const OnboardingScreen = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 14,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   backSpacer: { width: 26 },
   // Barre épaisse et pleinement arrondie, qui court sur toute la largeur restante :
@@ -1345,7 +1420,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 8,
     backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 4,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
   progressFill: {
@@ -1362,7 +1437,7 @@ const styles = StyleSheet.create({
 
   body: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: space.xl,
     // Constantes partagées avec `computeOptionHeight` : ce sont les marges que
     // la mesure du ScrollView ne couvre pas, elles doivent être les mêmes des
     // deux côtés.
@@ -1382,8 +1457,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     textAlign: 'center',
-    marginTop: 10,
-    paddingHorizontal: 4,
+    marginTop: space.sm,
+    paddingHorizontal: space.xs,
   },
 
   // Plus d'air au-dessus du titre qu'en dessous : le regard entre par lui.
@@ -1394,7 +1469,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: -0.8,
     lineHeight: 40,
-    marginBottom: 12,
+    marginBottom: space.md,
   },
   // Les réponses sont ANCRÉES sous la question, elles ne flottent plus au centre.
   // Avec `flex: 1, justifyContent: 'center'`, quatre cartes dans 1400 px de haut
@@ -1419,7 +1494,7 @@ const styles = StyleSheet.create({
   // Retrait latéral EN PLUS des 24 px de la page : la carte de résultat ne doit
   // pas courir d'un bord à l'autre. C'est un objet posé sur l'écran, pas un
   // bandeau — l'espace de chaque côté est ce qui le fait lire comme tel.
-  demoWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
+  demoWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: space.sm },
 
   // ── Cartes de réponse ──────────────────────────────────────────────────────
   // La MÊME constante que celle du calcul : l'écart entre deux cartes entre dans
@@ -1431,12 +1506,12 @@ const styles = StyleSheet.create({
     // que la hauteur juste ne s'applique.
     minHeight: 56,
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 16,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   // Sélection en aplat plein plutôt qu'en teinte légère : sur fond sombre, un
   // fond à 11 % d'opacité se distingue mal de l'état par défaut, surtout en
@@ -1452,34 +1527,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 17,
-    marginTop: 3,
+    marginTop: space.tight,
   },
   optionSubActive: { color: colors.background + 'B0' },
 
   draftRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    borderRadius: 14,
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
+    borderWidth: strokeWidth.control,
     borderColor: colors.primary + '70',
   },
   draftInput: {
     flex: 1,
-    paddingVertical: 13,
+    paddingVertical: space.md,
     color: colors.textMain,
     fontSize: 18,
     fontWeight: '800',
   },
   draftUnit: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
+  draftOk: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
 
   // ── Ligne de seuil ─────────────────────────────────────────────────────────
   // Aucune carte, aucun filet décoratif : les deux seuls traits de l'écran sont
   // les deux seuils eux-mêmes, et ils portent du sens.
-  markRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  markRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   markValue: {
     color: colors.primary,
     fontSize: 44,
@@ -1497,27 +1579,27 @@ const styles = StyleSheet.create({
   },
   redactRow: {
     flexDirection: 'row',
-    gap: 5,
+    gap: space.xs,
     alignSelf: 'flex-end',
-    marginBottom: 4,
+    marginBottom: space.xs,
   },
   redact: {
     width: 22,
     height: 34,
-    borderRadius: 5,
+    borderRadius: radius.xs,
     backgroundColor: colors.primary + '4D',
   },
-  markCaption: { color: colors.textMuted, fontSize: 14, marginLeft: 2 },
+  markCaption: { color: colors.textMuted, fontSize: 14, marginLeft: space.tight },
 
   dashRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: space.sm,
   },
   dash: {
     width: 6,
     height: 2,
-    borderRadius: 1,
+    borderRadius: radius.xs,
     backgroundColor: colors.primary + '80',
   },
 
@@ -1529,19 +1611,19 @@ const styles = StyleSheet.create({
     transformOrigin: 'bottom',
   },
 
-  solidLine: { height: 2, borderRadius: 1, backgroundColor: colors.textMain },
+  solidLine: { height: 2, borderRadius: radius.xs, backgroundColor: colors.textMain },
 
   // ── Décision de course ────────────────────────────────────────────────────
   // Une feuille de route, pas un tableau de bord : le contraste vient des
   // règles typographiques et des lignes fonctionnelles, jamais d'un effet.
-  decision: { paddingTop: 6 },
+  decision: { paddingTop: space.sm },
   decisionKicker: {
     color: colors.primary,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   decisionPrompt: {
     color: colors.textMain,
@@ -1551,7 +1633,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.7,
     maxWidth: 310,
   },
-  rateBlock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  rateBlock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   rateValue: {
     color: colors.primary,
     fontSize: 58,
@@ -1562,7 +1644,7 @@ const styles = StyleSheet.create({
   // Couche de flou : occupe exactement la boîte de la copie nette, qui reste
   // dans le flux et donne donc la taille.
   blurLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  computeWrap: { marginTop: 36, alignItems: 'center' },
+  computeWrap: { marginTop: space.xxl, alignItems: 'center' },
 
   // ── Couronne de graduations ──
   ring: {
@@ -1572,11 +1654,11 @@ const styles = StyleSheet.create({
   ringInner: {
     position: 'absolute',
     width: RING - 56, height: RING - 56, borderRadius: (RING - 56) / 2,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.14)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   tick: {
     position: 'absolute',
-    width: 3, height: 14, borderRadius: 2,
+    width: 3, height: 14, borderRadius: radius.xs,
     backgroundColor: colors.primary,
   },
   ringPct: {
@@ -1585,7 +1667,7 @@ const styles = StyleSheet.create({
   ringPctSign: { color: colors.textDimmed, fontSize: 18, fontWeight: '800' },
 
   // ── Phrase courante ──
-  phraseBox: { height: 58, marginTop: 34, alignSelf: 'stretch', justifyContent: 'center' },
+  phraseBox: { height: 58, marginTop: space.xxl, alignSelf: 'stretch', justifyContent: 'center' },
   phrase: {
     position: 'absolute', left: 0, right: 0,
     color: colors.textMain, fontSize: 16, fontWeight: '600',
@@ -1593,45 +1675,45 @@ const styles = StyleSheet.create({
   },
 
   panel: {
-    marginTop: 26,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.16)',
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 20,
+    marginTop: space.xl,
+    borderRadius: radius.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    paddingHorizontal: space.xl,
+    paddingTop: space.xl,
+    paddingBottom: space.xl,
     overflow: 'hidden',
   },
   plusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingLeft: 8, paddingRight: 12, paddingVertical: 6,
-    borderRadius: 999,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    paddingLeft: space.sm, paddingRight: space.md, paddingVertical: space.sm,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.13)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.30)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-  plusBadgeLogo: { width: 18, height: 18, borderRadius: 6 },
+  plusBadgeLogo: { width: 18, height: 18, borderRadius: radius.xs },
   plusBadgeTxt: {
     color: colors.textMain, fontSize: 11, fontWeight: '900', letterSpacing: 1.2,
   },
-  bars: { marginTop: 24, gap: 14 },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bars: { marginTop: space.xl, gap: space.md },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   barLabel: { color: colors.textDimmed, fontSize: 12, width: 84 },
   barLabelOn: { color: colors.textMain, fontSize: 12, fontWeight: '700', width: 84 },
   barTrack: {
-    flex: 1, height: 8, borderRadius: 4,
+    flex: 1, height: 8, borderRadius: radius.xs,
     backgroundColor: 'rgba(255,255,255,0.07)',
     overflow: 'hidden',
   },
   barFill: {
-    height: '100%', width: '100%', borderRadius: 4,
+    height: '100%', width: '100%', borderRadius: radius.xs,
     transformOrigin: 'left center',
   },
   barFillFree: { backgroundColor: 'rgba(255,255,255,0.22)' },
   barValue: { color: colors.textDimmed, fontSize: 13, fontWeight: '700', width: 58, textAlign: 'right' },
   barValueEnd: { width: 58, alignItems: 'flex-end' },
   barValueOn: { color: colors.primary, fontSize: 14, fontWeight: '900' },
-  maskPillBig: { flex: 1, borderRadius: 14, backgroundColor: 'rgba(0,230,118,0.28)' },
-  maskPillSmall: { flex: 1, borderRadius: 7, backgroundColor: 'rgba(0,230,118,0.28)' },
+  maskPillBig: { flex: 1, borderRadius: radius.md, backgroundColor: 'rgba(0,230,118,0.28)' },
+  maskPillSmall: { flex: 1, borderRadius: radius.sm, backgroundColor: 'rgba(0,230,118,0.28)' },
   blurCopySolo: { position: 'absolute', top: 0, left: 0 },
   blurFilterBig: { filter: [{ blur: 11 }] },
   blurFilterSmall: { filter: [{ blur: 5 }] },
@@ -1639,13 +1721,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 15,
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   decisionExplanation: {
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 20,
+    marginTop: space.xl,
     maxWidth: 350,
   },
 
@@ -1653,7 +1735,7 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 22,
+    marginTop: space.xl,
   },
 
   // Une ligne, pas un paragraphe : le chiffre masqué juste au-dessus dit déjà
@@ -1661,13 +1743,13 @@ const styles = StyleSheet.create({
   plusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 18,
+    gap: space.md,
+    marginTop: space.lg,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
+    borderWidth: strokeWidth.control,
     borderColor: colors.primary + '3A',
   },
   plusTexts: { flex: 1 },
@@ -1676,23 +1758,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12.5,
     lineHeight: 17,
-    marginTop: 2,
+    marginTop: space.tight,
   },
 
-  footer: { paddingHorizontal: 24, paddingBottom: 24 },
+  footer: { paddingHorizontal: space.xl, paddingBottom: space.xl },
   unlockCta: {
     minHeight: 62,
-    paddingHorizontal: 24,
-    borderRadius: 18,
+    paddingHorizontal: space.xl,
+    borderRadius: radius.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.primary,
-    shadowColor: '#00FF8C',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
+    ...elevation.raised.shadow,
   },
   unlockCtaTxt: {
     color: colors.background,
@@ -1705,16 +1783,16 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     textAlign: 'center',
-    marginTop: 9,
+    marginTop: space.sm,
   },
-  laterBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 1 },
+  laterBtn: { alignItems: 'center', paddingVertical: space.sm, marginTop: space.tight },
   laterTxt: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   // Pilule pleine à toutes les étapes. Le dégradé gris des étapes intermédiaires
   // se lisait comme un bouton désactivé alors qu'il était bien actif.
   cta: {
     width: '100%',
     height: 62,
-    borderRadius: 31,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,

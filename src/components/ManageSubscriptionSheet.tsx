@@ -18,6 +18,8 @@ import { colors } from '../theme/colors';
 import { hapticLight, hapticSuccess, hapticError } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { restorePurchases } from '../services/iapService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
 
 /**
  * Gestion de l'abonnement, en feuille montant du bas.
@@ -195,9 +197,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    gap: 14,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
+    gap: space.md,
   },
 
   // La croix est posée seule au-dessus des cartes, comme dans la référence : la
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.full,
     backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -214,9 +216,9 @@ const styles = StyleSheet.create({
 
   messageCard: {
     backgroundColor: colors.surfaceLight,
-    borderRadius: 20,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
+    borderRadius: radius.lg,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.xl,
     alignItems: 'center',
   },
   title: {
@@ -230,16 +232,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: space.sm,
   },
 
   // Cible de 60 px : ces cartes se tapent d'une main, souvent en déplacement.
   actionCard: {
     backgroundColor: colors.surfaceLight,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     minHeight: 60,
     justifyContent: 'center',
-    paddingHorizontal: 22,
+    paddingHorizontal: space.xl,
   },
   actionText: { color: colors.textMain, fontSize: 17, fontWeight: '600' },
   pressed: { opacity: 0.7 },

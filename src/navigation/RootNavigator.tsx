@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { getEffectivePlanTier } from '../services/subscriptionService';
+import { RIDE_NETWORK_ENABLED } from '../services/networkDemo';
 import { grantWelcomeCredits } from '../utils/deviceId';
 import { useTranslation } from 'react-i18next';
 import { withErrorBoundary } from '../components/ErrorBoundary';
@@ -30,6 +31,8 @@ import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
 import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
 import BestHoursScreenRaw from '../screens/BestHoursScreen';
 import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
+import NetworkOfferScreenRaw from '../screens/NetworkOfferScreen';
+import NetworkReceiveScreenRaw from '../screens/NetworkReceiveScreen';
 
 const AuthScreen = withErrorBoundary(AuthScreenRaw);
 const CarSettingsScreen = withErrorBoundary(CarSettingsScreenRaw);
@@ -44,6 +47,8 @@ const SupportTicketsScreen = withErrorBoundary(SupportTicketsScreenRaw);
 const SupportTicketDetailScreen = withErrorBoundary(SupportTicketDetailScreenRaw);
 const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
 const BestHoursScreen = withErrorBoundary(BestHoursScreenRaw);
+const NetworkOfferScreen = withErrorBoundary(NetworkOfferScreenRaw);
+const NetworkReceiveScreen = withErrorBoundary(NetworkReceiveScreenRaw);
 
 const Stack = createNativeStackNavigator();
 
@@ -277,6 +282,32 @@ const RootNavigator = () => {
             component={BestHoursScreen}
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
+
+          {/* Les deux sens du réseau. Deux routes plutôt qu'un écran à onglet :
+              chacune est un endroit où l'on arrive directement — depuis le
+              Dashboard, et demain depuis une notification « une course vient
+              d'être publiée à 900 m ». Le sélecteur en tête d'écran passe de
+              l'une à l'autre par `replace`, donc le retour reste le Dashboard
+              et non une pile d'allers-retours. */}
+          {/* En suspens pour la v1 (`RIDE_NETWORK_ENABLED`) : les routes ne sont
+              pas ENREGISTRÉES, comme Diagnostics plus bas. Retirer la carte du
+              Dashboard ne suffirait pas — un `navigate`, un deep link ou une
+              restauration d'état ouvriraient quand même des courses factices. */}
+          {RIDE_NETWORK_ENABLED && (
+            <Stack.Screen
+              name="NetworkOffer"
+              component={NetworkOfferScreen}
+              options={{ headerShown: false, animation: 'slide_from_right' }}
+            />
+          )}
+
+          {RIDE_NETWORK_ENABLED && (
+            <Stack.Screen
+              name="NetworkReceive"
+              component={NetworkReceiveScreen}
+              options={{ headerShown: false, animation: 'slide_from_right' }}
+            />
+          )}
 
           {/* Modales */}
           {/* L'écran n'est pas seulement caché du menu : il n'est pas ENREGISTRÉ

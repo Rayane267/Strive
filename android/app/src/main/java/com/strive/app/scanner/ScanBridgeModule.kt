@@ -393,6 +393,9 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 putNull("debugBlocks")
                 putInt("screenHeight", o.optInt("screenHeight", 0))
                 if (o.isNull("scanTs")) putNull("scanTs") else putDouble("scanTs", o.optDouble("scanTs"))
+                // Conservé dans le journal (cf. bufferScanResult) : c'est le seul
+                // moyen de mesurer le repli LLM sur les scans relevés après coup.
+                putBoolean("geminiUsed", o.optBoolean("geminiUsed", false))
             })
         }
     }
@@ -544,6 +547,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             screenHeight: Int = 0,
             scanTs: Double = 0.0,
             rideId: String,
+            geminiUsed: Boolean = false,
         ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
@@ -574,6 +578,17 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // Son identité, elle, est ici. Frappée au scan par la bulle,
                 // portée jusqu'à `rides.id`. Mirror iOS.
                 putString("rideId", rideId)
+                // Le parsing local a-t-il dû passer la main à Gemini ?
+                //
+                // Sans ce booléen, le JS ne pouvait pas le savoir : il ne voyait
+                // que SON propre fallback (celui de DashboardScreen), qui ne sert
+                // jamais quand le scan vient de la bulle. `scan_events` enregistrait
+                // donc `gemini_fallback = false` sur 100 % des scans — une
+                // constante, pas une mesure, et le coût unitaire de l'appel LLM
+                // restait invisible. Les ÉCHECS Gemini remontaient déjà
+                // (`emitScanFailure("gemini_ko")`) ; il manquait les réussites,
+                // qui sont précisément celles qui coûtent un appel facturé.
+                putBoolean("geminiUsed", geminiUsed)
             }
             // On journalise TOUJOURS avant d'émettre, puis on n'efface que sur
             // accusé de réception (`ackScan`) une fois la course en base.
@@ -584,7 +599,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             // clé primaire et traitée comme un succès sans doublon. Émettre sans
             // journaliser perdait la course dès que le JS recevait l'événement
             // puis échouait à l'écrire (réseau, crash).
-            bufferScanResult(ctx, result, screenHeight, scanTs, rideId)
+            bufferScanResult(ctx, result, screenHeight, scanTs, rideId, geminiUsed)
             emit("onScanResult", map)
         }
 
@@ -603,6 +618,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             screenHeight: Int,
             scanTs: Double,
             rideId: String,
+            geminiUsed: Boolean = false,
         ) {
             val prefs = ctx.applicationContext
                 .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
@@ -619,6 +635,11 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 put("pickupDistanceKm", result.pickupDistanceKm ?: JSONObject.NULL)
                 put("screenHeight", screenHeight)
                 put("scanTs", if (scanTs > 0) scanTs else JSONObject.NULL)
+                // Un booléen : ni PII ni poids, contrairement au screenshot et aux
+                // blocs OCR. La raison qui les exclut du journal ne vaut pas ici,
+                // et sans lui un scan relevé après coup — le cas NORMAL quand la
+                // bulle tourne app fermée — perdrait l'information.
+                put("geminiUsed", geminiUsed)
             })
             val trimmed = if (arr.length() > SCANS_MAX) {
                 JSONArray().also { out ->

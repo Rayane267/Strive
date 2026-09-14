@@ -19,6 +19,11 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { fetchRidesInRange } from '../services/ridesService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 import {
   buildHourGrid,
   cellIndex,
@@ -355,6 +360,10 @@ const BestHoursScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -397,13 +406,13 @@ const BestHoursScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
   },
   backBtn: {
     marginLeft: -10,
@@ -414,21 +423,21 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    marginRight: 12,
+    marginRight: space.md,
     color: colors.textMain,
     fontSize: 26,
     fontWeight: '800',
   },
   headerSpacer: { width: 38 },
 
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-  center: { paddingVertical: 48, alignItems: 'center' },
+  content: { paddingHorizontal: space.xl, paddingBottom: space.xxl },
+  center: { paddingVertical: space.xxxl, alignItems: 'center' },
   emptyTitle: { color: colors.textMain, fontSize: 16, fontWeight: '700' },
   emptyHint: {
     color: colors.textDimmed,
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 6,
+    marginTop: space.sm,
     textAlign: 'center',
   },
 
@@ -436,22 +445,22 @@ const styles = StyleSheet.create({
   // du paywall, pour qu'on reconnaisse le même objet d'un écran à l'autre.
   metricRow: {
     flexDirection: 'row',
-    padding: 4,
-    borderRadius: 999,
+    padding: space.xs,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 10,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.sm,
   },
   metricThumb: {
     position: 'absolute',
     left: 0,
     top: 4,
     bottom: 4,
-    borderRadius: 999,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.20)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.44)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   metricBtn: {
     flex: 1,
@@ -470,11 +479,11 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 12,
     lineHeight: 17,
-    marginBottom: 14,
+    marginBottom: space.md,
   },
 
-  grid: { marginBottom: 14 },
-  gridRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  grid: { marginBottom: space.md },
+  gridRow: { flexDirection: 'row', alignItems: 'center', marginBottom: space.tight },
   dayLabel: {
     width: 30,
     color: colors.textDimmed,
@@ -485,17 +494,17 @@ const styles = StyleSheet.create({
   cell: {
     flex: 1,
     aspectRatio: 1,
-    marginRight: 1,
-    borderRadius: 2,
+    marginRight: space.tight,
+    borderRadius: radius.xs,
   },
   cellOn: {
-    borderWidth: 1.5,
+    borderWidth: strokeWidth.control,
     borderColor: colors.textMain,
   },
-  hourAxis: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  hourAxis: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
   hourLabel: {
     flex: 1,
-    marginRight: 1,
+    marginRight: space.tight,
     color: colors.textDimmed,
     fontSize: 8,
     textAlign: 'left',
@@ -503,18 +512,18 @@ const styles = StyleSheet.create({
 
   detail: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 18,
+    borderRadius: radius.sm,
+    padding: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.lg,
   },
   detailTitle: { color: colors.textMain, fontSize: 14, fontWeight: '800' },
-  detailBody: { color: colors.textMuted, fontSize: 13, marginTop: 3 },
+  detailBody: { color: colors.textMuted, fontSize: 13, marginTop: space.tight },
   detailPlaceholder: {
     color: colors.textDimmed,
     fontSize: 12,
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
 
   sectionTitle: {
@@ -522,22 +531,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: space.sm,
     textTransform: 'uppercase',
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   sep: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    marginVertical: 10,
+    marginVertical: space.sm,
   },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   rank: {
     width: 18,
     color: colors.primary,
@@ -551,7 +560,7 @@ const styles = StyleSheet.create({
     color: colors.textDimmed,
     fontSize: 11,
     lineHeight: 16,
-    marginTop: 14,
+    marginTop: space.md,
   },
 
   cta: {
@@ -559,7 +568,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
-    borderRadius: 14,
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
     alignSelf: 'stretch',
   },
@@ -567,20 +576,20 @@ const styles = StyleSheet.create({
 
   lockCard: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
+    borderRadius: radius.md,
+    padding: space.xl,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     alignItems: 'center',
   },
   lockIcon: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,230,118,0.10)',
-    marginBottom: 14,
+    marginBottom: space.md,
   },
   lockTitle: {
     color: colors.textMain,
@@ -593,8 +602,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 18,
+    marginTop: space.sm,
+    marginBottom: space.lg,
   },
 });
 

@@ -6,6 +6,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 
 interface DataPoint {
   label: string;
@@ -77,17 +80,17 @@ const KpiTrendChart: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   title: {
     color: colors.textMuted,
@@ -98,7 +101,7 @@ const styles = StyleSheet.create({
   valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
   },
   currentValue: {
     fontSize: 18,
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 80,
     alignItems: 'flex-end',
-    gap: 4,
+    gap: space.xs,
   },
   pointCol: {
     flex: 1,
@@ -125,14 +128,14 @@ const styles = StyleSheet.create({
   },
   pointBar: {
     width: '100%',
-    borderRadius: 4,
+    borderRadius: radius.xs,
     minHeight: 4,
   },
   pointLabel: {
     color: colors.textDimmed,
     fontSize: 9,
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: space.xs,
   },
 });
 
