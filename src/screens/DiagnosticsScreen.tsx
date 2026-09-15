@@ -42,6 +42,7 @@ import { space } from '../theme/spacing';
 import { strokeWidth } from '../theme/stroke';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
+import { useMarket } from '../hooks/useMarket';
 import { scannerService } from '../services/scanner';
 import { hapticLight } from '../utils/haptics';
 import { resetSignupCounters } from '../utils/deviceId';
@@ -62,8 +63,9 @@ type Failure = {
 
 const DiagnosticsScreen = () => {
   const navigation = useNavigation<any>();
-  const { t } = useTranslation();
-  const { user } = useAuth();
+  const { t, i18n } = useTranslation();
+  const market = useMarket();
+  const { user, profile } = useAuth();
 
   const [tracing, setTracing] = useState(false);
   const [trace, setTrace] = useState('');
@@ -210,6 +212,26 @@ const DiagnosticsScreen = () => {
       </AnimatedEntrance>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* ── Marché ──
+            Posé EN PREMIER, et sans traduction : c'est la carte qu'on regarde
+            quand « j'ai choisi la livre et je vois des euros ». Elle montre la
+            chaîne entière, du pays enregistré jusqu'au symbole affiché, pour que
+            le maillon cassé se désigne lui-même au lieu de se deviner.
+
+            `profil` vaut — quand la colonne `country` manque en base, quand la
+            migration n'a pas tourné, ou quand l'écriture a échoué : dans ces
+            trois cas le marché retombe sur la région de l'appareil, et tout
+            s'affiche en euros sans que rien ne le dise. */}
+        <View style={[styles.card, { marginBottom: space.md }]}>
+          <Text style={styles.cardTitle}>Marché</Text>
+          <Text style={styles.cardSub}>
+            profil.country : {profile?.country ?? '— (absent)'}
+            {'\n'}marché résolu : {market.country} · {market.currency} · {market.symbol} · {market.distanceUnit}
+            {'\n'}langue : {i18n.language}
+            {'\n'}seuils : {market.thresholds.hourly}{market.symbol}/h · {market.thresholds.distance}{market.symbol}/km
+          </Text>
+        </View>
+
         {/* ── Collecte ── */}
         <View style={styles.card}>
           <View style={styles.switchRow}>
