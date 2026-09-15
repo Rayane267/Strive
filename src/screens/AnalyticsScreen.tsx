@@ -61,7 +61,12 @@ import {
   toMarketRate,
   dateLocale,
 } from '../utils/market';
-import { getFxRates, inCurrency, countConverted } from '../services/fxService';
+import {
+  getFxRates,
+  inCurrency,
+  countConverted,
+  normalizeRides,
+} from '../services/fxService';
 import { calendarLocale, CALENDAR_LOCALES } from '../utils/calendarLocales';
 
 
@@ -131,8 +136,7 @@ const AnalyticsScreen = () => {
         // Les seuils sont dans la devise du chauffeur : les courses d'une autre
         // monnaie y sont ramenées avant d'être comparées, sinon un tarif en
         // livres passerait pour un tarif en euros.
-        const rates = await getFxRates();
-        const normalized = weekRides.map(r => inCurrency(r, market.currency, rates));
+        const normalized = await normalizeRides(weekRides, market.currency);
         setWeeklyBilan(computeWeeklyBilan(normalized, mh, mk));
       } catch {
         setWeeklyBilan({ lossWeek: 0, avoided: 0 });

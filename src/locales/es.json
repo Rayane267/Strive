@@ -450,6 +450,7 @@
     "pushBlocked": "Bloqueadas en los ajustes del teléfono — pulsa para reactivarlas",
     "country": "País y moneda",
     "countrySub": "Define tu moneda, tus cotizaciones y tu umbral de rentabilidad.",
+    "countryChange": "¿No es mi país?",
     "currency": "Tu moneda",
     "currencySub": "La que verás en cada viaje."
   },

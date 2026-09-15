@@ -130,7 +130,7 @@ object OcrParser {
     private val ukOutwardRegex = Regex("""\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]""", RegexOption.IGNORE_CASE)
 
     /**
-     * Pays d'activité du chauffeur, posé par `ScanBridge.setMarketCountry`.
+     * Pays d'activité du chauffeur, posé par `ScanBridge.setMarket`.
      * Il n'entre en jeu QUE pour ce qui serait faux en France : les miles et
      * les quatre mots ci-dessus.
      */

@@ -44,7 +44,8 @@ export const scannerService: ScannerService = {
   hideSplash: () => {},
   setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) =>
     ScanBridge.setFuelDeduction?.(enabled, fuelCostPerKm),
-  setMarketCountry: (code: string) => ScanBridge.setMarketCountry?.(code),
+  setMarket: (country: string, currency: string) =>
+    ScanBridge.setMarket?.(country, currency),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),

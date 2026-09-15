@@ -59,6 +59,8 @@ const MAX_AGE_MS = 24 * 3600 * 1000;
 const ENDPOINT = 'https://api.frankfurter.app/latest?from=EUR&to=CHF,GBP';
 
 let memory: { rates: FxRates; at: number } | null = null;
+/** L'appel réseau en cours, partagé par tous ceux qui le demandent pendant. */
+let inFlight: Promise<FxRates> | null = null;
 
 function isValid(r: unknown): r is FxRates {
   const o = r as Partial<FxRates> | null;
@@ -81,10 +83,24 @@ function isValid(r: unknown): r is FxRates {
  * API de change est injoignable — il affiche un ordre de grandeur, et c'est
  * toujours mieux qu'un total amputé sans explication.
  */
-export async function getFxRates(): Promise<FxRates> {
+export function getFxRates(): Promise<FxRates> {
   const now = Date.now();
-  if (memory && now - memory.at < MAX_AGE_MS) return memory.rates;
+  if (memory && now - memory.at < MAX_AGE_MS) return Promise.resolve(memory.rates);
+  // UN SEUL APPEL EN VOL À LA FOIS. Le cache mémoire ne se remplit qu'une fois
+  // la réponse arrivée : deux écrans qui démarrent ensemble — et c'est le cas
+  // au lancement, le Dashboard et sa synchro hors-ligne — partaient chacun au
+  // réseau pour la même donnée. Partager la promesse rend l'appel gratuit pour
+  // le second, et rend `normalizeRides` utilisable partout sans compter les
+  // requêtes qu'il déclenche.
+  if (!inFlight) {
+    inFlight = loadFxRates(now).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
 
+async function loadFxRates(now: number): Promise<FxRates> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (raw) {
@@ -124,6 +140,22 @@ export async function getFxRates(): Promise<FxRates> {
 }
 
 /**
+ * Les taux DÉJÀ connus, sans attendre — ou le repli, au tout premier appel.
+ *
+ * `getFxRates` est asynchrone jusque dans son chemin le plus court : un écran
+ * qui somme pendant son rendu ne peut pas l'attendre, et démarrait donc sur
+ * `FX_FALLBACK` avant de se corriger une fois la promesse résolue. Sur un
+ * historique à deux monnaies, le total bougeait sous les yeux du chauffeur.
+ *
+ * Le cache mémoire, lui, est rempli dès le premier écran de la session. Le lire
+ * en clair supprime la correction pour tous les écrans suivants — il ne reste
+ * que le tout premier, qui n'a rien de mieux à afficher de toute façon.
+ */
+export function peekFxRates(): FxRates {
+  return memory?.rates ?? FX_FALLBACK;
+}
+
+/**
  * Un montant d'une devise vers une autre, via l'euro.
  *
  * Les taux sont tous exprimés en « unités par euro », donc le passage par l'EUR
@@ -157,16 +189,20 @@ export function convertAmount(
  * `distance_km` ne bouge pas : un kilomètre reste un kilomètre d'un pays à
  * l'autre. Seuls les taux, qui ont de l'argent au numérateur, suivent.
  */
-export function inCurrency<
-  T extends {
-    currency?: string | null;
-    fx_rate_eur?: number | null;
-    fare_estimated: number;
-    fare_final?: number | null;
-    hourly_rate?: number;
-    km_rate?: number;
-  },
->(ride: T, target: Currency, rates: FxRates): T {
+export type Convertible = {
+  currency?: string | null;
+  fx_rate_eur?: number | null;
+  fare_estimated: number;
+  fare_final?: number | null;
+  hourly_rate?: number;
+  km_rate?: number;
+};
+
+export function inCurrency<T extends Convertible>(
+  ride: T,
+  target: Currency,
+  rates: FxRates,
+): T {
   const from = (ride.currency ?? 'EUR') as Currency;
   if (from === target) return ride;
   // Le taux FIGÉ AU SCAN fait foi pour la première moitié du chemin : c'est lui
@@ -190,6 +226,28 @@ export function inCurrency<
   };
 }
 
+/**
+ * Une liste de courses ramenée à UNE DEVISE — la seule chose à demander.
+ *
+ * Quatre écrans écrivaient les deux mêmes lignes avant de sommer : chercher les
+ * taux, puis mapper `inCurrency`. Recopier une paire de gestes, c'est la rendre
+ * oubliable — et la liste qui saute la seconde ligne ne plante pas, elle
+ * additionne des euros avec des livres et affiche un total d'apparence normale.
+ * Ici il n'y a plus qu'un geste, et son argument est la devise.
+ *
+ * Asynchrone parce que les taux le sont, et c'est ce qui la rend juste : elle
+ * attend les vrais taux au lieu de partir sur le repli comme le ferait une
+ * valeur lue pendant un rendu. Les écrans concernés convertissent tous dans un
+ * effet, où attendre ne coûte rien.
+ */
+export async function normalizeRides<T extends Convertible>(
+  rides: T[],
+  target: Currency,
+): Promise<T[]> {
+  const rates = await getFxRates();
+  return rides.map(r => inCurrency(r, target, rates));
+}
+
 /** Combien de courses d'une liste ont dû être converties. */
 export function countConverted(
   rides: { currency?: string | null }[],
@@ -201,4 +259,5 @@ export function countConverted(
 /** Pour les tests et le diagnostic : vide le cache mémoire. */
 export function resetFxCache(): void {
   memory = null;
+  inFlight = null;
 }

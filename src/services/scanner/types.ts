@@ -123,11 +123,20 @@ export interface ScannerService {
   setFuelDeduction(enabled: boolean, fuelCostPerKm: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
   /**
-   * Pays d'activité, pour le géocodage natif : restreint la recherche TomTom à
-   * ce pays et fixe la langue des résultats. Ce n'est PAS la langue de l'app —
-   * `fr` ne sépare pas la France de la Belgique ni de la Suisse.
+   * Le marché du chauffeur, poussé au natif en une fois — deux valeurs qui n'y
+   * servent pas à la même chose.
+   *
+   * `country` est du CALCUL : il restreint la recherche TomTom et fixe la langue
+   * des résultats, et le parser s'en sert pour les adresses britanniques. Ce
+   * n'est pas la langue de l'app — `fr` ne sépare pas la France de la Belgique
+   * ni de la Suisse.
+   *
+   * `currency` est de l'AFFICHAGE : c'est elle que lisent l'écran verrouillé, la
+   * Dynamic Island, CarPlay, la bulle Android et leurs notifications. Le natif
+   * la déduisait du pays, ce qui revenait à énumérer quatre pays pour retrouver
+   * un « € » — le même détour qu'on vient de retirer côté JS.
    */
-  setMarketCountry(code: string): void;
+  setMarket(country: string, currency: string): void;
   setTomTomApiKey(key: string): void;
   /** Purge le cache de géocodage local (adresses = PII). À appeler au logout et
    *  après suppression de compte — RGPD : le cache vit sur l'appareil, hors de

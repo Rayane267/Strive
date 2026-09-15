@@ -57,7 +57,7 @@ import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
 import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
-import { getFxRates, convertAmount, inCurrency } from '../services/fxService';
+import { getFxRates, convertAmount, normalizeRides } from '../services/fxService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
@@ -423,10 +423,13 @@ const DashboardScreen = () => {
     // notifications iOS) doivent suivre la langue choisie dans l'app, pas celle
     // du téléphone.
     NativeModules.ScanBridge?.setAppLanguage?.(i18n.language);
-    // Et le PAYS, qui est autre chose que la langue : c'est lui qui désambiguïse
-    // une adresse au géocodage (il y a des « Victoria Street » dans plusieurs des
-    // treize pays couverts) et qui fixe la langue des résultats TomTom.
-    scannerService.setMarketCountry?.(market.country);
+    // Et le MARCHÉ, qui est autre chose que la langue. Le pays désambiguïse une
+    // adresse au géocodage (il y a des « Victoria Street » dans plusieurs des
+    // pays couverts) et fixe la langue des résultats TomTom ; la devise, elle,
+    // décide de ce que l'écran verrouillé et la Dynamic Island affichent — un
+    // verdict en euros sous une app qui parle en livres, c'est la mauvaise
+    // monnaie au moment précis où le chauffeur décide.
+    scannerService.setMarket?.(market.country, market.currency);
     // Sync timezone du téléphone vers profile (reset quota au midnight local).
     // Écriture UNIQUEMENT si la valeur a changé : l'appel était inconditionnel et
     // repartait à chaque montage du Dashboard, pour un fuseau qui ne bouge
@@ -439,7 +442,7 @@ const DashboardScreen = () => {
         }
       } catch {}
     }
-  }, [user?.id, i18n.language, profile?.timezone, market.country]);
+  }, [user?.id, i18n.language, profile?.timezone, market.country, market.currency]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -605,9 +608,7 @@ const DashboardScreen = () => {
         const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
         // Le tease chiffre un manque à gagner : les courses d'une autre monnaie
         // sont converties, pas écartées.
-        const rates = await getFxRates();
-        const weekRides = (await fetchRides(user.id, since))
-          .map(r => inCurrency(r, market.currency, rates));
+        const weekRides = await normalizeRides(await fetchRides(user.id, since), market.currency);
         const tease = computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate);
         setWeeklyTease(tease);
         // Récap hebdo (dimanche 19h) : montant si perte significative, sinon générique.

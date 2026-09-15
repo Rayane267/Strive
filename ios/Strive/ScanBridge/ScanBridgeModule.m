@@ -70,7 +70,8 @@ RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 
 RCT_EXTERN_METHOD(setAppLanguage:(NSString *)lang)
 
-RCT_EXTERN_METHOD(setMarketCountry:(NSString *)code)
+RCT_EXTERN_METHOD(setMarket:(NSString *)country
+                  currency:(NSString *)currency)
 
 RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
                   minKmRate:(nonnull NSNumber *)minKmRate

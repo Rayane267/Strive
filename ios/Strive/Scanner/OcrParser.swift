@@ -78,7 +78,7 @@ final class OcrParser {
   private let ukOutwardPattern = #"\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]"#
 
   /// Pays d'activité du chauffeur, écrit en App Group par
-  /// `ScanBridge.setMarketCountry`. Il n'entre en jeu QUE pour ce qui serait
+  /// `ScanBridge.setMarket`. Il n'entre en jeu QUE pour ce qui serait
   /// faux en France : les miles et les quatre mots ci-dessus.
   private var marketCountry: String {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)

@@ -30,7 +30,7 @@ import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
 import { LANGUAGE_NAMES, dateLocale, decimalSeparator } from '../utils/market';
-import { getFxRates, inCurrency } from '../services/fxService';
+import { normalizeRides } from '../services/fxService';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -147,9 +147,7 @@ const ProfileScreen = () => {
         const since = getWeekStart();
         // Un total : les courses d'une autre monnaie sont converties, pas
         // écartées.
-        const rates = await getFxRates();
-        const rides = (await fetchRides(user.id, since))
-          .map(r => inCurrency(r, market.currency, rates));
+        const rides = await normalizeRides(await fetchRides(user.id, since), market.currency);
         const total = rides
           .filter(r => r.status === 'ACCEPTED')
           .reduce((sum, r) => sum + effectiveFare(r), 0);

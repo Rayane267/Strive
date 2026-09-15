@@ -23,7 +23,7 @@ import {
   distanceUnitLabel,
   toMarketDistance,
   toMarketRate,
-  marketForRide,
+  displayForRide,
 } from '../utils/market';
 import { effectiveFare } from '../services/ridesService';
 import { formatTimeAgo } from '../utils/dateUtils';
@@ -57,10 +57,10 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
   // La course s'affiche dans la devise qu'elle a rapportée, pas dans celle
   // du jour : un chauffeur qui a changé de marché ne voit pas ses anciennes
   // courses changer de monnaie sous ses yeux.
-  const market = marketForRide(ride.currency, current);
+  const display = displayForRide(ride.currency, current);
   // La course est stockée en kilomètres, quelle que soit l'origine du scan — on
   // la ramène à l'unité que le chauffeur lit sur ses propres offres.
-  const distance = toMarketDistance(Number(ride.distance_km) || 0, market);
+  const distance = toMarketDistance(Number(ride.distance_km) || 0, display);
   const fare = effectiveFare(ride);
   const fareIsConfirmed = ride.fare_final != null;
   const hourlyRate = Number(ride.hourly_rate || 0);
@@ -88,7 +88,7 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
             <View style={[styles.ratePill, level === 2 && styles.ratePillGood, level === 1 && styles.ratePillMid]}>
               <Feather name="trending-up" size={12} color={level === 2 ? colors.background : level === 1 ? '#3A2A00' : colors.textMuted} />
               <Text style={[styles.ratePillText, level === 2 && styles.ratePillTextGood, level === 1 && styles.ratePillTextMid]}>
-                {hourlyRate.toFixed(0)} {hourlyUnit(market)}
+                {hourlyRate.toFixed(0)} {hourlyUnit(display)}
               </Text>
             </View>
             <View style={styles.timeAgoPill}>
@@ -107,13 +107,13 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
             )}
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatMoney(fare, market, { decimals: 2 })}</Text>
+            <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatMoney(fare, display, { decimals: 2 })}</Text>
             <View style={styles.tripMetrics}>
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>{t('dashboard.distance')}</Text>
                 <View style={styles.tripMetricItem}>
                   <MaterialCommunityIcons name="map-marker" size={14} color={colors.primary} />
-                  <Text style={styles.tripMetricText}>{distance.toFixed(1)} {market.distanceUnit}</Text>
+                  <Text style={styles.tripMetricText}>{distance.toFixed(1)} {display.distanceUnit}</Text>
                 </View>
               </View>
               <View style={styles.tripMetricCol}>
@@ -125,14 +125,14 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
               </View>
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>
-                  {distanceUnitLabel(market).toUpperCase()}
+                  {distanceUnitLabel(display).toUpperCase()}
                 </Text>
                 <View style={styles.tripMetricItem}>
                   <Feather name="navigation" size={13} color={colors.primary} />
                   {/* Le taux est stocké au kilomètre ; c'est ici, et nulle part
                       avant, qu'il devient un taux au mile. */}
                   <Text style={styles.tripMetricText}>
-                    {toMarketRate(kmRate, market).toFixed(2)}
+                    {toMarketRate(kmRate, display).toFixed(2)}
                   </Text>
                 </View>
               </View>

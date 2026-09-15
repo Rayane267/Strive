@@ -143,33 +143,69 @@ public enum StriveNativeStrings {
 /// Extension : la Live Activity a besoin du symbole, et un nouveau fichier
 /// demanderait de toucher au projet Xcode pour rien.
 ///
-/// Le pays vient de l'App Group, où `ScanBridge.setMarketCountry` l'écrit. Il
-/// n'est PAS mis en cache : il change quand le chauffeur corrige sa devise, et
-/// un scan doit le voir tout de suite.
+/// ── LA DEVISE, PAS LE PAYS ─────────────────────────────────────────────────
+/// Tout ici se lit sur `marketCurrency`, que `ScanBridge.setMarket` écrit dans
+/// l'App Group en même temps que le pays.
+///
+/// Le symbole se déduisait du pays, ce qui obligeait à lister les pays de
+/// chaque monnaie — quatre pour le seul euro — pour retrouver un caractère que
+/// la devise donne directement. La déduction tombait juste aujourd'hui et
+/// n'attendait qu'un septième marché pour se tromper, en silence et sur le
+/// premier chiffre que le chauffeur regarde.
+///
+/// Le PAYS reste écrit à côté : le parser en a besoin pour les adresses
+/// britanniques, le géocodeur pour restreindre sa recherche. Ce sont des
+/// calculs, pas de l'affichage — c'est le même partage que côté JS, où
+/// `CURRENCIES` sert l'écran et `MARKETS` le reste.
+///
+/// Rien n'est mis en cache : la devise change quand le chauffeur la corrige, et
+/// un scan doit la voir tout de suite.
 public enum StriveMarket {
-  static var country: String {
-    let gid = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+  private static var appGroupId: String {
+    (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
-    return UserDefaults(suiteName: gid)?.string(forKey: "marketCountry") ?? "FR"
+  }
+
+  /// « EUR », « CHF » ou « GBP ».
+  ///
+  /// ── LE REPLI SUR LE PAYS EST UNE MIGRATION, PAS UN RESTE ──────────────────
+  /// `marketCurrency` n'existe que depuis `setMarket`. Les installations déjà en
+  /// service n'ont que `marketCountry`, et le premier scan après mise à jour se
+  /// fait souvent SANS ouvrir l'app — le raccourci iOS analyse une capture tout
+  /// seul, et c'est justement là que le verdict s'affiche. Retomber bêtement sur
+  /// l'euro aurait rendu des « € » et des kilomètres à un chauffeur britannique
+  /// dont le pays était pourtant écrit à côté, jusqu'à sa prochaine ouverture du
+  /// Dashboard.
+  ///
+  /// Le pays porte la devise sans ambiguïté dans ce sens-là : c'est la déduction
+  /// inverse — de la devise vers le pays — qui n'est pas sûre.
+  static var currency: String {
+    let defaults = UserDefaults(suiteName: appGroupId)
+    if let c = defaults?.string(forKey: "marketCurrency"), !c.isEmpty { return c }
+    switch defaults?.string(forKey: "marketCountry") ?? "" {
+    case "GB": return "GBP"
+    case "CH": return "CHF"
+    default:   return "EUR"
+    }
   }
 
   /// « € », « CHF » ou « £ ».
   public static var symbol: String {
-    switch country {
-    case "GB": return "£"
-    case "CH": return "CHF"
-    default:   return "€"
+    switch currency {
+    case "GBP": return "£"
+    case "CHF": return "CHF"
+    default:    return "€"
     }
   }
 
   /// « km » partout, « mi » au Royaume-Uni.
-  public static var distanceUnit: String { country == "GB" ? "mi" : "km" }
+  public static var distanceUnit: String { currency == "GBP" ? "mi" : "km" }
 
   /// Le scanner rend toujours des kilomètres — c'est ce que stocke
   /// `rides.distance_km`, et les bornes de plausibilité raisonnent dessus. La
   /// conversion n'a lieu qu'ici, au dernier pixel.
   public static func distance(_ km: Double) -> Double {
-    country == "GB" ? km / 1.609344 : km
+    currency == "GBP" ? km / 1.609344 : km
   }
 
   /// La livre se pose AVANT le nombre, l'euro et le franc après. S'y tromper
@@ -210,7 +246,7 @@ public enum StriveMarket {
   /// plus de chemin pour le gagner. D'où la multiplication, là où une distance se
   /// divise. Affichage seulement : les seuils, eux, restent au kilomètre.
   public static func rate(_ perKm: Double) -> Double {
-    country == "GB" ? perKm * 1.609344 : perKm
+    currency == "GBP" ? perKm * 1.609344 : perKm
   }
 
   /// « 3.15€/km », « £3.24/mi ». Prend un taux PAR KILOMÈTRE.

@@ -22,40 +22,117 @@ import android.content.Context
 object MarketFormat {
     private const val PREFS = "strive_market"
     private const val KEY_COUNTRY = "marketCountry"
+    private const val KEY_CURRENCY = "marketCurrency"
 
-    /** Cache mémoire — évite de relire les préférences à chaque frame de la bulle. */
-    private var cached: String? = null
+    /** Caches mémoire — évitent de relire les préférences à chaque frame de la bulle. */
+    private var cachedCountry: String? = null
+    private var cachedCurrency: String? = null
 
-    fun setCountry(ctx: Context, code: String) {
+    /**
+     * Le marché, en deux valeurs qui ne servent PAS à la même chose.
+     *
+     * `country` est du calcul : le parser s'en sert pour les miles et les
+     * adresses britanniques, le géocodeur pour restreindre sa recherche.
+     * `currency` est de l'affichage, et rien d'autre.
+     *
+     * Écrits ensemble, en un appel : deux setters, c'est deux moments où l'un
+     * part sans l'autre. Mirror de `ScanBridge.setMarket` côté iOS.
+     */
+    fun setMarket(ctx: Context, country: String, currency: String) {
         ctx.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_COUNTRY, code).apply()
-        cached = code
+            .edit()
+            .putString(KEY_COUNTRY, country)
+            .putString(KEY_CURRENCY, currency)
+            .apply()
+        cachedCountry = country
+        cachedCurrency = currency
         // Les deux autres consommateurs du pays vivent leur propre vie : le
         // parser s'en sert pour les miles, le géocodeur pour restreindre sa
         // recherche. On les tient à jour d'ici, pour n'avoir qu'un point d'entrée.
-        OcrParser.marketCountry = code
-        TomTomService.marketCountry = code
+        OcrParser.marketCountry = country
+        TomTomService.marketCountry = country
     }
 
-    fun country(ctx: Context): String {
-        cached?.let { return it }
-        val c = ctx.applicationContext
+    /** Le pays ÉCRIT, ou `null` si le chauffeur n'en a encore jamais poussé un. */
+    private fun storedCountry(ctx: Context): String? =
+        ctx.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_COUNTRY, "FR") ?: "FR"
-        cached = c
+            .getString(KEY_COUNTRY, null)
+            ?.takeIf { it.isNotEmpty() }
+
+    fun country(ctx: Context): String {
+        cachedCountry?.let { return it }
+        val c = storedCountry(ctx) ?: "FR"
+        cachedCountry = c
+        return c
+    }
+
+    /**
+     * Rend au parser et au géocodeur le pays qu'ils ont perdu.
+     *
+     * `OcrParser.marketCountry` et `TomTomService.marketCountry` sont des
+     * STATIQUES, donc liées au processus. La bulle, elle, tourne dans un service
+     * de premier plan qu'Android relance sans que JS ait jamais démarré — c'est
+     * même la raison d'être de ces préférences. Les statiques repartaient alors
+     * à leurs valeurs par défaut : le parser relisait des kilomètres là où le
+     * chauffeur voit des miles, et TomTom réinterrogeait les treize marchés avec
+     * des libellés français. Un chauffeur londonien se retrouvait avec une
+     * « Victoria Street » parisienne après un simple redémarrage système, sans
+     * rien avoir fait.
+     *
+     * La préférence, elle, a traversé. On la relit au démarrage du service, ce
+     * que l'iOS obtient gratuitement en lisant son App Group à chaque appel.
+     *
+     * Sans pays écrit, on ne pose RIEN : les valeurs par défaut des deux
+     * statiques disent « je ne sais pas » — treize pays côté géocodeur — et un
+     * « FR » inventé vaudrait moins que cet aveu.
+     */
+    fun hydrate(ctx: Context) {
+        val c = storedCountry(ctx) ?: return
+        cachedCountry = c
+        OcrParser.marketCountry = c
+        TomTomService.marketCountry = c
+    }
+
+    /**
+     * « EUR », « CHF » ou « GBP » — ce que le chauffeur a choisi.
+     *
+     * L'affichage se lisait sur le PAYS, ce qui obligeait à énumérer les pays de
+     * chaque monnaie — quatre pour le seul euro — pour retrouver un caractère
+     * que la devise donne directement. La déduction tombait juste aujourd'hui et
+     * n'attendait qu'un septième marché pour se tromper, en silence, sur le
+     * premier chiffre que le chauffeur regarde.
+     */
+    fun currency(ctx: Context): String {
+        cachedCurrency?.let { return it }
+        val prefs = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // LE REPLI SUR LE PAYS EST UNE MIGRATION, PAS UN RESTE. `marketCurrency`
+        // n'existe que depuis `setMarket` : les installations déjà en service
+        // n'ont que le pays, et la bulle tourne sans que JS ait forcément
+        // redémarré après la mise à jour. Retomber sur l'euro aurait rendu des
+        // « € » et des kilomètres à un chauffeur britannique dont le pays était
+        // écrit juste à côté. Le pays porte la devise sans ambiguïté — c'est la
+        // déduction inverse qui n'est pas sûre.
+        val c = prefs.getString(KEY_CURRENCY, null)?.takeIf { it.isNotEmpty() }
+            ?: when (prefs.getString(KEY_COUNTRY, null)) {
+                "GB" -> "GBP"
+                "CH" -> "CHF"
+                else -> "EUR"
+            }
+        cachedCurrency = c
         return c
     }
 
     /** « € », « CHF » ou « £ ». */
-    fun symbol(ctx: Context): String = when (country(ctx)) {
-        "GB" -> "£"
-        "CH" -> "CHF"
+    fun symbol(ctx: Context): String = when (currency(ctx)) {
+        "GBP" -> "£"
+        "CHF" -> "CHF"
         else -> "€"
     }
 
     /** « km » partout, « mi » au Royaume-Uni. */
-    fun distanceUnit(ctx: Context): String = if (country(ctx) == "GB") "mi" else "km"
+    fun distanceUnit(ctx: Context): String = if (currency(ctx) == "GBP") "mi" else "km"
 
     /**
      * Distance ramenée à l'unité du marché.
@@ -65,7 +142,7 @@ object MarketFormat {
      * conversion n'a lieu qu'ici, au dernier pixel.
      */
     fun distance(ctx: Context, km: Double): Double =
-        if (country(ctx) == "GB") km / 1.609344 else km
+        if (currency(ctx) == "GBP") km / 1.609344 else km
 
     /**
      * La livre se pose AVANT le nombre, l'euro et le franc après.
@@ -119,7 +196,7 @@ object MarketFormat {
      * distance se divise. Affichage seulement : les seuils restent au kilomètre.
      */
     fun rate(ctx: Context, perKm: Double): Double =
-        if (country(ctx) == "GB") perKm * 1.609344 else perKm
+        if (currency(ctx) == "GBP") perKm * 1.609344 else perKm
 
     /** « 3.15€/km », « £3.24/mi ». Prend un taux PAR KILOMÈTRE. */
     fun perDistance(ctx: Context, perKm: Double): String =

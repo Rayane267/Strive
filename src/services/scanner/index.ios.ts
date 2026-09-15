@@ -112,15 +112,12 @@ export const scannerService: ScannerService = {
   },
 
   /**
-   * Pays d'activité, poussé au natif pour le géocodage : il restreint la
-   * recherche TomTom à ce pays et fixe la langue des résultats.
-   *
-   * Distinct de la langue de l'app : `fr` ne sépare pas la France de la Belgique
-   * ni de la Suisse, et c'est le PAYS qui désambiguïse un nom de rue — il y a
-   * des « Victoria Street » dans plusieurs des treize pays couverts.
+   * Le marché : le PAYS pour le géocodage — `fr` ne sépare pas la France de la
+   * Belgique ni de la Suisse, et il y a des « Victoria Street » dans plusieurs
+   * des pays couverts — et la DEVISE pour tout ce que le natif affiche.
    */
-  setMarketCountry: (code: string) => {
-    ScanBridge?.setMarketCountry?.(code);
+  setMarket: (country: string, currency: string) => {
+    ScanBridge?.setMarket?.(country, currency);
   },
 
   setTomTomApiKey: (key: string) => {

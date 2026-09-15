@@ -24,7 +24,7 @@ final class TomTomService {
   private var cachedKey: String?
 
   /**
-   Pays d'activité du chauffeur, écrit en App Group par `ScanBridge.setMarketCountry`.
+   Pays d'activité du chauffeur, écrit en App Group par `ScanBridge.setMarket`.
 
    `countrySet` listait les treize pays couverts et `language` était figé à
    `fr-FR`. Un nom de rue existe souvent dans plusieurs pays — il y a des

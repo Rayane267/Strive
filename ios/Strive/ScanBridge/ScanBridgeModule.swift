@@ -763,12 +763,27 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
-  /// Pays d'activité : restreint le géocodage à ce pays et fixe la langue des
-  /// résultats. Distinct de `appLanguage` — `fr` ne sépare pas la France de la
-  /// Belgique ni de la Suisse, et c'est le PAYS qui désambiguïse une adresse.
-  @objc func setMarketCountry(_ code: String) {
+  /// Le marché du chauffeur, en deux valeurs que le natif n'utilise PAS pour la
+  /// même chose.
+  ///
+  /// `country` sert au calcul : il restreint le géocodage et fixe la langue des
+  /// résultats TomTom, et le parser s'en sert pour les adresses britanniques.
+  /// Distinct de `appLanguage` — `fr` ne sépare pas la France de la Belgique ni
+  /// de la Suisse, et c'est le PAYS qui désambiguïse une adresse.
+  ///
+  /// `currency` sert à l'affichage, et à lui seul : c'est ce que `StriveMarket`
+  /// lit pour l'écran verrouillé, la Dynamic Island, CarPlay et les
+  /// notifications. Le symbole s'en déduit directement, au lieu d'être retrouvé
+  /// à partir du pays — quatre pays partagent l'euro, et les lister pour
+  /// afficher un « € » était une occasion de se tromper sans retour.
+  ///
+  /// Écrits ENSEMBLE, dans un seul appel : deux setters, c'est deux moments où
+  /// l'un part sans l'autre, et un écran verrouillé qui annonce des livres avec
+  /// un plancher belge.
+  @objc func setMarket(_ country: String, currency: String) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
-      defaults.set(code, forKey: "marketCountry")
+      defaults.set(country, forKey: "marketCountry")
+      defaults.set(currency, forKey: "marketCurrency")
     }
   }
 

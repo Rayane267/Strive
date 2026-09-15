@@ -43,6 +43,47 @@ export type DistanceUnit = 'km' | 'mi';
 export const KM_PER_MILE = 1.609344;
 
 /**
+ * CE QUE LA DEVISE SUFFIT À DIRE — et qu'on allait chercher dans le pays.
+ *
+ * Le symbole, sa place et l'unité de distance ne dépendent que de la monnaie.
+ * Ils étaient pourtant lus sur le marché, donc sur le PAYS : afficher « £ » sur
+ * une course britannique passait par `countryForCurrency`, qui interroge `Intl`
+ * pour deviner une région dont l'affichage n'avait aucun besoin. Une devinette,
+ * par ligne de liste, à chaque rendu — pour retrouver un caractère qui était
+ * déjà dans `rides.currency`.
+ *
+ * Ici il n'y a rien à deviner : trois devises, trois lignes, et `MARKETS` en
+ * dérive au lieu de les recopier.
+ *
+ * ── CE QUI N'EST PAS ICI, ET POURQUOI ─────────────────────────────────────
+ * Le prix du carburant, le régime de cotisations et le plancher de rentabilité
+ * restent au marché. L'euro couvre la France, la Belgique, l'Espagne et le
+ * Portugal : le plancher y va de 25 €/h à 10 €/h, et seule la France a un relevé
+ * de prix. Les déduire de l'euro, ce serait servir le gazole parisien à un
+ * chauffeur de Porto — dans le bénéfice net de chacune de ses courses.
+ *
+ * La règle tient en une ligne : ce qui s'AFFICHE se déduit de la devise, ce qui
+ * se CALCULE a besoin du pays. Les deux types disent laquelle des deux on tient.
+ */
+export type CurrencyDisplay = {
+  currency: Currency;
+  symbol: string;
+  /**
+   * La livre se pose AVANT le nombre (« £24 »), l'euro et le franc après
+   * (« 24 € »). S'y tromper suffit à faire lire le prix comme une traduction
+   * automatique.
+   */
+  before: boolean;
+  distanceUnit: DistanceUnit;
+};
+
+export const CURRENCIES: Record<Currency, CurrencyDisplay> = {
+  EUR: { currency: 'EUR', symbol: '€', before: false, distanceUnit: 'km' },
+  CHF: { currency: 'CHF', symbol: 'CHF', before: false, distanceUnit: 'km' },
+  GBP: { currency: 'GBP', symbol: '£', before: true, distanceUnit: 'mi' },
+};
+
+/**
  * Un régime social, réduit à ce dont le seuil a besoin : combien part, et sur
  * quoi.
  *
@@ -91,12 +132,17 @@ export type Thresholds = {
   scale: ReadonlyArray<{ hourly: number; distance: number }>;
 };
 
-export type Market = {
+/**
+ * Un marché EST une devise, plus ce que la devise ne dit pas.
+ *
+ * L'intersection n'est pas cosmétique : elle rend un `Market` acceptable partout
+ * où un `CurrencyDisplay` est attendu, donc les fonctions d'affichage n'ont pas
+ * à choisir entre les deux. Et l'inverse est refusé par le compilateur — une
+ * course, qui ne porte qu'une devise, ne peut pas se retrouver à décider d'un
+ * plancher de rentabilité.
+ */
+export type Market = CurrencyDisplay & {
   country: CountryCode;
-  currency: Currency;
-  /** Symbole affiché. Le format (avant/après, espace) est dans `formatMoney`. */
-  symbol: string;
-  distanceUnit: DistanceUnit;
   /**
    * Ligne de `fuel_prices` à lire, ou `null` si le chauffeur saisit lui-même son
    * prix au litre (Paramètres → Véhicule).
@@ -189,9 +235,7 @@ function thresholdsFrom(multiplier: number): Thresholds {
 export const MARKETS: Record<CountryCode, Market> = {
   FR: {
     country: 'FR',
-    currency: 'EUR',
-    symbol: '€',
-    distanceUnit: 'km',
+    ...CURRENCIES.EUR,
     fuelKey: 'paris',
     locales: ['fr'],
     regimes: [
@@ -212,9 +256,7 @@ export const MARKETS: Record<CountryCode, Market> = {
 
   BE: {
     country: 'BE',
-    currency: 'EUR',
-    symbol: '€',
-    distanceUnit: 'km',
+    ...CURRENCIES.EUR,
     fuelKey: null,
     // Bruxelles est bilingue et les deux communautés roulent : proposer l'une
     // sans l'autre exclut la moitié du marché.
@@ -234,9 +276,7 @@ export const MARKETS: Record<CountryCode, Market> = {
 
   CH: {
     country: 'CH',
-    currency: 'CHF',
-    symbol: 'CHF',
-    distanceUnit: 'km',
+    ...CURRENCIES.CHF,
     fuelKey: null,
     locales: ['fr', 'de', 'it'],
     regimes: [
@@ -256,9 +296,7 @@ export const MARKETS: Record<CountryCode, Market> = {
 
   ES: {
     country: 'ES',
-    currency: 'EUR',
-    symbol: '€',
-    distanceUnit: 'km',
+    ...CURRENCIES.EUR,
     fuelKey: null,
     locales: ['es'],
     regimes: [
@@ -280,9 +318,7 @@ export const MARKETS: Record<CountryCode, Market> = {
 
   PT: {
     country: 'PT',
-    currency: 'EUR',
-    symbol: '€',
-    distanceUnit: 'km',
+    ...CURRENCIES.EUR,
     fuelKey: null,
     locales: ['pt'],
     regimes: [
@@ -303,9 +339,7 @@ export const MARKETS: Record<CountryCode, Market> = {
 
   GB: {
     country: 'GB',
-    currency: 'GBP',
-    symbol: '£',
-    distanceUnit: 'mi',
+    ...CURRENCIES.GBP,
     fuelKey: null,
     locales: ['en'],
     regimes: [
@@ -464,12 +498,13 @@ export function getMarket(stored?: string | null): Market {
  * séparés à la main : `toLocaleString` dépend d'un Intl dont la présence varie
  * selon la build Hermes, et un montant entier ne justifie pas ce pari.
  *
- * La livre se pose AVANT le nombre (« £24 »), l'euro et le franc après — s'y
- * tromper suffit à faire lire le prix comme une traduction automatique.
+ * Prend une DEVISE, pas un marché : formater un montant n'a jamais eu besoin de
+ * savoir dans quel pays il a été gagné. Un `Market` reste accepté tel quel — il
+ * en est un.
  */
 export function formatMoney(
   amount: number,
-  market: Market,
+  cur: CurrencyDisplay,
   {
     decimals = 0,
     language,
@@ -478,36 +513,41 @@ export function formatMoney(
   const n = decimals > 0 ? amount.toFixed(decimals) : String(Math.round(amount));
   const [int, dec] = n.split('.');
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  // La décimale suit la LANGUE, le symbole suit le MARCHÉ : un chauffeur
+  // La décimale suit la LANGUE, le symbole suit la DEVISE : un chauffeur
   // londonien qui lit l'app en espagnol veut « £14,50 », pas « £14.50 ».
   const body = dec ? `${grouped}${decimalSeparator(language ?? i18n.language)}${dec}` : grouped;
-  return market.currency === 'GBP' ? `${market.symbol}${body}` : `${body} ${market.symbol}`;
+  return cur.before ? `${cur.symbol}${body}` : `${body} ${cur.symbol}`;
 }
 
 /**
- * Le marché d'une COURSE, d'après la devise figée à sa création.
+ * Comment s'affiche une COURSE, d'après la devise figée à sa création.
  *
  * Une course garde ce qu'elle a rapporté. Un chauffeur qui passe de l'euro à la
  * livre ne voit pas ses courses parisiennes devenir des livres : elles restent
  * en euros, avec leurs kilomètres, parce que c'est ce qu'il a encaissé et roulé.
  *
- * Le marché COURANT sert de repli, et pas seulement par commodité : les courses
+ * Le repli sur l'affichage COURANT n'est pas qu'une commodité : les courses
  * antérieures à la colonne `currency` n'ont pas de devise en base, et elles
- * étaient toutes en euros, d'un seul marché. Le repli leur redonne exactement
+ * étaient toutes en euros, d'un seul marché. Il leur redonne exactement
  * l'affichage qu'elles avaient.
  *
- * Deux marchés partageant une devise (la France et l'Espagne) donnent le même
- * affichage — seul le plancher de rentabilité les distingue, et il ne s'applique
- * qu'à la course du jour, jamais à une ligne d'historique.
+ * ── UN ACCÈS DE TABLE, PLUS UNE DÉDUCTION ─────────────────────────────────
+ * Cette fonction rendait un `Market`, qu'elle obtenait en déduisant un PAYS de
+ * la devise (`countryForCurrency`) — donc en interrogeant `Intl` pour deviner
+ * une région, par carte de liste et à chaque rendu, afin de retrouver un
+ * symbole que `CURRENCIES` donne directement. La déduction n'avait aucun effet
+ * visible : quatre pays partagent l'euro et s'affichent tous pareil. Seul le
+ * plancher de rentabilité les sépare, et il ne s'applique qu'à la course du
+ * jour — jamais à une ligne d'historique.
  */
-export function marketForRide(
+export function displayForRide(
   currency: string | null | undefined,
-  current: Market,
-): Market {
+  current: CurrencyDisplay,
+): CurrencyDisplay {
   if (!currency || currency === current.currency) return current;
-  const known = (Object.keys(CURRENCY_CODE) as Currency[]).includes(currency as Currency);
-  if (!known) return current;
-  return MARKETS[countryForCurrency(currency as Currency)];
+  // Une devise inconnue (course d'un marché pas encore ouvert, colonne libre)
+  // retombe sur l'affichage courant plutôt que de rendre `undefined`.
+  return CURRENCIES[currency as Currency] ?? current;
 }
 
 /**
@@ -528,11 +568,11 @@ export function dateLocale(language: string | undefined, market: Market): string
 }
 
 /** Suffixe des seuils : « €/h », « £/h », « CHF/h ». */
-export const hourlyUnit = (market: Market) => `${market.symbol}/h`;
+export const hourlyUnit = (cur: CurrencyDisplay) => `${cur.symbol}/h`;
 
 /** « €/km » ou « £/mi », selon ce que le chauffeur a sous les yeux. */
-export const distanceUnitLabel = (market: Market) =>
-  `${market.symbol}/${market.distanceUnit}`;
+export const distanceUnitLabel = (cur: CurrencyDisplay) =>
+  `${cur.symbol}/${cur.distanceUnit}`;
 
 /**
  * Distance lue par le scanner, ramenée à l'unité du marché.
@@ -541,8 +581,8 @@ export const distanceUnitLabel = (market: Market) =>
  * affichent partout sauf au Royaume-Uni. Là-bas ils liront des miles, et il n'y
  * a rien à convertir : c'est l'unité de référence du marché.
  */
-export function toMarketDistance(km: number, market: Market): number {
-  return market.distanceUnit === 'mi' ? km / KM_PER_MILE : km;
+export function toMarketDistance(km: number, cur: CurrencyDisplay): number {
+  return cur.distanceUnit === 'mi' ? km / KM_PER_MILE : km;
 }
 
 /**
@@ -558,8 +598,8 @@ export function toMarketDistance(km: number, market: Market): number {
  * plus de chemin pour le gagner. D'où la multiplication, là où une distance,
  * elle, se divise.
  */
-export function toMarketRate(ratePerKm: number, market: Market): number {
-  return market.distanceUnit === 'mi' ? ratePerKm * KM_PER_MILE : ratePerKm;
+export function toMarketRate(ratePerKm: number, cur: CurrencyDisplay): number {
+  return cur.distanceUnit === 'mi' ? ratePerKm * KM_PER_MILE : ratePerKm;
 }
 
 /**
@@ -571,8 +611,8 @@ export function toMarketRate(ratePerKm: number, market: Market): number {
  * miles doit donc redescendre ici avant d'être enregistré, sinon la barre
  * monte de 1,6× sans que personne ne l'ait demandé.
  */
-export function fromMarketRate(rate: number, market: Market): number {
-  return market.distanceUnit === 'mi' ? rate / KM_PER_MILE : rate;
+export function fromMarketRate(rate: number, cur: CurrencyDisplay): number {
+  return cur.distanceUnit === 'mi' ? rate / KM_PER_MILE : rate;
 }
 
 /**
@@ -607,8 +647,8 @@ export const MPG_FACTOR = (100 / KM_PER_MILE) * LITRES_PER_IMPERIAL_GALLON;
 export const MI_PER_KWH_FACTOR = 100 / KM_PER_MILE;
 
 /** « L/100km », « kWh/100km », ou « mpg » / « mi/kWh » au Royaume-Uni. */
-export function consumptionUnit(market: Market, electric: boolean): string {
-  if (market.distanceUnit === 'mi') return electric ? 'mi/kWh' : 'mpg';
+export function consumptionUnit(cur: CurrencyDisplay, electric: boolean): string {
+  if (cur.distanceUnit === 'mi') return electric ? 'mi/kWh' : 'mpg';
   return electric ? 'kWh/100km' : 'L/100km';
 }
 
@@ -627,11 +667,11 @@ export function consumptionUnit(market: Market, electric: boolean): string {
  * reste valide quelle que soit la porte d'entrée.
  */
 export function consumptionBounds(
-  market: Market,
+  cur: CurrencyDisplay,
   electric: boolean,
 ): { min: number; max: number; unit: string } {
-  const unit = consumptionUnit(market, electric);
-  if (market.distanceUnit === 'mi') {
+  const unit = consumptionUnit(cur, electric);
+  if (cur.distanceUnit === 'mi') {
     return electric ? { min: 0.7, max: 20, unit } : { min: 5, max: 200, unit };
   }
   return { min: 0.1, max: 99.9, unit };
@@ -647,19 +687,19 @@ export function consumptionBounds(
  */
 export function toMarketConsumption(
   per100km: number,
-  market: Market,
+  cur: CurrencyDisplay,
   electric: boolean,
 ): number {
-  if (market.distanceUnit !== 'mi' || !(per100km > 0)) return per100km;
+  if (cur.distanceUnit !== 'mi' || !(per100km > 0)) return per100km;
   return (electric ? MI_PER_KWH_FACTOR : MPG_FACTOR) / per100km;
 }
 
 /** Le chemin inverse, pour ce que le chauffeur tape. */
 export function fromMarketConsumption(
   value: number,
-  market: Market,
+  cur: CurrencyDisplay,
   electric: boolean,
 ): number {
-  if (market.distanceUnit !== 'mi' || !(value > 0)) return value;
+  if (cur.distanceUnit !== 'mi' || !(value > 0)) return value;
   return (electric ? MI_PER_KWH_FACTOR : MPG_FACTOR) / value;
 }

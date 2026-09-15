@@ -61,16 +61,11 @@ import {
   toMarketDistance,
   toMarketRate,
   dateLocale,
-  marketForRide,
+  displayForRide,
   type Market,
 } from '../utils/market';
-import {
-  getFxRates,
-  inCurrency,
-  countConverted,
-  FX_FALLBACK,
-  type FxRates,
-} from '../services/fxService';
+import { inCurrency, countConverted } from '../services/fxService';
+import { useFxRates } from '../hooks/useFxRates';
 import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 
@@ -109,7 +104,7 @@ const RideCard = React.memo(
     // La ligne s'affiche dans la devise que la course a rapportée. Un chauffeur
     // qui déménage garde ses courses parisiennes en euros — avec leurs
     // kilomètres — au lieu de les voir devenir des livres et des miles.
-    const market = marketForRide(ride.currency, current);
+    const display = displayForRide(ride.currency, current);
     const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
     const isDeclined = ride.status === 'DECLINED';
     const isPending = ride.status === 'PENDING';
@@ -190,12 +185,12 @@ const RideCard = React.memo(
                 adjustsFontSizeToFit
                 minimumFontScale={0.6}
               >
-                {formatMoney(fare, market, { decimals: 2 })}
+                {formatMoney(fare, display, { decimals: 2 })}
               </Text>
               <Text style={styles.fareMeta} numberOfLines={1}>
                 {ride.duration_min || 0} {t('history.min')} ·{' '}
-                {toMarketDistance(Number(ride.distance_km) || 0, market).toFixed(1)}{' '}
-                {market.distanceUnit}
+                {toMarketDistance(Number(ride.distance_km) || 0, display).toFixed(1)}{' '}
+                {display.distanceUnit}
                 {' · '}
                 {formatTimeAgo(ride.created_at, t)}
               </Text>
@@ -215,12 +210,12 @@ const RideCard = React.memo(
           <View style={styles.rateRow}>
             <Text style={[styles.rateValue, { color: rateColor }]}>
               {Number(ride.hourly_rate || 0).toFixed(0)}
-              <Text style={styles.rateUnit}>{hourlyUnit(market)}</Text>
+              <Text style={styles.rateUnit}>{hourlyUnit(display)}</Text>
             </Text>
             <View style={styles.rateDivider} />
             <Text style={[styles.rateValue, { color: rateColor }]}>
-              {toMarketRate(Number(ride.km_rate) || 0, market).toFixed(2)}
-              <Text style={styles.rateUnit}>{distanceUnitLabel(market)}</Text>
+              {toMarketRate(Number(ride.km_rate) || 0, display).toFixed(2)}
+              <Text style={styles.rateUnit}>{distanceUnitLabel(display)}</Text>
             </Text>
           </View>
 
@@ -273,15 +268,9 @@ type FilterType = 'all' | 'accepted' | 'declined';
 
 const HistoryScreen = () => {
   const market = useMarket();
-  // Les taux servent aux TOTAUX seulement. Le repli suffit au premier
-  // rendu : sans course d'une autre monnaie — le cas de tout le monde —
-  // ils ne changent strictement rien à ce qui s'affiche.
-  const [fxRates, setFxRates] = useState<FxRates>(FX_FALLBACK);
-  useEffect(() => {
-    let cancelled = false;
-    getFxRates().then(r => { if (!cancelled) setFxRates(r); });
-    return () => { cancelled = true; };
-  }, []);
+  // Les taux servent aux TOTAUX seulement : chaque LIGNE garde la monnaie
+  // qu'elle a rapportée, et seule la somme a besoin d'une monnaie commune.
+  const fxRates = useFxRates();
   const { t, i18n } = useTranslation();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();

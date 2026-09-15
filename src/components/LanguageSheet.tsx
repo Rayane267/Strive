@@ -80,8 +80,11 @@ const LanguageSheet = ({
   // Suivre l'appareil signifie « aucun choix stocké » : l'état ne se lit donc
   // pas dans i18n, qui affiche toujours une langue concrète.
   const [followsDevice, setFollowsDevice] = React.useState(false);
-  /** `lang` puis `market` : on ne demande le pays qu'une fois la langue choisie. */
-  const [step, setStep] = React.useState<'lang' | 'market'>('lang');
+  /**
+   * `lang` puis `market`. `country` est un DÉTOUR, pas une étape : on n'y va que
+   * si le chauffeur dit que le pays affiché sous sa devise n'est pas le sien.
+   */
+  const [step, setStep] = React.useState<'lang' | 'market' | 'country'>('lang');
   const [savingCountry, setSavingCountry] = React.useState(false);
 
   useEffect(() => {
@@ -130,6 +133,9 @@ const LanguageSheet = ({
    * plancher de rentabilité. Écrit sur le profil : il PRIME sur la région de
    * l'appareil, qui n'était qu'une valeur par défaut.
    */
+  /** « France », « Portugal »… dans la langue de l'app. */
+  const countryName = (code: CountryCode) => t(`countries.${code.toLowerCase()}`, code);
+
   /**
    * Les devises proposées, avec les pays qu'elles recouvrent.
    *
@@ -148,14 +154,43 @@ const LanguageSheet = ({
   /**
    * Une devise choisie s'applique tout de suite — aucune question de plus.
    *
-   * Un euro étant un euro, le pays ne porte plus que le plancher de
-   * rentabilité : `countryForCurrency` le déduit de la région de l'appareil,
-   * puis de la langue. Le régime de cotisations, lui, reste demandé en clair à
-   * l'onboarding — c'est le chauffeur qui le connaît, pas son fuseau.
+   * Le pays est DÉDUIT (`countryForCurrency` : région de l'appareil, puis
+   * langue), et il porte trois choses qu'une devise ne dit pas — le géocodage
+   * des adresses, la source du prix du carburant et le plancher de rentabilité.
+   * L'euro couvrant quatre pays, cette déduction peut tomber à côté.
+   *
+   * D'où le pays écrit SOUS chaque devise, et « Ce n'est pas mon pays ? » qui
+   * mène à la liste complète. La déduction reste le chemin court parce qu'elle
+   * est juste presque toujours ; elle n'est simplement plus muette, et c'est ce
+   * silence-là qui était le vrai défaut : un chiffre faux qu'on voit se corrige,
+   * un chiffre faux qu'on ne voit pas se propage.
+   *
+   * Le régime de cotisations, lui, reste demandé en clair à l'onboarding —
+   * c'est le chauffeur qui le connaît, pas son fuseau.
    */
+  /**
+   * Le pays qu'une devise donnera — le RÉGLAGE D'ABORD, la déduction ensuite.
+   *
+   * `countryForCurrency` seul suffisait tant que la feuille ne montrait rien :
+   * il déduit de la région de l'appareil, puis de la langue. Mais un chauffeur
+   * belge dont le téléphone est configuré en France a `profiles.country = 'BE'`
+   * et se voyait proposer « France » sous l'euro — sa propre devise, déjà
+   * sélectionnée. Un tap dessus pour vérifier, et il passait en France : seuils
+   * remis de 15 €/h à 25 €/h et adresses géocodées dans le mauvais pays, pour
+   * avoir touché la ligne qui décrivait sa situation actuelle.
+   *
+   * Un réglage explicite prime sur une détection — c'est la règle que `getMarket`
+   * applique déjà. Elle valait aussi ici.
+   */
+  const countryFor = (currency: Currency): CountryCode => {
+    const stored = profile?.country as CountryCode | undefined;
+    if (stored && MARKETS[stored]?.currency === currency) return stored;
+    return countryForCurrency(currency, i18n.language);
+  };
+
   const pickCurrency = (currency: Currency) => {
     hapticLight();
-    applyCountry(countryForCurrency(currency, i18n.language));
+    applyCountry(countryFor(currency));
   };
 
   const applyCountry = async (country: CountryCode) => {
@@ -192,7 +227,7 @@ const LanguageSheet = ({
       await refreshProfile?.();
       // Le natif géocode avec ce pays : sans ce rappel, le prochain scan
       // chercherait encore l'adresse dans l'ancien.
-      scannerService.setMarketCountry?.(country);
+      scannerService.setMarket?.(country, MARKETS[country].currency);
       // Et il verdicte avec ces seuils-là : la bulle et la Live Activity
       // garderaient sinon l'ancienne barre jusqu'au prochain focus du Dashboard.
       scannerService.setThresholds?.(floor.hourly, floor.distance);
@@ -282,7 +317,7 @@ const LanguageSheet = ({
                 <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
               </ScrollView>
             </>
-          ) : (
+          ) : step === 'market' ? (
             <>
               <Text style={styles.title}>{t('preferences.currency', 'Votre devise')}</Text>
               <Text style={styles.subtitle}>
@@ -308,6 +343,14 @@ const LanguageSheet = ({
                       // « CHF CHF » n'aurait aucun sens : quand le symbole EST
                       // le code, on ne l'écrit qu'une fois.
                       label={m.symbol === iso ? iso : `${m.symbol}  ${iso}`}
+                      // LE PAYS DÉDUIT, ÉCRIT. C'est lui qui part au géocodage,
+                      // qui choisit la source du prix du carburant et qui pose le
+                      // plancher de rentabilité — trois choses fausses d'un coup
+                      // si la déduction tombe à côté. Elle était muette : un
+                      // chauffeur de Porto au téléphone configuré en France
+                      // obtenait « France » sans qu'aucun écran ne le lui dise,
+                      // et ses adresses étaient géocodées à 1 500 km.
+                      sub={countryName(countryFor(currency))}
                       selected={
                         !!profile?.country &&
                         MARKETS[profile.country as CountryCode]?.currency === currency
@@ -317,7 +360,63 @@ const LanguageSheet = ({
                     />
                   );
                 })}
+                {/* Un tap pour qui voit le bon pays — l'immense majorité —, deux
+                    pour les autres. Poser la question du pays à tout le monde
+                    coûterait un écran de plus à chacun pour une erreur qui en
+                    touche une minorité ; ne pas la poser du tout laissait cette
+                    minorité dans le faux sans recours. */}
+                <Option
+                  label={t('preferences.countryChange', "Ce n'est pas mon pays ?")}
+                  muted
+                  disabled={savingCountry}
+                  onPress={() => { hapticLight(); setStep('country'); }}
+                />
                 <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>{t('preferences.country', 'Pays et devise')}</Text>
+              <Text style={styles.subtitle}>
+                {t(
+                  'preferences.countrySub',
+                  'Il fixe votre devise, vos cotisations et votre seuil de rentabilité.',
+                )}
+              </Text>
+
+              <ScrollView
+                style={styles.optionsScroll}
+                contentContainerStyle={styles.options}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* LES SIX PAYS, et pas seulement ceux de la devise affichée.
+                    Filtrer sur la monnaie supposerait que le chauffeur s'est au
+                    moins trompé du bon côté — or celui qui arrive ici est
+                    précisément celui dont la déduction est fausse. Le pays est
+                    de toute façon la réponse complète : il porte la devise. */}
+                {(Object.keys(MARKETS) as CountryCode[]).map(code => {
+                  const m = MARKETS[code];
+                  const iso = CURRENCY_CODE[m.currency];
+                  return (
+                    <Option
+                      key={code}
+                      label={countryName(code)}
+                      sub={m.symbol === iso ? iso : `${m.symbol}  ${iso}`}
+                      selected={profile?.country === code}
+                      disabled={savingCountry}
+                      onPress={() => applyCountry(code)}
+                    />
+                  );
+                })}
+                {/* Retour à la devise, pas fermeture : on est venu d'ici par un
+                    détour, et un « Annuler » qui referme tout obligerait à
+                    rouvrir la feuille et à repasser par la langue. */}
+                <Option
+                  label={t('common.back', 'Retour')}
+                  muted
+                  disabled={savingCountry}
+                  onPress={() => { hapticLight(); setStep('market'); }}
+                />
               </ScrollView>
             </>
           )}

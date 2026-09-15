@@ -150,6 +150,10 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Le service peut redémarrer sans que JS ait tourné : le parser et le
+        // géocodeur repartiraient alors sur leurs valeurs par défaut. On leur
+        // rend le pays écrit en préférences avant le premier scan.
+        MarketFormat.hydrate(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

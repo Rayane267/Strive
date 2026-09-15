@@ -450,6 +450,7 @@
     "pushBlocked": "Blocked in your phone settings — tap to re-enable",
     "country": "Country and currency",
     "countrySub": "It sets your currency, your contributions and your profitability threshold.",
+    "countryChange": "Not my country?",
     "currency": "Your currency",
     "currencySub": "The one you'll read on every ride."
   },
