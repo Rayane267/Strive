@@ -5,13 +5,13 @@ import { Ride } from '../types/database';
 // d'éventuelles colonnes serveur hors-type et fige le payload réseau.
 const RIDE_COLUMNS =
   'id, user_id, platform, status, fare_estimated, fare_final, distance_km, ' +
-  'duration_min, hourly_rate, km_rate, fuel_cost, net_profit, ' +
+  'duration_min, hourly_rate, km_rate, currency, fx_rate_eur, fuel_cost, net_profit, ' +
   'pickup_address, destination_address, scan_ts, created_at';
 
 export async function fetchRides(
   userId: string,
   since: Date,
-  options: { limit?: number } = {},
+  options: { limit?: number; currency?: string } = {},
 ): Promise<Ride[]> {
   let query = supabase
     .from('rides')
@@ -93,6 +93,20 @@ export async function createRide(params: {
   durationMin: number;
   hourlyRate: number;
   kmRate: number;
+  /**
+   * La devise du marché AU MOMENT DU SCAN. Figée ici et jamais recalculée :
+   * c'est ce qui permet à un chauffeur qui déménage de garder ses courses
+   * françaises en euros au lieu de les voir devenir des livres du jour au
+   * lendemain.
+   */
+  currency: 'EUR' | 'CHF' | 'GBP';
+  /**
+   * Le taux du jour, figé avec la course. `1` en zone euro.
+   *
+   * Écrit ici plutôt que relu plus tard : c'est ce qui rend un total passé
+   * reproductible. Un relevé qui change tout seul n'est plus un relevé.
+   */
+  fxRateEur: number;
   fuelCost?: number | null;
   netProfit?: number | null;
   pickupAddress?: string | null;
@@ -138,6 +152,8 @@ export async function createRide(params: {
       duration_min: params.durationMin,
       hourly_rate: params.hourlyRate,
       km_rate: params.kmRate,
+      currency: params.currency,
+      fx_rate_eur: params.fxRateEur,
       fuel_cost: params.fuelCost ?? null,
       net_profit: params.netProfit ?? null,
       // Une adresse tient sur UNE ligne en base.

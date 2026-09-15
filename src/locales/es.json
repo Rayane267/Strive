@@ -379,7 +379,9 @@
       "DECLINED": "RECHAZADO",
       "PENDING": "PENDIENTE"
     },
-    "changeMonth": "Cambiar de mes"
+    "changeMonth": "Cambiar de mes",
+    "otherCurrency_one": "incluye {{count}} viaje convertido a tu moneda",
+    "otherCurrency_other": "incluye {{count}} viajes convertidos a tu moneda"
   },
   "settings": {
     "title": "Ajustes del vehículo",

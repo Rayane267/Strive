@@ -61,6 +61,7 @@ import {
   toMarketRate,
   dateLocale,
 } from '../utils/market';
+import { getFxRates, inCurrency, countConverted } from '../services/fxService';
 import { calendarLocale, CALENDAR_LOCALES } from '../utils/calendarLocales';
 
 
@@ -127,12 +128,17 @@ const AnalyticsScreen = () => {
         ]);
         const mh = Number(prefsRes.data?.min_hourly_rate ?? 25) || 25;
         const mk = Number(prefsRes.data?.min_km_rate ?? 1.2) || 1.2;
-        setWeeklyBilan(computeWeeklyBilan(weekRides, mh, mk));
+        // Les seuils sont dans la devise du chauffeur : les courses d'une autre
+        // monnaie y sont ramenées avant d'être comparées, sinon un tarif en
+        // livres passerait pour un tarif en euros.
+        const rates = await getFxRates();
+        const normalized = weekRides.map(r => inCurrency(r, market.currency, rates));
+        setWeeklyBilan(computeWeeklyBilan(normalized, mh, mk));
       } catch {
         setWeeklyBilan({ lossWeek: 0, avoided: 0 });
       }
     })();
-  }, [user?.id, isPaid, resetHour]);
+  }, [user?.id, isPaid, resetHour, market.currency]);
   const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
@@ -186,6 +192,9 @@ const AnalyticsScreen = () => {
   const [weeklyBilan, setWeeklyBilan] = useState<{ lossWeek: number; avoided: number }>({ lossWeek: 0, avoided: 0 });
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
+  // Nombre de courses d'une autre monnaie incluses dans les totaux, pour
+  // pouvoir le dire à l'écran plutôt que de le taire.
+  const [convertedRides, setConvertedRides] = useState(0);
   const [qualityScore, setQualityScore] = useState<QualityScore | null>(null);
   /// Maille des graphes. Elle décide aussi de leur TITRE : « Gains par jour »
   /// sur des barres hebdomadaires serait faux.
@@ -223,6 +232,7 @@ const AnalyticsScreen = () => {
         rides,
         { data: sessionsData, error: sessionsError },
         { data: prefsData },
+        fxRates,
       ] = await Promise.all([
         fetchRidesInRange(user.id, rangeStart, rangeEnd),
         supabase
@@ -236,11 +246,24 @@ const AnalyticsScreen = () => {
           .select('min_hourly_rate, min_km_rate')
           .eq('id', user.id)
           .single(),
+        getFxRates(),
       ]);
+
+      // ── UNE SEULE MONNAIE À PARTIR D'ICI ────────────────────────────────
+      // Tout ce qui suit somme, divise ou compare : gains totaux, €/h, €/km,
+      // score qualité, répartition par plateforme, courbes. Une course en livres
+      // fausserait chacun de ces calculs de la même façon, et les corriger un
+      // par un aurait laissé passer le prochain. On convertit ici, une fois.
+      //
+      // Le taux figé au scan fait foi (cf. `fx_rate_eur`) : un total de mars ne
+      // bouge pas parce que la livre a bougé en septembre.
+      const convertedCount = countConverted(rides, market.currency);
+      const normalizedRides = rides.map(r => inCurrency(r, market.currency, fxRates));
+      setConvertedRides(convertedCount);
 
       if (sessionsError) throw sessionsError;
 
-      if (!rides || rides.length === 0) {
+      if (!rides || normalizedRides.length === 0) {
         const emptyStats = { totalProfit: 0, totalDistance: 0, totalDurationMin: 0, hourlyRate: 0, pricePerKm: 0, acceptedCount: 0, fuelCost: 0, appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 }, appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 } };
         setStats(emptyStats);
         setDailyEarnings([]);
@@ -264,9 +287,9 @@ const AnalyticsScreen = () => {
       const minKm = isFree
         ? floor.distance
         : Number(prefsData?.min_km_rate ?? floor.distance) || floor.distance;
-      setQualityScore(computeQualityScore(rides as any, minHourly, minKm));
+      setQualityScore(computeQualityScore(normalizedRides as any, minHourly, minKm));
 
-      const acceptedRides = rides.filter((r: any) => r.status === 'ACCEPTED');
+      const acceptedRides = normalizedRides.filter((r: any) => r.status === 'ACCEPTED');
       let totalProfit = 0;
       let totalDistance = 0;
       const distribution: Record<'UBER' | 'BOLT' | 'HEETCH', number> = { UBER: 0, BOLT: 0, HEETCH: 0 };
@@ -655,6 +678,14 @@ const AnalyticsScreen = () => {
                     {money2(displayProfit)}
                   </Text>
                 </Animated.View>
+                {/* N'apparaît que si le total contient des courses d'une autre
+                    monnaie — donc presque jamais. Mais un total silencieusement
+                    converti serait pire qu'un total converti et annoncé. */}
+                {convertedRides > 0 && (
+                  <Text style={styles.convertedNote} numberOfLines={2}>
+                    {t('history.otherCurrency', { count: convertedRides })}
+                  </Text>
+                )}
                 {hasFuelData && (
                   <View style={styles.profitToggleRow}>
                     <View style={[styles.profitBadge, showNet && styles.profitBadgeActive]}>
@@ -1110,6 +1141,11 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     marginBottom: space.sm,
     textAlign: 'center',
+  },
+  convertedNote: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
   },
   profitToggleRow: {
     flexDirection: 'row',

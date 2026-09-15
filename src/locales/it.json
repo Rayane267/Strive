@@ -379,7 +379,9 @@
       "DECLINED": "RIFIUTATA",
       "PENDING": "IN ATTESA"
     },
-    "changeMonth": "Cambia mese"
+    "changeMonth": "Cambia mese",
+    "otherCurrency_one": "di cui {{count}} corsa convertita nella tua valuta",
+    "otherCurrency_other": "di cui {{count}} corse convertite nella tua valuta"
   },
   "settings": {
     "title": "Impostazioni veicolo",

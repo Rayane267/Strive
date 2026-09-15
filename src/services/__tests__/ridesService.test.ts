@@ -98,6 +98,8 @@ describe('createRide', () => {
       durationMin: 10,
       hourlyRate: 60,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
     });
 
     expect(mockUpsert).toHaveBeenCalledWith(
@@ -117,6 +119,8 @@ describe('createRide', () => {
       durationMin: 8,
       hourlyRate: 60,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
       pickupAddress: '1 rue A',
       destinationAddress: '2 rue B',
     });
@@ -144,6 +148,8 @@ describe('createRide', () => {
       durationMin: 6,
       hourlyRate: 50,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
     });
 
     expect(mockUpsert).toHaveBeenCalledWith(
@@ -163,6 +169,8 @@ describe('createRide', () => {
         durationMin: 10,
         hourlyRate: 60,
         kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
       }),
     ).rejects.toBeDefined();
   });

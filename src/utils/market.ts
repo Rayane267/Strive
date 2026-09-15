@@ -485,6 +485,32 @@ export function formatMoney(
 }
 
 /**
+ * Le marché d'une COURSE, d'après la devise figée à sa création.
+ *
+ * Une course garde ce qu'elle a rapporté. Un chauffeur qui passe de l'euro à la
+ * livre ne voit pas ses courses parisiennes devenir des livres : elles restent
+ * en euros, avec leurs kilomètres, parce que c'est ce qu'il a encaissé et roulé.
+ *
+ * Le marché COURANT sert de repli, et pas seulement par commodité : les courses
+ * antérieures à la colonne `currency` n'ont pas de devise en base, et elles
+ * étaient toutes en euros, d'un seul marché. Le repli leur redonne exactement
+ * l'affichage qu'elles avaient.
+ *
+ * Deux marchés partageant une devise (la France et l'Espagne) donnent le même
+ * affichage — seul le plancher de rentabilité les distingue, et il ne s'applique
+ * qu'à la course du jour, jamais à une ligne d'historique.
+ */
+export function marketForRide(
+  currency: string | null | undefined,
+  current: Market,
+): Market {
+  if (!currency || currency === current.currency) return current;
+  const known = (Object.keys(CURRENCY_CODE) as Currency[]).includes(currency as Currency);
+  if (!known) return current;
+  return MARKETS[countryForCurrency(currency as Currency)];
+}
+
+/**
  * La locale à donner à `Intl` : la LANGUE dit les mots, le MARCHÉ dit la région.
  *
  * Les deux se choisissent séparément, et leur croisement n'est pas une curiosité :

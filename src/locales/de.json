@@ -379,7 +379,9 @@
       "DECLINED": "ABGELEHNT",
       "PENDING": "OFFEN"
     },
-    "changeMonth": "Monat wechseln"
+    "changeMonth": "Monat wechseln",
+    "otherCurrency_one": "davon {{count}} Fahrt in deine Währung umgerechnet",
+    "otherCurrency_other": "davon {{count}} Fahrten in deine Währung umgerechnet"
   },
   "settings": {
     "title": "Fahrzeugeinstellungen",

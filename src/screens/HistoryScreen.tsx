@@ -61,8 +61,16 @@ import {
   toMarketDistance,
   toMarketRate,
   dateLocale,
+  marketForRide,
   type Market,
 } from '../utils/market';
+import {
+  getFxRates,
+  inCurrency,
+  countConverted,
+  FX_FALLBACK,
+  type FxRates,
+} from '../services/fxService';
 import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 
@@ -88,16 +96,20 @@ const RideCard = React.memo(
     t,
     minHourly,
     minKm,
-    market,
+    market: current,
   }: {
     ride: Ride;
     t: any;
     minHourly: number;
     minKm: number;
-    /** Passé en prop et non lu par `useMarket` : la carte est mémoïsée et
-     *  rendue par centaines dans la liste. */
+    /** Marché COURANT, passé en prop et non lu par `useMarket` : la carte est
+     *  mémoïsée et rendue par centaines dans la liste. */
     market: Market;
   }) => {
+    // La ligne s'affiche dans la devise que la course a rapportée. Un chauffeur
+    // qui déménage garde ses courses parisiennes en euros — avec leurs
+    // kilomètres — au lieu de les voir devenir des livres et des miles.
+    const market = marketForRide(ride.currency, current);
     const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
     const isDeclined = ride.status === 'DECLINED';
     const isPending = ride.status === 'PENDING';
@@ -261,6 +273,15 @@ type FilterType = 'all' | 'accepted' | 'declined';
 
 const HistoryScreen = () => {
   const market = useMarket();
+  // Les taux servent aux TOTAUX seulement. Le repli suffit au premier
+  // rendu : sans course d'une autre monnaie — le cas de tout le monde —
+  // ils ne changent strictement rien à ce qui s'affiche.
+  const [fxRates, setFxRates] = useState<FxRates>(FX_FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    getFxRates().then(r => { if (!cancelled) setFxRates(r); });
+    return () => { cancelled = true; };
+  }, []);
   const { t, i18n } = useTranslation();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();
@@ -536,9 +557,16 @@ const HistoryScreen = () => {
   const declined = rides.filter(r => r.status === 'DECLINED').length;
   const acceptRate =
     rides.length > 0 ? Math.round((accepted / rides.length) * 100) : 0;
-  const dailyTotal = rides
-    .filter(r => r.status === 'ACCEPTED')
-    .reduce((sum, r) => sum + effectiveFare(r), 0);
+  // Chaque LIGNE garde sa monnaie ; le TOTAL, lui, a besoin d'une monnaie
+  // commune — additionner 200 € et 150 £ ne désigne rien. Les courses d'une
+  // autre devise y sont donc converties, au taux figé à leur scan, et l'écran
+  // le dit juste dessous plutôt que de le taire.
+  const acceptedRides = rides.filter(r => r.status === 'ACCEPTED');
+  const dailyTotal = acceptedRides.reduce(
+    (sum, r) => sum + effectiveFare(inCurrency(r, market.currency, fxRates)),
+    0,
+  );
+  const otherCurrencyCount = countConverted(acceptedRides, market.currency);
 
   const filteredRides = useMemo(
     () =>
@@ -657,6 +685,14 @@ const HistoryScreen = () => {
               >
                 {formatMoney(dailyTotal, market, { decimals: 2 })}
               </Text>
+              {/* N'apparaît que si le chauffeur a des courses dans une autre
+                  monnaie — c'est-à-dire presque jamais. Mais un total muet qui
+                  ne compte pas tout serait pire qu'un total incomplet annoncé. */}
+              {otherCurrencyCount > 0 && (
+                <Text style={styles.heroOtherCurrency} numberOfLines={2}>
+                  {t('history.otherCurrency', { count: otherCurrencyCount })}
+                </Text>
+              )}
             </View>
             <View style={styles.acceptBlock}>
               <Text
@@ -1082,6 +1118,11 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '900',
     letterSpacing: -1,
+  },
+  heroOtherCurrency: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
   },
   acceptBlock: { alignItems: 'flex-end', flexShrink: 0, maxWidth: 100 },
   acceptValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },

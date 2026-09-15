@@ -30,6 +30,7 @@ import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
 import { LANGUAGE_NAMES, dateLocale, decimalSeparator } from '../utils/market';
+import { getFxRates, inCurrency } from '../services/fxService';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -144,7 +145,11 @@ const ProfileScreen = () => {
         // preferences, et aller chercher `day_reset_hour` pour un ecart de
         // quelques heures une fois par semaine couterait un aller-retour.
         const since = getWeekStart();
-        const rides = await fetchRides(user.id, since);
+        // Un total : les courses d'une autre monnaie sont converties, pas
+        // écartées.
+        const rates = await getFxRates();
+        const rides = (await fetchRides(user.id, since))
+          .map(r => inCurrency(r, market.currency, rates));
         const total = rides
           .filter(r => r.status === 'ACCEPTED')
           .reduce((sum, r) => sum + effectiveFare(r), 0);
@@ -156,7 +161,7 @@ const ProfileScreen = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, market.currency]);
 
   // Notifications : l'état affiché croise DEUX conditions, le jeton enregistré
   // ET la permission système.

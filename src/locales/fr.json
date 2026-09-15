@@ -379,7 +379,9 @@
       "DECLINED": "REFUSÉE",
       "PENDING": "EN ATTENTE"
     },
-    "changeMonth": "Changer le mois"
+    "changeMonth": "Changer le mois",
+    "otherCurrency_one": "dont {{count}} course convertie dans votre devise",
+    "otherCurrency_other": "dont {{count}} courses converties dans votre devise"
   },
   "settings": {
     "title": "Paramètres Véhicule",

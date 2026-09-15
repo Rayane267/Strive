@@ -20,10 +20,13 @@ import { useNetworkStatus } from './useNetworkStatus';
 import { drainLegacyOfflineQueue } from '../services/offlineService';
 import { createRide } from '../services/ridesService';
 import { useAuth } from '../context/AuthContext';
+import { useMarket } from '../hooks/useMarket';
+import { getFxRates } from '../services/fxService';
 
 export function useOfflineSync() {
   const { isConnected } = useNetworkStatus();
   const { user } = useAuth();
+  const market = useMarket();
   const syncingRef = useRef(false);
   const wasOfflineRef = useRef(false);
 
@@ -31,6 +34,7 @@ export function useOfflineSync() {
     if (!user || syncingRef.current) return;
     syncingRef.current = true;
     try {
+      const rates = await getFxRates();
       const count = await drainLegacyOfflineQueue(async (ride) => {
         await createRide({
           userId: user.id,
@@ -40,6 +44,12 @@ export function useOfflineSync() {
           durationMin: ride.duration_min,
           hourlyRate: ride.hourly_rate,
           kmRate: ride.km_rate,
+          // La file héritée ne portait pas de devise — elle date d'un build
+          // à un seul marché. On prend celle d'aujourd'hui : c'est la seule
+          // information disponible, et la file se vide en quelques secondes
+          // après le retour du réseau.
+          currency: market.currency,
+          fxRateEur: rates[market.currency],
           // Ces trois champs étaient omis : une course reprise perdait son coût
           // carburant, son net, et surtout sa clé de scan — donc sa date, que
           // `createRide` dérive de `scanTs`. Elle atterrissait au jour de la
@@ -57,7 +67,7 @@ export function useOfflineSync() {
     } finally {
       syncingRef.current = false;
     }
-  }, [user]);
+  }, [user, market.currency]);
 
   // Trigger 1 : retour de connexion après offline
   useEffect(() => {

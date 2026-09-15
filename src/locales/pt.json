@@ -379,7 +379,9 @@
       "DECLINED": "RECUSADA",
       "PENDING": "PENDENTE"
     },
-    "changeMonth": "Mudar de mês"
+    "changeMonth": "Mudar de mês",
+    "otherCurrency_one": "inclui {{count}} viagem convertida para a sua moeda",
+    "otherCurrency_other": "inclui {{count}} viagens convertidas para a sua moeda"
   },
   "settings": {
     "title": "Definições do veículo",

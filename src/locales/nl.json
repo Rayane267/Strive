@@ -379,7 +379,9 @@
       "DECLINED": "GEWEIGERD",
       "PENDING": "IN AFWACHTING"
     },
-    "changeMonth": "Maand wijzigen"
+    "changeMonth": "Maand wijzigen",
+    "otherCurrency_one": "inclusief {{count}} rit omgerekend naar je munt",
+    "otherCurrency_other": "inclusief {{count}} ritten omgerekend naar je munt"
   },
   "settings": {
     "title": "Voertuiginstellingen",

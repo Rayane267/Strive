@@ -78,6 +78,30 @@ export interface Ride {
   duration_min: number;
   hourly_rate: number;
   km_rate: number;
+  /**
+   * Devise dans laquelle cette course a été gagnée.
+   *
+   * FIGÉE À LA CRÉATION. Changer de marché ne la réécrit pas : le chauffeur a
+   * encaissé 20 €, pas £17,20, et c'est le premier chiffre qu'il compare à son
+   * relevé bancaire. Sans cette colonne, basculer en livres ne convertissait
+   * rien — ça RÉINTERPRÉTAIT tout l'historique, en silence.
+   *
+   * `undefined` sur les courses antérieures à la migration 20260915 : elles
+   * sont alors lues comme des euros, ce qu'elles étaient toutes.
+   */
+  currency?: 'EUR' | 'CHF' | 'GBP' | null;
+  /**
+   * Unités de `currency` pour 1 EUR, FIGÉES AU SCAN.
+   *
+   * Sans elle, un total consolidé se recalculerait au taux du jour et
+   * changerait tout seul : « 2 340 € ce mois-ci » devenait 2 358 € la semaine
+   * suivante sans que le chauffeur ait roulé. Figée, la valeur pivot de chaque
+   * course ne bouge plus jamais.
+   *
+   * `null` sur les courses antérieures à la migration : elles étaient toutes en
+   * euros, donc le taux vaut 1 et se déduit.
+   */
+  fx_rate_eur?: number | null;
   fuel_cost?: number | null;    // coût carburant figé au scan
   net_profit?: number | null;   // tarif − fuel_cost (net réel daté)
   pickup_address?: string | null;

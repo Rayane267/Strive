@@ -56,7 +56,8 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, hourlyUnit } from '../utils/market';
+import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
+import { getFxRates, convertAmount, inCurrency } from '../services/fxService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
@@ -121,16 +122,29 @@ async function fetchTodayOnlineBaseSeconds(userId: string, resetHour: number): P
 // Même frontière que `fetchTodayOnlineBaseSeconds` : le minuit local en dur
 // donnait un €/h faux avec day_reset_hour = 4, en divisant des gains comptés
 // depuis minuit par des heures comptées depuis 4h la veille.
-async function fetchTodayAcceptedTotals(userId: string, resetHour: number): Promise<{ earnings: number; km: number }> {
+async function fetchTodayAcceptedTotals(userId: string, resetHour: number, currency: string): Promise<{ earnings: number; km: number }> {
   const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('rides')
-    .select('fare_estimated, fare_final, distance_km')
+    .select('fare_estimated, fare_final, distance_km, currency')
     .eq('user_id', userId)
     .eq('status', 'ACCEPTED')
     .gte('created_at', dayStart.toISOString());
   const rows = data ?? [];
-  const earnings = rows.reduce((s: number, r: any) => s + Number(r.fare_final ?? r.fare_estimated ?? 0), 0);
+  // Converties et non écartées : ces gains partent aussi au natif, où l'écran
+  // verrouillé les affiche derrière un seul symbole. Un total amputé y serait
+  // indiscernable d'une journée creuse.
+  const rates = await getFxRates();
+  const earnings = rows.reduce(
+    (s: number, r: any) =>
+      s + convertAmount(
+        Number(r.fare_final ?? r.fare_estimated ?? 0),
+        (r.currency ?? 'EUR') as Currency,
+        currency as Currency,
+        rates,
+      ),
+    0,
+  );
   const km = rows.reduce((s: number, r: any) => s + Number(r.distance_km ?? 0), 0);
   return { earnings, km };
 }
@@ -352,7 +366,7 @@ const DashboardScreen = () => {
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
           const currentElapsed = Math.floor((Date.now() - startTs) / 1000);
           // Réhydrate les vrais totaux du jour (sinon 0 jusqu'au prochain tag).
-          const totals = await fetchTodayAcceptedTotals(user.id, dayResetHourRef.current);
+          const totals = await fetchTodayAcceptedTotals(user.id, dayResetHourRef.current, market.currency);
           const onlineHr = (todayOnlineBaseSecondsRef.current + currentElapsed) / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
@@ -371,7 +385,7 @@ const DashboardScreen = () => {
       // Verdict rendu (session reprise, clôturée ou absente) : les scans natifs
       // en attente peuvent être traités.
       .finally(() => sessionRestoredRef.current!.resolve());
-  }, [user?.id]);
+  }, [user?.id, market.currency]);
 
   // La disparition de la Live Activity ne ferme PLUS la session : « Tout
   // effacer » dans le centre de notifications, la limite de durée iOS ou une fin
@@ -589,7 +603,11 @@ const DashboardScreen = () => {
     (async () => {
       try {
         const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-        const weekRides = await fetchRides(user.id, since);
+        // Le tease chiffre un manque à gagner : les courses d'une autre monnaie
+        // sont converties, pas écartées.
+        const rates = await getFxRates();
+        const weekRides = (await fetchRides(user.id, since))
+          .map(r => inCurrency(r, market.currency, rates));
         const tease = computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate);
         setWeeklyTease(tease);
         // Récap hebdo (dimanche 19h) : montant si perte significative, sinon générique.
@@ -598,7 +616,7 @@ const DashboardScreen = () => {
         setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
       }
     })();
-  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans]);
+  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans, market.currency]);
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
@@ -885,6 +903,11 @@ const DashboardScreen = () => {
           durationMin: totalDuration,
           hourlyRate,
           kmRate,
+          // Figés ici tous les deux : une course scannée à Paris reste en euros
+          // même si le chauffeur passe à la livre le mois suivant, et sa valeur
+          // pivot ne bougera plus — donc les totaux du mois passé non plus.
+          currency: market.currency,
+          fxRateEur: (await getFxRates())[market.currency],
           fuelCost,
           netProfit,
           pickupAddress: result.pickupAddress,
@@ -1020,7 +1043,7 @@ const DashboardScreen = () => {
       subFailed?.remove();
       subFailure?.remove();
     };
-  }, [user?.id, preferences, t]);
+  }, [user?.id, preferences, t, market.currency]);
 
   const handleToggleScanner = async () => {
     if (scannerActive) {

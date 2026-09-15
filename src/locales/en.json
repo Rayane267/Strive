@@ -379,7 +379,9 @@
       "DECLINED": "DECLINED",
       "PENDING": "PENDING"
     },
-    "changeMonth": "Change month"
+    "changeMonth": "Change month",
+    "otherCurrency_one": "includes {{count}} ride converted to your currency",
+    "otherCurrency_other": "includes {{count}} rides converted to your currency"
   },
   "settings": {
     "title": "Car Settings",
