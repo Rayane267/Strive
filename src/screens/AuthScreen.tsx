@@ -100,11 +100,25 @@ const AuthField = () => (
       colors={[
         // teinte 151°, saturation relevée, valeur réglée sur la luminance de la
         // référence à cette hauteur — luminance visée en commentaire.
-        '#509171', // 122
-        '#4E9674', // 125 — le plateau du haut
-        '#3D7A5C', // 100
-        '#2C6248', //  79
-        '#204835', //  58
+        // ⚠️ VALEURS REVUES — le sommet lisait « blanc » et non « vert ».
+        //
+        // Deux choses le causaient, et une seule ne suffisait pas à l'expliquer.
+        // La SATURATION d'abord : les arrêts d'origine tournaient autour de 0,45,
+        // ce qui, à cette luminance, donne un vert grisé — la teinte s'efface et
+        // il ne reste que la clarté. Ils sont remontés à 0,70, donc franchement
+        // verts. La LUMINANCE ensuite : 122 au premier pixel, c'est 6,6× le fond
+        // (18,5), et l'écran s'ouvrait sur une tache pâle avant même la marque.
+        // Le sommet descend à 92, le reste de la courbe suit dans la même
+        // proportion. La forme du dégradé ne bouge pas — plateau en haut, chute
+        // après 6 %, fondu vers `FIELD_TOP` — seule son intensité change.
+        //
+        // Les valeurs d'origine, si le rendu manque de lumière : #509171 (122),
+        // #4E9674 (125), #3D7A5C (100), #2C6248 (79), #204835 (58).
+        '#257A51', //  92
+        '#267D53', //  94 — le plateau du haut
+        '#1F6845', //  78
+        '#1A5538', //  64
+        '#13402A', //  48
         '#192E24', //  39
         '#131F19', //  26
         '#101412', //  18,5
@@ -145,12 +159,15 @@ const AuthField = () => (
       colors={[
         'rgba(255,255,255,0)',
         'rgba(255,255,255,0)',
-        'rgba(255,255,255,0.11)',
+        // Bandes blanches divisées par deux : posées sur un sommet déjà pâle,
+        // elles ajoutaient du voile là où il y en avait déjà trop. Sur la lueur
+        // assombrie ci-dessus, la moitié suffit à faire lire les plis.
+        'rgba(255,255,255,0.05)',
         'rgba(7,12,9,0.16)',
         'rgba(7,12,9,0)',
         'rgba(7,12,9,0)',
         'rgba(7,12,9,0.06)',
-        'rgba(255,255,255,0.08)',
+        'rgba(255,255,255,0.04)',
         'rgba(255,255,255,0)',
         'rgba(255,255,255,0)',
       ]}

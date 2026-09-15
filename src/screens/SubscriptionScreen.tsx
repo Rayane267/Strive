@@ -566,18 +566,20 @@ const SubscriptionScreen = () => {
         <Feather name="x" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
-      {/* `edges={['bottom']}` laisse le fond passer sous la barre de statut —
-          c'est voulu, la teinte doit monter jusqu'en haut. Mais le CONTENU, lui,
-          démarrait à 48 px du bord : sur un iPhone à Dynamic Island (59 px de
-          zone sûre) la pastille du logo passait dessous. On reprend donc l'encart
-          ici, sur le seul contenu. */}
+      {/* L'encart de zone sûre est porté par le HERO, pas par la ScrollView.
+          Posé ici, il décalait la boîte du hero vers le bas — et comme celle-ci
+          est en `overflow: 'hidden'`, son halo vert se trouvait rogné au-dessus
+          de ce bord : une bande noire restait collée sous la barre de statut, et
+          l'écran se lisait en deux morceaux. Le hero repart donc de tout en haut
+          et pousse son propre CONTENU, ce qui laisse le vert monter jusqu'à
+          l'encoche. */}
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top }]}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
 
         {/* ── HERO ── */}
-        <View style={styles.hero}>
+        <View style={[styles.hero, { paddingTop: insets.top + space.xl }]}>
           <SafeGradient
             colors={['rgba(0,230,118,0.22)', 'rgba(0,230,118,0.06)', 'transparent']}
             style={styles.heroGlow}
@@ -867,10 +869,9 @@ const styles = StyleSheet.create({
 
   // ── Hero ──
   hero: {
-    // `xl` et non `xxxl` : l'encart de zone sûre porté par `scroll` fournit
-    // désormais l'essentiel de la respiration du haut, et la cumuler avec 48 px
-    // repoussait le logo trop bas sur les appareils à encoche.
-    paddingHorizontal: space.xl, paddingTop: space.xl, paddingBottom: space.xxl,
+    // `paddingTop` est posé au rendu : zone sûre + `xl`. La boîte, elle, commence
+    // à y=0 pour que son halo couvre la barre de statut.
+    paddingHorizontal: space.xl, paddingBottom: space.xxl,
     overflow: 'hidden', alignItems: 'center',
   },
   heroGlow: {
