@@ -241,7 +241,7 @@ object OcrParser {
      * « min » n'est pas touché : le `(?![a-z])` empêche « mi » de mordre dessus.
      */
     private val MILES_REGEX =
-        Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])""", RegexOption.IGNORE_CASE)
+        Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])""", RegexOption.IGNORE_CASE)
 
     private fun milesToKm(s: String): String {
         if (!s.contains("mi", ignoreCase = true)) return s

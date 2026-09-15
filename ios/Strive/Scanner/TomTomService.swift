@@ -49,7 +49,9 @@ final class TomTomService {
   /// Langue des résultats : celle du pays. Figée à `fr-FR`, elle renvoyait des
   /// libellés français à un chauffeur londonien.
   private var geocodeLanguage: String {
-    switch marketCountry {
+    // `?? ""` plutot qu'un switch sur l'Optional : le filet est gratuit et
+    // enleve toute ambiguite d'inference.
+    switch marketCountry ?? "" {
     case "GB": return "en-GB"
     case "ES": return "es-ES"
     case "PT": return "pt-PT"

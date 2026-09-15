@@ -144,7 +144,6 @@ final class OcrParser {
   // ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup.
   private static let evContextRegex = try! NSRegularExpression(
     pattern: #"(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)"#, options: .caseInsensitive)
-    options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
   private static let durationHourRegex = try! NSRegularExpression(
@@ -234,7 +233,7 @@ final class OcrParser {
     guard s.range(of: "mi", options: .caseInsensitive) != nil else { return s }
     return replaceAll(
       s,
-      pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])"#,
+      pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])"#,
       options: [.caseInsensitive]
     ) { match in
       let raw = match.replacingOccurrences(
