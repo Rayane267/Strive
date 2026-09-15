@@ -101,11 +101,24 @@ export const PLANS = ALL_PLANS.filter((p) => p.id !== 'premium' || PREMIUM_LIVE)
 
 type ComparisonRow = { label: string; free: string; plus: string; premium: string };
 
-export const COMPARISON: ComparisonRow[] = [
-  { label: 'Scans par jour',         free: '3',           plus: '30',          premium: 'Illimité' },
+// Le support prioritaire appartient à Premium SEUL : le trigger
+// `20260901_support_priority.sql` pose `priority` à partir de
+// `effective_tier(user) = 'premium'`. Annoncé sur Plus, c'était une promesse que
+// l'app ne tient pas — et la file d'attente du support est l'endroit où le
+// chauffeur s'en aperçoit, au pire moment.
+const ALL_COMPARISON: ComparisonRow[] = [
+  { label: 'Scans par jour',         free: '3',           plus: '20',          premium: 'Illimité' },
   { label: 'Seuils €/h et €/km',     free: 'Imposés',     plus: 'Les tiens',   premium: 'Les tiens' },
   { label: 'Carburant déduit',       free: '—',           plus: 'Par modèle',  premium: 'Par modèle' },
   { label: 'Historique des courses', free: "Aujourd'hui", plus: '7 jours',     premium: 'Illimité' },
   { label: 'Réglages véhicule',      free: 'Verrouillés', plus: 'Modifiables', premium: 'Modifiables' },
-  { label: 'Support',                free: 'Standard',    plus: 'Prioritaire', premium: 'Prioritaire' },
+  { label: 'Support',                free: 'Standard',    plus: 'Standard',    premium: 'Prioritaire' },
 ];
+
+// Tant que Premium n'est pas en vente, sa colonne est masquée — une ligne dont
+// « Gratuit » et « Plus » disent la même chose ne distingue alors plus rien et
+// n'a rien à faire dans un tableau comparatif. Elle revient d'elle-même le jour
+// où `PREMIUM_LIVE` passe à `true`.
+export const COMPARISON = ALL_COMPARISON.filter(
+  (row) => PREMIUM_LIVE || row.free !== row.plus,
+);

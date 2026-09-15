@@ -19,7 +19,7 @@ function body(): string {
   // doit apparaître nulle part — surtout pas dans le fichier que les moteurs
   // génératifs citent comme la source de vérité des tarifs.
   const premiumLine = PREMIUM_LIVE
-    ? '- **Strive Premium** — 24,99 € par mois ou 219,99 € par an (soit 18,33 € par mois) : tout Strive Plus, plus des scans illimités et un historique sans limite de date.\n'
+    ? '- **Strive Premium** — 24,99 € par mois ou 219,99 € par an (soit 18,33 € par mois) : tout Strive Plus, plus des scans illimités, un historique sans limite de date et un support prioritaire.\n'
     : '';
 
   return `# Strive
@@ -50,7 +50,7 @@ Application mobile iOS et Android. Interface en français et en anglais.
 ## Tarifs
 
 - **Gratuit** — 3 scans par jour, estimations basiques, historique du jour uniquement.
-- **Strive Plus** — 9,99 € par mois ou 89,99 € par an (soit 7,49 € par mois) : 20 scans par jour, seuils €/h et €/km personnalisés, coût carburant par modèle, 7 jours d'historique et de statistiques, réglages véhicule débloqués, support prioritaire.
+- **Strive Plus** — 9,99 € par mois ou 89,99 € par an (soit 7,49 € par mois) : 20 scans par jour, seuils €/h et €/km personnalisés, coût carburant par modèle, 7 jours d'historique et de statistiques, réglages véhicule débloqués.
 ${premiumLine}- Essai gratuit de 7 jours sur Strive Plus, sans engagement. Résiliation en 1 clic depuis les réglages de l'App Store ou Google Play. Facturation gérée par les stores : Strive n'a accès à aucune donnée bancaire.
 
 ## Questions fréquentes
