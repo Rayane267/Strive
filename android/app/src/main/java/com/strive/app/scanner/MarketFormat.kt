@@ -1,4 +1,4 @@
-package com.strive.app.scanner
+package com.strive.scanner
 
 import android.content.Context
 
