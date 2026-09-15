@@ -1,0 +1,18 @@
+<resources>
+<!-- Généré à la main — Android résout lui-même la bonne ressource à partir
+     du Locale posé par FloatingBubbleService.setAppLanguage. Il n'y a rien à
+     écrire en Kotlin : le dossier SUFFIT. -->
+  <string name="app_name">Strive</string>
+  <string name="accessibility_service_description">Strive is een professioneel hulpmiddel voor taxichauffeurs. Deze toegankelijkheidsdienst wordt uitsluitend gebruikt om het scherm van de apps Uber, Bolt en Heetch vast te leggen wanneer de gebruiker op de scanknop tikt, om automatisch de ritgegevens (tarief, afstand, adressen) via lokale OCR te halen. Er worden geen persoonsgegevens gelezen of verzameld. De analyse gebeurt op het toestel en start alleen op uitdrukkelijk verzoek van de chauffeur.</string>
+  <string name="scanner_not_a_ride">Geen ritaanbod gevonden</string>
+  <string name="scanner_session_required_bubble">Ga online om te scannen</string>
+  <string name="scanner_session_required_title">Sessie vereist</string>
+  <string name="scanner_session_required_body">Start je sessie in Strive om ritten te scannen.</string>
+  <string name="scanner_notif_active_title">Strive-scanner actief</string>
+  <string name="scanner_notif_active_body">Tik op de pil om te scannen</string>
+  <string name="scanner_notif_online">online</string>
+  <string name="scanner_ride_accept">✅ Rit aangenomen</string>
+  <string name="scanner_ride_decline">❌ Geweigerd</string>
+  <string name="scanner_quota_reached">Limiet bereikt</string>
+  <string name="scanner_quota_reached_free">Limiet bereikt · Ga naar Plus</string>
+</resources>

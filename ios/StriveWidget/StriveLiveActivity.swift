@@ -97,15 +97,15 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.center) {
           if isError {
-            Text(laString(fr: "Analyse impossible", en: "Analysis failed"))
+            Text(StriveNativeStrings.get("analysisFailed"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isScanning {
-            Text(laString(fr: "Analyse…", en: "Analyzing…"))
+            Text(StriveNativeStrings.get("analyzing"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isLocked {
-            Text(laString(fr: "Passe Plus pour voir", en: "Go Plus to see"))
+            Text(StriveNativeStrings.get("goPlus"))
               .font(.system(size: 14, weight: .bold))
               .foregroundColor(.white)
           } else if isRecap {
@@ -116,7 +116,7 @@ struct StriveLiveActivity: Widget {
           } else if isIdle {
             // Le libellé de session porte la région centrale ; les chiffres sont
             // en dessous, dans la région basse, où ils ont la largeur.
-            Text(laString(fr: "Session en cours", en: "Session running"))
+            Text(StriveNativeStrings.get("sessionRunning"))
               .font(.system(size: 12, weight: .semibold))
               .foregroundColor(.white.opacity(0.45))
           } else {
@@ -128,12 +128,12 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           if isError {
-            Text(laString(fr: "Réessayez avec une autre capture", en: "Try another screenshot"))
+            Text(StriveNativeStrings.get("tryAnother"))
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
               .padding(.vertical, 4)
           } else if isLocked {
-            Text(laString(fr: "Se rembourse en une course", en: "Pays for itself in one ride"))
+            Text(StriveNativeStrings.get("paysForItself"))
               .font(.system(size: 12, weight: .medium))
               .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
@@ -191,7 +191,7 @@ struct StriveLiveActivity: Widget {
         }
       } compactTrailing: {
         if isError {
-          Text(laString(fr: "Erreur", en: "Error"))
+          Text(StriveNativeStrings.get("error"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(errorRed)
         } else if isScanning {
@@ -291,7 +291,7 @@ private struct LockScreenView: View {
       ZStack {
         VStack(spacing: 12) {
           HStack(spacing: 8) {
-            Text(laString(fr: "Course", en: "Ride"))
+            Text(StriveNativeStrings.get("ride"))
               .font(.system(size: 15, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
 
@@ -318,10 +318,10 @@ private struct LockScreenView: View {
           Image(systemName: "lock.fill")
             .font(.system(size: 17, weight: .bold))
             .foregroundColor(.white)
-          Text(laString(fr: "Passe Plus pour voir", en: "Go Plus to see"))
+          Text(StriveNativeStrings.get("goPlus"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white)
-          Text(laString(fr: "Se rembourse en une course", en: "Pays for itself in one ride"))
+          Text(StriveNativeStrings.get("paysForItself"))
             .font(.system(size: 11, weight: .medium))
             .foregroundColor(.white.opacity(0.6))
         }
@@ -387,12 +387,12 @@ private struct LockScreenView: View {
           if isScanning {
             HStack(spacing: 5) {
               ProgressView().tint(accent).scaleEffect(0.7)
-              Text(laString(fr: "Analyse…", en: "Analyzing…"))
+              Text(StriveNativeStrings.get("analyzing"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
             }
           } else if isError {
-            Text(laString(fr: "Erreur", en: "Error"))
+            Text(StriveNativeStrings.get("error"))
               .font(.system(size: 11, weight: .bold))
               .foregroundColor(errorRed)
           } else {
@@ -425,7 +425,7 @@ private struct LockScreenView: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-              Text(laString(fr: "GAINS", en: "EARNINGS"))
+              Text(StriveNativeStrings.get("earningsCaps"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(.white.opacity(0.3))
@@ -442,7 +442,7 @@ private struct LockScreenView: View {
                 .foregroundColor(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-              Text(laString(fr: "/HEURE", en: "/HOUR"))
+              Text(StriveNativeStrings.get("perHourCaps"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(accent.opacity(0.5))
@@ -693,7 +693,7 @@ private struct DecisionButtons: View {
   var body: some View {
     HStack(spacing: 8) {
       Button(intent: RideDecisionIntent(rideId: rideId, accepted: false)) {
-        Label(laString(fr: "Refusée", en: "Declined"), systemImage: "xmark")
+        Label(StriveNativeStrings.get("declined"), systemImage: "xmark")
           .font(.system(size: 13, weight: .bold))
           .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.94, green: 0.27, blue: 0.27))
@@ -704,7 +704,7 @@ private struct DecisionButtons: View {
       .buttonStyle(.plain)
 
       Button(intent: RideDecisionIntent(rideId: rideId, accepted: true)) {
-        Label(laString(fr: "Prise", en: "Taken"), systemImage: "checkmark")
+        Label(StriveNativeStrings.get("taken"), systemImage: "checkmark")
           .font(.system(size: 13, weight: .bold))
           .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.0, green: 0.78, blue: 0.32))
@@ -773,17 +773,6 @@ private func laCountPresentation(_ p: LAPresentation, platform: String) -> Bool 
     d.set(Date().timeIntervalSince1970, forKey: "laPres_since")
   }
   return true
-}
-
-private func laString(fr: String, en: String) -> String {
-  let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
-    ?? "group.com.striveapp.app"
-  // Anglais UNIQUEMENT si l'app est réglée en anglais ; français sinon. Pas de
-  // repli sur la locale système : un chauffeur qui a mis Strive en français sur
-  // un iPhone en anglais doit lire du français partout, y compris ici.
-  guard let appLang = UserDefaults(suiteName: groupId)?.string(forKey: "appLanguage")
-  else { return fr }
-  return appLang.hasPrefix("en") ? en : fr
 }
 
 // MARK: - Helpers couleurs

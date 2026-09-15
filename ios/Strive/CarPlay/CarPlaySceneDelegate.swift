@@ -107,11 +107,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
       // chauffeur n'a simplement pas démarré sa session.
       return [
         CPInformationItem(
-          title: localized(fr: "Aucune session", en: "No session"),
-          detail: localized(
-            fr: "Démarrez votre session dans Strive.",
-            en: "Start your session in Strive."
-          )
+          title: StriveNativeStrings.get("noSession"),
+          detail: StriveNativeStrings.get("startSession")
         )
       ]
     }
@@ -132,19 +129,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     return [
       CPInformationItem(
-        title: localized(fr: "Par heure", en: "Per hour"),
+        title: StriveNativeStrings.get("perHour"),
         detail: hourlyRate.map { StriveMarket.perHour($0) } ?? "—"
       ),
       CPInformationItem(
-        title: localized(fr: "Gains", en: "Earnings"),
+        title: StriveNativeStrings.get("earnings"),
         detail: StriveMarket.money(earnings)
       ),
       CPInformationItem(
-        title: localized(fr: "En ligne", en: "Online"),
+        title: StriveNativeStrings.get("online"),
         detail: formatDuration(onlineSeconds)
       ),
       CPInformationItem(
-        title: localized(fr: "Distance", en: "Distance"),
+        title: StriveNativeStrings.get("distance"),
         detail: String(format: "%.0f %@", StriveMarket.distance(km), StriveMarket.distanceUnit)
       ),
     ]
@@ -170,11 +167,4 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     return h > 0 ? String(format: "%d h %02d", h, m) : "\(m) min"
   }
 
-  /// Même résolution de langue que le reste de l'app (App Group `appLanguage`,
-  /// sinon locale système) — cf. LiveActivityManager / AnalyzeRideIntent.
-  private func localized(fr: String, en: String) -> String {
-    guard let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-    else { return fr }
-    return appLang.hasPrefix("en") ? en : fr
-  }
 }

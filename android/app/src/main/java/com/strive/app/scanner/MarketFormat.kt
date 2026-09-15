@@ -73,8 +73,24 @@ object MarketFormat {
      * S'y tromper suffit à faire lire le prix comme une traduction automatique,
      * et c'est le premier chiffre que le chauffeur regarde.
      */
+    /**
+     * La virgule décimale suit la LANGUE, le symbole suit le MARCHÉ.
+     *
+     * `Locale.US` écrit toujours un point. Un chauffeur français lisait donc
+     * « 19.61€ » dans la bulle et « 19,61 € » dans l'app, pour la même course.
+     * Les deux réglages se choisissent séparément et n'ont aucune raison de se
+     * suivre : un Londonien peut lire l'app en français.
+     */
+    fun decimalSeparator(ctx: Context): String {
+        val lang = ctx.applicationContext
+            .getSharedPreferences(FloatingBubbleService.LANG_PREFS, Context.MODE_PRIVATE)
+            .getString(FloatingBubbleService.LANG_KEY, null)
+        return if (lang != null && lang.startsWith("en")) "." else ","
+    }
+
     fun money(ctx: Context, value: Double, decimals: Int = 0): String {
         val s = String.format(java.util.Locale.US, "%.${decimals}f", value)
+            .replace(".", decimalSeparator(ctx))
         val sym = symbol(ctx)
         // Espace avant « CHF » seulement : c'est un mot, et « 37CHF » se lit
         // comme une coquille. Les glyphes restent collés — la bulle compte ses
@@ -111,7 +127,8 @@ object MarketFormat {
 
     /** « 5.4km », « 3.4mi ». */
     fun distanceText(ctx: Context, km: Double): String =
-        String.format(java.util.Locale.US, "%.1f", distance(ctx, km)) + distanceUnit(ctx)
+        String.format(java.util.Locale.US, "%.1f", distance(ctx, km))
+            .replace(".", decimalSeparator(ctx)) + distanceUnit(ctx)
 
     /**
      * Tarif de la course. Rond tant qu'il est rond.

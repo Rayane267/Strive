@@ -1,0 +1,18 @@
+<resources>
+<!-- Généré à la main — Android résout lui-même la bonne ressource à partir
+     du Locale posé par FloatingBubbleService.setAppLanguage. Il n'y a rien à
+     écrire en Kotlin : le dossier SUFFIT. -->
+  <string name="app_name">Strive</string>
+  <string name="accessibility_service_description">O Strive é uma ferramenta profissional para motoristas TVDE. Este serviço de acessibilidade é usado exclusivamente para capturar o ecrã das apps Uber, Bolt e Heetch quando o utilizador toca no botão de análise, para extrair automaticamente os dados da viagem (tarifa, distância, moradas) por OCR local. Nenhum dado pessoal é lido ou recolhido. A análise é feita no dispositivo e só é ativada a pedido explícito do motorista.</string>
+  <string name="scanner_not_a_ride">Nenhuma oferta de viagem detetada</string>
+  <string name="scanner_session_required_bubble">Fique online para analisar</string>
+  <string name="scanner_session_required_title">Sessão necessária</string>
+  <string name="scanner_session_required_body">Inicie a sua sessão no Strive para analisar as suas viagens.</string>
+  <string name="scanner_notif_active_title">Scanner Strive ativo</string>
+  <string name="scanner_notif_active_body">Toque na pastilha para analisar</string>
+  <string name="scanner_notif_online">online</string>
+  <string name="scanner_ride_accept">✅ Viagem aceite</string>
+  <string name="scanner_ride_decline">❌ Recusada</string>
+  <string name="scanner_quota_reached">Quota atingida</string>
+  <string name="scanner_quota_reached_free">Quota atingida · Passe a Plus</string>
+</resources>

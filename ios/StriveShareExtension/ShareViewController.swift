@@ -25,6 +25,9 @@ class ShareViewController: UIViewController {
   /// Résout la langue UI (fr/en) : pref synchronisée par l'app principale via
   /// App Group (`appLanguage`), sinon locale système. Même logique que AnalyzeRideIntent.
   private func localizedString(fr: String, en: String) -> String {
+    // Les sept langues d'abord (cf. `StriveNativeStrings`) ; fr/en reste
+    // le repli, écrit à côté de son point d'usage.
+    if let translated = StriveNativeStrings.forFrench(fr) { return translated }
     // Anglais uniquement si l'app est réglée en anglais, français sinon — la
     // locale système ne fait PAS foi.
     guard let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")

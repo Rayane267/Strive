@@ -641,6 +641,10 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {
+    // Les sept langues d'abord (cf. `StriveNativeStrings`). Le couple fr/en
+    // reste écrit ici : il sert de repli, et il garde la phrase lisible à
+    // côté de son point d'usage.
+    if let translated = StriveNativeStrings.forFrench(fr) { return translated }
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     // Anglais uniquement si l'app est réglée en anglais, français sinon — la

@@ -2,6 +2,112 @@ import Foundation
 import ActivityKit
 import AppIntents
 
+/// Ce que le NATIF écrit, dans les sept langues de l'app.
+///
+/// La Live Activity et CarPlay ne peuvent pas appeler i18next : ils tournent
+/// dans des processus qui n'ont jamais chargé JavaScript. Ils avaient donc leur
+/// propre paire `laString(fr:en:)` — deux langues, et un repli sur le FRANÇAIS.
+/// Un chauffeur espagnol qui avait mis Strive en espagnol lisait « Analyse… »
+/// sur son écran verrouillé : ni sa langue, ni même celle de repli de l'app.
+///
+/// La langue vient de l'App Group, où `ScanBridge.setAppLanguage` l'écrit à
+/// chaque choix. Pas de repli sur la locale SYSTÈME : un chauffeur qui a mis
+/// Strive en français sur un iPhone en anglais doit lire du français partout, y
+/// compris ici.
+public enum StriveNativeStrings {
+  static let table: [String: [String: String]] = [
+    "analysisFailed": ["fr": "Analyse impossible", "en": "Analysis failed", "es": "Análisis imposible", "pt": "Análise impossível", "nl": "Analyse mislukt", "de": "Analyse fehlgeschlagen", "it": "Analisi impossibile"],
+    "analyzing": ["fr": "Analyse…", "en": "Analyzing…", "es": "Analizando…", "pt": "A analisar…", "nl": "Analyseren…", "de": "Analyse…", "it": "Analisi…"],
+    "goPlus": ["fr": "Passe Plus pour voir", "en": "Go Plus to see", "es": "Pasa a Plus para verlo", "pt": "Passe a Plus para ver", "nl": "Ga naar Plus om te zien", "de": "Plus holen, um zu sehen", "it": "Passa a Plus per vedere"],
+    "sessionRunning": ["fr": "Session en cours", "en": "Session running", "es": "Sesión en curso", "pt": "Sessão em curso", "nl": "Sessie bezig", "de": "Sitzung läuft", "it": "Sessione in corso"],
+    "tryAnother": ["fr": "Réessayez avec une autre capture", "en": "Try another screenshot", "es": "Prueba con otra captura", "pt": "Tente com outra captura", "nl": "Probeer een andere schermafbeelding", "de": "Versuch einen anderen Screenshot", "it": "Riprova con un'altra schermata"],
+    "paysForItself": ["fr": "Se rembourse en une course", "en": "Pays for itself in one ride", "es": "Se paga en un solo viaje", "pt": "Paga-se numa só viagem", "nl": "Verdient zich terug in één rit", "de": "Zahlt sich in einer Fahrt aus", "it": "Si ripaga in una corsa"],
+    "error": ["fr": "Erreur", "en": "Error", "es": "Error", "pt": "Erro", "nl": "Fout", "de": "Fehler", "it": "Errore"],
+    "ride": ["fr": "Course", "en": "Ride", "es": "Viaje", "pt": "Viagem", "nl": "Rit", "de": "Fahrt", "it": "Corsa"],
+    "earningsCaps": ["fr": "GAINS", "en": "EARNINGS", "es": "GANANCIAS", "pt": "GANHOS", "nl": "VERDIENSTEN", "de": "EINNAHMEN", "it": "GUADAGNI"],
+    "perHourCaps": ["fr": "/HEURE", "en": "/HOUR", "es": "/HORA", "pt": "/HORA", "nl": "/UUR", "de": "/STUNDE", "it": "/ORA"],
+    "declined": ["fr": "Refusée", "en": "Declined", "es": "Rechazada", "pt": "Recusada", "nl": "Geweigerd", "de": "Abgelehnt", "it": "Rifiutata"],
+    "taken": ["fr": "Prise", "en": "Taken", "es": "Aceptada", "pt": "Aceite", "nl": "Aangenomen", "de": "Angenommen", "it": "Accettata"],
+    "noSession": ["fr": "Aucune session", "en": "No session", "es": "Sin sesión", "pt": "Sem sessão", "nl": "Geen sessie", "de": "Keine Sitzung", "it": "Nessuna sessione"],
+    "startSession": ["fr": "Démarrez votre session dans Strive.", "en": "Start your session in Strive.", "es": "Inicia tu sesión en Strive.", "pt": "Inicie a sua sessão no Strive.", "nl": "Start je sessie in Strive.", "de": "Starte deine Sitzung in Strive.", "it": "Avvia la tua sessione su Strive."],
+    "perHour": ["fr": "Par heure", "en": "Per hour", "es": "Por hora", "pt": "Por hora", "nl": "Per uur", "de": "Pro Stunde", "it": "All'ora"],
+    "earnings": ["fr": "Gains", "en": "Earnings", "es": "Ganancias", "pt": "Ganhos", "nl": "Verdiensten", "de": "Einnahmen", "it": "Guadagni"],
+    "online": ["fr": "En ligne", "en": "Online", "es": "En línea", "pt": "Online", "nl": "Online", "de": "Online", "it": "Online"],
+    "distance": ["fr": "Distance", "en": "Distance", "es": "Distancia", "pt": "Distância", "nl": "Afstand", "de": "Distanz", "it": "Distanza"],
+    "signIn": ["fr": "Connectez-vous à Strive pour analyser vos courses.", "en": "Sign in to Strive to analyse your rides.", "es": "Inicia sesión en Strive para analizar tus viajes.", "pt": "Inicie sessão no Strive para analisar as suas viagens.", "nl": "Meld je aan bij Strive om je ritten te analyseren.", "de": "Melde dich bei Strive an, um deine Fahrten zu analysieren.", "it": "Accedi a Strive per analizzare le tue corse."],
+    "scannerOff": ["fr": "Scanner désactivé — activez-le dans Strive › Préférences.", "en": "Scanner disabled — enable it in Strive › Preferences.", "es": "Escáner desactivado — actívalo en Strive › Preferencias.", "pt": "Scanner desativado — ative-o em Strive › Preferências.", "nl": "Scanner uitgeschakeld — zet hem aan in Strive › Voorkeuren.", "de": "Scanner deaktiviert — aktiviere ihn in Strive › Einstellungen.", "it": "Scanner disattivato — attivalo in Strive › Preferenze."],
+    "sessionRequired": ["fr": "Session requise", "en": "Session required", "es": "Sesión necesaria", "pt": "Sessão necessária", "nl": "Sessie vereist", "de": "Sitzung erforderlich", "it": "Sessione richiesta"],
+    "sessionRequiredBody": ["fr": "Veuillez démarrer votre session dans Strive pour commencer à scanner.", "en": "Please start your session in Strive to begin scanning.", "es": "Inicia tu sesión en Strive para empezar a escanear.", "pt": "Inicie a sua sessão no Strive para começar a analisar.", "nl": "Start je sessie in Strive om te beginnen met scannen.", "de": "Starte deine Sitzung in Strive, um mit dem Scannen zu beginnen.", "it": "Avvia la tua sessione su Strive per iniziare a scansionare."],
+    "quotaPlus": ["fr": "Quota journalier atteint — passez à Plus pour continuer à scanner aujourd'hui.", "en": "Daily quota reached — go Plus to keep scanning today.", "es": "Cuota diaria alcanzada — pasa a Plus para seguir escaneando hoy.", "pt": "Quota diária atingida — passe a Plus para continuar hoje.", "nl": "Daglimiet bereikt — ga naar Plus om vandaag verder te scannen.", "de": "Tageslimit erreicht — hol dir Plus, um heute weiterzuscannen.", "it": "Quota giornaliera raggiunta — passa a Plus per continuare oggi."],
+    "quotaTomorrow": ["fr": "Quota journalier atteint — revenez demain.", "en": "Daily quota reached — come back tomorrow.", "es": "Cuota diaria alcanzada — vuelve mañana.", "pt": "Quota diária atingida — volte amanhã.", "nl": "Daglimiet bereikt — kom morgen terug.", "de": "Tageslimit erreicht — komm morgen wieder.", "it": "Quota giornaliera raggiunta — torna domani."],
+    "invalidImage": ["fr": "Image invalide — réessayez avec une capture d'écran.", "en": "Invalid image — try again with a screenshot.", "es": "Imagen no válida — inténtalo con una captura de pantalla.", "pt": "Imagem inválida — tente com uma captura de ecrã.", "nl": "Ongeldige afbeelding — probeer het met een schermafbeelding.", "de": "Ungültiges Bild — versuch es mit einem Screenshot.", "it": "Immagine non valida — riprova con un'istantanea."],
+    "alreadyRunning": ["fr": "Analyse déjà en cours — patiente une seconde.", "en": "Analysis already running — hold on a second.", "es": "Análisis ya en curso — espera un segundo.", "pt": "Análise já em curso — aguarde um segundo.", "nl": "Analyse loopt al — wacht even.", "de": "Analyse läuft bereits — einen Moment.", "it": "Analisi già in corso — attendi un secondo."],
+    "cardHidden": ["fr": "Carte masquée — session toujours active. Ouvrez Strive pour la réafficher.", "en": "Card hidden — session still active. Open Strive to bring it back.", "es": "Tarjeta oculta — la sesión sigue activa. Abre Strive para recuperarla.", "pt": "Cartão oculto — a sessão continua ativa. Abra o Strive para o repor.", "nl": "Kaart verborgen — sessie loopt nog. Open Strive om hem terug te halen.", "de": "Karte ausgeblendet — Sitzung läuft noch. Öffne Strive, um sie zurückzuholen.", "it": "Scheda nascosta — sessione ancora attiva. Apri Strive per ripristinarla."],
+    "noOfferRetry": ["fr": "Aucune offre détectée — réessayez avec une autre capture.", "en": "No ride offer detected — try again with another screenshot.", "es": "Ninguna oferta detectada — inténtalo con otra captura.", "pt": "Nenhuma oferta detetada — tente com outra captura.", "nl": "Geen rit gevonden — probeer een andere schermafbeelding.", "de": "Kein Angebot erkannt — versuch einen anderen Screenshot.", "it": "Nessuna offerta rilevata — riprova con un'altra schermata."],
+    "interrupted": ["fr": "Analyse interrompue — relancez le scan.", "en": "Analysis interrupted — run the scan again.", "es": "Análisis interrumpido — vuelve a escanear.", "pt": "Análise interrompida — volte a analisar.", "nl": "Analyse onderbroken — scan opnieuw.", "de": "Analyse abgebrochen — scanne erneut.", "it": "Analisi interrotta — riavvia la scansione."],
+    "inactiveSession": ["fr": "Session inactive", "en": "Inactive session", "es": "Sesión inactiva", "pt": "Sessão inativa", "nl": "Inactieve sessie", "de": "Inaktive Sitzung", "it": "Sessione inattiva"],
+    "inactiveSessionBody": ["fr": "Vous n'avez pas scanné depuis 1h. Pensez à fermer votre session.", "en": "You haven't scanned in 1 hour. Consider ending your session.", "es": "No escaneas desde hace 1 h. Piensa en cerrar tu sesión.", "pt": "Não analisa há 1 hora. Pense em fechar a sua sessão.", "nl": "Je hebt al een uur niet gescand. Denk aan het sluiten van je sessie.", "de": "Du hast seit einer Stunde nicht gescannt. Denk ans Beenden der Sitzung.", "it": "Non scansioni da 1 ora. Pensa a chiudere la sessione."],
+    "analysisFailedRetry": ["fr": "Analyse impossible — réessayez.", "en": "Analysis failed — please try again.", "es": "Análisis imposible — inténtalo de nuevo.", "pt": "Análise impossível — tente novamente.", "nl": "Analyse mislukt — probeer opnieuw.", "de": "Analyse fehlgeschlagen — versuch es erneut.", "it": "Analisi impossibile — riprova."],
+    "analyzingLong": ["fr": "Analyse en cours…", "en": "Analyzing…", "es": "Analizando…", "pt": "A analisar…", "nl": "Analyseren…", "de": "Analyse läuft…", "it": "Analisi in corso…"],
+    "openInStrive": ["fr": "Ouvrir dans Strive", "en": "Open in Strive", "es": "Abrir en Strive", "pt": "Abrir no Strive", "nl": "Openen in Strive", "de": "In Strive öffnen", "it": "Apri in Strive"],
+    "timeout": ["fr": "Analyse trop longue — vérifie ta connexion", "en": "Analysis timed out — check your connection", "es": "Análisis demasiado largo — comprueba tu conexión", "pt": "Análise demasiado longa — verifique a sua ligação", "nl": "Analyse duurt te lang — check je verbinding", "de": "Analyse dauert zu lange — prüf deine Verbindung", "it": "Analisi troppo lunga — controlla la connessione"],
+    "useTheApp": ["fr": "📱  Passez par l'application\nLe scan se lance depuis Strive, avec le bouton Action ou le raccourci.", "en": "📱  Use the app\nScanning runs from Strive, via the Action button or the shortcut.", "es": "📱  Usa la aplicación\nEl escaneo se lanza desde Strive, con el botón Acción o el atajo.", "pt": "📱  Use a aplicação\nA análise arranca no Strive, com o botão Ação ou o atalho.", "nl": "📱  Gebruik de app\nScannen start vanuit Strive, via de Actieknop of de snelkoppeling.", "de": "📱  Nutze die App\nDer Scan startet in Strive, über die Aktionstaste oder den Kurzbefehl.", "it": "📱  Usa l'app\nLa scansione parte da Strive, con il tasto Azione o la scorciatoia."],
+    "openStrive": ["fr": "Ouvrir Strive", "en": "Open Strive", "es": "Abrir Strive", "pt": "Abrir o Strive", "nl": "Strive openen", "de": "Strive öffnen", "it": "Apri Strive"],
+    "noImage": ["fr": "Aucune image reçue", "en": "No image received", "es": "No se recibió ninguna imagen", "pt": "Nenhuma imagem recebida", "nl": "Geen afbeelding ontvangen", "de": "Kein Bild empfangen", "it": "Nessuna immagine ricevuta"],
+    "errorPrefix": ["fr": "Erreur : ", "en": "Error: ", "es": "Error: ", "pt": "Erro: ", "nl": "Fout: ", "de": "Fehler: ", "it": "Errore: "],
+    "unsupportedFormat": ["fr": "Format d'image non supporté", "en": "Unsupported image format", "es": "Formato de imagen no compatible", "pt": "Formato de imagem não suportado", "nl": "Niet-ondersteund afbeeldingsformaat", "de": "Nicht unterstütztes Bildformat", "it": "Formato immagine non supportato"],
+    "noImageInShare": ["fr": "Aucune image trouvée dans le partage", "en": "No image found in the share", "es": "No se encontró ninguna imagen en lo compartido", "pt": "Nenhuma imagem encontrada na partilha", "nl": "Geen afbeelding gevonden in het gedeelde item", "de": "Kein Bild in der Freigabe gefunden", "it": "Nessuna immagine trovata nella condivisione"],
+    "noOffer": ["fr": "Aucune offre de course détectée", "en": "No ride offer detected", "es": "Ninguna oferta de viaje detectada", "pt": "Nenhuma oferta de viagem detetada", "nl": "Geen ritaanbod gevonden", "de": "Kein Fahrtangebot erkannt", "it": "Nessuna offerta di corsa rilevata"],
+    "aiAnalysis": ["fr": "Analyse IA en cours…", "en": "AI analysis in progress…", "es": "Análisis IA en curso…", "pt": "Análise IA em curso…", "nl": "AI-analyse bezig…", "de": "KI-Analyse läuft…", "it": "Analisi IA in corso…"],
+    "cannotAnalyze": ["fr": "Impossible d'analyser cette image", "en": "Could not analyze this image", "es": "No se pudo analizar esta imagen", "pt": "Não foi possível analisar esta imagem", "nl": "Deze afbeelding kon niet worden geanalyseerd", "de": "Dieses Bild konnte nicht analysiert werden", "it": "Impossibile analizzare questa immagine"],
+    "addressesUnreadable": ["fr": "Scan échoué — adresses illisibles, réessaie", "en": "Scan failed — addresses unreadable, try again", "es": "Escaneo fallido — direcciones ilegibles, inténtalo otra vez", "pt": "Análise falhou — moradas ilegíveis, tente outra vez", "nl": "Scan mislukt — adressen onleesbaar, probeer opnieuw", "de": "Scan fehlgeschlagen — Adressen unlesbar, versuch es erneut", "it": "Scansione fallita — indirizzi illeggibili, riprova"],
+    "routing": ["fr": "Calcul de l'itinéraire…", "en": "Calculating the route…", "es": "Calculando la ruta…", "pt": "A calcular o itinerário…", "nl": "Route berekenen…", "de": "Route wird berechnet…", "it": "Calcolo dell'itinerario…"],
+    "alreadyRunningShare": ["fr": "⏳  Analyse déjà en cours\nOuvrez Strive pour voir le résultat", "en": "⏳  Analysis already running\nOpen Strive to see the result", "es": "⏳  Análisis ya en curso\nAbre Strive para ver el resultado", "pt": "⏳  Análise já em curso\nAbra o Strive para ver o resultado", "nl": "⏳  Analyse loopt al\nOpen Strive om het resultaat te zien", "de": "⏳  Analyse läuft bereits\nÖffne Strive, um das Ergebnis zu sehen", "it": "⏳  Analisi già in corso\nApri Strive per vedere il risultato"],
+    "scannerOffShare": ["fr": "⏸  Scanner désactivé\nActivez-le dans Strive › Préférences", "en": "⏸  Scanner disabled\nEnable it in Strive › Preferences", "es": "⏸  Escáner desactivado\nActívalo en Strive › Preferencias", "pt": "⏸  Scanner desativado\nAtive-o em Strive › Preferências", "nl": "⏸  Scanner uitgeschakeld\nZet hem aan in Strive › Voorkeuren", "de": "⏸  Scanner deaktiviert\nAktiviere ihn in Strive › Einstellungen", "it": "⏸  Scanner disattivato\nAttivalo in Strive › Preferenze"],
+    "quotaShare": ["fr": "🔒  Quota journalier atteint\nReviens demain ou achète des crédits", "en": "🔒  Daily quota reached\nCome back tomorrow or buy credits", "es": "🔒  Cuota diaria alcanzada\nVuelve mañana o compra créditos", "pt": "🔒  Quota diária atingida\nVolte amanhã ou compre créditos", "nl": "🔒  Daglimiet bereikt\nKom morgen terug of koop credits", "de": "🔒  Tageslimit erreicht\nKomm morgen wieder oder kauf Credits", "it": "🔒  Quota giornaliera raggiunta\nTorna domani o compra crediti"],
+  ]
+
+  /// La langue choisie DANS Strive, réduite à son code de base (« pt-BR » →
+  /// « pt »), et le français si rien n'a été choisi.
+  public static var language: String {
+    let gid = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    guard let raw = UserDefaults(suiteName: gid)?.string(forKey: "appLanguage")
+    else { return "fr" }
+    let base = raw.split(separator: "-").first.map(String.init) ?? raw
+    return table["error"]?[base] != nil ? base : "fr"
+  }
+
+  public static func get(_ key: String) -> String {
+    let row = table[key]
+    return row?[language] ?? row?["fr"] ?? key
+  }
+
+  /// Index inversé : la PHRASE FRANÇAISE sert de clé.
+  ///
+  /// Les trois helpers `localizedString(fr:en:)` du scanner passent leur phrase
+  /// française en clair, à côté de son point d'usage — c'est lisible, et
+  /// réécrire une quarantaine de sites d'appel pour y glisser une clé aurait
+  /// coûté plus cher que ça ne rapporte.
+  ///
+  /// Une phrase absente de la table retombe proprement sur le couple fr/en
+  /// écrit sur place : ajouter un message ne casse rien, il reste simplement
+  /// bilingue jusqu'à ce qu'on le traduise. Corriger une coquille côté français
+  /// sans toucher la table a le même effet — dégradation, pas panne.
+  private static let byFrench: [String: [String: String]] = {
+    var out: [String: [String: String]] = [:]
+    for (_, row) in table {
+      if let fr = row["fr"] { out[fr] = row }
+    }
+    return out
+  }()
+
+  /// La traduction d'une phrase française, ou `nil` si elle n'est pas connue.
+  public static func forFrench(_ fr: String) -> String? {
+    byFrench[fr]?[language]
+  }
+}
+
 /// Devise et unité de distance du chauffeur, pour tout ce que le NATIF affiche :
 /// la Dynamic Island, l'écran verrouillé, les notifications, CarPlay.
 ///
@@ -51,9 +157,20 @@ public enum StriveMarket {
   /// une coquille. Les glyphes, eux, restent collés — l'îlot compact et la
   /// pastille de tarif comptent leurs points de largeur.
   public static func money(_ value: Double, decimals: Int = 0) -> String {
+    // `String(format:)` écrit toujours un POINT décimal, quelle que soit la
+    // locale. Un chauffeur français lisait donc « 19.61€ » sur son écran
+    // verrouillé et « 19,61 € » dans l'app, pour la même course. La virgule
+    // suit la LANGUE, le symbole suit le MARCHÉ — les deux se choisissent
+    // séparément et n'ont aucune raison de se suivre.
     let s = String(format: "%.\(decimals)f", value)
+      .replacingOccurrences(of: ".", with: StriveMarket.decimalSeparator)
     if symbol == "£" { return "£" + s }
     return symbol.count > 1 ? s + " " + symbol : s + symbol
+  }
+
+  /// « , » dans six des sept langues, « . » en anglais.
+  public static var decimalSeparator: String {
+    StriveNativeStrings.language == "en" ? "." : ","
   }
 
   /// « 57€/h », « £37/h ».
@@ -80,7 +197,8 @@ public enum StriveMarket {
 
   /// « 5.4km », « 3.4mi ».
   public static func distanceText(_ km: Double) -> String {
-    String(format: "%.1f", distance(km)) + distanceUnit
+    String(format: "%.1f", distance(km))
+      .replacingOccurrences(of: ".", with: decimalSeparator) + distanceUnit
   }
 }
 

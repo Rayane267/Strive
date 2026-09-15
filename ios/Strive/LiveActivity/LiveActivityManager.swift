@@ -104,6 +104,9 @@ final class LiveActivityManager {
   /// et l'AppIntent — le texte des alertes s'affichait jusqu'ici en français
   /// quelle que soit la langue de l'utilisateur.
   private func localizedString(fr: String, en: String) -> String {
+    // Les sept langues d'abord (cf. `StriveNativeStrings`) ; fr/en reste
+    // le repli, écrit à côté de son point d'usage.
+    if let translated = StriveNativeStrings.forFrench(fr) { return translated }
     // Anglais uniquement si l'app est réglée en anglais, français sinon — la
     // locale système ne fait PAS foi (cf. laString côté widget).
     guard let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
