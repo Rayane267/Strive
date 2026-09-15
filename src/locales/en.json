@@ -1154,6 +1154,7 @@
     "countersResetting": "Resetting…",
     "countersDone": "Counters cleared. The device now looks brand new: signup quota free and welcome gift replayable.",
     "presTitle": "Dynamic Island — presentations",
+    "widgetNeverSeen": "never seen — it isn’t writing to the App Group",
     "presNeedsTracing": "Turn collection on above, then drive as usual. Counters fill up on every scan result.",
     "presWaiting": "No result measured since the reset. Run a scan.",
     "presExpanded": "Expanded island",

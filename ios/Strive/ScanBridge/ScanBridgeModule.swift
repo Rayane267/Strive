@@ -278,6 +278,20 @@ class ScanBridgeModule: RCTEventEmitter {
           "minimal":  d.integer(forKey: "laPres_minimal"),
           "since":    d.double(forKey: "laPres_since"),
         ],
+        // LE TÉMOIN — ce que l'EXTENSION a lu, écrit par elle seule (cf.
+        // `laStampLocale`). L'app et le widget sont deux processus, et aucune API
+        // ne permet de demander à une extension ce qu'elle a vu : sans cette
+        // trace, une Live Activity en français et en euros sous une app en
+        // anglais et en livres n'a aucune cause observable.
+        //
+        // `at` à zéro alors que l'îlot s'affiche est la lecture qui compte : le
+        // widget n'a rien pu écrire, donc il ne peut rien lire non plus, donc
+        // l'entitlement App Group manque à sa cible.
+        "widget": [
+          "lang":     d.string(forKey: "laSeenLang") ?? "",
+          "currency": d.string(forKey: "laSeenCur") ?? "",
+          "at":       d.double(forKey: "laSeenAt"),
+        ],
       ])
     } else {
       resolve(["trace": "", "lastStep": "", "tracing": false])

@@ -1154,6 +1154,7 @@
     "countersResetting": "Réinitialisation…",
     "countersDone": "Compteurs vidés. L'appareil est vu comme neuf : quota d'inscription libre et cadeau de bienvenue rejouable.",
     "presTitle": "Dynamic Island — présentations",
+    "widgetNeverSeen": "jamais vu — il n’écrit pas dans l’App Group",
     "presNeedsTracing": "Activez la collecte ci-dessus, puis roulez normalement. Les compteurs se remplissent à chaque résultat de scan.",
     "presWaiting": "Aucun résultat mesuré depuis la remise à zéro. Faites un scan.",
     "presExpanded": "Îlot déplié",

@@ -74,6 +74,10 @@ const DiagnosticsScreen = () => {
   const [resetting, setResetting] = useState(false);
   const [presentations, setPresentations] =
     useState<{ expanded: number; compact: number; minimal: number; since: number } | null>(null);
+  /** Ce que l'extension widget a lu, écrit par elle seule. Voir `widget` dans
+   *  `ScannerService.getDiagnostics` — c'est la seule fenêtre sur son process. */
+  const [widget, setWidget] =
+    useState<{ lang: string; currency: string; at: number } | null>(null);
 
   /// Redémarre une mesure propre. À faire juste avant une vacation : des
   /// compteurs qui cumulent plusieurs jours de tests au bureau ne disent rien
@@ -142,6 +146,7 @@ const DiagnosticsScreen = () => {
       setTracing(diag.tracing);
       setTrace(diag.trace);
       setPresentations(diag.presentations ?? null);
+      setWidget(diag.widget ?? null);
     }
     if (user?.id) {
       // Trente derniers échecs. La table est purgée à 30 jours côté base, donc
@@ -229,6 +234,30 @@ const DiagnosticsScreen = () => {
             {'\n'}marché résolu : {market.country} · {market.currency} · {market.symbol} · {market.distanceUnit}
             {'\n'}langue : {i18n.language}
             {'\n'}seuils : {market.thresholds.hourly}{market.symbol}/h · {market.thresholds.distance}{market.symbol}/km
+            {/* LES DEUX SOURCES, CÔTE À CÔTE. Tout ce qui précède vient du JS.
+                La ligne ci-dessous vient de l'EXTENSION widget, qui l'a écrite
+                elle-même en rendant la Live Activity — c'est la seule fenêtre
+                sur son process, aucune API ne permet de l'interroger.
+
+                Les trois lectures :
+                  · même langue, même devise → tout va bien ;
+                  · divergence horodatée → le groupe est lisible, son contenu est
+                    faux, donc JS n'a pas poussé ;
+                  · « jamais vu » alors que l'îlot s'affiche → le widget ne peut
+                    pas écrire dans le conteneur, donc l'entitlement App Group
+                    manque à sa cible. */}
+            {Platform.OS === 'ios' && (
+              <>
+                {'\n'}widget :{' '}
+                {!widget || !widget.at
+                  ? t('diagnostics.widgetNeverSeen', 'jamais vu — il n’écrit pas dans l’App Group')
+                  : `${widget.lang} · ${widget.currency}` +
+                    (widget.lang !== i18n.language.split('-')[0] || widget.currency !== market.currency
+                      ? '  ⚠︎ '
+                      : '  ✓ ') +
+                    new Date(widget.at * 1000).toLocaleTimeString()}
+              </>
+            )}
           </Text>
         </View>
 

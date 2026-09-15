@@ -211,6 +211,22 @@ export interface ScannerService {
      *  est un majorant (SwiftUI peut évaluer une vue sans l'afficher).
      *  `since` = début de la fenêtre de mesure, en secondes epoch. */
     presentations?: { expanded: number; compact: number; minimal: number; since: number };
+    /**
+     * LE TÉMOIN : ce que l'extension widget a RÉELLEMENT lu, écrit par elle
+     * seule au moment du rendu.
+     *
+     * L'app et le widget sont deux processus, et aucune API ne permet de
+     * demander à une extension ce qu'elle a vu. Sans cette trace, une Live
+     * Activity en français et en euros sous une app en anglais et en livres
+     * n'a aucune cause observable depuis l'app — il faut une capture d'écran
+     * et des hypothèses.
+     *
+     * `at` à 0 alors que l'îlot s'affiche est la lecture qui compte : le widget
+     * n'a rien pu écrire, donc il ne lit rien non plus, donc l'entitlement App
+     * Group manque à sa cible. Une divergence horodatée, elle, dit l'inverse —
+     * le groupe est lisible, c'est son contenu qui est faux.
+     */
+    widget?: { lang: string; currency: string; at: number };
   }>;
   /** Redémarre une mesure propre des présentations. iOS uniquement. */
   resetPresentationCounters?(): void;

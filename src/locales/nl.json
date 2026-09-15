@@ -1162,6 +1162,7 @@
     "countersResetting": "Resetten…",
     "countersDone": "Tellers geleegd. Het toestel wordt als nieuw gezien: vrije registratielimiet en welkomstgeschenk opnieuw te spelen.",
     "presTitle": "Dynamic Island — weergaven",
+    "widgetNeverSeen": "nooit gezien — schrijft niet naar de App Group",
     "presNeedsTracing": "Schakel het verzamelen hierboven in en rijd normaal. De tellers vullen zich bij elk scanresultaat.",
     "presWaiting": "Geen resultaat gemeten sinds de reset. Doe een scan.",
     "presExpanded": "Uitgeklapte island",

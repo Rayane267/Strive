@@ -1162,6 +1162,7 @@
     "countersResetting": "A reiniciar…",
     "countersDone": "Contadores esvaziados. O dispositivo é visto como novo: limite de registo livre e oferta de boas-vindas repetível.",
     "presTitle": "Dynamic Island — apresentações",
+    "widgetNeverSeen": "nunca visto — não escreve no App Group",
     "presNeedsTracing": "Ative a recolha acima e conduza normalmente. Os contadores enchem-se a cada resultado de análise.",
     "presWaiting": "Nenhum resultado medido desde a reposição. Faça uma análise.",
     "presExpanded": "Ilha expandida",

@@ -1162,6 +1162,7 @@
     "countersResetting": "Zurücksetzen…",
     "countersDone": "Zähler geleert. Das Gerät gilt als neu: freies Registrierungslimit und wiederholbares Willkommensgeschenk.",
     "presTitle": "Dynamic Island — Darstellungen",
+    "widgetNeverSeen": "nie gesehen — schreibt nicht in die App Group",
     "presNeedsTracing": "Aktiviere oben das Sammeln und fahr normal. Die Zähler füllen sich bei jedem Scan-Ergebnis.",
     "presWaiting": "Kein Ergebnis seit dem Zurücksetzen gemessen. Mach einen Scan.",
     "presExpanded": "Ausgeklappte Island",

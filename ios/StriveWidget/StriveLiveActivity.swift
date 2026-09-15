@@ -40,6 +40,7 @@ struct StriveLiveActivity: Widget {
           // Compté ici et pas dans les trois autres régions : elles sont
           // évaluées ensemble, une seule suffit à dater un dépliage.
           let _ = laCountPresentation(.expanded, platform: context.state.platform)
+          let _ = laStampLocale()
           if isError {
             Image(systemName: "xmark.circle.fill")
               .font(.system(size: 18, weight: .bold))
@@ -161,6 +162,7 @@ struct StriveLiveActivity: Widget {
         }
       } compactLeading: {
         let _ = laCountPresentation(.compact, platform: context.state.platform)
+        let _ = laStampLocale()
         if isError {
           Image(systemName: "xmark.circle.fill")
             .foregroundColor(errorRed)
@@ -222,6 +224,7 @@ struct StriveLiveActivity: Widget {
         }
       } minimal: {
         let _ = laCountPresentation(.minimal, platform: context.state.platform)
+        let _ = laStampLocale()
         // `minimal` est la SEULE surface visible quand autre chose occupe le
         // Dynamic Island — un appel en cours au premier chef. Dans ce cas iOS ne
         // déplie pas l'activité de lui-même : ce cercle de ~20 pt est tout ce
@@ -269,6 +272,9 @@ private struct LockScreenView: View {
   /// verdict vieux de plusieurs minutes.
   var stale: Bool = false
   var body: some View {
+    // Le lock screen se rend aussi sur les iPhone sans Dynamic Island :
+    // le temoin doit passer par ici, sinon il ne verrait jamais ces appareils.
+    let _ = laStampLocale()
     let isScanning = !stale && state.platform == "SCANNING"
     let isError = !stale && state.platform == "ERROR"
     let isLocked = !stale && state.platform == "LOCKED"
@@ -754,6 +760,53 @@ enum LAPresentation: String {
 ///
 /// Opt-in derrière `laTracing`, comme la trace : on n'écrit rien chez un
 /// chauffeur qui n'a rien demandé.
+/// LE TÉMOIN : ce que l'extension a RÉELLEMENT lu, écrit par elle-même.
+///
+/// Le widget et l'app sont deux processus, et iOS n'offre aucune API pour
+/// demander à une extension ce qu'elle a vu. Le seul canal entre les deux est le
+/// conteneur partagé — précisément celui dont on soupçonne qu'il ne marche pas.
+/// La seule preuve possible est donc une trace que le widget laisse lui-même.
+///
+/// Trois lectures dans l'écran Diagnostic :
+///   • `en · GBP`, horodaté à l'instant → tout va bien
+///   • `fr · EUR`, horodaté à l'instant → le groupe est lisible mais mal rempli,
+///     donc JS n'a pas poussé
+///   • RIEN, alors que l'îlot s'affiche → l'extension ne peut pas écrire dans le
+///     conteneur, donc l'entitlement App Group manque à la cible
+///
+/// C'est la troisième qui vaut le détour : elle nomme en une ligne le défaut qui
+/// a demandé une capture d'écran et une demi-douzaine d'hypothèses.
+///
+/// PAS d'opt-in derrière `laTracing`, contrairement aux compteurs de
+/// présentation : on n'écrit pas une mesure de comportement, on écrit l'état
+/// courant — deux chaînes courtes, de même nature que ce que l'app y met déjà.
+///
+/// POSÉ DANS CE FICHIER, jamais dans `StriveActivityAttributes.swift` : ce
+/// dernier est compilé dans les DEUX cibles, et l'app y écrirait sa propre
+/// lecture par-dessus celle du widget. Un témoin ne vaut que s'il ne peut venir
+/// que de l'extension.
+@discardableResult
+private func laStampLocale() -> Bool {
+  let gid = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+    ?? "group.com.striveapp.app"
+  guard let d = UserDefaults(suiteName: gid) else { return false }
+  let lang = StriveNativeStrings.language
+  let cur = StriveMarket.currency
+  let now = Date().timeIntervalSince1970
+  // L'IDLE se re-rend en boucle — le timer de session tourne — et on écrirait
+  // trois clés des milliers de fois pour une valeur qui ne bouge pas. Une minute
+  // suffit : le témoin sert à dater une divergence, pas à mesurer une fréquence.
+  if d.string(forKey: "laSeenLang") == lang,
+     d.string(forKey: "laSeenCur") == cur,
+     now - d.double(forKey: "laSeenAt") < 60 {
+    return false
+  }
+  d.set(lang, forKey: "laSeenLang")
+  d.set(cur, forKey: "laSeenCur")
+  d.set(now, forKey: "laSeenAt")
+  return true
+}
+
 @discardableResult
 private func laCountPresentation(_ p: LAPresentation, platform: String) -> Bool {
   // Seuls les états de RÉSULTAT sont comptés. L'IDLE se re-rend en boucle (le
