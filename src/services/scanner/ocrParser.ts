@@ -83,8 +83,8 @@ const ADDRESS_STREET_KEYWORDS = [
   // « Street ». Sans eux, « 14 Elmwood Gardens » ne passait que par la structure
   // chiffre-d'abord, et une adresse sans numéro ne passait pas du tout.
   'street', 'road', 'lane', 'drive', 'st.', 'rd.', 'ave.', 'way',
-  'close', 'court', 'crescent', 'terrace', 'gardens', 'mews', 'row',
-  'walk', 'grove', 'hill', 'park', 'rise', 'green', 'wharf', 'embankment',
+  'crescent', 'terrace', 'gardens', 'mews', 'row',
+  'walk', 'grove', 'hill', 'rise', 'wharf', 'embankment',
   // ES — « c/ » est l'abréviation ordinaire de « calle » sur les plaques comme
   // dans les applis ; sans elle, la moitié des adresses espagnoles ne portent
   // aucun mot de voie reconnaissable.
@@ -103,6 +103,26 @@ const ADDRESS_STREET_KEYWORDS = [
   'stazione', 'aeroporto', 'ospedale',
 ];
 // Suffixes DE qui forment des mots composés (Hauptstraße). Matchés en fin de mot.
+/**
+ * Types de voie anglais qui sont AUSSI des mots français.
+ *
+ * « court » (trajet court), « park », « close », « green » : quatre mots que
+ * l'app rencontre en France, et qui y feraient passer un bloc quelconque pour
+ * une adresse — au risque d'évincer la vraie. Ils ne sont consultés que sur le
+ * marché britannique, où ils désignent bel et bien des rues.
+ */
+const UK_ONLY_STREET_KEYWORDS = ['close', 'court', 'park', 'green'];
+
+/**
+ * Marché du scan en cours, posé par `parseBlocks`.
+ *
+ * Une variable de module plutôt qu'un paramètre traversant six fonctions : le
+ * parser est synchrone et ne traite qu'une capture à la fois, et les fonctions
+ * qu'il faudrait sinon modifier sont réglées au cas par cas sur des captures
+ * réelles. Mirror du `marketCountry` statique des parsers natifs.
+ */
+let scanCountry = 'FR';
+
 const ADDRESS_STREET_SUFFIXES = [
   'straße', 'strasse', 'str.', 'gasse', 'weg', 'allee', 'platz',
   'damm', 'ufer', 'ring',
@@ -138,7 +158,7 @@ const POSTCODE_REGEX = /\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i;
  *
  * « min » n'est pas touché : `(?![a-z])` empêche « mi » de mordre dessus.
  */
-const MILES_REGEX = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])/gi;
+const MILES_REGEX = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])/gi;
 
 export const milesToKm = (text: string): string =>
   text.replace(MILES_REGEX, (_m, raw: string) => {
@@ -201,11 +221,26 @@ const RATE_MAX = 12;   // €/km
 export function parseBlocks(
   blocks: TextBlock[],
   screenHeight: number,
+  /**
+   * Pays d'activité du chauffeur. Il n'entre en jeu QUE pour ce qui serait faux
+   * en France — la conversion des miles et les quatre types de voie anglais qui
+   * sont aussi des mots français. Par défaut `FR`, soit le comportement
+   * d'origine au caractère près.
+   */
+  country: string = 'FR',
 ): ScanResult | null {
   if (blocks.length === 0) return null;
+  scanCountry = country;
 
   // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
-  blocks = blocks.map(b => (/mi/i.test(b.text) ? { ...b, text: milesToKm(b.text) } : b));
+  //
+  // ⚠️ UNIQUEMENT AU ROYAUME-UNI. ML Kit découpe parfois « 11 min » en deux
+  // blocs, et « 11 mi » seul serait alors lu comme 17,7 km : une distance 1,6×
+  // trop grande, donc un €/km faux, et rien pour le signaler. Le seul marché
+  // qui affiche des miles est le seul où l'on prend ce risque.
+  if (country === 'GB') {
+    blocks = blocks.map(b => (/mi/i.test(b.text) ? { ...b, text: milesToKm(b.text) } : b));
+  }
 
   const fullText = blocks.map(b => b.text).join(' ').toLowerCase();
   const platform = detectPlatform(fullText);
@@ -614,6 +649,12 @@ function isAddressBlock(block: TextBlock): boolean {
   if (/\b(uber\w*|bolt\w*|heetch\w*)\b/.test(text)) return false;
 
   // 1. Mot-clé de voie/POI matché comme mot entier (évite "via" → "aviation")
+  if (
+    scanCountry === 'GB' &&
+    UK_ONLY_STREET_KEYWORDS.some(k =>
+      new RegExp(`(?<![a-zà-üß])${escapeRegex(k)}(?![a-zà-üß])`, 'i').test(text),
+    )
+  ) return true;
   if (ADDRESS_STREET_KEYWORDS.some(k =>
     new RegExp(`(?<![a-zà-üß])${escapeRegex(k)}(?![a-zà-üß])`, 'i').test(text)
   )) return true;

@@ -62,6 +62,22 @@ final class OcrParser {
     .UBER: ["uber"], .BOLT: ["bolt"], .HEETCH: ["heetch"],
   ]
 
+  /// Types de voie anglais qui sont AUSSI des mots français.
+  /// 
+  /// « court » (trajet court), « park », « close », « green » : quatre mots que
+  /// l'app rencontre en France, et qui y feraient passer un bloc quelconque pour
+  /// une adresse — au risque d'évincer la vraie. Consultés au UK seulement.
+  private let ukOnlyStreetKeywords = ["close", "court", "park", "green"]
+
+  /// Pays d'activité du chauffeur, écrit en App Group par
+  /// `ScanBridge.setMarketCountry`. Il n'entre en jeu QUE pour ce qui serait
+  /// faux en France : les miles et les quatre mots ci-dessus.
+  private var marketCountry: String {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: appGroupId)?.string(forKey: "marketCountry") ?? "FR"
+  }
+
   private let addressStreetKeywords: [String] = [
     "rue", "avenue", "av.", "boulevard", "blvd", "bd", "bd.",
     "place", "pl.", "impasse", "imp.", "allée", "allee", "all.",
@@ -71,8 +87,8 @@ final class OcrParser {
     "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
     // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
     // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
-    "close", "court", "crescent", "terrace", "gardens", "mews", "row",
-    "walk", "grove", "hill", "park", "rise", "green", "wharf", "embankment",
+    "crescent", "terrace", "gardens", "mews", "row",
+    "walk", "grove", "hill", "rise", "wharf", "embankment",
     // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
     // adresses espagnoles ne portent aucun mot de voie reconnaissable.
     "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
@@ -243,9 +259,17 @@ final class OcrParser {
     if blocks.isEmpty { return nil }
 
     // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
-    let blocks = blocks.map {
-      OcrTextBlock(text: milesToKm($0.text), box: $0.box, confidence: $0.confidence)
-    }
+    //
+    // ⚠️ UNIQUEMENT AU ROYAUME-UNI. L'OCR découpe parfois « 11 min » en deux
+    // blocs, et « 11 mi » seul serait alors lu comme 17,7 km : une distance
+    // 1,6× trop grande, donc un €/km faux, et rien pour le signaler. Le seul
+    // marché qui affiche des miles est le seul où l'on prend ce risque.
+    let country = marketCountry
+    let blocks = country == "GB"
+      ? blocks.map {
+          OcrTextBlock(text: milesToKm($0.text), box: $0.box, confidence: $0.confidence)
+        }
+      : blocks
 
     let fullText = blocks.map { $0.text }.joined(separator: " ").lowercased()
     // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -800,7 +824,10 @@ final class OcrParser {
 
     // ── Signaux positifs ──
     // 1. Mots de voie en mot entier
-    for kw in addressStreetKeywords {
+    let keywords = marketCountry == "GB"
+      ? addressStreetKeywords + ukOnlyStreetKeywords
+      : addressStreetKeywords
+    for kw in keywords {
       let escaped = NSRegularExpression.escapedPattern(for: kw)
       if matches(text, pattern: "(?<![a-zà-üß])\(escaped)(?![a-zà-üß])", caseInsensitive: true) {
         return true
@@ -940,7 +967,10 @@ final class OcrParser {
     if t.isEmpty || t.count > 60 { return false }
     if matches(t, pattern: #"\d\s*(?:km|min)\b"#, caseInsensitive: true) { return false }
     if matches(t, pattern: #"^\d{1,4}\s+[A-Za-zà-üÀ-Ü]"#) { return false }
-    for kw in addressStreetKeywords {
+    let keywords = marketCountry == "GB"
+      ? addressStreetKeywords + ukOnlyStreetKeywords
+      : addressStreetKeywords
+    for kw in keywords {
       let escaped = NSRegularExpression.escapedPattern(for: kw)
       if matches(t, pattern: "(?<![a-zà-üß])\(escaped)(?![a-zà-üß])", caseInsensitive: true) { return false }
     }

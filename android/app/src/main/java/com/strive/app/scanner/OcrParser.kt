@@ -110,6 +110,23 @@ object OcrParser {
     }
 
     // Mots-clés de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs
+    /**
+     * Types de voie anglais qui sont AUSSI des mots français.
+     * 
+     * « court » (trajet court), « park », « close », « green » : quatre mots que
+     * l'app rencontre en France, et qui y feraient passer un bloc quelconque pour
+     * une adresse — au risque d'évincer la vraie. Consultés au UK seulement.
+     */
+    private val ukOnlyStreetKeywords = listOf("close", "court", "park", "green")
+
+    /**
+     * Pays d'activité du chauffeur, posé par `ScanBridge.setMarketCountry`.
+     * Il n'entre en jeu QUE pour ce qui serait faux en France : les miles et
+     * les quatre mots ci-dessus.
+     */
+    @JvmStatic
+    var marketCountry: String = "FR"
+
     private val addressStreetKeywords = listOf(
         // FR
         "rue", "avenue", "av.", "boulevard", "blvd", "bd", "bd.",
@@ -121,8 +138,8 @@ object OcrParser {
         "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
         // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
         // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
-        "close", "court", "crescent", "terrace", "gardens", "mews", "row",
-        "walk", "grove", "hill", "park", "rise", "green", "wharf", "embankment",
+        "crescent", "terrace", "gardens", "mews", "row",
+        "walk", "grove", "hill", "rise", "wharf", "embankment",
         // ES
         // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
         // adresses espagnoles ne portent aucun mot de voie reconnaissable.
@@ -241,7 +258,10 @@ object OcrParser {
         //   "1l8", "1o8"            → "118", "108"   (lettre isolée entre chiffres)
         // Les runs l/I/o/O à côté de lettres (ex: "Libération") ne matchent pas
         // grâce aux lookbehind/lookahead `(?<![a-zA-Zà-ü])`.
-        return milesToKm(s)
+        // ⚠️ Les miles UNIQUEMENT au Royaume-Uni : ML Kit découpe parfois
+        // « 11 min » en deux blocs, et « 11 mi » seul deviendrait 17,7 km —
+        // une distance 1,6× trop grande, sans la moindre alerte.
+        return (if (marketCountry == "GB") milesToKm(s) else s)
             // Runs l/I avant ".X" ou avant un nombre décimal "X.Y"
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=[.,]\d)""")) { "1".repeat(it.value.length) }
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=\d[.,]\d)""")) { "1".repeat(it.value.length) }
@@ -361,7 +381,9 @@ object OcrParser {
         if (Regex("""\d\s*(?:km|min)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return false
         if (Regex("""^\d{1,4}\s+[A-Za-zà-üÀ-Ü]""").containsMatchIn(t)) return false
         // Un mot de voie ⇒ nouvelle rue, pas une continuation.
-        val hasStreetKw = addressStreetKeywords.any { kw ->
+        val keywords = if (marketCountry == "GB")
+            addressStreetKeywords + ukOnlyStreetKeywords else addressStreetKeywords
+        val hasStreetKw = keywords.any { kw ->
             Regex("""(?<![a-zà-üß])${Regex.escape(kw)}(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(t)
         }
         if (hasStreetKw) return false
@@ -918,7 +940,9 @@ object OcrParser {
 
         // ── Signaux positifs ──
         // 1. Mot de voie (mot entier) : évite "via"→"aviation", "rue"→"cruelty".
-        val wordBoundaryMatch = addressStreetKeywords.any { kw ->
+        val keywords = if (marketCountry == "GB")
+            addressStreetKeywords + ukOnlyStreetKeywords else addressStreetKeywords
+        val wordBoundaryMatch = keywords.any { kw ->
             val escaped = Regex.escape(kw)
             Regex("""(?<![a-zà-üß])$escaped(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
         }

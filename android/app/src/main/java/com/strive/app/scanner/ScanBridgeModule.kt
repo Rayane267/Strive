@@ -262,6 +262,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun setMarketCountry(code: String) {
         TomTomService.marketCountry = code
+        OcrParser.marketCountry = code
     }
 
     /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
