@@ -57,7 +57,7 @@ import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
 import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
-import { getFxRates, convertAmount, normalizeRides } from '../services/fxService';
+import { getFxRates, normalizeRides } from '../services/fxService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
@@ -126,7 +126,7 @@ async function fetchTodayAcceptedTotals(userId: string, resetHour: number, curre
   const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('rides')
-    .select('fare_estimated, fare_final, distance_km, currency')
+    .select('fare_estimated, fare_final, distance_km, currency, fx_rate_eur')
     .eq('user_id', userId)
     .eq('status', 'ACCEPTED')
     .gte('created_at', dayStart.toISOString());
@@ -134,15 +134,18 @@ async function fetchTodayAcceptedTotals(userId: string, resetHour: number, curre
   // Converties et non écartées : ces gains partent aussi au natif, où l'écran
   // verrouillé les affiche derrière un seul symbole. Un total amputé y serait
   // indiscernable d'une journée creuse.
-  const rates = await getFxRates();
-  const earnings = rows.reduce(
-    (s: number, r: any) =>
-      s + convertAmount(
-        Number(r.fare_final ?? r.fare_estimated ?? 0),
-        (r.currency ?? 'EUR') as Currency,
-        currency as Currency,
-        rates,
-      ),
+  //
+  // Par `normalizeRides` comme partout ailleurs, et non par `convertAmount` :
+  // c'est le seul chemin qui honore `fx_rate_eur`, le taux figé au scan. La
+  // colonne n'était même pas demandée ici, donc ce total-là se recalculait au
+  // taux du jour pendant que l'Historique et les Stats tenaient le taux figé.
+  // Sans effet visible — ce sont les courses du jour, les deux taux sont le
+  // même — mais deux écrans qui répondent à la même question par deux méthodes
+  // finissent par ne plus répondre pareil, et c'est l'écran verrouillé qui
+  // aurait eu tort en silence.
+  const normalized = await normalizeRides(rows as any[], currency as Currency);
+  const earnings = normalized.reduce(
+    (s: number, r: any) => s + Number(r.fare_final ?? r.fare_estimated ?? 0),
     0,
   );
   const km = rows.reduce((s: number, r: any) => s + Number(r.distance_km ?? 0), 0);
