@@ -454,10 +454,10 @@ private struct LockScreenView: View {
               .frame(width: 1, height: 32)
 
             VStack(spacing: 2) {
-              Text(String(format: "%.1f", state.todayKm))
+              Text(String(format: "%.1f", StriveMarket.distance(state.todayKm)))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
-              Text("KM")
+              Text(StriveMarket.distanceUnit.uppercased())
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(.white.opacity(0.3))
