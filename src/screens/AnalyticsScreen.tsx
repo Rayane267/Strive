@@ -54,21 +54,8 @@ import { cacheStats, getCachedStats } from '../services/offlineService';
 import { fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
 import { formatMoney, hourlyUnit, distanceUnitLabel } from '../utils/market';
+import { calendarLocale } from '../utils/calendarLocales';
 
-LocaleConfig.locales['fr'] = {
-  monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-  monthNamesShort: ['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'],
-  dayNames: ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
-  dayNamesShort: ['Di','Lu','Ma','Me','Je','Ve','Sa'],
-  today: "Aujourd'hui",
-};
-LocaleConfig.locales['en'] = {
-  monthNames: ['January','February','March','April','May','June','July','August','September','October','November','December'],
-  monthNamesShort: ['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.'],
-  dayNames: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
-  dayNamesShort: ['Su','Mo','Tu','We','Th','Fr','Sa'],
-  today: 'Today',
-};
 
 const PLATFORMS = [
   { key: 'UBER',   label: 'Uber',   color: '#FFFFFF' },
@@ -88,7 +75,7 @@ const AnalyticsScreen = () => {
   const [resetHour, setResetHour] = useState(0);
 
   useEffect(() => {
-    LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
+    LocaleConfig.defaultLocale = calendarLocale(i18n.language);
   }, [i18n.language]);
 
   // Re-read day_reset_hour on focus so a change in Preferences is picked up
@@ -477,7 +464,7 @@ const AnalyticsScreen = () => {
   };
 
   const renderCustomHeader = (date: any) => {
-    const locale = LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'];
+    const locale = LocaleConfig.locales[calendarLocale(i18n.language)];
     const d = new Date(date.getTime());
     return (
       <View style={styles.calHeaderRow}>
@@ -897,7 +884,7 @@ const AnalyticsScreen = () => {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.monthGrid}>
-                    {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m: string, idx: number) => {
+                    {LocaleConfig.locales[calendarLocale(i18n.language)].monthNamesShort.map((m: string, idx: number) => {
                       const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
                         && pickerYear === parseInt(currentMonth.split('-')[0]);
                       return (
