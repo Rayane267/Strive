@@ -1,0 +1,1283 @@
+{
+  "rating": {
+    "title": "Ti piace Strive?",
+    "message": "Se l'applicazione ti è utile, prenditi un momento per valutarla: aiuta molto!",
+    "notNow": "Non ora",
+    "rate": "Valuta l'applicazione"
+  },
+  "common": {
+    "error": "Errore",
+    "success": "Fatto",
+    "retry": "Riprova",
+    "optional": "facoltativo",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "open": "Apri",
+    "loading": "Caricamento…",
+    "offlineTitle": "Offline",
+    "offlineSave": "Nessuna connessione. Dovrai salvare di nuovo le modifiche una volta online.",
+    "unsavedTitle": "Modifiche non salvate",
+    "unsavedMessage": "Vuoi uscire senza salvare le modifiche?",
+    "stay": "Resta",
+    "leave": "Esci",
+    "back": "Indietro",
+    "close": "Chiudi"
+  },
+  "errors": {
+    "profileLoadFailed": "Impossibile caricare il tuo profilo.",
+    "saveFailed": "Impossibile salvare. Riprova.",
+    "loadFailed": "Errore di caricamento",
+    "retry": "Riprova",
+    "crashTitle": "Si è verificato un errore",
+    "crashMessage": "Si è verificato un errore imprevisto."
+  },
+  "nav": {
+    "dashboard": "Home",
+    "history": "Cronologia",
+    "analytics": "Statistiche",
+    "shop": "Negozio",
+    "profile": "Profilo"
+  },
+  "auth": {
+    "continueGoogle": "Continua con Google",
+    "continueApple": "Continua con Apple",
+    "continueFacebook": "Continua con Facebook",
+    "connecting": "Connessione…",
+    "termsText": "Continuando, accetti le nostre",
+    "termsLink": "Condizioni d'uso",
+    "andText": "e la nostra",
+    "privacyLink": "Informativa sulla privacy",
+    "errors": {
+      "googleTitle": "Errore Google",
+      "appleTitle": "Errore Apple",
+      "facebookTitle": "Errore Facebook",
+      "rateLimit": "Troppi tentativi. Riprova tra qualche minuto.",
+      "deviceSignupLimit": "Troppi account creati con questo telefono. Riprova più tardi.",
+      "accountExistsOtherProvider": "Esiste già un account Strive con questo indirizzo e-mail. Accedi di nuovo con il metodo usato la prima volta — Google o Apple.",
+      "signupFailed": "Impossibile creare l'account. Riprova tra un istante.",
+      "passwordMismatch": "Le password non corrispondono",
+      "resetTitle": "Reimpostazione",
+      "weakPassword": "Password troppo debole (minimo 8 caratteri)"
+    },
+    "backToLogin": "Torna all'accesso",
+    "confirmPasswordPlaceholder": "Conferma la password",
+    "passwordPlaceholder": "Password",
+    "resetCtaConfirm": "Aggiorna",
+    "resetExpired": "Il link di reimpostazione non è valido o è scaduto. Richiedine uno nuovo.",
+    "resetExpiredTitle": "Link scaduto",
+    "resetSubtitle": "Scegli una nuova password (minimo 8 caratteri).",
+    "resetSuccess": "Ora puoi accedere con la tua nuova password",
+    "resetSuccessTitle": "Password aggiornata",
+    "resetTitle": "Reimposta la password"
+  },
+  "profile": {
+    "title": "Il mio profilo",
+    "subtitle": "Impostazioni e preferenze",
+    "general": "GENERALE",
+    "account": "Modifica il profilo",
+    "accountSub": "E-mail, telefono, licenza",
+    "car": "Impostazioni del veicolo",
+    "carSub": "Dati del veicolo, carburante",
+    "resources": "RISORSE",
+    "tutorial": "Guida",
+    "tutorialSub": "Vedi la guida e i consigli",
+    "help": "Aiuto e assistenza",
+    "helpSub": "Domande frequenti, contatti",
+    "language": "LINGUA / LANGUAGE",
+    "logout": "Esci",
+    "plus": "Membro Plus",
+    "free": "Membro gratuito",
+    "upgradeLink": "Passa a Plus →",
+    "subscriptionSub": "20 scansioni/giorno, €/h in diretta…",
+    "subscriptionSubActive": "Disdire, cambiare piano…",
+    "upgradeCardTitle": "Passa a Strive Plus",
+    "upgradeCardSub": "20 scansioni/giorno · €/h in diretta · Senza vincoli",
+    "verified": "PARTNER VERIFICATO",
+    "emailLabel": "E-MAIL",
+    "phoneLabel": "TELEFONO",
+    "phonePlaceholder": "+41 79 123 45 67",
+    "licenseLabel": "NUMERO DI LICENZA (VTC / TAXI)",
+    "licensePlaceholder": "Es.: 123456789",
+    "logoutModal": {
+      "title": "Esci",
+      "message": "Vuoi davvero uscire dal tuo account?",
+      "cancel": "Annulla",
+      "confirm": "Esci"
+    },
+    "deleteAccount": "Elimina il mio account",
+    "deleteModal": {
+      "title": "Eliminare l'account?",
+      "message": "Azione irreversibile: account, preferenze e cronologia delle corse saranno eliminati definitivamente.",
+      "placeholder": "Scrivi ELIMINA",
+      "confirm": "Elimina",
+      "errorTitle": "Errore",
+      "errorMessage": "Scrivi \"ELIMINA\" per confermare.",
+      "errorGeneric": "Eliminazione impossibile. Riprova o contatta l'assistenza."
+    },
+    "privacy": "Informativa sulla privacy",
+    "terms": "Condizioni d'uso",
+    "setup": {
+      "title": "Crea il tuo profilo",
+      "subtitle": "Questi dati permettono di personalizzare la tua esperienza su Strive.",
+      "firstName": "Nome",
+      "lastName": "Cognome",
+      "phone": "Telefono",
+      "dob": "Data di nascita",
+      "placeholderFirstName": "Marco",
+      "placeholderLastName": "Rossi",
+      "placeholderPhone": "79 123 45 67",
+      "placeholderDay": "GG",
+      "placeholderMonth": "MM",
+      "placeholderYear": "AAAA",
+      "dialPickerTitle": "Prefisso del paese",
+      "dialSearchPlaceholder": "Cerca un paese o un prefisso",
+      "dialNoResult": "Nessun paese trovato",
+      "submit": "Continua",
+      "errors": {
+        "firstNameRequired": "Il nome è obbligatorio",
+        "lastNameRequired": "Il cognome è obbligatorio",
+        "phoneRequired": "Il numero di telefono è obbligatorio",
+        "phoneInvalid": "Il numero può contenere solo cifre",
+        "phoneLength": "{{code}} richiede {{expected}} cifre",
+        "dobRequired": "La data di nascita è obbligatoria",
+        "dobInvalid": "Data non valida",
+        "dobMonthInvalid": "Mese non valido (01–12)",
+        "dobDayInvalid": "Giorno non valido (01–31)",
+        "dobYearInvalid": "Anno non valido",
+        "dobNotExist": "Questa data non esiste",
+        "dobMinAge": "Devi avere almeno 18 anni",
+        "saveFailed": "Errore durante il salvataggio"
+      }
+    },
+    "deleteAccountSub": "Azione irreversibile",
+    "weekEarnings": "Guadagni della settimana",
+    "settings": "Impostazioni",
+    "subscription": "Abbonamento",
+    "supportSection": "Assistenza",
+    "legal": "Note legali",
+    "session": "Sessione"
+  },
+  "scanner": {
+    "title": "Configura lo scanner",
+    "twoPerms": "2 autorizzazioni necessarie",
+    "threePerms": "3 autorizzazioni necessarie",
+    "subtitle": "Queste autorizzazioni permettono alla bolla di Strive di comparire sopra le app VTC e di analizzare lo schermo.",
+    "disclosureTitle": "Perché queste autorizzazioni?",
+    "disclosureBody": "Strive usa il servizio di accessibilità e la cattura dello schermo SOLTANTO per analizzare tramite OCR le offerte mostrate in Uber, Bolt e Heetch, ogni volta che premi il pulsante di scansione. Nessun dato personale viene letto o raccolto. L'analisi è locale, sul tuo dispositivo.",
+    "overlayTitle": "Mostra sopra le altre app",
+    "overlayGranted": "Concessa ✓",
+    "overlayDesc": "Impostazioni → Applicazioni → Accesso speciale → Mostra sopra le altre app → Strive → Attiva",
+    "accessibilityTitle": "Servizio di accessibilità",
+    "accessibilityGranted": "Attivato ✓",
+    "accessibilityDesc": "Impostazioni → Accessibilità → Servizi installati → Strive Scanner → Attiva",
+    "captureTitle": "Cattura dello schermo",
+    "captureGranted": "Concessa ✓",
+    "captureDesc": "Necessaria su Android 10 e precedenti per catturare lo schermo",
+    "infoText": "Torna qui dopo ogni passaggio e premi Aggiorna per rinfrescare lo stato.",
+    "refresh": "Aggiorna",
+    "open": "Apri",
+    "allow": "Consenti",
+    "allowing": "…",
+    "start": "Avvia lo scanner",
+    "stop": "Ferma lo scanner",
+    "waiting": "In attesa delle autorizzazioni…",
+    "iosTitle": "Scansiona con un comando rapido",
+    "iosSubtitle": "Configura il comando una sola volta — poi tocca due volte il retro del tuo iPhone per analizzare un'offerta da Uber, Bolt o Heetch.",
+    "iosStep1Title": "Crea il comando rapido",
+    "iosStep1Desc": "In Comandi rapidi: «Cattura schermata» e poi «Analizza una corsa con Strive».",
+    "iosStep2Title": "Assegnalo al doppio tocco",
+    "iosStep2Desc": "Impostazioni → Accessibilità → Tocco → Tocca il retro → Tocco doppio: scegli il tuo comando.",
+    "iosStep3Title": "Risultato nella Dynamic Island",
+    "iosStep3Desc": "Da Uber/Bolt/Heetch, tocca due volte il retro dell'iPhone. Il verdetto appare in diretta nella Dynamic Island.",
+    "iosInfoText": "L'analisi gira localmente sul tuo iPhone (Vision, con Gemini come riserva). Nessun dato personale viene raccolto.",
+    "iosActivate": "Ho capito",
+    "iosOpenShortcuts": "Apri Comandi rapidi",
+    "iosOpenAccessibility": "Apri Impostazioni"
+  },
+  "dashboard": {
+    "title": "Pannello",
+    "subtitle": "Pannello in diretta",
+    "kmRate": "€/KM",
+    "greeting": "Ciao, {{name}} 👋",
+    "greetingDefault": "Autista",
+    "banner": {
+      "exhaustedTitle": "Limite raggiunto",
+      "exhaustedSub": "Acquista crediti o passa a Plus",
+      "remaining": "{{count}} scansione/i rimasta/e oggi",
+      "upgradeSub": "Passa a Plus per 20 scansioni/giorno"
+    },
+    "offline": "Sei offline",
+    "goOnline": "ONLINE",
+    "goOffline": "Vai offline",
+    "session": "SESSIONE DI OGGI",
+    "live": "Diretta",
+    "earnings": "GUADAGNI",
+    "avgRate": "TARIFFA MEDIA",
+    "scans": "SCANSIONI",
+    "pending": "Corse in attesa",
+    "clearAll": "Cancella tutto",
+    "waiting": "In attesa di schermate…",
+    "estFare": "Prezzo stimato",
+    "distance": "DISTANZA",
+    "time": "TEMPO",
+    "decline": "Rifiuta",
+    "accept": "Accetta",
+    "online": "Online",
+    "sessionRequired": "Sessione necessaria",
+    "startSessionToScan": "Avvia la tua sessione per iniziare a scansionare.",
+    "estimated": "stim.",
+    "status": {
+      "accepted": "CORSA ACCETTATA",
+      "declined": "CORSA RIFIUTATA"
+    },
+    "timeLabels": {
+      "justNow": "Proprio ora",
+      "minutesAgo": "{{count}} min fa",
+      "hoursAgo": "{{count}} h fa",
+      "daysAgo": "{{count}} g fa"
+    },
+    "priceCheck": {
+      "title": "Prezzo della corsa",
+      "message": "Il prezzo mostrato è corretto?",
+      "yes": "Sì, accetta",
+      "no": "No, correggi"
+    },
+    "priceModal": {
+      "title": "Prezzo reale della corsa",
+      "subtitle": "Inserisci l'importo finale mostrato",
+      "placeholder": "Es.: 14.50",
+      "skip": "Salta",
+      "confirm": "Conferma"
+    },
+    "offlineBanner": "Vai online per attivare lo scanner",
+    "offlineHint": "Vai online per scansionare",
+    "offlineHintSub": "Lo scanner funziona solo quando sei online.",
+    "scanLimit": {
+      "reached": "Limite raggiunto",
+      "remaining": "{{count}} scansione/i rimasta/e",
+      "buy": "+ Crediti",
+      "cardTitle": "Limite giornaliero raggiunto",
+      "cardText": "Hai usato le tue {{count}} scansioni di oggi.",
+      "cardTextFree": "Strive Plus si ripaga già con la prima corsa non redditizia che rifiuti. 20 scansioni/giorno per non guidare più in perdita.",
+      "upgrade": "Passa a Plus",
+      "comeBackTomorrow": "Torna domani per scansionare di nuovo."
+    },
+    "weeklyTease": {
+      "lossTitle": "≈ {{eur}} € sotto il tuo obiettivo questa settimana",
+      "lossSub": "≈ {{eur}} €/mese a questo ritmo",
+      "cta": "Riconosci ogni corsa mal pagata → Strive Plus",
+      "prideTitle_one": "💪 {{count}} corsa non redditizia evitata questa settimana",
+      "prideTitle_other": "💪 {{count}} corse non redditizie evitate questa settimana",
+      "prideCta": "Vedi il tuo bilancio completo con Plus"
+    },
+    "upgradeCard": {
+      "title": "Smetti di guidare in perdita",
+      "sub": "Plus si ripaga con una sola corsa evitata",
+      "perk1": "20 scansioni/giorno",
+      "perk2": "{{unit}} in diretta",
+      "perk3": "Cronologia"
+    },
+    "liveActivityPermission": {
+      "title": "Attività in tempo reale",
+      "message": "Per vedere il risultato delle scansioni in tempo reale, attiva le Attività in tempo reale in Impostazioni → Strive."
+    },
+    "home": "Home"
+  },
+  "shop": {
+    "title": "Negozio",
+    "creditsBalance": "Crediti disponibili",
+    "extraBalance": "{{count}} scansione",
+    "extraBalance_plural": "{{count}} scansioni",
+    "packsTitle": "PACCHETTI DI SCANSIONI",
+    "packsSubtitle": "Utilizzabili in aggiunta al tuo limite giornaliero, senza scadenza.",
+    "bestValue": "MIGLIOR PREZZO",
+    "scans": "scansioni",
+    "info1": "I crediti si usano automaticamente una volta raggiunto il limite giornaliero.",
+    "info2": "I crediti non scadono mai.",
+    "info3": "Passa a Plus o Premium per un limite giornaliero più alto.",
+    "upgradeTitle": "Passa a Plus — 20 scansioni/giorno",
+    "upgradeSubtitle": "Abbonamento mensile a partire da 4.99 €",
+    "purchaseSuccess": "Acquisto confermato!",
+    "creditsAdded": "{{count}} scansione/i aggiunta/e al tuo account.",
+    "purchaseError": "Errore",
+    "purchaseErrorMsg": "Impossibile completare l'acquisto. Riprova.",
+    "comingSoonTitle": "Presto disponibile",
+    "comingSoonSub": "Il negozio di crediti sarà presto accessibile."
+  },
+  "analytics": {
+    "title": "Le mie statistiche",
+    "weeklyBilan": {
+      "title": "Bilancio della settimana",
+      "loss": "≈ {{eur}} € sotto il tuo obiettivo questa settimana",
+      "avoided_one": "💪 {{count}} corsa non redditizia evitata",
+      "avoided_other": "💪 {{count}} corse non redditizie evitate"
+    },
+    "netProfit": "Profitto netto",
+    "grossProfit": "Profitto lordo",
+    "netAfterFuel": "Netto dopo carburante",
+    "vsAvg": "vs media",
+    "beforeTax": "Prima delle imposte",
+    "distance": "Distanza",
+    "activeHours": "Ore attive",
+    "appDist": "Ripartizione",
+    "hourlyRate": "Tariffa oraria",
+    "priceKm": "Prezzo / km",
+    "loading": "Caricamento dei dati…",
+    "empty": {
+      "title": "Ancora nessun dato",
+      "hint": "Scansiona la tua prima corsa per vedere qui i tuoi guadagni, la tua tariffa oraria e le tue tendenze."
+    },
+    "calendar": {
+      "selectDate": "Seleziona una data",
+      "oneDay": "1 giorno",
+      "sevenDays": "7 giorni",
+      "validate": "Conferma",
+      "today": "Oggi"
+    },
+    "dailyEarnings": "Guadagni per giorno",
+    "quality": {
+      "title": "Qualità delle corse",
+      "levelGood": "Eccellente",
+      "levelMid": "Discreta",
+      "levelLow": "Da migliorare",
+      "caption_one": "Su {{count}} corsa accettata",
+      "caption_other": "Su {{count}} corse accettate",
+      "discipline": "{{pct}} % di buone decisioni (accettare / rifiutare)",
+      "missed_one": "{{count}} buona corsa rifiutata",
+      "missed_other": "{{count}} buone corse rifiutate"
+    },
+    "alerts": {
+      "premiumTitle": "Accesso Plus",
+      "premiumRequired": "L'analisi su più giorni o nel passato è riservata ai membri Plus.",
+      "limitText": "{{days}} giorni al massimo — la cronologia illimitata è riservata a Premium"
+    },
+    "earningsBy": {
+      "day": "Guadagni per giorno",
+      "week": "Guadagni per settimana",
+      "month": "Guadagni per mese"
+    }
+  },
+  "history": {
+    "title": "Cronologia",
+    "today": "Oggi",
+    "yesterday": "Ieri",
+    "scanned": "Corse analizzate",
+    "earnings": "Guadagni",
+    "dailyTotal": "Totale del giorno:",
+    "prevSession": "SESSIONE PRECEDENTE",
+    "empty": "Nessuna corsa scansionata oggi.",
+    "emptyHint": "Le tue scansioni appariranno qui.",
+    "emptyCta": "Avvia una scansione",
+    "perHour": "/h",
+    "perKm": "/km",
+    "min": "min",
+    "km": "km",
+    "acceptRate": "Tasso accett.",
+    "filterAll": "Tutto · {{count}}",
+    "selectDates": "Seleziona le date",
+    "upgradeForHistory": "Passa a Plus per esplorare le tue giornate passate",
+    "status": {
+      "ACCEPTED": "ACCETTATA",
+      "DECLINED": "RIFIUTATA",
+      "PENDING": "IN ATTESA"
+    },
+    "changeMonth": "Cambia mese"
+  },
+  "settings": {
+    "title": "Impostazioni veicolo",
+    "subtitle": "Configurazione del veicolo",
+    "freePlan": "Piano gratuito",
+    "vehInfo": "DATI DEL VEICOLO",
+    "model": "Modello del veicolo",
+    "year": "Anno",
+    "fuelType": "Carburante",
+    "regNum": "Targa",
+    "consumption": "CONSUMO",
+    "avgCons": "Consumo medio",
+    "manualInput": "Inserimento manuale (L/100 km)",
+    "fuelCost": "Costo del carburante",
+    "priceLiter": "Prezzo al litro (€)",
+    "proFeatures": "FUNZIONI PRO",
+    "upgradeReq": "Abbonamento richiesto",
+    "feat1Title": "Consumo preciso",
+    "feat1Sub": "Analisi in tempo reale in base alla velocità",
+    "feat2Title": "Costi specifici",
+    "feat2Sub": "Calcolo dell'usura secondo il tuo modello",
+    "feat3Title": "Dati API in diretta",
+    "feat3Sub": "Sincronizzazione con il traffico di Waze/Google",
+    "save": "Salva",
+    "fuel": {
+      "essence": "Benzina",
+      "diesel": "Diesel",
+      "electric": "Elettrico"
+    }
+  },
+  "preferences": {
+    "title": "Preferenze",
+    "subtitle": "Impostazioni di accettazione delle corse.",
+    "save": "Salva",
+    "tripId": "Identificatore di corsa",
+    "active": "Attivo",
+    "enableTripId": "Attiva l'identificatore",
+    "enableTripIdSub": "Analizza le offerte tramite il comando AssistiveTouch",
+    "minimums": "I tuoi minimi",
+    "minHr": "Minimo €/h",
+    "minKm": "Minimo €/km",
+    "dayReset": "Reset della giornata",
+    "dayResetSub": "Ora in cui le tue statistiche del giorno si azzerano",
+    "dayReset4am": "Reset alle 4",
+    "dayReset4amSub": "Per gli autisti notturni: la giornata inizia alle 4 locali invece che a mezzanotte",
+    "includePickup": "Includi l'avvicinamento nei calcoli",
+    "includePickupSub": "Tiene conto del tempo e della distanza fino al cliente per una stima più realistica.",
+    "deductFuel": "Togli il carburante dal prezzo",
+    "deductFuelSub": "Il prezzo mostrato diventa netto del carburante stimato",
+    "deductFuelMissing": "Indica il consumo del tuo veicolo perché questa opzione abbia effetto.",
+    "resultMode": "Dynamic Island",
+    "resultModeSub": "Mostra il risultato nella Dynamic Island. Disattivato = notifica classica.",
+    "advanced": "Impostazioni avanzate",
+    "setup": "Riavvia la configurazione",
+    "identification": "Identificazione",
+    "options": "Opzioni",
+    "saveSuccess": "Preferenze salvate correttamente.",
+    "saveError": "Impossibile salvare. Riprova.",
+    "language": "Lingua",
+    "push": "Notifiche push",
+    "pushSub": "Avvisi di scansione, promemoria e riepiloghi",
+    "languageSub": "Scegli la lingua dell'app",
+    "languageDevice": "Lingua del dispositivo",
+    "pushDeniedTitle": "Notifiche rifiutate",
+    "pushDeniedBody": "Hai rifiutato le notifiche per Strive. iOS non lo richiede di nuovo — attivale nelle Impostazioni del dispositivo.",
+    "openSettings": "Apri le Impostazioni",
+    "thresholdLockCta": "Imposta i tuoi con Plus",
+    "pushBlocked": "Bloccate nelle impostazioni del telefono — tocca per riattivarle",
+    "country": "Paese e valuta",
+    "countrySub": "Determina la tua valuta, i tuoi contributi e la tua soglia di redditività."
+  },
+  "upgrade": {
+    "title": "Passa a Pro",
+    "unlock": "Sblocca il potenziale",
+    "unlockSub": "Massimizza i tuoi guadagni con dati precisi e analisi illimitate.",
+    "starter": "Principiante",
+    "free": "GRATUITO",
+    "feat1": "3 scansioni al giorno",
+    "feat2": "Stime di base",
+    "feat3": "Impostazioni generali",
+    "popular": "POPOLARE",
+    "proDriver": "Autista Pro",
+    "perMonth": "/ mese",
+    "proFeat1": "Scansioni illimitate",
+    "proFeat2": "Percorsi precisi con Google/Waze",
+    "proFeat3": "Stima del carburante per modello",
+    "proFeat4": "Analisi del tempo di avvicinamento",
+    "goPremium": "Diventa Premium",
+    "restore": "Ripristina gli acquisti"
+  },
+  "carSettings": {
+    "title": "Impostazioni veicolo",
+    "subtitle": "Configurazione del veicolo",
+    "freePlan": "Piano gratuito",
+    "vehInfo": "DATI DEL VEICOLO",
+    "makeLabel": "Marca *",
+    "makePlaceholder": "Es.: Toyota",
+    "modelLabel": "Modello del veicolo *",
+    "modelPlaceholder": "Es.: Prius",
+    "yearLabel": "Anno",
+    "fuelLabel": "Carburante",
+    "fuelPlaceholder": "Energia",
+    "regLabel": "Targa",
+    "regPlaceholder": "TI 123456",
+    "consumption": "CONSUMO",
+    "avgCons": "Consumo medio",
+    "unitFuel": "L/100 km",
+    "unitElectric": "kWh/100 km",
+    "elecPrice": "Prezzo di ricarica",
+    "proFeatures": "FUNZIONI PRO",
+    "upgradeReq": "Abbonamento richiesto",
+    "feat1Title": "Consumo preciso",
+    "feat1Sub": "Analisi in tempo reale in base alla velocità",
+    "feat2Title": "Costi specifici",
+    "feat2Sub": "Calcolo dell'usura secondo il tuo modello",
+    "feat3Title": "Dati API in diretta",
+    "feat3Sub": "Sincronizzazione con il traffico di Waze/Google",
+    "save": "Salva",
+    "useTyped": "Usa «{{value}}»",
+    "noResult": "Nessun risultato",
+    "errors": {
+      "required": "Compila tutti i campi obbligatori.",
+      "saveFailed": "Impossibile salvare i dati. Riprova.",
+      "consInvalid": "Consumo non valido (tra 0.1 e 99.9).",
+      "priceInvalid": "Prezzo non valido (tra 0.01 e 3 {{unit}}).",
+      "fuelPriceInvalid": "Prezzo non valido (tra 0.01 e 10 {{unit}})."
+    },
+    "success": {
+      "saved": "Profilo aggiornato correttamente."
+    },
+    "fuelPrice": "Prezzo del carburante",
+    "fuelPriceAuto": "automatico se vuoto"
+  },
+  "tutorial": {
+    "skip": "Salta",
+    "next": "Avanti",
+    "start": "Fare la mia prima scansione",
+    "step": "PASSO",
+    "openShortcuts": "Apri Comandi rapidi",
+    "openAccessibility": "Apri Accessibilità",
+    "step1": {
+      "title": "Benvenuto su Strive",
+      "desc": "Non accettare più una corsa alla cieca. Ti mostriamo quanto rende davvero — €/h e €/km, traffico compreso."
+    },
+    "step2": {
+      "title": "Configura lo scanner",
+      "desc": "Autorizza le notifiche qui sotto. L'accessibilità e la visualizzazione sopra le altre app ti saranno chieste al primo avvio dello scanner."
+    },
+    "step2_ios": {
+      "title": "Tre impostazioni, una sola volta",
+      "desc": ""
+    },
+    "iosPreview": {
+      "title": "Ecco cosa vedrai",
+      "subtitle": "Il verdetto appare nella Dynamic Island, in diretta sopra la tua app VTC.",
+      "verdictTake": "ACCETTA",
+      "verdictThreshold": "Entrambi i valori superano le tue soglie ✓",
+      "glance": "Quello che vedi a colpo d'occhio:",
+      "metricHr": "€/h",
+      "metricHrSub": "Tariffa oraria (con avvicinamento)",
+      "metricKm": "€/km",
+      "metricKmSub": "Tariffa per km percorso",
+      "metricTotal": "Totale",
+      "metricTotalSub": "Guadagni totali della corsa",
+      "customizeCta": "Personalizza le mie soglie",
+      "verdictMaybe": "FORSE",
+      "verdictSkip": "RIFIUTA",
+      "hintGood": "Entrambi i valori superano le tue soglie ✓",
+      "hintAverage": "Buon €/km ma il €/h non segue — decidi tu",
+      "hintBad": "€/h troppo basso, lunga distanza — da evitare"
+    },
+    "quickRef": {
+      "ios": {
+        "step1": "Cattura l'offerta",
+        "step1Sub": "Su Uber, Bolt o Heetch",
+        "step2": "Premi AssistiveTouch",
+        "step2Sub": "Senza uscire dall'applicazione",
+        "step3": "Leggi il verdetto",
+        "step3Sub": "€/h e €/km reali, traffico incluso",
+        "step4": "Segna la corsa",
+        "step4Sub": "Accettata o rifiutata — è ciò che riempie le tue statistiche"
+      },
+      "android": {
+        "step1": "Attiva lo scanner",
+        "step1Sub": "Dalla home di Strive",
+        "step2": "Tocca la bolla",
+        "step2Sub": "Quando compare l'offerta",
+        "step3": "Leggi il verdetto",
+        "step3Sub": "€/h e €/km reali, traffico incluso",
+        "step4": "Segna la corsa",
+        "step4Sub": "Accettata o rifiutata — è ciò che riempie le tue statistiche"
+      }
+    },
+    "iosInstall": {
+      "cta": "Ottieni il comando rapido",
+      "ctaDone": "Apri di nuovo",
+      "notifT": "Notifiche",
+      "notifS": "Senza di esse, una scansione può riuscire senza che tu la veda mai.",
+      "notifCta": "Attiva le notifiche",
+      "notifDone": "Notifiche attivate",
+      "notifErrorBody": "Impossibile completare l'attivazione. Controlla la connessione e riprova.",
+      "shortcutT": "Il comando rapido",
+      "shortcutS": "È lui che fa tutto: la cattura, l'analisi, il verdetto. È già pronto, basta aggiungerlo.",
+      "notifS_android": "È tramite esse che arriva il verdetto, con i pulsanti Accettata e Rifiutata. Senza questa impostazione, una scansione riuscita può non mostrarti nulla.",
+      "confirmCta": "L'ho aggiunto",
+      "confirmed": "Hai confermato l'aggiunta",
+      "urgentT": "Notifiche urgenti",
+      "urgentS": "In modalità Guida tutto è nascosto — tranne ciò che è segnato come urgente. Il tuo verdetto deve esserlo.",
+      "urgentCta": "Apri le notifiche"
+    },
+    "step3": {
+      "title": "Accetta o rifiuta in un istante",
+      "desc": "Tocca la bolla quando appare un'offerta. Strive ti mostra la tariffa oraria e quella al km in tempo reale. Verde = vai, rosso = rifiuta."
+    },
+    "iosTrigger": {
+      "recommended": "★ Consigliato — Il più rapido",
+      "backTap": {
+        "label": "Retro",
+        "hero": "Tocca il retro",
+        "step1t": "Apri Impostazioni",
+        "step1s": "Impostazioni → Accessibilità → Tocco",
+        "step2t": "Tocca il retro",
+        "step2s": "Tocca «Tocco doppio»",
+        "step3t": "Scegli il comando rapido",
+        "step3s": "Seleziona Strive nell'elenco"
+      },
+      "assistive": {
+        "label": "Assistive",
+        "hero": "Pulsante fluttuante",
+        "step1t": "Apri Impostazioni",
+        "step1s": "Impostazioni → Accessibilità → Tocco",
+        "step2t": "Attiva AssistiveTouch",
+        "step2s": "Interruttore in cima alla pagina",
+        "step3t": "Azioni personalizzate",
+        "step3s": "Tocco singolo",
+        "step4t": "Aggiungi «Strive»",
+        "step4s": "Selezionalo nell'elenco dei comandi rapidi"
+      },
+      "homeScreen": {
+        "label": "Home",
+        "hero": "Icona dell'app",
+        "step1t": "Apri Comandi rapidi",
+        "step1s": "L'app Comandi rapidi di Apple",
+        "step2t": "Tieni premuto il comando",
+        "step2s": "Pressione lunga → Dettagli",
+        "step3t": "Aggiungi alla schermata",
+        "step3s": "«Aggiungi a Home»"
+      },
+      "cta": "Apri le impostazioni di accessibilità",
+      "ctaSettings": "Apri le Impostazioni",
+      "doneCta": "È configurato"
+    },
+    "step4": {
+      "title": "Segui i tuoi risultati",
+      "desc": "Le schede Cronologia e Statistiche mostrano i tuoi guadagni del giorno, il tuo tasso di accettazione e le piattaforme più redditizie."
+    },
+    "step5": {
+      "title": "La tua prima scansione",
+      "desc": "Tre gesti per sapere se la corsa vale la pena. Un quarto perché lo sappiano anche le tue statistiche."
+    },
+    "step5_ios": {
+      "title": "La tua prima scansione",
+      "desc": "Tre gesti per sapere se la corsa vale la pena. Un quarto perché lo sappiano anche le tue statistiche."
+    },
+    "tips": {
+      "step1": "Strive funziona con Uber, Bolt e Heetch. Altre piattaforme arriveranno presto.",
+      "step2": "Dovrai concedere 2 autorizzazioni: overlay e accessibilità. Segui la guida passo a passo.",
+      "step2_ios": "Puoi anche assegnare il comando al pulsante Azione (iPhone 15 Pro e successivi) o ad AssistiveTouch.",
+      "step3": "Consiglio: tocca la bolla quando l'offerta appare sul tuo schermo VTC. Non serve cambiare app.",
+      "step3_ios": "Consiglio: il doppio tocco sul retro funziona anche con una custodia (sottile). Non serve cambiare app.",
+      "step4": "La scheda Statistiche mostra i tuoi guadagni per giorno, per piattaforma e la tua tariffa oraria in tempo reale.",
+      "step5": "Consiglio: inizia con una soglia minima di 20 €/h, poi regolala in base ai tuoi risultati.",
+      "step5_ios": "Consiglio: inizia con una soglia minima di 20 €/h, poi regolala in base ai tuoi risultati."
+    },
+    "restartVideo": "Rivedi il video",
+    "recap": {
+      "title": "La tua installazione",
+      "desc": "Tocca una riga per andare all'impostazione corrispondente.",
+      "notifT": "Notifiche",
+      "notifS": "È tramite esse che arriva il verdetto quando la scheda non ha potuto mostrare nulla.",
+      "bubbleT": "Bolla AssistiveTouch",
+      "bubbleS": "È quella che tocchi per analizzare un'offerta.",
+      "urgentT": "Notifiche urgenti",
+      "urgentS": "La modalità Guida nasconde il verdetto senza di esse.",
+      "state_ok": "Pronto",
+      "state_todo": "Da attivare",
+      "state_unknown": "Da verificare",
+      "state_declared": "Confermato",
+      "notifPath": "Impostazioni › Notifiche › Strive",
+      "bubblePath": "Impostazioni › Accessibilità › Tocco › AssistiveTouch",
+      "urgentPath": "Impostazioni › Notifiche › Strive › Notifiche urgenti",
+      "shortcutT": "Il comando rapido",
+      "shortcutS": "Tocca per aprire Comandi rapidi e verificare che ci sia.",
+      "shortcutPath": "Comandi rapidi › I miei comandi › Analizza una corsa"
+    },
+    "notifStep": {
+      "title": "Autorizza le notifiche",
+      "desc": "È tramite esse che arriva il verdetto quando la scheda non ha potuto mostrare nulla. Senza questa impostazione, una scansione riuscita può non mostrarti nulla."
+    },
+    "tag": {
+      "title": "Segna le tue corse",
+      "desc": "Accettata o rifiutata: senza questa risposta, Strive non può calcolare i tuoi guadagni reali — le tue statistiche restano vuote.",
+      "diT": "Sulla scheda del verdetto",
+      "diS": "Tocca Accettata o Rifiutata direttamente nella Dynamic Island.",
+      "notifT": "Dalla notifica",
+      "notifS_ios": "Senza Dynamic Island, tira la notifica verso il basso: appaiono i due pulsanti.",
+      "notifS_android": "I pulsanti Accettata e Rifiutata sono direttamente sulla notifica di risultato.",
+      "historyT": "O più tardi, nella Cronologia",
+      "historyS": "Le corse senza risposta restano segnate come «In attesa» finché non decidi."
+    }
+  },
+  "help": {
+    "title": "Aiuto e assistenza",
+    "subtitle": "Domande e risposte",
+    "faqTitle": "DOMANDE FREQUENTI",
+    "contactTitle": "CONTATTI",
+    "contactDesc": "Una domanda che non trovi qui? Scrivici, rispondiamo entro 24 h.",
+    "contactBtn": "Contattaci per e-mail",
+    "mailSubject": "Assistenza Strive",
+    "mailContext": "Info tecniche (non cancellare)",
+    "faq": {
+      "q1": "Come funziona lo scanner?",
+      "a1": "Lo scanner cattura lo schermo della tua app VTC tramite il servizio di accessibilità, estrae i dati della corsa (tariffa, distanza, durata) con l'OCR e mostra un verdetto in base alle tue soglie minime.",
+      "q2": "Quali app VTC sono supportate?",
+      "a2": "Attualmente Uber, Bolt e Heetch. Altre piattaforme arriveranno presto.",
+      "q3": "Perché la bolla non appare?",
+      "a3": "Verifica che entrambe le autorizzazioni siano concesse nella schermata di configurazione: «Mostra sopra le altre app» e «Servizio di accessibilità» devono essere attivi.",
+      "q4": "Come modifico le mie soglie minime?",
+      "a4": "Vai in Profilo → Preferenze di corsa. Regola i cursori della tariffa oraria e di quella al km. Le modifiche si applicano subito.",
+      "q5": "Come disdico il mio abbonamento Plus?",
+      "a5": "Su Android: Google Play → Abbonamenti. Su iOS: Impostazioni → Il tuo nome → Abbonamenti. Trova Strive e premi Disdici.",
+      "q6": "I miei dati sono al sicuro?",
+      "a6": "Sì. La scansione avviene sul tuo dispositivo e nessuna schermata viene conservata. Le tue corse sono archiviate in modo sicuro, mai vendute né cedute, e Strive non ha alcun legame con le piattaforme VTC. Puoi cancellare tutto in qualsiasi momento da Profilo → Account.",
+      "q7": "Come viene calcolata la mia tariffa oraria (€/h)?",
+      "a7": "Strive parte dalla tariffa della corsa, aggiunge il tempo di avvicinamento al cliente e calcola il tempo di percorrenza reale con il traffico in tempo reale. Ottieni il tuo €/h reale, non una stima in linea d'aria.",
+      "q8": "Come funzionano il costo del carburante e il profitto netto?",
+      "a8": "Partendo dal consumo del tuo veicolo (L/100 km, o kWh/100 km per l'elettrico) e dal prezzo del carburante, Strive deduce il costo di ogni corsa per mostrare il tuo profitto netto. Con l'elettrico puoi fissare il tuo prezzo al kWh in Profilo → Veicolo.",
+      "q9": "Cos'è il punteggio di qualità delle corse?",
+      "a9": "Un punteggio su 100 assegnato a ogni corsa confrontando i suoi €/h e €/km con le tue soglie: verde sopra, arancione vicino, rosso sotto. Nelle Statistiche vedi anche la qualità media delle corse accettate.",
+      "q10": "Quante scansioni al giorno?",
+      "a10": "3 scansioni al giorno con il piano gratuito, 20 al giorno con Strive Plus.",
+      "q11": "Come contatto l'assistenza?",
+      "a11": "Da Profilo → I miei ticket: apri un ticket e rispondiamo direttamente nell'app (ricevi una notifica a ogni risposta)."
+    }
+  },
+  "support": {
+    "title": "I miei ticket",
+    "subtitle": "Assistenza Strive",
+    "priorityBadge": "Prioritario",
+    "menuSub": "Contattare l'assistenza, seguire le tue richieste",
+    "empty": "Ancora nessun ticket",
+    "emptyHint": "Una domanda, un problema? Apri un ticket, rispondiamo in fretta.",
+    "newTicket": "Nuovo ticket",
+    "subjectLabel": "Oggetto",
+    "subjectPlaceholder": "Es.: Problema di scansione",
+    "messageLabel": "Messaggio",
+    "messagePlaceholder": "Descrivi la tua richiesta in dettaglio…",
+    "send": "Invia",
+    "staff": "Assistenza Strive",
+    "replyPlaceholder": "Scrivi la tua risposta…",
+    "status": {
+      "open": "In attesa",
+      "answered": "Risposto",
+      "closed": "Chiuso"
+    },
+    "categoryLabel": "Categoria",
+    "subcategoryLabel": "Precisa",
+    "errorLabel": "Riguarda un errore recente?",
+    "filterAll": "Tutti",
+    "cat": {
+      "scan": "Scansione",
+      "subscription": "Abbonamento",
+      "account": "Account",
+      "data": "Cronologia",
+      "suggestion": "Suggerimento",
+      "other": "Altro"
+    },
+    "sub": {
+      "scan": {
+        "no_detect": "Nessuna corsa rilevata",
+        "wrong_values": "Numeri errati",
+        "addresses": "Indirizzi letti male",
+        "trigger": "Il comando rapido non si avvia",
+        "display": "Il risultato non appare"
+      },
+      "subscription": {
+        "purchase": "Acquisto impossibile",
+        "restore": "Ripristinare il mio abbonamento",
+        "billing": "Fatturazione",
+        "cancel": "Disdetta"
+      },
+      "account": {
+        "login": "Accesso impossibile",
+        "profile": "Modificare i miei dati",
+        "delete": "Eliminare il mio account"
+      },
+      "data": {
+        "missing_ride": "Corsa mancante",
+        "wrong_stats": "Statistiche errate",
+        "export": "Recuperare i miei dati"
+      }
+    },
+    "reason": {
+      "scanner_off": "Scanner disattivato",
+      "session_off": "Sessione non avviata",
+      "quota_reached": "Limite giornaliero raggiunto",
+      "invalid_image": "Immagine illeggibile",
+      "throttled": "Analisi già in corso",
+      "ocr_empty": "Nessun testo letto sullo schermo",
+      "no_addresses": "Indirizzi illeggibili",
+      "not_a_ride": "Nessuna offerta rilevata",
+      "gemini_ko": "L'analisi con IA non è riuscita",
+      "la_start_failed": "Visualizzazione impossibile",
+      "expired": "Analisi interrotta",
+      "timeout": "Analisi troppo lunga"
+    }
+  },
+  "iap": {
+    "loading": "Caricamento delle offerte…",
+    "notAvailable": "Negozio non disponibile. Riprova.",
+    "purchaseCancelled": "Acquisto annullato.",
+    "restoreSuccess": "Acquisti ripristinati!",
+    "restoreNone": "Nessun acquisto da ripristinare.",
+    "restoreFail": "Impossibile ripristinare gli acquisti."
+  },
+  "accountInfo": {
+    "subtitle": "Dati personali",
+    "informations": "DATI",
+    "driverDefault": "Autista",
+    "emailLockedNote": "E-mail collegata al tuo account Google / Apple — non modificabile.",
+    "errorSave": "Impossibile salvare le modifiche.",
+    "privacy": "DATI E PRIVACY",
+    "deleteHistory": {
+      "title": "Elimina la mia cronologia",
+      "message": "Tutte le tue corse registrate (indirizzi, tariffe, statistiche) saranno eliminate definitivamente. Questa azione è irreversibile.",
+      "confirm": "Elimina",
+      "button": "Elimina la mia cronologia",
+      "note": "Le tue corse (indirizzi inclusi) sono conservate fino all'eliminazione del tuo account, poi cancellate definitivamente.",
+      "success": "Cronologia eliminata.",
+      "error": "Eliminazione non riuscita. Riprova."
+    },
+    "errors": {
+      "emailInvalid": "E-mail non valida",
+      "phoneInvalid": "Numero di telefono non valido"
+    },
+    "title": "Profilo"
+  },
+  "subscription": {
+    "label": "STRIVE",
+    "heroTitle": "Sappi.\nDecidi. Guadagna.",
+    "heroSub": "Non tutte le corse valgono uguale. Con Strive Plus lo sai prima di accettare.",
+    "values": {
+      "scan": {
+        "title": "Scansione in 2 secondi",
+        "sub": "Cattura l'offerta → verdetto istantaneo sul tuo schermo."
+      },
+      "hourly": {
+        "title": "€/h in diretta",
+        "sub": "Vedi la tua tariffa oraria reale su ogni corsa."
+      },
+      "filter": {
+        "title": "Rifiuta le trappole",
+        "sub": "Sappi quali corse ti fanno perdere tempo."
+      },
+      "threshold": {
+        "title": "La tua soglia, le tue regole",
+        "sub": "Definisci il tuo €/h minimo, Strive fa la selezione."
+      }
+    },
+    "feat": {
+      "scan": "20 scansioni al giorno",
+      "scanText": "invece di 3 — abbastanza per una giornata intera di servizio.",
+      "threshold": "La tua soglia, non la nostra",
+      "thresholdText": "sei tu a fissare il €/h da cui una corsa vale la pena.",
+      "fuel": "Il netto, non il lordo",
+      "fuelText": "il carburante del tuo modello dedotto a ogni corsa, non una media.",
+      "history": "La tua settimana intera",
+      "historyText": "7 giorni di cronologia per riconoscere le tue giornate davvero redditizie, non solo oggi.",
+      "traffic": "Basato sul traffico in tempo reale, non in linea d'aria —",
+      "trafficText": "non accettare più una corsa che finirà nel traffico."
+    },
+    "yearlyAccess": "ABBONAMENTO ANNUALE",
+    "monthlyAccess": "ABBONAMENTO MENSILE",
+    "heroTitleActive": "Strive Plus attivo",
+    "heroSubActive": "Il tuo abbonamento è attivo. Gestiscilo qui sotto.",
+    "activeTitle": "Abbonamento attivo",
+    "activeSub": "Piano {{plan}}",
+    "manage": "Gestisci il mio abbonamento",
+    "manageVia": "Gestisci tramite {{store}}",
+    "cancelHint": "Per disdire, vai nelle impostazioni di {{store}}.",
+    "popular": "POPOLARE",
+    "trialRibbon": "7 GIORNI GRATIS",
+    "trialFreeLabel": "0.00 € per 7 giorni",
+    "trialThenPrice": "poi {{price}}/mese",
+    "trialHint": "Disdicibile in qualsiasi momento durante la prova",
+    "monthlyHint": "Senza vincoli, disdicibile in 1 clic",
+    "trust": {
+      "cancel": "Disdetta in 1 clic",
+      "secure": "Pagamento Apple",
+      "secureAndroid": "Google Play",
+      "commitment": "Senza vincoli"
+    },
+    "faq": {
+      "title": "Domande frequenti",
+      "q1": "Come funziona la prova gratuita di 7 giorni?",
+      "a1": "I primi 7 giorni sono gratuiti al 100 %. Puoi disdire in qualsiasi momento dalle Impostazioni iOS prima della fine del periodo — non ti verrà addebitato nulla. Altrimenti l'abbonamento si rinnova automaticamente alla tariffa normale.",
+      "q2": "Posso disdire in qualsiasi momento?",
+      "a2": "Sì. In 1 clic da Impostazioni iOS → ID Apple → Abbonamenti. Nessuna domanda, nessun attrito, nessun vincolo.",
+      "q3": "Con quali app di corse funziona Strive?",
+      "a3": "Uber, Bolt, Heetch e tutte le app VTC che mostrano l'offerta sullo schermo. Strive analizza qualsiasi schermata per estrarne prezzo, distanza e tempo.",
+      "q4": "I miei dati sono privati?",
+      "a4": "Tutto è cifrato e conservato in modo sicuro. Nessun dato venduto, nessuna pubblicità, nessun tracciamento di terzi. Puoi eliminare il tuo account in qualsiasi momento dall'app."
+    },
+    "freeHeader": "Gratuito",
+    "plusHeader": "Plus",
+    "monthlyTab": "Mensile",
+    "yearlyTab": "Annuale",
+    "monthlyFallbackPrice": "9.99 €",
+    "yearlyFallbackPrice": "89.99 €",
+    "perMonthShort": "/mese",
+    "perYearShort": "/anno",
+    "perMonthEquiv": "cioè {{price}}/mese",
+    "switchYearlyHint": "Passa all'annuale per risparmiare il {{percent}} %",
+    "trialBadge": "7 GIORNI DI PROVA GRATUITA",
+    "ctaTrial": "Inizia i miei 7 giorni gratis",
+    "ctaSubscribe": "Abbonati ora",
+    "ctaHintTrial": "Poi {{price}}{{cycle}}. Disdetta in qualsiasi momento, senza costi.",
+    "ctaHintNoTrial": "Fatturato {{cycle}}. Disdetta in qualsiasi momento nell'App Store.",
+    "cycleMonthly": " ogni mese",
+    "cycleYearly": " ogni anno",
+    "restore": "Ripristina gli acquisti",
+    "terms": "Condizioni",
+    "privacy": "Privacy",
+    "errorTitle": "Errore",
+    "errorMsg": "Impossibile completare l'abbonamento. Riprova.",
+    "alreadyOwnedMsg": "Questo abbonamento è ancora attivo sul tuo account Apple. Tocca «Ripristina gli acquisti» per riottenere l'accesso.",
+    "receiptInUseMsg": "Questo acquisto Apple è già collegato a un altro account Strive. Accedi con quell'account oppure tocca «Ripristina gli acquisti».",
+    "storeProblemMsg": "L'App Store non ha risposto. Controlla la connessione e riprova.",
+    "pendingTitle": "Acquisto in attesa",
+    "pendingMsg": "L'App Store deve ancora convalidare il pagamento. Il tuo accesso si aprirà appena sarà confermato.",
+    "rows": {
+      "scans": {
+        "label": "Scansioni giornaliere",
+        "free": "3 / giorno",
+        "plus": "20 / giorno"
+      },
+      "dashboard": {
+        "label": "Pannello",
+        "free": "Base",
+        "plus": "Completo"
+      },
+      "fuel": {
+        "label": "Consumo di carburante",
+        "plus": "Per modello"
+      },
+      "goal": {
+        "label": "Obiettivo / giorno",
+        "plus": "Personalizzabile"
+      },
+      "history": {
+        "label": "Cronologia corse",
+        "free": "Solo oggi",
+        "plus": "7 giorni"
+      },
+      "hourly": {
+        "label": "Tariffa oraria €/h",
+        "plus": "In diretta"
+      },
+      "support": {
+        "label": "Assistenza",
+        "plus": "Prioritaria"
+      }
+    },
+    "noneFound": "Nessun abbonamento trovato",
+    "noneFoundSub": "Possiamo verificare i tuoi acquisti precedenti",
+    "restorePrevious": "Ripristina gli acquisti precedenti",
+    "restoreSuccessSub": "Il tuo abbonamento è di nuovo attivo.",
+    "restoreFailSub": "Controlla la connessione e riprova.",
+    "manageStore": "Gestisci nell'App Store",
+    "planName": "Strive Plus",
+    "periodMonth": "mese",
+    "periodYear": "anno",
+    "perWeekEquiv": "cioè {{price}} a settimana",
+    "trialStrip": "Prova gratuita {{days}} g",
+    "noPaymentToday": "Nessun pagamento oggi",
+    "cancelAnytime": "Disdicibile in qualsiasi momento",
+    "finePrintTrial": "{{days}} giorni gratis, poi {{price}} per {{period}}. Rinnovo automatico.",
+    "finePrintNoTrial": "{{price}} per {{period}}. Rinnovo automatico, disdicibile in qualsiasi momento.",
+    "benefit": {
+      "plus": {
+        "scans": "20 scansioni al giorno invece di 3",
+        "thresholds": "Le tue soglie €/h e €/km, non le nostre",
+        "traffic": "Il €/h calcolato sul traffico reale",
+        "fuel": "Il carburante del tuo modello dedotto",
+        "history": "Le tue statistiche su 7 giorni di fila"
+      },
+      "premium": {
+        "allPlus": "Tutte le funzionalità Plus",
+        "scans": "Scansioni illimitate",
+        "history": "Cronologia e statistiche illimitate",
+        "slots": "Le tue migliori fasce, ora per ora",
+        "support": "Assistenza prioritaria"
+      }
+    },
+    "saveAmount": "RISPARMIA {{amount}}",
+    "heroTitleWelcomeEnd": "Le tue 30 scansioni\nin regalo sono finite.",
+    "heroSubWelcomeEnd": "Ora sai cosa cambia. Con Strive Plus sono 20 al giorno — tutti i giorni.",
+    "tier": {
+      "plus": "Plus",
+      "premium": "Premium"
+    },
+    "heroSubPremium": "Nessun limite, e l'app ti dice quando lavorare — non solo quale corsa prendere.",
+    "premiumMonthlyFallbackPrice": "19.99 €",
+    "premiumYearlyFallbackPrice": "179.99 €",
+    "upgradeTitle": "Cosa aggiunge Premium",
+    "upgradeSub": "Mantieni tutto ciò che Plus ti dà già.",
+    "upgradeProrata": "Il cambio è immediato. {{store}} deduce il tempo già pagato su Plus.",
+    "ctaUpgrade": "Passa a Premium",
+    "bestValueStrip": "Offerta migliore"
+  },
+  "network": {
+    "offline": "Nessuna connessione a internet"
+  },
+  "timeAgo": {
+    "justNow": "Proprio ora",
+    "minutes": "{{count}} min fa",
+    "hours": "{{count}} h fa",
+    "days": "{{count}} g fa"
+  },
+  "notifications": {
+    "inactivity": {
+      "title": "Sessione inattiva",
+      "body": "Non scansioni da 1 h. Ricordati di chiudere la tua sessione."
+    },
+    "quotaReset": {
+      "title": "Limite ricaricato!",
+      "body": "Le tue scansioni giornaliere sono di nuovo disponibili. Buona strada!"
+    },
+    "quotaReached": {
+      "title": "Limite raggiunto",
+      "body": "Hai usato tutte le tue scansioni di oggi. Ricarica tra {{time}}.",
+      "bodyFree": "Hai usato le tue scansioni del giorno. Passa a Plus per {{scans}} scansioni al giorno — ricarica tra {{time}}."
+    },
+    "rideRejected": {
+      "title": "Corsa non registrata",
+      "bodyQuota": "Limite giornaliero superato: questa corsa non ha potuto essere aggiunta alle tue statistiche.",
+      "bodyOther": "Questa corsa è stata rifiutata al momento della registrazione. Contatta l'assistenza se si ripete."
+    },
+    "sessionClosed": {
+      "title": "Sessione chiusa",
+      "body": "La tua sessione è stata chiusa dopo 2 h senza scansioni."
+    },
+    "syncDropped": {
+      "title": "Sincronizzazione incompleta",
+      "body": "{{count}} corsa/e scansionata/e offline non hanno potuto essere registrate. Controlla la tua cronologia."
+    },
+    "weeklyRecap": {
+      "title": "📊 Il tuo bilancio della settimana",
+      "body": "Vieni a vedere quanto potresti guadagnare in più con Strive.",
+      "bodyLoss": "≈ {{eur}} € sotto il tuo obiettivo questa settimana. Scopri come evitarlo."
+    }
+  },
+  "tier": {
+    "free": "Free",
+    "freeBadge": "Free",
+    "plus": "★ Plus",
+    "plusBadge": "PLUS",
+    "premiumBadge": "PREMIUM",
+    "plusOnly": "Riservato a Strive Plus",
+    "plusName": "Plus",
+    "premiumName": "Premium"
+  },
+  "countries": {
+    "fr": "Francia",
+    "be": "Belgio",
+    "ch": "Svizzera",
+    "lu": "Lussemburgo",
+    "dz": "Algeria",
+    "ma": "Marocco",
+    "tn": "Tunisia",
+    "sn": "Senegal",
+    "ci": "Costa d'Avorio",
+    "cm": "Camerun",
+    "ml": "Mali",
+    "gn": "Guinea",
+    "pt": "Portogallo",
+    "es": "Spagna",
+    "it": "Italia",
+    "gb": "Regno Unito",
+    "de": "Germania",
+    "ro": "Romania",
+    "pl": "Polonia",
+    "us": "Stati Uniti / Canada"
+  },
+  "onboarding": {
+    "skip": "Salta",
+    "next": "Continua",
+    "start": "Inizia",
+    "other": "Altro",
+    "counter": "Passo {{current}} di {{total}}",
+    "demo": {
+      "title": "Una corsa, un verdetto",
+      "desc": "Strive legge l'offerta e calcola quanto rende davvero. Tocca la scheda per vedere altre corse."
+    },
+    "platforms": {
+      "title": "Su quali app guidi?",
+      "desc": "Strive imparerà a riconoscere i loro schermi. Puoi sceglierne più di una."
+    },
+    "hours": {
+      "title": "Quante ore alla settimana?",
+      "desc": "Il tempo davvero al volante, non il tempo connesso."
+    },
+    "goal": {
+      "title": "Quello che vuoi ti resti",
+      "desc": "Al mese, dopo le spese. È il tuo obiettivo, non il tuo fatturato."
+    },
+    "costs": {
+      "title": "Le tue spese fisse mensili",
+      "desc": "Noleggio o finanziamento del veicolo, assicurazione, abbonamenti. Quello che se ne va ogni mese, qualunque cosa accada.",
+      "none": "Nessuna",
+      "subOwned": "Veicolo pagato",
+      "subCredit": "Finanziamento veicolo",
+      "subLease": "Leasing + assicurazione",
+      "subWeekly": "Noleggio settimanale",
+      "subRental": "Noleggio tutto compreso"
+    },
+    "status": {
+      "title": "Il tuo stato",
+      "desc": "Determina la quota del tuo fatturato che se ne va in contributi sociali.",
+      "auto": "Lavoratore autonomo",
+      "company": "Società",
+      "employee": "Dipendente",
+      "autoSub": "≈ 21 % del fatturato, nulla di deducibile",
+      "companySub": "≈ 45 % del compenso, spese dedotte prima",
+      "employeeSub": "Nessun contributo a tuo carico",
+      "independent": "Indipendente",
+      "independentSub": "A seconda del paese: 20.5 % del reddito netto (BE), 10.6 % (CH), 15 % del fatturato (PT)",
+      "autonomo": "Autónomo",
+      "autonomoSub": "Contributo mensile forfettario (cuota RETA) — contalo nelle tue spese fisse",
+      "sole_trader": "Sole trader",
+      "sole_traderSub": "≈ 6 % dell'utile (National Insurance Class 4), spese dedotte prima"
+    },
+    "result": {
+      "title": "La tua regola di corsa",
+      "desc": "",
+      "fromGoal": "Calcolata dal tuo obiettivo, dalle tue ore e dalle tue spese. Strive segnerà come da rifiutare ogni corsa al di sotto.",
+      "floored": "Il tuo obiettivo è raggiungibile anche più in basso, ma teniamo questa soglia: una corsa pagata meno ti costa denaro una volta contati usura e spese.",
+      "yoursCaption": "La tua soglia di redditività",
+      "answersLine": "{{goal}} netti · {{hours}} h al mese · {{revenue}} di fatturato",
+      "freeApplies": "Il piano gratuito applica",
+      "yoursLabel": "La tua soglia",
+      "decisionKicker": "La tua regola, da adesso",
+      "lockedPrompt": "Sotto la tua soglia, una corsa non merita il tuo tempo.",
+      "readyPrompt": "La tua soglia è pronta. Al di sotto, rifiuti.",
+      "plusOnly": "Con Plus",
+      "unlockCta": "Applica la mia soglia con Plus",
+      "unlockReassurance": "La tua soglia personalizzata sarà applicata a ogni corsa.",
+      "later": "Continua senza",
+      "lockedBody": "Strive l'ha calcolata dalle tue risposte. Sbloccala con Plus perché si applichi alle tue corse.",
+      "lockedTag": "BLOCCATA"
+    },
+    "computing": {
+      "title": "Stiamo calcolando la tua soglia",
+      "desc": "",
+      "gross": "Riportiamo il tuo obiettivo netto al lordo",
+      "costs": "Ci aggiungiamo le tue spese fisse",
+      "hours": "Le ripartiamo sulle tue ore del mese",
+      "km": "Adattiamo la tua soglia al chilometro"
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnostica",
+    "menuSub": "Tracce tecniche e scansioni fallite",
+    "tracingTitle": "Raccogliere le tracce",
+    "tracingSub": "Registra cosa fa la Dynamic Island durante una scansione. Spento, non viene scritto nulla sul dispositivo.",
+    "androidNote": "Android non ha Live Activity: qui viene compilato solo l'elenco delle scansioni fallite.",
+    "traceTitle": "Traccia Live Activity",
+    "traceEmpty": "Nessuna traccia. Attiva la raccolta, riproduci il problema e torna qui.",
+    "traceWaiting": "Raccolta attiva. Fai una scansione e torna qui.",
+    "clear": "Cancella la traccia",
+    "failuresTitle": "Scansioni fallite",
+    "failuresEmpty": "Nessun errore registrato negli ultimi 30 giorni.",
+    "reload": "Ricarica",
+    "countersTitle": "Contatori antiabuso",
+    "countersHint": "Svuota il contatore di registrazioni del Keychain e rigenera l'identificativo del dispositivo. Da usare per rigiocare un ciclo creazione → eliminazione → ricreazione di un account.",
+    "countersReset": "Reimposta il dispositivo",
+    "countersResetting": "Reimpostazione…",
+    "countersDone": "Contatori svuotati. Il dispositivo è visto come nuovo: limite di registrazione libero e regalo di benvenuto ripetibile.",
+    "presTitle": "Dynamic Island — presentazioni",
+    "presNeedsTracing": "Attiva la raccolta qui sopra e guida normalmente. I contatori si riempiono a ogni risultato di scansione.",
+    "presWaiting": "Nessun risultato misurato dall'azzeramento. Fai una scansione.",
+    "presExpanded": "Island espansa",
+    "presCompact": "Compatta",
+    "presMinimal": "Pallino",
+    "presSince": "Misura dal {{date}}",
+    "presReset": "Riavvia la misura",
+    "replayTitle": "Rigiocare il primo avvio",
+    "replayHint": "Apre la schermata del regalo senza toccare il database, tutte le volte che serve. Il secondo pulsante riarma l'onboarding e la guida — riavvia l'app dopo.",
+    "replayGift": "Vedi la schermata delle scansioni in regalo",
+    "replayOnboarding": "Riarma l'onboarding",
+    "replayDone": "Fatto. Chiudi completamente l'app e riaprila per rivedere il percorso."
+  },
+  "welcomeGift": {
+    "body": "Da usare entro {{days}} giorni, in aggiunta alle tue scansioni quotidiane.",
+    "cta": "Ne approfitto",
+    "hello": "Benvenuto.",
+    "helloNamed": "Benvenuto, {{name}}.",
+    "unit": "scansioni in regalo",
+    "a11y": "{{n}} scansioni in regalo"
+  },
+  "bestHours": {
+    "title": "Fasce migliori",
+    "menuTitle": "Fasce migliori",
+    "cardTitle": "Le tue fasce migliori",
+    "cardSub": "Le ore in cui squilla, e quelle in cui paga",
+    "lockTitle": "Riservato a Premium",
+    "lockSub": "La griglia dei tuoi ultimi 90 giorni, ora per ora: quando il tuo telefono squilla di più e quando le tue corse rendono meglio. Serve qualche mese di cronologia perché dica qualcosa.",
+    "lockCta": "Scopri Premium",
+    "metric": {
+      "offers": "Squilla",
+      "hourlyRate": "Paga"
+    },
+    "hint": {
+      "offers": "Le ore in cui il tuo telefono ha squillato di più. Le corse rifiutate contano: dicono che il lavoro c'era.",
+      "hourlyRate": "Quanto hanno reso davvero le tue corse accettate, dedotto il carburante, rapportato al tempo passato in corsa."
+    },
+    "slot": "{{day}} {{hour}}–{{nextHour}}",
+    "detailOffers_one": "{{count}} corsa",
+    "detailOffers_other": "{{count}} corse",
+    "perHour": "/h",
+    "noAccepted": "nessuna corsa accettata",
+    "tapHint": "Tocca una casella per vedere il dettaglio della fascia.",
+    "top": {
+      "offers": "Le tue fasce più cariche",
+      "hourlyRate": "Le tue fasce più redditizie"
+    },
+    "notEnoughSlots": "Nessuna fascia raggiunge ancora {{min}} corse — al di sotto, una classifica non poggia su nulla.",
+    "empty": "Non ci sono ancora abbastanza dati",
+    "emptyHint": "Servono circa {{min}} corse scansionate perché la griglia significhi qualcosa. Sei a {{current}}.",
+    "footnote": "Sugli ultimi {{days}} giorni · {{rides}} corse scansionate. I rifiuti contano nel volume, mai nella tariffa oraria."
+  },
+  "rideNetwork": {
+    "title": "Rete",
+    "menuTitle": "Rete",
+    "menuSub": "Passare una corsa, riceverne una",
+    "tab": {
+      "offer": "Proporre",
+      "receive": "Ricevere"
+    },
+    "share": {
+      "driver": "Autista in corsa",
+      "platform": "Strive"
+    },
+    "offer": {
+      "intro": "Un cliente al telefono e tu sei già in corsa? Passala alla rete: un autista vicino a te la prende e tu tieni il 10 % del prezzo concordato.",
+      "tripSection": "IL PERCORSO",
+      "pickupPlaceholder": "Presa a bordo",
+      "dropoffPlaceholder": "Destinazione",
+      "fareSection": "PREZZO CONCORDATO",
+      "fareHint": "Il prezzo che hai appena detto al cliente. È quello che viene condiviso — non si aggiunge nulla sopra.",
+      "splitSection": "RIPARTIZIONE",
+      "splitHint": "Cosa diventa questo prezzo, prima che tu pubblichi.",
+      "shareYou": "Tu, per averla portata",
+      "compareTitle": "PER CONFRONTO",
+      "compareBody": "Su una piattaforma classica, la commissione si aggira sul {{rate}} %: {{amount}} trattenuti su questa corsa. Strive ne prende {{ours}}.",
+      "publish": "Pubblica nella rete",
+      "missing": "Indica il percorso e il prezzo concordato.",
+      "publishedTitle": "Corsa pubblicata",
+      "publishedBody": "Visibile ai {{drivers}} autisti della rete attorno alla presa a bordo.",
+      "publishedShare": "La tua parte se viene presa: {{amount}}",
+      "publishAnother": "Proponi un'altra corsa"
+    },
+    "receive": {
+      "howTitle": "Come funziona",
+      "how1": "Un autista della rete ti passa una corsa che non può prendere — è già in corsa.",
+      "how2": "Vedi quanto incassi prima di accettare: il prezzo concordato, meno il 10 % per chi l'ha portata e il 2 % per Strive.",
+      "how3": "Quando sei tu a portare una corsa, è il contrario: incassi il 10 % senza lasciare la tua.",
+      "howGot": "Ho capito",
+      "nearby": "Corse nelle vicinanze",
+      "nearbyCount_one": "{{count}} disponibile",
+      "nearbyCount_other": "{{count}} disponibili",
+      "toPickup": "a {{km}} km · {{min}} min",
+      "posted": "{{min}} min fa",
+      "net": "NETTO PER TE",
+      "grossNote": "Su {{gross}} concordati · {{referrer}} a chi l'ha portata · {{platform}} a Strive",
+      "verified": "Verificato",
+      "broughtBy": "Ti ha portato questa corsa",
+      "ridesShared_one": "{{count}} portata alla rete",
+      "ridesShared_other": "{{count}} portate alla rete",
+      "accept": "Accetta · {{amount}}",
+      "acceptedNote": "Accettata. Il cliente è avvisato e ricevi il suo numero.",
+      "weekTitle": "QUESTA SETTIMANA NELLA RETE",
+      "weekTaken": "Corse prese",
+      "weekReferral": "Commissioni di segnalazione",
+      "weekMeta": "{{taken}} corse prese dalla rete · {{referred}} corse portate ad altri autisti."
+    }
+  }
+}

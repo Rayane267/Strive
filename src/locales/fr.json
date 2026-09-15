@@ -205,7 +205,7 @@
       "exhaustedTitle": "Quota atteint",
       "exhaustedSub": "Achetez des crédits ou passez Plus",
       "remaining": "{{count}} scan(s) restant(s) aujourd'hui",
-      "upgradeSub": "Passez Plus pour 50 scans/jour"
+      "upgradeSub": "Passez Plus pour 20 scans/jour"
     },
     "offline": "Vous êtes hors ligne",
     "goOnline": "EN LIGNE",
@@ -275,7 +275,7 @@
       "title": "Arrêtez de rouler à perte",
       "sub": "Plus se rembourse en une seule course évitée",
       "perk1": "20 scans/jour",
-      "perk2": "€/h en direct",
+      "perk2": "{{unit}} en direct",
       "perk3": "Historique"
     },
     "liveActivityPermission": {
@@ -296,7 +296,7 @@
     "info1": "Les crédits s'utilisent automatiquement une fois votre quota journalier atteint.",
     "info2": "Les crédits n'expirent jamais.",
     "info3": "Passez Plus ou Premium pour un quota journalier plus élevé.",
-    "upgradeTitle": "Passez Plus — 50 scans/jour",
+    "upgradeTitle": "Passez Plus — 20 scans/jour",
     "upgradeSubtitle": "Abonnement mensuel à partir de 4,99€",
     "purchaseSuccess": "Achat confirmé !",
     "creditsAdded": "{{count}} scan(s) ajouté(s) à votre compte.",
@@ -450,7 +450,9 @@
     "pushDeniedBody": "Vous avez refusé les notifications pour Strive. iOS ne repropose pas la demande — activez-les dans les Réglages de l'appareil.",
     "openSettings": "Ouvrir les Réglages",
     "thresholdLockCta": "Fixez les vôtres avec Plus",
-    "pushBlocked": "Bloquées dans les réglages du téléphone — appuyez pour les réactiver"
+    "pushBlocked": "Bloquées dans les réglages du téléphone — appuyez pour les réactiver",
+    "country": "Pays et devise",
+    "countrySub": "Il fixe votre devise, vos cotisations et votre seuil de rentabilité."
   },
   "upgrade": {
     "title": "Passer en Pro",
@@ -458,7 +460,7 @@
     "unlockSub": "Maximisez vos gains avec des données précises et des analyses illimitées.",
     "starter": "Débutant",
     "free": "GRATUIT",
-    "feat1": "5 Scans par jour",
+    "feat1": "3 scans par jour",
     "feat2": "Estimations Basiques",
     "feat3": "Paramètres Globaux",
     "popular": "POPULAIRE",
@@ -505,11 +507,14 @@
       "required": "Veuillez remplir tous les champs obligatoires.",
       "saveFailed": "Impossible d'enregistrer les données. Réessayez.",
       "consInvalid": "Consommation invalide (entre 0.1 et 99.9).",
-      "priceInvalid": "Prix invalide (entre 0.01 et 3 €/kWh)."
+      "priceInvalid": "Prix invalide (entre 0,01 et 3 {{unit}}).",
+      "fuelPriceInvalid": "Prix invalide (entre 0,01 et 10 {{unit}})."
     },
     "success": {
       "saved": "Profil mis à jour avec succès."
-    }
+    },
+    "fuelPrice": "Prix du carburant",
+    "fuelPriceAuto": "auto si vide"
   },
   "tutorial": {
     "skip": "Passer",
@@ -1104,7 +1109,13 @@
       "employee": "Salarié",
       "autoSub": "≈ 21 % du chiffre d'affaires, rien de déductible",
       "companySub": "≈ 45 % de la rémunération, charges déduites avant",
-      "employeeSub": "Aucune cotisation à votre charge"
+      "employeeSub": "Aucune cotisation à votre charge",
+      "independent": "Indépendant",
+      "independentSub": "Selon le pays : 20,5 % du revenu net (BE), 10,6 % (CH), 15 % du chiffre d'affaires (PT)",
+      "autonomo": "Autónomo",
+      "autonomoSub": "Cotisation forfaitaire mensuelle (cuota RETA) — comptez-la dans vos charges fixes",
+      "sole_trader": "Sole trader",
+      "sole_traderSub": "≈ 6 % du bénéfice (National Insurance Class 4), charges déduites avant"
     },
     "result": {
       "title": "Votre règle de course",

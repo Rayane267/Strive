@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  Dimensions,
   Easing,
   Modal,
   NativeModules,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,6 +21,11 @@ import { hapticLight } from '../utils/haptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
+import { useAuth } from '../context/AuthContext';
+import { updateProfile } from '../services/profileService';
+import { scannerService } from '../services/scanner';
+import { MARKETS, LANGUAGE_NAMES, CURRENCY_CODE, type CountryCode } from '../utils/market';
+import { SUPPORTED } from '../i18n';
 
 /**
  * Choix de la langue, en feuille montant du bas.
@@ -27,10 +34,22 @@ import { space } from '../theme/spacing';
  * elle ne disait pas ce qu'elle allait faire — on découvrait le résultat après
  * coup. Une feuille montre les options avant de choisir.
  *
- * « Langue de l'appareil » n'est pas une troisième langue : c'est l'effacement
+ * « Langue de l'appareil » n'est pas une langue de plus : c'est l'effacement
  * du choix explicite, après quoi l'app suit de nouveau le réglage du téléphone.
  * C'est la valeur par défaut à l'installation, et rien ne permettait d'y revenir
  * une fois une langue choisie à la main.
+ *
+ * ── DEUX TEMPS : LA LANGUE, PUIS LE PAYS ───────────────────────────────────
+ * La langue ne dit pas le pays, et c'est le pays qui porte la devise, l'unité de
+ * distance et le régime de cotisations. `fr` ne sépare pas la France de la
+ * Belgique ni de la Suisse ; `nl` ne sépare pas les Pays-Bas de la Belgique ;
+ * `pt` et `es` débordent largement l'Europe. Deviner l'un depuis l'autre,
+ * c'était calculer le seuil de rentabilité d'un chauffeur bruxellois avec les
+ * cotisations françaises.
+ *
+ * La seconde étape ne se saute donc pas après un changement de langue : c'est
+ * le seul moment où le chauffeur a une raison de se poser la question, et il
+ * voit la devise qu'il va lire partout ensuite.
  */
 
 const STORE_LANGUAGE_KEY = 'user_language';
@@ -44,6 +63,7 @@ const LanguageSheet = ({
   onClose: () => void;
 }) => {
   const { t, i18n } = useTranslation();
+  const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const anim = useRef(new Animated.Value(0)).current;
@@ -51,9 +71,15 @@ const LanguageSheet = ({
   // Suivre l'appareil signifie « aucun choix stocké » : l'état ne se lit donc
   // pas dans i18n, qui affiche toujours une langue concrète.
   const [followsDevice, setFollowsDevice] = React.useState(false);
+  /** `lang` puis `market` : on ne demande le pays qu'une fois la langue choisie. */
+  const [step, setStep] = React.useState<'lang' | 'market'>('lang');
+  const [savingCountry, setSavingCountry] = React.useState(false);
 
   useEffect(() => {
     if (!visible) return;
+    // Rouvrir la feuille repart de la langue : c'est ce que le chauffeur vient
+    // chercher, et l'étape pays n'a de sens qu'à la suite d'un choix.
+    setStep('lang');
     AsyncStorage.getItem(STORE_LANGUAGE_KEY).then(v => setFollowsDevice(!v));
   }, [visible]);
 
@@ -68,7 +94,7 @@ const LanguageSheet = ({
 
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [520, 0] });
 
-  const apply = async (lang: 'fr' | 'en' | null) => {
+  const apply = async (lang: string | null) => {
     hapticLight();
     if (lang === null) {
       // Effacer la clé AVANT de changer de langue : `cacheUserLanguage` la
@@ -79,7 +105,7 @@ const LanguageSheet = ({
         || NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
         || NativeModules.I18nManager?.localeIdentifier
         || 'en').slice(0, 2);
-      const next = device === 'fr' ? 'fr' : 'en';
+      const next = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
       await i18n.changeLanguage(next);
       await AsyncStorage.removeItem(STORE_LANGUAGE_KEY);
       pushToNative(next);
@@ -87,7 +113,33 @@ const LanguageSheet = ({
       await i18n.changeLanguage(lang);
       pushToNative(lang);
     }
-    onClose();
+    setStep('market');
+  };
+
+  /**
+   * Le pays fixe la devise, l'unité de distance, le régime de cotisations et le
+   * plancher de rentabilité. Écrit sur le profil : il PRIME sur la région de
+   * l'appareil, qui n'était qu'une valeur par défaut.
+   */
+  const applyCountry = async (country: CountryCode) => {
+    hapticLight();
+    if (!user?.id || country === profile?.country) {
+      onClose();
+      return;
+    }
+    setSavingCountry(true);
+    try {
+      await updateProfile(user.id, { country });
+      await refreshProfile?.();
+      // Le natif géocode avec ce pays : sans ce rappel, le prochain scan
+      // chercherait encore l'adresse dans l'ancien.
+      scannerService.setMarketCountry?.(country);
+    } catch {
+      // On ferme quand même : réessayer est un geste, pas une impasse.
+    } finally {
+      setSavingCountry(false);
+      onClose();
+    }
   };
 
   // Le natif doit suivre : sans ça, les libellés de la Share Extension et de la
@@ -128,21 +180,71 @@ const LanguageSheet = ({
             </Pressable>
           </View>
 
-          <Text style={styles.title}>{t('preferences.language', 'Langue')}</Text>
-          <Text style={styles.subtitle}>
-            {t('preferences.languageSub', "Choisir la langue de l'app")}
-          </Text>
+          {step === 'lang' ? (
+            <>
+              <Text style={styles.title}>{t('preferences.language', 'Langue')}</Text>
+              <Text style={styles.subtitle}>
+                {t('preferences.languageSub', "Choisir la langue de l'app")}
+              </Text>
 
-          <View style={styles.options}>
-            <Option
-              label={t('preferences.languageDevice', "Langue de l'appareil")}
-              selected={current === null}
-              onPress={() => apply(null)}
-            />
-            <Option label="Français" selected={current === 'fr'} onPress={() => apply('fr')} />
-            <Option label="English" selected={current === 'en'} onPress={() => apply('en')} />
-            <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
-          </View>
+              {/* Défilable depuis qu'il y a sept langues : à quatre lignes tout
+                  tenait, à neuf la dernière sortait de l'écran sur un petit
+                  téléphone — et une option qu'on ne voit pas n'existe pas. */}
+              <ScrollView
+                style={styles.optionsScroll}
+                contentContainerStyle={styles.options}
+                showsVerticalScrollIndicator={false}
+              >
+                <Option
+                  label={t('preferences.languageDevice', "Langue de l'appareil")}
+                  selected={current === null}
+                  onPress={() => apply(null)}
+                />
+                {/* Chaque langue porte son propre nom : on ne cherche pas
+                    « Néerlandais » quand on cherche « Nederlands ». */}
+                {SUPPORTED.map(code => (
+                  <Option
+                    key={code}
+                    label={LANGUAGE_NAMES[code] ?? code}
+                    selected={current === code}
+                    onPress={() => apply(code)}
+                  />
+                ))}
+                <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>{t('preferences.country', 'Pays et devise')}</Text>
+              <Text style={styles.subtitle}>
+                {t(
+                  'preferences.countrySub',
+                  'Il fixe votre devise, vos cotisations et votre seuil de rentabilité.',
+                )}
+              </Text>
+
+              <ScrollView
+                style={styles.optionsScroll}
+                contentContainerStyle={styles.options}
+                showsVerticalScrollIndicator={false}
+              >
+                {(Object.keys(MARKETS) as CountryCode[]).map(code => {
+                  const m = MARKETS[code];
+                  return (
+                    <Option
+                      key={code}
+                      label={`${t(`countries.${code.toLowerCase()}`)}  ·  ${m.symbol} ${CURRENCY_CODE[m.currency]}`}
+                      selected={profile?.country === code}
+                      disabled={savingCountry}
+                      onPress={() => applyCountry(code)}
+                    />
+                  );
+                })}
+                <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
+              </ScrollView>
+            </>
+          )}
+
         </Animated.View>
       </View>
     </Modal>
@@ -154,14 +256,17 @@ const Option = ({
   onPress,
   selected,
   muted,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
   selected?: boolean;
   muted?: boolean;
+  disabled?: boolean;
 }) => (
   <Pressable
     onPress={onPress}
+    disabled={disabled}
     style={({ pressed }) => [
       styles.option,
       selected && styles.optionSelected,
@@ -221,7 +326,10 @@ const styles = StyleSheet.create({
   title: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
   subtitle: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginTop: space.sm },
 
-  options: { marginTop: space.xl, gap: space.sm },
+  // Plafonné à 60 % de la hauteur : au-delà, la feuille mangerait tout l'écran
+  // et on ne verrait plus ce qu'elle recouvre.
+  optionsScroll: { maxHeight: Dimensions.get('window').height * 0.6 },
+  options: { marginTop: space.xl, gap: space.sm, paddingBottom: space.xs },
   // 56 px : la feuille se manipule d'une main, souvent en marchant.
   option: {
     height: 56,

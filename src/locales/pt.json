@@ -1,0 +1,1283 @@
+{
+  "rating": {
+    "title": "Gosta do Strive?",
+    "message": "Se a aplicação lhe é útil, dedique um momento a avaliá-la — ajuda muito!",
+    "notNow": "Agora não",
+    "rate": "Avaliar a aplicação"
+  },
+  "common": {
+    "error": "Erro",
+    "success": "Feito",
+    "retry": "Tentar de novo",
+    "optional": "opcional",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "open": "Abrir",
+    "loading": "A carregar…",
+    "offlineTitle": "Sem ligação",
+    "offlineSave": "Sem ligação. Terá de voltar a guardar as alterações quando estiver online.",
+    "unsavedTitle": "Alterações por guardar",
+    "unsavedMessage": "Quer sair sem guardar as alterações?",
+    "stay": "Ficar",
+    "leave": "Sair",
+    "back": "Voltar",
+    "close": "Fechar"
+  },
+  "errors": {
+    "profileLoadFailed": "Não foi possível carregar o seu perfil.",
+    "saveFailed": "Não foi possível guardar. Tente de novo.",
+    "loadFailed": "Erro ao carregar",
+    "retry": "Tentar de novo",
+    "crashTitle": "Ocorreu um erro",
+    "crashMessage": "Ocorreu um erro inesperado."
+  },
+  "nav": {
+    "dashboard": "Início",
+    "history": "Histórico",
+    "analytics": "Estatísticas",
+    "shop": "Loja",
+    "profile": "Perfil"
+  },
+  "auth": {
+    "continueGoogle": "Continuar com o Google",
+    "continueApple": "Continuar com a Apple",
+    "continueFacebook": "Continuar com o Facebook",
+    "connecting": "A ligar…",
+    "termsText": "Ao continuar, aceita os nossos",
+    "termsLink": "Termos de utilização",
+    "andText": "e a nossa",
+    "privacyLink": "Política de privacidade",
+    "errors": {
+      "googleTitle": "Erro do Google",
+      "appleTitle": "Erro da Apple",
+      "facebookTitle": "Erro do Facebook",
+      "rateLimit": "Demasiadas tentativas. Tente de novo dentro de alguns minutos.",
+      "deviceSignupLimit": "Foram criadas demasiadas contas com este telemóvel. Tente mais tarde.",
+      "accountExistsOtherProvider": "Já existe uma conta Strive com este e-mail. Entre novamente com o método que usou da primeira vez — Google ou Apple.",
+      "signupFailed": "Não foi possível criar a conta. Tente daqui a um instante.",
+      "passwordMismatch": "As palavras-passe não coincidem",
+      "resetTitle": "Reposição",
+      "weakPassword": "Palavra-passe demasiado fraca (mínimo 8 caracteres)"
+    },
+    "backToLogin": "Voltar ao início de sessão",
+    "confirmPasswordPlaceholder": "Confirmar a palavra-passe",
+    "passwordPlaceholder": "Palavra-passe",
+    "resetCtaConfirm": "Atualizar",
+    "resetExpired": "O link de reposição é inválido ou expirou. Peça um novo.",
+    "resetExpiredTitle": "Link expirado",
+    "resetSubtitle": "Escolha uma nova palavra-passe (mínimo 8 caracteres).",
+    "resetSuccess": "Já pode iniciar sessão com a sua nova palavra-passe",
+    "resetSuccessTitle": "Palavra-passe atualizada",
+    "resetTitle": "Repor a palavra-passe"
+  },
+  "profile": {
+    "title": "O meu perfil",
+    "subtitle": "Definições e preferências",
+    "general": "GERAL",
+    "account": "Editar o perfil",
+    "accountSub": "E-mail, telemóvel, licença",
+    "car": "Definições do veículo",
+    "carSub": "Dados do veículo, combustível",
+    "resources": "RECURSOS",
+    "tutorial": "Tutorial",
+    "tutorialSub": "Ver o guia e as dicas",
+    "help": "Ajuda e apoio",
+    "helpSub": "Perguntas frequentes, contacto",
+    "language": "IDIOMA / LANGUAGE",
+    "logout": "Terminar sessão",
+    "plus": "Membro Plus",
+    "free": "Membro gratuito",
+    "upgradeLink": "Passar a Plus →",
+    "subscriptionSub": "20 análises/dia, €/h em direto…",
+    "subscriptionSubActive": "Cancelar, mudar de plano…",
+    "upgradeCardTitle": "Passe ao Strive Plus",
+    "upgradeCardSub": "20 análises/dia · €/h em direto · Sem fidelização",
+    "verified": "PARCEIRO VERIFICADO",
+    "emailLabel": "E-MAIL",
+    "phoneLabel": "TELEMÓVEL",
+    "phonePlaceholder": "+351 912 345 678",
+    "licenseLabel": "NÚMERO DE LICENÇA (TVDE / TÁXI)",
+    "licensePlaceholder": "Ex.: 123456789",
+    "logoutModal": {
+      "title": "Terminar sessão",
+      "message": "Tem a certeza de que quer terminar a sessão da sua conta?",
+      "cancel": "Cancelar",
+      "confirm": "Terminar sessão"
+    },
+    "deleteAccount": "Eliminar a minha conta",
+    "deleteModal": {
+      "title": "Eliminar a conta?",
+      "message": "Ação irreversível: conta, preferências e histórico de viagens serão eliminados definitivamente.",
+      "placeholder": "Escreva ELIMINAR",
+      "confirm": "Eliminar",
+      "errorTitle": "Erro",
+      "errorMessage": "Escreva \"ELIMINAR\" para confirmar.",
+      "errorGeneric": "Não foi possível eliminar. Tente de novo ou contacte o apoio."
+    },
+    "privacy": "Política de privacidade",
+    "terms": "Termos de utilização",
+    "setup": {
+      "title": "Crie o seu perfil",
+      "subtitle": "Estes dados permitem personalizar a sua experiência no Strive.",
+      "firstName": "Nome",
+      "lastName": "Apelido",
+      "phone": "Telemóvel",
+      "dob": "Data de nascimento",
+      "placeholderFirstName": "João",
+      "placeholderLastName": "Silva",
+      "placeholderPhone": "912 345 678",
+      "placeholderDay": "DD",
+      "placeholderMonth": "MM",
+      "placeholderYear": "AAAA",
+      "dialPickerTitle": "Indicativo do país",
+      "dialSearchPlaceholder": "Procurar um país ou um indicativo",
+      "dialNoResult": "Nenhum país encontrado",
+      "submit": "Continuar",
+      "errors": {
+        "firstNameRequired": "O nome é obrigatório",
+        "lastNameRequired": "O apelido é obrigatório",
+        "phoneRequired": "O número de telemóvel é obrigatório",
+        "phoneInvalid": "O número só pode conter algarismos",
+        "phoneLength": "{{code}} espera {{expected}} algarismos",
+        "dobRequired": "A data de nascimento é obrigatória",
+        "dobInvalid": "Data inválida",
+        "dobMonthInvalid": "Mês inválido (01–12)",
+        "dobDayInvalid": "Dia inválido (01–31)",
+        "dobYearInvalid": "Ano inválido",
+        "dobNotExist": "Esta data não existe",
+        "dobMinAge": "Tem de ter pelo menos 18 anos",
+        "saveFailed": "Erro ao guardar"
+      }
+    },
+    "deleteAccountSub": "Ação irreversível",
+    "weekEarnings": "Ganhos da semana",
+    "settings": "Definições",
+    "subscription": "Subscrição",
+    "supportSection": "Apoio",
+    "legal": "Legal",
+    "session": "Sessão"
+  },
+  "scanner": {
+    "title": "Configurar o scanner",
+    "twoPerms": "2 permissões necessárias",
+    "threePerms": "3 permissões necessárias",
+    "subtitle": "Estas permissões permitem que a bolha do Strive apareça por cima das apps TVDE e analise o ecrã.",
+    "disclosureTitle": "Porquê estas permissões?",
+    "disclosureBody": "O Strive usa o serviço de acessibilidade e a captura de ecrã APENAS para analisar por OCR as ofertas mostradas no Uber, Bolt e Heetch, sempre que carrega no botão de análise. Nenhum dado pessoal é lido nem recolhido. A análise é local, no seu dispositivo.",
+    "overlayTitle": "Mostrar por cima de outras apps",
+    "overlayGranted": "Concedida ✓",
+    "overlayDesc": "Definições → Aplicações → Acesso especial → Mostrar por cima → Strive → Ativar",
+    "accessibilityTitle": "Serviço de acessibilidade",
+    "accessibilityGranted": "Ativado ✓",
+    "accessibilityDesc": "Definições → Acessibilidade → Serviços instalados → Strive Scanner → Ativar",
+    "captureTitle": "Captura de ecrã",
+    "captureGranted": "Concedida ✓",
+    "captureDesc": "Necessário no Android 10 e anteriores para capturar o ecrã",
+    "infoText": "Volte aqui depois de cada passo e carregue em Atualizar para ver o estado.",
+    "refresh": "Atualizar",
+    "open": "Abrir",
+    "allow": "Permitir",
+    "allowing": "…",
+    "start": "Iniciar o scanner",
+    "stop": "Parar o scanner",
+    "waiting": "A aguardar as permissões…",
+    "iosTitle": "Analisar através de um atalho",
+    "iosSubtitle": "Configure um atalho uma única vez — depois, toque duas vezes nas costas do seu iPhone para analisar uma oferta do Uber, Bolt ou Heetch.",
+    "iosStep1Title": "Crie o atalho",
+    "iosStep1Desc": "Em Atalhos: «Tirar captura de ecrã» e depois «Analisar uma viagem com o Strive».",
+    "iosStep2Title": "Atribua ao toque duplo",
+    "iosStep2Desc": "Definições → Acessibilidade → Toque → Tocar atrás → Tocar duas vezes: escolha o seu atalho.",
+    "iosStep3Title": "Resultado na Dynamic Island",
+    "iosStep3Desc": "A partir do Uber/Bolt/Heetch, toque duas vezes nas costas do iPhone. O veredicto aparece em direto na Dynamic Island.",
+    "iosInfoText": "A análise corre localmente no seu iPhone (Vision, com o Gemini como alternativa). Nenhum dado pessoal é recolhido.",
+    "iosActivate": "Percebi",
+    "iosOpenShortcuts": "Abrir Atalhos",
+    "iosOpenAccessibility": "Abrir Definições"
+  },
+  "dashboard": {
+    "title": "Painel",
+    "subtitle": "Painel em direto",
+    "kmRate": "€/KM",
+    "greeting": "Olá, {{name}} 👋",
+    "greetingDefault": "Motorista",
+    "banner": {
+      "exhaustedTitle": "Limite atingido",
+      "exhaustedSub": "Compre créditos ou passe a Plus",
+      "remaining": "{{count}} análise(s) restante(s) hoje",
+      "upgradeSub": "Passe a Plus para 20 análises/dia"
+    },
+    "offline": "Está offline",
+    "goOnline": "ONLINE",
+    "goOffline": "Ficar offline",
+    "session": "SESSÃO DE HOJE",
+    "live": "Direto",
+    "earnings": "GANHOS",
+    "avgRate": "TARIFA MÉD.",
+    "scans": "ANÁLISES",
+    "pending": "Viagens pendentes",
+    "clearAll": "Limpar tudo",
+    "waiting": "A aguardar capturas…",
+    "estFare": "Preço estimado",
+    "distance": "DISTÂNCIA",
+    "time": "TEMPO",
+    "decline": "Recusar",
+    "accept": "Aceitar",
+    "online": "Online",
+    "sessionRequired": "Sessão necessária",
+    "startSessionToScan": "Inicie a sua sessão para começar a analisar.",
+    "estimated": "est.",
+    "status": {
+      "accepted": "VIAGEM ACEITE",
+      "declined": "VIAGEM RECUSADA"
+    },
+    "timeLabels": {
+      "justNow": "Agora mesmo",
+      "minutesAgo": "Há {{count}} min",
+      "hoursAgo": "Há {{count}} h",
+      "daysAgo": "Há {{count}} d"
+    },
+    "priceCheck": {
+      "title": "Preço da viagem",
+      "message": "O preço mostrado está correto?",
+      "yes": "Sim, aceitar",
+      "no": "Não, corrigir"
+    },
+    "priceModal": {
+      "title": "Preço real da viagem",
+      "subtitle": "Introduza o valor final mostrado",
+      "placeholder": "Ex.: 14,50",
+      "skip": "Ignorar",
+      "confirm": "Confirmar"
+    },
+    "offlineBanner": "Fique online para ativar o scanner",
+    "offlineHint": "Fique online para analisar",
+    "offlineHintSub": "O scanner só funciona quando está online.",
+    "scanLimit": {
+      "reached": "Limite atingido",
+      "remaining": "{{count}} análise(s) restante(s)",
+      "buy": "+ Créditos",
+      "cardTitle": "Limite diário atingido",
+      "cardText": "Já usou as suas {{count}} análises de hoje.",
+      "cardTextFree": "O Strive Plus paga-se logo na primeira viagem não rentável que recusar. 20 análises/dia para deixar de conduzir a perder.",
+      "upgrade": "Passar a Plus",
+      "comeBackTomorrow": "Volte amanhã para analisar de novo."
+    },
+    "weeklyTease": {
+      "lossTitle": "≈ {{eur}} € abaixo do seu objetivo esta semana",
+      "lossSub": "≈ {{eur}} €/mês a este ritmo",
+      "cta": "Detete cada viagem mal paga → Strive Plus",
+      "prideTitle_one": "💪 {{count}} viagem não rentável evitada esta semana",
+      "prideTitle_other": "💪 {{count}} viagens não rentáveis evitadas esta semana",
+      "prideCta": "Ver o seu balanço completo com o Plus"
+    },
+    "upgradeCard": {
+      "title": "Pare de conduzir a perder",
+      "sub": "O Plus paga-se com uma única viagem evitada",
+      "perk1": "20 análises/dia",
+      "perk2": "{{unit}} em direto",
+      "perk3": "Histórico"
+    },
+    "liveActivityPermission": {
+      "title": "Atividades ao vivo",
+      "message": "Para ver o resultado das análises em tempo real, ative as Atividades ao vivo em Definições → Strive."
+    },
+    "home": "Início"
+  },
+  "shop": {
+    "title": "Loja",
+    "creditsBalance": "Créditos disponíveis",
+    "extraBalance": "{{count}} análise",
+    "extraBalance_plural": "{{count}} análises",
+    "packsTitle": "PACOTES DE ANÁLISES",
+    "packsSubtitle": "Usam-se além do seu limite diário e não expiram.",
+    "bestValue": "MELHOR PREÇO",
+    "scans": "análises",
+    "info1": "Os créditos são usados automaticamente quando esgota o seu limite diário.",
+    "info2": "Os créditos nunca expiram.",
+    "info3": "Passe a Plus ou Premium para ter um limite diário maior.",
+    "upgradeTitle": "Passe a Plus — 20 análises/dia",
+    "upgradeSubtitle": "Subscrição mensal a partir de 4,99 €",
+    "purchaseSuccess": "Compra confirmada!",
+    "creditsAdded": "{{count}} análise(s) adicionada(s) à sua conta.",
+    "purchaseError": "Erro",
+    "purchaseErrorMsg": "Não foi possível concluir a compra. Tente de novo.",
+    "comingSoonTitle": "Brevemente",
+    "comingSoonSub": "A loja de créditos estará disponível em breve."
+  },
+  "analytics": {
+    "title": "As minhas estatísticas",
+    "weeklyBilan": {
+      "title": "Balanço da semana",
+      "loss": "≈ {{eur}} € abaixo do seu objetivo esta semana",
+      "avoided_one": "💪 {{count}} viagem não rentável evitada",
+      "avoided_other": "💪 {{count}} viagens não rentáveis evitadas"
+    },
+    "netProfit": "Lucro líquido",
+    "grossProfit": "Lucro bruto",
+    "netAfterFuel": "Líquido após combustível",
+    "vsAvg": "vs méd.",
+    "beforeTax": "Antes de impostos",
+    "distance": "Distância",
+    "activeHours": "Horas ativas",
+    "appDist": "Repartição",
+    "hourlyRate": "Valor por hora",
+    "priceKm": "Preço / km",
+    "loading": "A carregar os dados…",
+    "empty": {
+      "title": "Ainda não há dados",
+      "hint": "Analise a sua primeira viagem para ver aqui os seus ganhos, o seu valor por hora e as suas tendências."
+    },
+    "calendar": {
+      "selectDate": "Selecione uma data",
+      "oneDay": "1 dia",
+      "sevenDays": "7 dias",
+      "validate": "Validar",
+      "today": "Hoje"
+    },
+    "dailyEarnings": "Ganhos por dia",
+    "quality": {
+      "title": "Qualidade das viagens",
+      "levelGood": "Excelente",
+      "levelMid": "Correto",
+      "levelLow": "A melhorar",
+      "caption_one": "Em {{count}} viagem aceite",
+      "caption_other": "Em {{count}} viagens aceites",
+      "discipline": "{{pct}} % de boas decisões (aceitar / recusar)",
+      "missed_one": "{{count}} boa viagem recusada",
+      "missed_other": "{{count}} boas viagens recusadas"
+    },
+    "alerts": {
+      "premiumTitle": "Acesso Plus",
+      "premiumRequired": "A análise em vários dias ou no passado é reservada aos membros Plus.",
+      "limitText": "{{days}} dias no máximo — o histórico ilimitado é reservado ao Premium"
+    },
+    "earningsBy": {
+      "day": "Ganhos por dia",
+      "week": "Ganhos por semana",
+      "month": "Ganhos por mês"
+    }
+  },
+  "history": {
+    "title": "Histórico",
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "scanned": "Viagens analisadas",
+    "earnings": "Ganhos",
+    "dailyTotal": "Total do dia:",
+    "prevSession": "SESSÃO ANTERIOR",
+    "empty": "Nenhuma viagem analisada hoje.",
+    "emptyHint": "As suas análises aparecerão aqui.",
+    "emptyCta": "Iniciar uma análise",
+    "perHour": "/h",
+    "perKm": "/km",
+    "min": "min",
+    "km": "km",
+    "acceptRate": "Taxa aceit.",
+    "filterAll": "Tudo · {{count}}",
+    "selectDates": "Selecionar as datas",
+    "upgradeForHistory": "Passe a Plus para explorar os seus dias passados",
+    "status": {
+      "ACCEPTED": "ACEITE",
+      "DECLINED": "RECUSADA",
+      "PENDING": "PENDENTE"
+    },
+    "changeMonth": "Mudar de mês"
+  },
+  "settings": {
+    "title": "Definições do veículo",
+    "subtitle": "Configuração do veículo",
+    "freePlan": "Plano gratuito",
+    "vehInfo": "DADOS DO VEÍCULO",
+    "model": "Modelo do veículo",
+    "year": "Ano",
+    "fuelType": "Combustível",
+    "regNum": "Matrícula",
+    "consumption": "CONSUMO",
+    "avgCons": "Consumo médio",
+    "manualInput": "Introdução manual (L/100 km)",
+    "fuelCost": "Custo do combustível",
+    "priceLiter": "Preço por litro (€)",
+    "proFeatures": "FUNÇÕES PRO",
+    "upgradeReq": "Subscrição necessária",
+    "feat1Title": "Consumo preciso",
+    "feat1Sub": "Análise em tempo real pela velocidade",
+    "feat2Title": "Custos específicos",
+    "feat2Sub": "Cálculo do desgaste segundo o seu modelo",
+    "feat3Title": "Dados de API em direto",
+    "feat3Sub": "Sincronização com o trânsito Waze/Google",
+    "save": "Guardar",
+    "fuel": {
+      "essence": "Gasolina",
+      "diesel": "Gasóleo",
+      "electric": "Elétrico"
+    }
+  },
+  "preferences": {
+    "title": "Preferências",
+    "subtitle": "Definições de aceitação das viagens.",
+    "save": "Guardar",
+    "tripId": "Identificador de viagem",
+    "active": "Ativo",
+    "enableTripId": "Ativar o identificador",
+    "enableTripIdSub": "Analisar as ofertas através do atalho AssistiveTouch",
+    "minimums": "Os seus mínimos",
+    "minHr": "Mínimo €/h",
+    "minKm": "Mínimo €/km",
+    "dayReset": "Reinício do dia",
+    "dayResetSub": "Hora a que as suas estatísticas do dia são reiniciadas",
+    "dayReset4am": "Reinício às 4h",
+    "dayReset4amSub": "Para os motoristas noturnos: o dia começa às 4h locais em vez da meia-noite",
+    "includePickup": "Incluir a aproximação nos cálculos",
+    "includePickupSub": "Tem em conta o tempo e a distância até ao cliente para uma estimativa mais realista.",
+    "deductFuel": "Descontar o combustível do preço",
+    "deductFuelSub": "O preço mostrado passa a ser líquido do combustível estimado",
+    "deductFuelMissing": "Indique o consumo do seu veículo para que esta opção tenha efeito.",
+    "resultMode": "Dynamic Island",
+    "resultModeSub": "Mostrar o resultado na Dynamic Island. Desativado = notificação clássica.",
+    "advanced": "Definições avançadas",
+    "setup": "Voltar a lançar a configuração",
+    "identification": "Identificação",
+    "options": "Opções",
+    "saveSuccess": "Preferências guardadas com sucesso.",
+    "saveError": "Não foi possível guardar. Tente de novo.",
+    "language": "Idioma",
+    "push": "Notificações push",
+    "pushSub": "Alertas de análise, lembretes e resumos",
+    "languageSub": "Escolher o idioma da app",
+    "languageDevice": "Idioma do dispositivo",
+    "pushDeniedTitle": "Notificações recusadas",
+    "pushDeniedBody": "Recusou as notificações do Strive. O iOS não volta a perguntar — ative-as nas Definições do dispositivo.",
+    "openSettings": "Abrir as Definições",
+    "thresholdLockCta": "Defina os seus com o Plus",
+    "pushBlocked": "Bloqueadas nas definições do telemóvel — toque para as reativar",
+    "country": "País e moeda",
+    "countrySub": "Define a sua moeda, as suas contribuições e o seu limiar de rentabilidade."
+  },
+  "upgrade": {
+    "title": "Passar a Pro",
+    "unlock": "Desbloqueie o potencial",
+    "unlockSub": "Maximize os seus ganhos com dados precisos e análises ilimitadas.",
+    "starter": "Iniciante",
+    "free": "GRATUITO",
+    "feat1": "3 análises por dia",
+    "feat2": "Estimativas básicas",
+    "feat3": "Definições globais",
+    "popular": "POPULAR",
+    "proDriver": "Motorista Pro",
+    "perMonth": "/ mês",
+    "proFeat1": "Análises ilimitadas",
+    "proFeat2": "Rotas precisas Google/Waze",
+    "proFeat3": "Estimativa de combustível por modelo",
+    "proFeat4": "Análise do tempo de aproximação",
+    "goPremium": "Tornar-me Premium",
+    "restore": "Restaurar as compras"
+  },
+  "carSettings": {
+    "title": "Definições do veículo",
+    "subtitle": "Configuração do veículo",
+    "freePlan": "Plano gratuito",
+    "vehInfo": "DADOS DO VEÍCULO",
+    "makeLabel": "Marca *",
+    "makePlaceholder": "Ex.: Toyota",
+    "modelLabel": "Modelo do veículo *",
+    "modelPlaceholder": "Ex.: Prius",
+    "yearLabel": "Ano",
+    "fuelLabel": "Combustível",
+    "fuelPlaceholder": "Energia",
+    "regLabel": "Matrícula",
+    "regPlaceholder": "AA-12-BB",
+    "consumption": "CONSUMO",
+    "avgCons": "Consumo médio",
+    "unitFuel": "L/100 km",
+    "unitElectric": "kWh/100 km",
+    "elecPrice": "Preço do carregamento",
+    "proFeatures": "FUNÇÕES PRO",
+    "upgradeReq": "Subscrição necessária",
+    "feat1Title": "Consumo preciso",
+    "feat1Sub": "Análise em tempo real pela velocidade",
+    "feat2Title": "Custos específicos",
+    "feat2Sub": "Cálculo do desgaste segundo o seu modelo",
+    "feat3Title": "Dados de API em direto",
+    "feat3Sub": "Sincronização com o trânsito Waze/Google",
+    "save": "Guardar",
+    "useTyped": "Usar «{{value}}»",
+    "noResult": "Sem resultados",
+    "errors": {
+      "required": "Preencha todos os campos obrigatórios.",
+      "saveFailed": "Não foi possível guardar os dados. Tente de novo.",
+      "consInvalid": "Consumo inválido (entre 0,1 e 99,9).",
+      "priceInvalid": "Preço inválido (entre 0,01 e 3 {{unit}}).",
+      "fuelPriceInvalid": "Preço inválido (entre 0,01 e 10 {{unit}})."
+    },
+    "success": {
+      "saved": "Perfil atualizado com sucesso."
+    },
+    "fuelPrice": "Preço do combustível",
+    "fuelPriceAuto": "automático se ficar vazio"
+  },
+  "tutorial": {
+    "skip": "Ignorar",
+    "next": "Seguinte",
+    "start": "Fazer a minha primeira análise",
+    "step": "PASSO",
+    "openShortcuts": "Abrir Atalhos",
+    "openAccessibility": "Abrir Acessibilidade",
+    "step1": {
+      "title": "Bem-vindo ao Strive",
+      "desc": "Não volte a aceitar uma viagem às cegas. Mostramos-lhe o que ela rende de facto — €/h e €/km, trânsito incluído."
+    },
+    "step2": {
+      "title": "Configure o scanner",
+      "desc": "Autorize as notificações abaixo. A acessibilidade e a sobreposição a outras apps ser-lhe-ão pedidas no primeiro arranque do scanner."
+    },
+    "step2_ios": {
+      "title": "Três definições, uma só vez",
+      "desc": ""
+    },
+    "iosPreview": {
+      "title": "É isto que vai ver",
+      "subtitle": "O veredicto aparece na Dynamic Island, em direto por cima da sua app TVDE.",
+      "verdictTake": "ACEITAR",
+      "verdictThreshold": "As duas métricas superam os seus limiares ✓",
+      "glance": "O que vê num relance:",
+      "metricHr": "€/h",
+      "metricHrSub": "Valor por hora (com aproximação)",
+      "metricKm": "€/km",
+      "metricKmSub": "Valor por km percorrido",
+      "metricTotal": "Total",
+      "metricTotalSub": "Ganhos totais da viagem",
+      "customizeCta": "Personalizar os meus limiares",
+      "verdictMaybe": "TALVEZ",
+      "verdictSkip": "RECUSAR",
+      "hintGood": "As duas métricas superam os seus limiares ✓",
+      "hintAverage": "Bom €/km mas o €/h não acompanha — decida você",
+      "hintBad": "€/h demasiado baixo, longa distância — a evitar"
+    },
+    "quickRef": {
+      "ios": {
+        "step1": "Capture a oferta",
+        "step1Sub": "No Uber, Bolt ou Heetch",
+        "step2": "Toque no AssistiveTouch",
+        "step2Sub": "Sem sair da aplicação",
+        "step3": "Leia o veredicto",
+        "step3Sub": "€/h e €/km reais, trânsito incluído",
+        "step4": "Marque a viagem",
+        "step4Sub": "Aceite ou recusada — é o que preenche as suas estatísticas"
+      },
+      "android": {
+        "step1": "Ative o scanner",
+        "step1Sub": "A partir do início do Strive",
+        "step2": "Toque na bolha",
+        "step2Sub": "Quando a oferta aparecer",
+        "step3": "Leia o veredicto",
+        "step3Sub": "€/h e €/km reais, trânsito incluído",
+        "step4": "Marque a viagem",
+        "step4Sub": "Aceite ou recusada — é o que preenche as suas estatísticas"
+      }
+    },
+    "iosInstall": {
+      "cta": "Obter o atalho",
+      "ctaDone": "Abrir novamente",
+      "notifT": "Notificações",
+      "notifS": "Sem elas, uma análise pode correr bem sem que a chegue a ver.",
+      "notifCta": "Ativar as notificações",
+      "notifDone": "Notificações ativadas",
+      "notifErrorBody": "Não foi possível terminar a ativação. Verifique a sua ligação e tente de novo.",
+      "shortcutT": "O atalho",
+      "shortcutS": "É ele que faz tudo: a captura, a análise, o veredicto. Já está configurado, basta adicioná-lo.",
+      "notifS_android": "É por elas que chega o veredicto, com os botões Aceite e Recusada. Sem esta definição, uma análise bem-sucedida pode não lhe mostrar nada.",
+      "confirmCta": "Já o adicionei",
+      "confirmed": "Confirmou que o adicionou",
+      "urgentT": "Notificações urgentes",
+      "urgentS": "No modo Condução tudo fica oculto — exceto o que está marcado como urgente. O seu veredicto tem de estar.",
+      "urgentCta": "Abrir as notificações"
+    },
+    "step3": {
+      "title": "Aceite ou recuse num instante",
+      "desc": "Toque na bolha quando surgir uma oferta. O Strive mostra-lhe o valor por hora e por km em tempo real. Verde = avance, vermelho = recuse."
+    },
+    "iosTrigger": {
+      "recommended": "★ Recomendado — O mais rápido",
+      "backTap": {
+        "label": "Traseira",
+        "hero": "Tocar atrás",
+        "step1t": "Abrir Definições",
+        "step1s": "Definições → Acessibilidade → Toque",
+        "step2t": "Tocar atrás",
+        "step2s": "Toque em «Tocar duas vezes»",
+        "step3t": "Escolher o atalho",
+        "step3s": "Selecione o Strive na lista"
+      },
+      "assistive": {
+        "label": "Assistive",
+        "hero": "Botão flutuante",
+        "step1t": "Abrir Definições",
+        "step1s": "Definições → Acessibilidade → Toque",
+        "step2t": "Ativar o AssistiveTouch",
+        "step2s": "Interruptor no topo da página",
+        "step3t": "Ações personalizadas",
+        "step3s": "Toque único",
+        "step4t": "Adicionar «Strive»",
+        "step4s": "Selecione na lista de atalhos"
+      },
+      "homeScreen": {
+        "label": "Início",
+        "hero": "Ícone de app",
+        "step1t": "Abrir Atalhos",
+        "step1s": "A app Atalhos da Apple",
+        "step2t": "Manter o atalho premido",
+        "step2s": "Toque longo → Detalhes",
+        "step3t": "Adicionar ao ecrã",
+        "step3s": "«Adicionar ao ecrã principal»"
+      },
+      "cta": "Abrir as definições de acessibilidade",
+      "ctaSettings": "Abrir as Definições",
+      "doneCta": "Está configurado"
+    },
+    "step4": {
+      "title": "Acompanhe o seu desempenho",
+      "desc": "Os separadores Histórico e Estatísticas mostram os seus ganhos do dia, a sua taxa de aceitação e as plataformas mais rentáveis."
+    },
+    "step5": {
+      "title": "A sua primeira análise",
+      "desc": "Três gestos para saber se a viagem vale a pena. Um quarto para que as suas estatísticas também o saibam."
+    },
+    "step5_ios": {
+      "title": "A sua primeira análise",
+      "desc": "Três gestos para saber se a viagem vale a pena. Um quarto para que as suas estatísticas também o saibam."
+    },
+    "tips": {
+      "step1": "O Strive funciona com o Uber, a Bolt e a Heetch. Em breve chegam mais plataformas.",
+      "step2": "Terá de conceder 2 permissões: sobreposição e acessibilidade. Siga o guia passo a passo.",
+      "step2_ios": "Também pode atribuir o atalho ao botão Ação (iPhone 15 Pro e posteriores) ou ao AssistiveTouch.",
+      "step3": "Dica: toque na bolha quando a oferta aparecer no ecrã da sua app TVDE. Não precisa de mudar de app.",
+      "step3_ios": "Dica: o toque duplo atrás funciona mesmo com capa (fina). Não precisa de mudar de app.",
+      "step4": "O separador Estatísticas mostra os seus ganhos por dia, por plataforma e o seu valor por hora em tempo real.",
+      "step5": "Conselho: comece com um limiar mínimo de 20 €/h e ajuste depois consoante os resultados.",
+      "step5_ios": "Conselho: comece com um limiar mínimo de 20 €/h e ajuste depois consoante os resultados."
+    },
+    "restartVideo": "Rever o vídeo",
+    "recap": {
+      "title": "A sua instalação",
+      "desc": "Toque numa linha para ir à definição correspondente.",
+      "notifT": "Notificações",
+      "notifS": "É por elas que chega o veredicto quando o cartão não conseguiu mostrar nada.",
+      "bubbleT": "Bolha AssistiveTouch",
+      "bubbleS": "É nela que toca para analisar uma oferta.",
+      "urgentT": "Notificações urgentes",
+      "urgentS": "O modo Condução oculta o veredicto sem elas.",
+      "state_ok": "Pronto",
+      "state_todo": "Por ativar",
+      "state_unknown": "Por verificar",
+      "state_declared": "Confirmado",
+      "notifPath": "Definições › Notificações › Strive",
+      "bubblePath": "Definições › Acessibilidade › Toque › AssistiveTouch",
+      "urgentPath": "Definições › Notificações › Strive › Notificações urgentes",
+      "shortcutT": "O atalho",
+      "shortcutS": "Toque para abrir Atalhos e confirmar que lá está.",
+      "shortcutPath": "Atalhos › Os meus atalhos › Analisar uma viagem"
+    },
+    "notifStep": {
+      "title": "Autorize as notificações",
+      "desc": "É por elas que chega o veredicto quando o cartão não conseguiu mostrar nada. Sem esta definição, uma análise bem-sucedida pode não lhe mostrar nada."
+    },
+    "tag": {
+      "title": "Marque as suas viagens",
+      "desc": "Aceite ou recusada: sem essa resposta, o Strive não consegue calcular os seus ganhos reais — as suas estatísticas ficam vazias.",
+      "diT": "No cartão do veredicto",
+      "diS": "Toque em Aceite ou Recusada diretamente na Dynamic Island.",
+      "notifT": "A partir da notificação",
+      "notifS_ios": "Sem Dynamic Island, puxe a notificação para baixo: aparecem os dois botões.",
+      "notifS_android": "Os botões Aceite e Recusada estão diretamente na notificação de resultado.",
+      "historyT": "Ou mais tarde, no Histórico",
+      "historyS": "As viagens sem resposta ficam marcadas como «Pendente» até que decida."
+    }
+  },
+  "help": {
+    "title": "Ajuda e apoio",
+    "subtitle": "Perguntas e respostas",
+    "faqTitle": "PERGUNTAS FREQUENTES",
+    "contactTitle": "CONTACTO",
+    "contactDesc": "Uma pergunta que não está aqui? Escreva-nos, respondemos em 24 h.",
+    "contactBtn": "Contactar por e-mail",
+    "mailSubject": "Apoio Strive",
+    "mailContext": "Dados técnicos (não apagar)",
+    "faq": {
+      "q1": "Como funciona o scanner?",
+      "a1": "O scanner captura o ecrã da sua app TVDE através do serviço de acessibilidade, extrai os dados da viagem (tarifa, distância, duração) por OCR e mostra um veredicto de acordo com os seus limiares mínimos.",
+      "q2": "Que apps TVDE são suportadas?",
+      "a2": "Atualmente o Uber, a Bolt e a Heetch. Em breve chegam mais plataformas.",
+      "q3": "Porque não aparece a bolha?",
+      "a3": "Verifique se as duas permissões estão concedidas no ecrã de configuração: «Mostrar por cima de outras apps» e «Serviço de acessibilidade» têm de estar ativados.",
+      "q4": "Como altero os meus limiares mínimos?",
+      "a4": "Vá a Perfil → Preferências de viagem. Ajuste os cursores do valor por hora e por km. As alterações aplicam-se de imediato.",
+      "q5": "Como cancelo a minha subscrição Plus?",
+      "a5": "No Android: Google Play → Subscrições. No iOS: Definições → O seu nome → Subscrições. Encontre o Strive e toque em Cancelar.",
+      "q6": "Os meus dados estão seguros?",
+      "a6": "Sim. A análise é feita no seu dispositivo e nenhuma captura de ecrã é guardada. As suas viagens são armazenadas de forma segura, nunca vendidas nem cedidas, e o Strive não tem qualquer ligação às plataformas TVDE. Pode apagar tudo a qualquer momento em Perfil → Conta.",
+      "q7": "Como é calculado o meu valor por hora (€/h)?",
+      "a7": "O Strive parte da tarifa da viagem, acrescenta o tempo de aproximação até ao cliente e calcula o tempo de percurso real com o trânsito em tempo real. Obtém o seu €/h real, não uma estimativa em linha reta.",
+      "q8": "Como funcionam o custo do combustível e o lucro líquido?",
+      "a8": "A partir do consumo do seu veículo (L/100 km, ou kWh/100 km no elétrico) e do preço do combustível, o Strive desconta o custo de cada viagem para mostrar o seu lucro líquido. No elétrico pode definir o seu próprio preço por kWh em Perfil → Veículo.",
+      "q9": "O que é a pontuação de qualidade das viagens?",
+      "a9": "Uma pontuação em 100 atribuída a cada viagem comparando os seus €/h e €/km com os seus limiares: verde acima, laranja perto, vermelho abaixo. Nas Estatísticas vê também a qualidade média das viagens aceites.",
+      "q10": "Quantas análises por dia?",
+      "a10": "3 análises por dia no plano gratuito, 20 por dia com o Strive Plus.",
+      "q11": "Como contacto o apoio?",
+      "a11": "Em Perfil → Os meus tickets: abra um ticket e respondemos diretamente na app (recebe uma notificação a cada resposta)."
+    }
+  },
+  "support": {
+    "title": "Os meus tickets",
+    "subtitle": "Apoio Strive",
+    "priorityBadge": "Prioritário",
+    "menuSub": "Contactar o apoio, acompanhar os seus pedidos",
+    "empty": "Ainda não há tickets",
+    "emptyHint": "Uma dúvida, um problema? Abra um ticket e respondemos depressa.",
+    "newTicket": "Novo ticket",
+    "subjectLabel": "Assunto",
+    "subjectPlaceholder": "Ex.: Problema de análise",
+    "messageLabel": "Mensagem",
+    "messagePlaceholder": "Descreva o seu pedido em detalhe…",
+    "send": "Enviar",
+    "staff": "Apoio Strive",
+    "replyPlaceholder": "Escreva a sua resposta…",
+    "status": {
+      "open": "Pendente",
+      "answered": "Respondido",
+      "closed": "Fechado"
+    },
+    "categoryLabel": "Categoria",
+    "subcategoryLabel": "Especifique",
+    "errorLabel": "Tem a ver com um erro recente?",
+    "filterAll": "Todos",
+    "cat": {
+      "scan": "Análise",
+      "subscription": "Subscrição",
+      "account": "Conta",
+      "data": "Histórico",
+      "suggestion": "Sugestão",
+      "other": "Outro"
+    },
+    "sub": {
+      "scan": {
+        "no_detect": "Nenhuma viagem detetada",
+        "wrong_values": "Números incorretos",
+        "addresses": "Moradas mal lidas",
+        "trigger": "O atalho não arranca",
+        "display": "O resultado não aparece"
+      },
+      "subscription": {
+        "purchase": "Compra impossível",
+        "restore": "Restaurar a minha subscrição",
+        "billing": "Faturação",
+        "cancel": "Cancelamento"
+      },
+      "account": {
+        "login": "Não consigo entrar",
+        "profile": "Alterar os meus dados",
+        "delete": "Eliminar a minha conta"
+      },
+      "data": {
+        "missing_ride": "Viagem em falta",
+        "wrong_stats": "Estatísticas incorretas",
+        "export": "Recuperar os meus dados"
+      }
+    },
+    "reason": {
+      "scanner_off": "Scanner desativado",
+      "session_off": "Sessão não iniciada",
+      "quota_reached": "Limite diário atingido",
+      "invalid_image": "Imagem ilegível",
+      "throttled": "Análise já em curso",
+      "ocr_empty": "Nenhum texto lido no ecrã",
+      "no_addresses": "Moradas ilegíveis",
+      "not_a_ride": "Nenhuma oferta detetada",
+      "gemini_ko": "A análise por IA falhou",
+      "la_start_failed": "Não foi possível mostrar",
+      "expired": "Análise interrompida",
+      "timeout": "Análise demasiado longa"
+    }
+  },
+  "iap": {
+    "loading": "A carregar as ofertas…",
+    "notAvailable": "Loja indisponível. Tente de novo.",
+    "purchaseCancelled": "Compra cancelada.",
+    "restoreSuccess": "Compras restauradas!",
+    "restoreNone": "Não há compras para restaurar.",
+    "restoreFail": "Não foi possível restaurar as compras."
+  },
+  "accountInfo": {
+    "subtitle": "Dados pessoais",
+    "informations": "DADOS",
+    "driverDefault": "Motorista",
+    "emailLockedNote": "E-mail ligado à sua conta Google / Apple — não editável.",
+    "errorSave": "Não foi possível guardar as alterações.",
+    "privacy": "DADOS E PRIVACIDADE",
+    "deleteHistory": {
+      "title": "Eliminar o meu histórico",
+      "message": "Todas as suas viagens guardadas (moradas, tarifas, estatísticas) serão eliminadas definitivamente. Esta ação é irreversível.",
+      "confirm": "Eliminar",
+      "button": "Eliminar o meu histórico",
+      "note": "As suas viagens (moradas incluídas) são conservadas até eliminar a sua conta e depois apagadas definitivamente.",
+      "success": "Histórico eliminado.",
+      "error": "Falha ao eliminar. Tente de novo."
+    },
+    "errors": {
+      "emailInvalid": "E-mail inválido",
+      "phoneInvalid": "Número de telemóvel inválido"
+    },
+    "title": "Perfil"
+  },
+  "subscription": {
+    "label": "STRIVE",
+    "heroTitle": "Saiba.\nDecida. Ganhe.",
+    "heroSub": "Nem todas as viagens valem o mesmo. Com o Strive Plus, sabe antes de aceitar.",
+    "values": {
+      "scan": {
+        "title": "Análise em 2 segundos",
+        "sub": "Capture a oferta → veredicto instantâneo no seu ecrã."
+      },
+      "hourly": {
+        "title": "€/h em direto",
+        "sub": "Veja o seu valor por hora real em cada viagem."
+      },
+      "filter": {
+        "title": "Recuse as armadilhas",
+        "sub": "Saiba que viagens lhe fazem perder tempo."
+      },
+      "threshold": {
+        "title": "O seu limiar, as suas regras",
+        "sub": "Defina o seu €/h mínimo e o Strive faz a triagem."
+      }
+    },
+    "feat": {
+      "scan": "20 análises por dia",
+      "scanText": "em vez de 3 — que chegam para um dia inteiro de serviço.",
+      "threshold": "O seu limiar, não o nosso",
+      "thresholdText": "é o senhor que fixa o €/h a partir do qual uma viagem vale a pena.",
+      "fuel": "O líquido, não o bruto",
+      "fuelText": "o combustível do seu modelo descontado em cada viagem, não uma média.",
+      "history": "A sua semana inteira",
+      "historyText": "7 dias de histórico para detetar os seus verdadeiros dias rentáveis, não só hoje.",
+      "traffic": "Baseado no trânsito em tempo real, não em linha reta —",
+      "trafficText": "não volte a aceitar uma viagem que acaba no trânsito."
+    },
+    "yearlyAccess": "SUBSCRIÇÃO ANUAL",
+    "monthlyAccess": "SUBSCRIÇÃO MENSAL",
+    "heroTitleActive": "Strive Plus ativo",
+    "heroSubActive": "A sua subscrição está ativa. Faça a gestão abaixo.",
+    "activeTitle": "Subscrição ativa",
+    "activeSub": "Plano {{plan}}",
+    "manage": "Gerir a minha subscrição",
+    "manageVia": "Gerir através de {{store}}",
+    "cancelHint": "Para cancelar, vá às definições de {{store}}.",
+    "popular": "POPULAR",
+    "trialRibbon": "7 DIAS GRÁTIS",
+    "trialFreeLabel": "0,00 € durante 7 dias",
+    "trialThenPrice": "depois {{price}}/mês",
+    "trialHint": "Cancelável a qualquer momento durante o período experimental",
+    "monthlyHint": "Sem fidelização, cancelável em 1 clique",
+    "trust": {
+      "cancel": "Cancelamento em 1 clique",
+      "secure": "Pagamento Apple",
+      "secureAndroid": "Google Play",
+      "commitment": "Sem fidelização"
+    },
+    "faq": {
+      "title": "Perguntas frequentes",
+      "q1": "Como funciona o período experimental de 7 dias?",
+      "a1": "Os primeiros 7 dias são 100 % gratuitos. Pode cancelar a qualquer momento nas Definições do iOS antes do fim do período — não lhe será cobrado nada. Caso contrário, a subscrição renova-se automaticamente ao preço normal.",
+      "q2": "Posso cancelar a qualquer momento?",
+      "a2": "Sim. Em 1 clique nas Definições do iOS → ID Apple → Subscrições. Sem perguntas, sem atrito, sem fidelização.",
+      "q3": "Com que apps de viagens funciona o Strive?",
+      "a3": "Uber, Bolt, Heetch e todas as apps TVDE que mostram a oferta no ecrã. O Strive analisa qualquer captura para extrair o preço, a distância e o tempo.",
+      "q4": "Os meus dados são privados?",
+      "a4": "Está tudo encriptado e guardado de forma segura. Nenhum dado vendido, nenhuma publicidade, nenhum rastreio de terceiros. Pode eliminar a sua conta a qualquer momento na app."
+    },
+    "freeHeader": "Gratuito",
+    "plusHeader": "Plus",
+    "monthlyTab": "Mensal",
+    "yearlyTab": "Anual",
+    "monthlyFallbackPrice": "9,99 €",
+    "yearlyFallbackPrice": "89,99 €",
+    "perMonthShort": "/mês",
+    "perYearShort": "/ano",
+    "perMonthEquiv": "ou seja {{price}}/mês",
+    "switchYearlyHint": "Passe ao anual para poupar {{percent}} %",
+    "trialBadge": "7 DIAS DE EXPERIÊNCIA GRÁTIS",
+    "ctaTrial": "Começar os meus 7 dias grátis",
+    "ctaSubscribe": "Subscrever agora",
+    "ctaHintTrial": "Depois {{price}}{{cycle}}. Cancelamento a qualquer momento, sem custos.",
+    "ctaHintNoTrial": "Faturado {{cycle}}. Cancelamento a qualquer momento na App Store.",
+    "cycleMonthly": " todos os meses",
+    "cycleYearly": " todos os anos",
+    "restore": "Restaurar as compras",
+    "terms": "Termos",
+    "privacy": "Privacidade",
+    "errorTitle": "Erro",
+    "errorMsg": "Não foi possível concluir a subscrição. Tente de novo.",
+    "alreadyOwnedMsg": "Esta subscrição continua ativa na sua conta Apple. Toque em «Restaurar as compras» para recuperar o acesso.",
+    "receiptInUseMsg": "Esta compra Apple já está ligada a outra conta Strive. Entre com essa conta ou toque em «Restaurar as compras».",
+    "storeProblemMsg": "A App Store não respondeu. Verifique a sua ligação e tente de novo.",
+    "pendingTitle": "Compra pendente",
+    "pendingMsg": "A App Store ainda tem de validar o pagamento. O seu acesso abre assim que for confirmado.",
+    "rows": {
+      "scans": {
+        "label": "Análises diárias",
+        "free": "3 / dia",
+        "plus": "20 / dia"
+      },
+      "dashboard": {
+        "label": "Painel",
+        "free": "Básico",
+        "plus": "Completo"
+      },
+      "fuel": {
+        "label": "Consumo de combustível",
+        "plus": "Por modelo"
+      },
+      "goal": {
+        "label": "Objetivo / dia",
+        "plus": "Personalizável"
+      },
+      "history": {
+        "label": "Histórico de viagens",
+        "free": "Só hoje",
+        "plus": "7 dias"
+      },
+      "hourly": {
+        "label": "Valor por hora €/h",
+        "plus": "Em direto"
+      },
+      "support": {
+        "label": "Apoio",
+        "plus": "Prioritário"
+      }
+    },
+    "noneFound": "Nenhuma subscrição encontrada",
+    "noneFoundSub": "Podemos verificar as suas compras anteriores",
+    "restorePrevious": "Restaurar as compras anteriores",
+    "restoreSuccessSub": "A sua subscrição está novamente ativa.",
+    "restoreFailSub": "Verifique a sua ligação e tente de novo.",
+    "manageStore": "Gerir na App Store",
+    "planName": "Strive Plus",
+    "periodMonth": "mês",
+    "periodYear": "ano",
+    "perWeekEquiv": "ou seja {{price}} por semana",
+    "trialStrip": "Experiência grátis {{days}} d",
+    "noPaymentToday": "Nenhum pagamento hoje",
+    "cancelAnytime": "Cancelável a qualquer momento",
+    "finePrintTrial": "{{days}} dias grátis, depois {{price}} por {{period}}. Renovação automática.",
+    "finePrintNoTrial": "{{price}} por {{period}}. Renovação automática, cancelável a qualquer momento.",
+    "benefit": {
+      "plus": {
+        "scans": "20 análises por dia em vez de 3",
+        "thresholds": "Os seus limiares €/h e €/km, não os nossos",
+        "traffic": "O €/h calculado com o trânsito real",
+        "fuel": "O combustível do seu modelo descontado",
+        "history": "As suas estatísticas de 7 dias seguidos"
+      },
+      "premium": {
+        "allPlus": "Todas as funcionalidades Plus",
+        "scans": "Análises ilimitadas",
+        "history": "Histórico e estatísticas ilimitados",
+        "slots": "Os seus melhores períodos, hora a hora",
+        "support": "Apoio prioritário"
+      }
+    },
+    "saveAmount": "POUPE {{amount}}",
+    "heroTitleWelcomeEnd": "As suas 30 análises\noferecidas acabaram.",
+    "heroSubWelcomeEnd": "Já sabe o que isso muda. Com o Strive Plus são 20 por dia — todos os dias.",
+    "tier": {
+      "plus": "Plus",
+      "premium": "Premium"
+    },
+    "heroSubPremium": "Sem qualquer limite, e a app diz-lhe quando trabalhar — não apenas que viagem aceitar.",
+    "premiumMonthlyFallbackPrice": "19,99 €",
+    "premiumYearlyFallbackPrice": "179,99 €",
+    "upgradeTitle": "O que o Premium acrescenta",
+    "upgradeSub": "Mantém tudo o que o Plus já lhe dá.",
+    "upgradeProrata": "A mudança é imediata. A {{store}} desconta o tempo já pago no Plus.",
+    "ctaUpgrade": "Passar a Premium",
+    "bestValueStrip": "Melhor oferta"
+  },
+  "network": {
+    "offline": "Sem ligação à internet"
+  },
+  "timeAgo": {
+    "justNow": "Agora mesmo",
+    "minutes": "há {{count}} min",
+    "hours": "há {{count}} h",
+    "days": "há {{count}} d"
+  },
+  "notifications": {
+    "inactivity": {
+      "title": "Sessão inativa",
+      "body": "Não analisa nada há 1 h. Não se esqueça de fechar a sua sessão."
+    },
+    "quotaReset": {
+      "title": "Limite recarregado!",
+      "body": "As suas análises diárias estão novamente disponíveis. Boa estrada!"
+    },
+    "quotaReached": {
+      "title": "Limite atingido",
+      "body": "Usou todas as suas análises de hoje. Recarrega dentro de {{time}}.",
+      "bodyFree": "Usou as suas análises do dia. Passe a Plus para {{scans}} análises por dia — recarrega dentro de {{time}}."
+    },
+    "rideRejected": {
+      "title": "Viagem não registada",
+      "bodyQuota": "Limite diário ultrapassado: esta viagem não pôde ser adicionada às suas estatísticas.",
+      "bodyOther": "Esta viagem foi recusada no registo. Contacte o apoio se voltar a acontecer."
+    },
+    "sessionClosed": {
+      "title": "Sessão fechada",
+      "body": "A sua sessão foi fechada após 2 h sem análises."
+    },
+    "syncDropped": {
+      "title": "Sincronização incompleta",
+      "body": "{{count}} viagem(ns) analisada(s) offline não puderam ser registadas. Verifique o seu histórico."
+    },
+    "weeklyRecap": {
+      "title": "📊 O seu balanço da semana",
+      "body": "Venha ver quanto poderia ganhar a mais com o Strive.",
+      "bodyLoss": "≈ {{eur}} € abaixo do seu objetivo esta semana. Veja como evitar isso."
+    }
+  },
+  "tier": {
+    "free": "Free",
+    "freeBadge": "Free",
+    "plus": "★ Plus",
+    "plusBadge": "PLUS",
+    "premiumBadge": "PREMIUM",
+    "plusOnly": "Reservado ao Strive Plus",
+    "plusName": "Plus",
+    "premiumName": "Premium"
+  },
+  "countries": {
+    "fr": "França",
+    "be": "Bélgica",
+    "ch": "Suíça",
+    "lu": "Luxemburgo",
+    "dz": "Argélia",
+    "ma": "Marrocos",
+    "tn": "Tunísia",
+    "sn": "Senegal",
+    "ci": "Costa do Marfim",
+    "cm": "Camarões",
+    "ml": "Mali",
+    "gn": "Guiné",
+    "pt": "Portugal",
+    "es": "Espanha",
+    "it": "Itália",
+    "gb": "Reino Unido",
+    "de": "Alemanha",
+    "ro": "Roménia",
+    "pl": "Polónia",
+    "us": "Estados Unidos / Canadá"
+  },
+  "onboarding": {
+    "skip": "Ignorar",
+    "next": "Continuar",
+    "start": "Começar",
+    "other": "Outro",
+    "counter": "Passo {{current}} de {{total}}",
+    "demo": {
+      "title": "Uma viagem, um veredicto",
+      "desc": "O Strive lê a oferta e calcula o que ela rende de facto. Toque no cartão para ver outras viagens."
+    },
+    "platforms": {
+      "title": "Em que apps conduz?",
+      "desc": "O Strive vai aprender a reconhecer os ecrãs delas. Pode escolher várias."
+    },
+    "hours": {
+      "title": "Quantas horas por semana?",
+      "desc": "O tempo realmente ao volante, não o tempo ligado."
+    },
+    "goal": {
+      "title": "O que quer que lhe sobre",
+      "desc": "Por mês, depois das despesas. É o seu objetivo, não a sua faturação."
+    },
+    "costs": {
+      "title": "As suas despesas fixas mensais",
+      "desc": "Aluguer ou crédito do veículo, seguro, subscrições. O que sai todos os meses aconteça o que acontecer.",
+      "none": "Nenhuma",
+      "subOwned": "Veículo pago",
+      "subCredit": "Crédito do veículo",
+      "subLease": "Leasing + seguro",
+      "subWeekly": "Aluguer semanal",
+      "subRental": "Aluguer tudo incluído"
+    },
+    "status": {
+      "title": "O seu regime",
+      "desc": "Determina a parte da sua faturação que sai em contribuições sociais.",
+      "auto": "Trabalhador por conta própria",
+      "company": "Sociedade",
+      "employee": "Trabalhador por conta de outrem",
+      "autoSub": "≈ 21 % da faturação, nada dedutível",
+      "companySub": "≈ 45 % da remuneração, despesas deduzidas antes",
+      "employeeSub": "Nenhuma contribuição a seu cargo",
+      "independent": "Trabalhador independente",
+      "independentSub": "Conforme o país: 20,5 % do rendimento líquido (BE), 10,6 % (CH), 15 % da faturação (PT)",
+      "autonomo": "Autónomo",
+      "autonomoSub": "Contribuição mensal fixa (cuota do RETA) — conte-a nas suas despesas fixas",
+      "sole_trader": "Sole trader",
+      "sole_traderSub": "≈ 6 % do lucro (National Insurance Class 4), despesas deduzidas antes"
+    },
+    "result": {
+      "title": "A sua regra de viagem",
+      "desc": "",
+      "fromGoal": "Calculado a partir do seu objetivo, das suas horas e das suas despesas. O Strive marcará como a recusar qualquer viagem abaixo disso.",
+      "floored": "O seu objetivo é alcançável abaixo disto, mas mantemos este limiar: uma viagem pior paga custa-lhe dinheiro depois de contados o desgaste e as despesas.",
+      "yoursCaption": "O seu limiar de rentabilidade",
+      "answersLine": "{{goal}} líquido · {{hours}} h por mês · {{revenue}} de faturação",
+      "freeApplies": "O plano gratuito aplica",
+      "yoursLabel": "O seu limiar",
+      "decisionKicker": "A sua regra, a partir de agora",
+      "lockedPrompt": "Abaixo do seu limiar, uma viagem não merece o seu tempo.",
+      "readyPrompt": "O seu limiar está pronto. Abaixo dele, recusa.",
+      "plusOnly": "Com o Plus",
+      "unlockCta": "Aplicar o meu limiar com o Plus",
+      "unlockReassurance": "O seu limiar personalizado será aplicado a cada viagem.",
+      "later": "Continuar sem ele",
+      "lockedBody": "O Strive calculou-o a partir das suas respostas. Desbloqueie-o com o Plus para que se aplique às suas viagens.",
+      "lockedTag": "BLOQUEADO"
+    },
+    "computing": {
+      "title": "Estamos a calcular o seu limiar",
+      "desc": "",
+      "gross": "Levamos o seu objetivo líquido ao bruto",
+      "costs": "Juntamos as suas despesas fixas",
+      "hours": "Repartimos pelas suas horas do mês",
+      "km": "Ajustamos o seu limiar ao quilómetro"
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnóstico",
+    "menuSub": "Registos técnicos e análises falhadas",
+    "tracingTitle": "Recolher os registos",
+    "tracingSub": "Regista o que a Dynamic Island faz durante uma análise. Desligado, nada é escrito no dispositivo.",
+    "androidNote": "O Android não tem Live Activity: aqui só é preenchida a lista de análises falhadas.",
+    "traceTitle": "Registo da Live Activity",
+    "traceEmpty": "Nenhum registo. Ative a recolha, reproduza o problema e volte aqui.",
+    "traceWaiting": "Recolha ativa. Faça uma análise e volte aqui.",
+    "clear": "Apagar o registo",
+    "failuresTitle": "Análises falhadas",
+    "failuresEmpty": "Nenhuma falha registada nos últimos 30 dias.",
+    "reload": "Recarregar",
+    "countersTitle": "Contadores antiabuso",
+    "countersHint": "Esvazia o contador de registos do Keychain e regenera o identificador do dispositivo. Use para repetir um ciclo criação → eliminação → recriação de conta.",
+    "countersReset": "Reiniciar o dispositivo",
+    "countersResetting": "A reiniciar…",
+    "countersDone": "Contadores esvaziados. O dispositivo é visto como novo: limite de registo livre e oferta de boas-vindas repetível.",
+    "presTitle": "Dynamic Island — apresentações",
+    "presNeedsTracing": "Ative a recolha acima e conduza normalmente. Os contadores enchem-se a cada resultado de análise.",
+    "presWaiting": "Nenhum resultado medido desde a reposição. Faça uma análise.",
+    "presExpanded": "Ilha expandida",
+    "presCompact": "Compacta",
+    "presMinimal": "Ponto",
+    "presSince": "Medição desde {{date}}",
+    "presReset": "Reiniciar a medição",
+    "replayTitle": "Repetir o primeiro arranque",
+    "replayHint": "Abre o ecrã da oferta sem tocar na base de dados, tantas vezes quantas forem precisas. O segundo botão rearma o onboarding e o tutorial — reinicie a app a seguir.",
+    "replayGift": "Ver o ecrã das análises oferecidas",
+    "replayOnboarding": "Rearmar o onboarding",
+    "replayDone": "Está feito. Feche a app por completo e abra-a de novo para rever o percurso."
+  },
+  "welcomeGift": {
+    "body": "Para usar em {{days}} dias, além das suas análises diárias.",
+    "cta": "Quero aproveitar",
+    "hello": "Bem-vindo.",
+    "helloNamed": "Bem-vindo, {{name}}.",
+    "unit": "análises oferecidas",
+    "a11y": "{{n}} análises oferecidas"
+  },
+  "bestHours": {
+    "title": "Melhores períodos",
+    "menuTitle": "Melhores períodos",
+    "cardTitle": "Os seus melhores períodos",
+    "cardSub": "As horas em que toca, e aquelas em que paga",
+    "lockTitle": "Reservado ao Premium",
+    "lockSub": "A grelha dos seus últimos 90 dias, hora a hora: quando o seu telemóvel toca mais e quando as suas viagens rendem melhor. Precisa de meses de histórico para dizer alguma coisa.",
+    "lockCta": "Descobrir o Premium",
+    "metric": {
+      "offers": "Toca",
+      "hourlyRate": "Paga"
+    },
+    "hint": {
+      "offers": "As horas em que o seu telemóvel mais tocou. As viagens recusadas contam: dizem que havia trabalho.",
+      "hourlyRate": "O que as suas viagens aceites renderam de facto, descontado o combustível, face ao tempo passado em viagem."
+    },
+    "slot": "{{day}} {{hour}}h–{{nextHour}}h",
+    "detailOffers_one": "{{count}} viagem",
+    "detailOffers_other": "{{count}} viagens",
+    "perHour": "/h",
+    "noAccepted": "nenhuma viagem aceite",
+    "tapHint": "Toque numa célula para ver o detalhe do período.",
+    "top": {
+      "offers": "Os seus períodos mais carregados",
+      "hourlyRate": "Os seus períodos mais rentáveis"
+    },
+    "notEnoughSlots": "Nenhum período atinge ainda {{min}} viagens — abaixo disso, uma classificação não assenta em nada.",
+    "empty": "Ainda não há dados suficientes",
+    "emptyHint": "São precisas cerca de {{min}} viagens analisadas para que a grelha queira dizer alguma coisa. Vai em {{current}}.",
+    "footnote": "Nos últimos {{days}} dias · {{rides}} viagens analisadas. As recusas contam no volume, nunca no valor por hora."
+  },
+  "rideNetwork": {
+    "title": "Rede",
+    "menuTitle": "Rede",
+    "menuSub": "Passar uma viagem, receber uma",
+    "tab": {
+      "offer": "Propor",
+      "receive": "Receber"
+    },
+    "share": {
+      "driver": "Motorista em viagem",
+      "platform": "Strive"
+    },
+    "offer": {
+      "intro": "Um cliente ao telefone e já está em viagem? Passe-a à rede: um motorista perto de si aceita-a e fica com 10 % do preço acordado.",
+      "tripSection": "O TRAJETO",
+      "pickupPlaceholder": "Recolha",
+      "dropoffPlaceholder": "Destino",
+      "fareSection": "PREÇO ACORDADO",
+      "fareHint": "O preço que acabou de anunciar ao cliente. É esse que é partilhado — nada se acrescenta por cima.",
+      "splitSection": "REPARTIÇÃO",
+      "splitHint": "Em que se transforma esse preço, antes de publicar.",
+      "shareYou": "Você, por a ter trazido",
+      "compareTitle": "PARA COMPARAR",
+      "compareBody": "Numa plataforma clássica, a comissão ronda os {{rate}} %: {{amount}} retidos nesta viagem. O Strive fica com {{ours}}.",
+      "publish": "Publicar na rede",
+      "missing": "Indique o trajeto e o preço acordado.",
+      "publishedTitle": "Viagem publicada",
+      "publishedBody": "Visível para os {{drivers}} motoristas da rede à volta da recolha.",
+      "publishedShare": "A sua parte se for aceite: {{amount}}",
+      "publishAnother": "Propor outra viagem"
+    },
+    "receive": {
+      "howTitle": "Como funciona",
+      "how1": "Um motorista da rede passa-lhe uma viagem que não pode aceitar — já está em viagem.",
+      "how2": "Vê o que recebe antes de aceitar: o preço acordado, menos 10 % para quem a trouxe e 2 % para o Strive.",
+      "how3": "Quando é o senhor a trazer uma viagem, é ao contrário: recebe os 10 % sem deixar a sua.",
+      "howGot": "Percebi",
+      "nearby": "Viagens por perto",
+      "nearbyCount_one": "{{count}} disponível",
+      "nearbyCount_other": "{{count}} disponíveis",
+      "toPickup": "a {{km}} km · {{min}} min",
+      "posted": "há {{min}} min",
+      "net": "LÍQUIDO PARA SI",
+      "grossNote": "Sobre {{gross}} acordados · {{referrer}} para quem a trouxe · {{platform}} para o Strive",
+      "verified": "Verificado",
+      "broughtBy": "Trouxe-lhe esta viagem",
+      "ridesShared_one": "{{count}} trazida à rede",
+      "ridesShared_other": "{{count}} trazidas à rede",
+      "accept": "Aceitar · {{amount}}",
+      "acceptedNote": "Aceite. O cliente foi avisado e recebe o número dele.",
+      "weekTitle": "ESTA SEMANA NA REDE",
+      "weekTaken": "Viagens aceites",
+      "weekReferral": "Comissões por indicação",
+      "weekMeta": "{{taken}} viagens aceites da rede · {{referred}} viagens trazidas a outros motoristas."
+    }
+  }
+}

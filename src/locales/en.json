@@ -205,7 +205,7 @@
       "exhaustedTitle": "Daily limit reached",
       "exhaustedSub": "Buy credits or upgrade to Plus",
       "remaining": "{{count}} scan(s) left today",
-      "upgradeSub": "Go Plus for 50 scans/day"
+      "upgradeSub": "Go Plus for 20 scans/day"
     },
     "offline": "You are Offline",
     "goOffline": "Go Offline",
@@ -275,7 +275,7 @@
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
       "perk1": "20 scans/day",
-      "perk2": "Live €/h",
+      "perk2": "Live {{unit}}",
       "perk3": "History"
     },
     "liveActivityPermission": {
@@ -296,7 +296,7 @@
     "info1": "Credits are used automatically once your daily quota is reached.",
     "info2": "Credits never expire.",
     "info3": "Upgrade to Plus or Premium for a higher daily quota.",
-    "upgradeTitle": "Go Plus — 50 scans/day",
+    "upgradeTitle": "Go Plus — 20 scans/day",
     "upgradeSubtitle": "Monthly plan from €4.99",
     "purchaseSuccess": "Purchase confirmed!",
     "creditsAdded": "{{count}} scan(s) added to your account.",
@@ -450,7 +450,9 @@
     "pushDeniedBody": "You declined notifications for Strive. iOS won't ask again — turn them on in your device Settings.",
     "openSettings": "Open Settings",
     "thresholdLockCta": "Set your own with Plus",
-    "pushBlocked": "Blocked in your phone settings — tap to re-enable"
+    "pushBlocked": "Blocked in your phone settings — tap to re-enable",
+    "country": "Country and currency",
+    "countrySub": "It sets your currency, your contributions and your profitability threshold."
   },
   "upgrade": {
     "title": "Upgrade to Pro",
@@ -458,7 +460,7 @@
     "unlockSub": "Maximize your earnings with precise data and unlimited scanning capabilities.",
     "starter": "Starter",
     "free": "FREE",
-    "feat1": "5 Scans per day",
+    "feat1": "3 scans per day",
     "feat2": "Basic Estimates",
     "feat3": "Global Car Settings",
     "popular": "MOST POPULAR",
@@ -505,11 +507,14 @@
       "required": "Please fill in all required fields.",
       "saveFailed": "Unable to save data. Please try again.",
       "consInvalid": "Invalid consumption (between 0.1 and 99.9).",
-      "priceInvalid": "Invalid price (between 0.01 and 3 €/kWh)."
+      "priceInvalid": "Invalid price (between 0.01 and 3 {{unit}}).",
+      "fuelPriceInvalid": "Invalid price (between 0.01 and 10 {{unit}})."
     },
     "success": {
       "saved": "Profile updated successfully."
-    }
+    },
+    "fuelPrice": "Fuel price",
+    "fuelPriceAuto": "auto if left empty"
   },
   "tutorial": {
     "skip": "Skip",
@@ -1104,7 +1109,13 @@
       "employee": "Employee",
       "autoSub": "≈21% of turnover, nothing deductible",
       "companySub": "≈45% of pay, expenses deducted first",
-      "employeeSub": "No contributions on your side"
+      "employeeSub": "No contributions on your side",
+      "independent": "Self-employed",
+      "independentSub": "By country: 20.5% of net income (BE), 10.6% (CH), 15% of turnover (PT)",
+      "autonomo": "Autónomo",
+      "autonomoSub": "Flat monthly contribution (RETA cuota) — count it in your fixed costs",
+      "sole_trader": "Sole trader",
+      "sole_traderSub": "≈6% of profit (National Insurance Class 4), expenses deducted first"
     },
     "result": {
       "title": "Your driving rule",
