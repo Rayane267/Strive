@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n';
 import { getBusinessDayKey } from '../utils/dateUtils';
-import { getMarket, formatMoney } from '../utils/market';
+import { getMarket, formatMoney, type CurrencyDisplay } from '../utils/market';
 
 const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
@@ -163,9 +163,22 @@ export function notifyQuotaReached(resetHour: number, isFree = false, plusScans?
  * Récap hebdo (dimanche ~19h) — ré-engagement free → ouvre l'app → voit le
  * tease de perte. Reprogrammé à chaque ouverture (one-shot) ; le montant est le
  * cumul "cette semaine jusqu'ici" → ne peut que sous-estimer, jamais sur-promettre.
- * `lossEur` optionnel : si absent/faible, message générique.
+ * `loss` optionnel : si absent/faible, message générique.
+ *
+ * ── LA DEVISE VIENT DE L'APPELANT ─────────────────────────────────────────
+ * Le montant arrive déjà converti : l'appelant l'a tiré de courses ramenées à
+ * `market.currency`. Le symbole, lui, se lisait sur `getMarket()` sans argument
+ * — donc sur la région du TÉLÉPHONE, faute de profil ici. Un chauffeur
+ * britannique dont l'appareil est configuré en France recevait « 42 € » pour un
+ * manque à gagner de 42 £ : le bon nombre sous la mauvaise monnaie, et dans le
+ * seul endroit de l'app où il ne peut rien recouper.
+ *
+ * Le commentaire qui justifiait ce repli — « pas de contexte React ici » —
+ * décrivait un état revolu : l'unique appelant est le Dashboard, qui a le
+ * marché sous la main. Le repli reste pour les appels sans devise, où il vaut
+ * toujours mieux qu'un chiffre nu.
  */
-export function scheduleWeeklyRecap(lossEur?: number) {
+export function scheduleWeeklyRecap(loss?: number, cur?: CurrencyDisplay) {
   cancelNative('weekly-recap');
   const now = new Date();
   const next = new Date(now);
@@ -174,12 +187,9 @@ export function scheduleWeeklyRecap(lossEur?: number) {
   if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 7);
 
   const delayMs = next.getTime() - now.getTime();
-  const body = lossEur && lossEur >= 10
-    // Pas de contexte React ici : le marché est déduit de la région de
-    // l'appareil, faute du pays du profil. Une notification en euros à un
-    // chauffeur londonien reste moins coûteuse qu'un chiffre sans devise.
+  const body = loss && loss >= 10
     ? i18n.t('notifications.weeklyRecap.bodyLoss', {
-        amount: formatMoney(lossEur, getMarket()),
+        amount: formatMoney(loss, cur ?? getMarket()),
       })
     : i18n.t('notifications.weeklyRecap.body');
   scheduleNative('weekly-recap', i18n.t('notifications.weeklyRecap.title'), body, delayMs);

@@ -615,12 +615,14 @@ const DashboardScreen = () => {
         const tease = computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate);
         setWeeklyTease(tease);
         // Récap hebdo (dimanche 19h) : montant si perte significative, sinon générique.
-        scheduleWeeklyRecap(tease.state === 'loss' ? tease.lossWeek : undefined);
+        // Le marché part avec le montant : `tease.lossWeek` est deja dans la
+        // devise du chauffeur, la notification doit l'ecrire avec son symbole.
+        scheduleWeeklyRecap(tease.state === 'loss' ? tease.lossWeek : undefined, market);
       } catch {
         setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
       }
     })();
-  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans, market.currency]);
+  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans, market]);
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
