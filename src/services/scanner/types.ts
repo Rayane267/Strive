@@ -122,6 +122,12 @@ export interface ScannerService {
   hideSplash(): void;
   setFuelDeduction(enabled: boolean, fuelCostPerKm: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
+  /**
+   * Pays d'activité, pour le géocodage natif : restreint la recherche TomTom à
+   * ce pays et fixe la langue des résultats. Ce n'est PAS la langue de l'app —
+   * `fr` ne sépare pas la France de la Belgique ni de la Suisse.
+   */
+  setMarketCountry(code: string): void;
   setTomTomApiKey(key: string): void;
   /** Purge le cache de géocodage local (adresses = PII). À appeler au logout et
    *  après suppression de compte — RGPD : le cache vit sur l'appareil, hors de

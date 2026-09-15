@@ -69,10 +69,16 @@ final class OcrParser {
     "quai", "villa", "cité", "cite", "esplanade", "cours",
     "faubourg", "fg.", "voie", "sq.", "square",
     "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
-    "calle", "avenida", "plaza", "paseo", "carretera", "camino", "ronda",
+    // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
+    // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
+    "close", "court", "crescent", "terrace", "gardens", "mews", "row",
+    "walk", "grove", "hill", "park", "rise", "green", "wharf", "embankment",
+    // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
+    // adresses espagnoles ne portent aucun mot de voie reconnaissable.
+    "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
     "via", "viale", "corso", "piazza", "strada", "vicolo", "largo",
     "straat", "laan", "plein", "gracht",
-    "travessa", "rua",
+    "travessa", "rua", "praça", "praca", "estrada", "alameda",
     "gare", "aéroport", "aeroport", "airport", "terminal",
     "porte", "hôpital", "hopital", "hospital", "station",
     "bahnhof", "hauptbahnhof", "flughafen", "krankenhaus",
@@ -85,9 +91,17 @@ final class OcrParser {
     "damm", "ufer", "ring",
   ]
 
+  /// Mots qui ne sont JAMAIS une adresse — libellés de bouton, en-têtes.
+  /// Les cinq marchés non francophones ont les leurs : sans eux, un « Aceptar »
+  /// ou un « Annehmen » seul sur sa ligne pouvait passer pour une adresse.
   private let nonAddressWords: Set<String> = [
     "uber", "bolt", "heetch", "total", "fare", "gain", "tarif",
     "accepted", "accepté", "min", "km", "estimated", "estimé",
+    "aceptar", "aceptado", "estimado", "tarifa", "ganancia",
+    "aceitar", "aceite", "ganho",
+    "accetta", "accettata", "stimato", "tariffa", "guadagno",
+    "aanvaarden", "aanvaard", "geschat", "tarief", "inkomsten",
+    "annehmen", "angenommen", "geschätzt", "geschaetzt", "einnahmen",
   ]
 
   // MARK: - Regex (mêmes patterns que Android)
@@ -101,7 +115,7 @@ final class OcrParser {
   // de plancher obligerait à modifier deux endroits pour rester cohérent.
   // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS/Kotlin.
   private static let priceWholeRegex = try! NSRegularExpression(
-    pattern: #"(\d{2,6}|[6-9])\s*€"#)
+    pattern: #"(\d{2,6}|[6-9])\s*(?:€|£|CHF)"#, options: [.caseInsensitive])
   // Retire la note de l'app ("★ 5,00", "* 5,00") avant de chercher un tarif.
   private static let ratingRegex = try! NSRegularExpression(
     pattern: #"[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}"#)
@@ -113,7 +127,7 @@ final class OcrParser {
   // faux en silence. Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration.
   // ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup.
   private static let evContextRegex = try! NSRegularExpression(
-    pattern: #"(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)"#,
+    pattern: #"(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)"#, options: .caseInsensitive)
     options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
@@ -186,10 +200,52 @@ final class OcrParser {
     return result
   }
 
+  /// MILES → KILOMÈTRES, avant toute autre lecture.
+  ///
+  /// Les plateformes affichent des miles au Royaume-Uni, et toutes les
+  /// expressions de ce parser sont ancrées sur « km » : un écran londonien ne
+  /// rendait AUCUNE distance, donc aucun verdict, alors que le prix avait été lu.
+  ///
+  /// On réécrit le texte plutôt que d'ajouter une unité à chaque expression :
+  /// celles-ci sont réglées au cas par cas sur des captures réelles, avec leurs
+  /// indices de groupe et leurs gardes. Tout l'aval — bornes de plausibilité,
+  /// colonne `rides.distance_km` — raisonne en kilomètres : la conversion se fait
+  /// à l'entrée, le mile ne revient qu'à l'affichage.
+  ///
+  /// Mirror exact du JS (`ocrParser.ts`) et du Kotlin. « min » n'est pas touché :
+  /// le `(?![a-z])` empêche « mi » de mordre dessus.
+  private func milesToKm(_ s: String) -> String {
+    guard s.range(of: "mi", options: .caseInsensitive) != nil else { return s }
+    return replaceAll(
+      s,
+      pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])"#,
+      options: [.caseInsensitive]
+    ) { match in
+      let raw = match.replacingOccurrences(
+        of: #"[^0-9.,]"#, with: "", options: .regularExpression
+      ).replacingOccurrences(of: ",", with: ".")
+      guard let value = Double(raw) else { return match }
+      return String(format: "%.1f km", value * 1.609344)
+    }
+  }
+
+  /// Un symbole monétaire, quel qu'il soit. Était « € » en dur : sur une offre
+  /// londonienne (« £16.40 ») ou genevoise (« CHF 24.50 »), les replis qui s'en
+  /// servent ne mordaient jamais. Mirror du JS et du Kotlin.
+  static func hasCurrency(_ text: String) -> Bool {
+    let t = text.lowercased()
+    return t.contains("€") || t.contains("£") || t.contains("chf")
+  }
+
   // MARK: - Entry point
 
   func parse(blocks: [OcrTextBlock], screenWidth: Int, screenHeight: Int, image: UIImage? = nil) -> ScanResultModel? {
     if blocks.isEmpty { return nil }
+
+    // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
+    let blocks = blocks.map {
+      OcrTextBlock(text: milesToKm($0.text), box: $0.box, confidence: $0.confidence)
+    }
 
     let fullText = blocks.map { $0.text }.joined(separator: " ").lowercased()
     // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -393,7 +449,8 @@ final class OcrParser {
       score += Float(block.box.height) * 1.5
       let centerY = Float((block.box.top + block.box.bottom) / 2)
       if centerY < Float(screenHeight) * 0.55 { score += 30 }
-      if blockLower.contains("€") || blockLower.contains("eur") { score += 20 }
+      if blockLower.contains("€") || blockLower.contains("£") || blockLower.contains("chf")
+         || blockLower.contains("eur") { score += 20 }
       if isWhole { score -= 10 }
       if matches(blockLower, pattern: #"course\s+de"#) { score -= 30 }
 
@@ -425,7 +482,7 @@ final class OcrParser {
     // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
     // matcher un code postal ou une heure qui contiendrait la même suite.
     let glued = String(format: "%d%02d", euros, cents)
-    return blocks.first(where: { $0.text.contains(glued) && $0.text.contains("€") })?.box.centerY
+    return blocks.first(where: { $0.text.contains(glued) && Self.hasCurrency($0.text) })?.box.centerY
   }
 
   // MARK: - Distance extraction
@@ -725,9 +782,9 @@ final class OcrParser {
     if matches(text, pattern: #"course\s+de"#) { return false }
     if matches(text, pattern: #"\d[.,\s]*\d*\s*km\b"#) { return false }
     if matches(text, pattern: #"\d\s*min\b"#) { return false }
-    if matches(text, pattern: #"^\s*\d{1,3}[.,]\d{1,2}\s*€?\s*$"#) { return false }
+    if matches(text, pattern: #"^\s*\d{1,3}[.,]\d{1,2}\s*(?:€|£|CHF)?\s*$"#) { return false }
     // Toute ligne tarifaire ("19,38 € (net, TTC)") → jamais une adresse.
-    if text.contains("€") { return false }
+    if Self.hasCurrency(text) { return false }
     if text.contains("★") || text.contains("⭐") || matches(text, pattern: #"\brating\b"#) { return false }
     // Ligne "note passager" ("Shirley 5.0 ★" / "Jean 4,9 *") : une note 0-5 avec
     // décimale n'apparaît jamais dans une adresse → évite de prendre le nom du
@@ -760,8 +817,11 @@ final class OcrParser {
     if matches(text, pattern: #"^\d{1,4}\s+[a-zà-ü]{3,}"#) { return true }
     // 4. Voie + numéro (DE/ES/IT)
     if matches(text, pattern: #"[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$"#) { return true }
-    // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris".
-    if matches(text, pattern: #"\b\d{4,5}\b"#) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
+    // 5. Code postal + lettres : "94430 Chennevières", "75011 Paris".
+    //    Numérique (75011, 1000 Bruxelles, 1200-001 Lisbonne) OU
+    // alphanumérique britannique (« SW1A 1AA », « M1 1AE »). Sans le second, les
+    // adresses londoniennes perdaient leur signal le plus fiable. Mirror du JS.
+    if matches(text, pattern: #"\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b"#, caseInsensitive: true) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
     // 6. Segment avec virgule SUIVIE d'une lettre + ≥6 lettres : "Châtelet, Paris".
     //    On exige ", lettre" (pas une virgule décimale type "4,79") sinon une
     //    ligne note/tarif passe pour une adresse.
@@ -793,7 +853,9 @@ final class OcrParser {
         candidates = candidates.filter { b in
           // Adresse avec code postal (4-5 chiffres) = signal fort, jamais évincée
           // même loin d'un bloc km/min (cas Heetch : adresses sans métrique proche).
-          if matches(b.text, pattern: #"\b\d{4,5}\b"#) { return true }
+          // `b.text` est BRUT ici, pas minusculé : sans `caseInsensitive`, un
+          // « SW1A 1AA » ne matcherait jamais le motif britannique.
+          if matches(b.text, pattern: #"\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b"#, caseInsensitive: true) { return true }
           return metricYs.contains(where: { abs($0 - b.box.centerY) <= radius })
         }
       }

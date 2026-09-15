@@ -23,6 +23,34 @@ object TomTomService {
     /** Clé API TomTom — renseignée depuis JS au démarrage via setTomTomApiKey. */
     var apiKey: String = ""
 
+    /**
+     * Pays d'activité du chauffeur, pour le géocodage.
+     *
+     * `countrySet` listait les treize pays couverts et `language` était figé à
+     * `fr-FR`. Une adresse de rue existe souvent dans plusieurs pays — il y a des
+     * « Victoria Street » partout — et TomTom, à `limit=1`, en choisissait une.
+     * Restreindre au pays du chauffeur supprime l'ambiguïté à la source au lieu
+     * d'espérer que le classement tombe juste.
+     *
+     * Vide = on ne sait pas encore : on garde alors la liste complète, qui vaut
+     * mieux qu'un pays deviné.
+     */
+    var marketCountry: String = ""
+
+    /** Le pays du chauffeur s'il est connu, sinon les treize marchés couverts. */
+    private val countrySet get() = if (marketCountry.isNotEmpty()) marketCountry else COUNTRY_SET
+
+    /** Langue des résultats : celle du pays, faute de quoi les libellés
+     *  revenaient en français pour un chauffeur londonien. */
+    private val geocodeLanguage get() = when (marketCountry) {
+        "GB" -> "en-GB"
+        "ES" -> "es-ES"
+        "PT" -> "pt-PT"
+        "BE" -> "fr-BE"
+        "CH" -> "fr-CH"
+        else -> "fr-FR"
+    }
+
     val isReady get() = apiKey.isNotEmpty()
 
     data class Coords(val lat: Double, val lon: Double)
@@ -133,7 +161,7 @@ object TomTomService {
         GeocodeCache.get(address)?.let { return it }
 
         val encoded = URLEncoder.encode(address, "UTF-8")
-        val url = "$BASE_SEARCH/$encoded.json?key=$apiKey&language=fr-FR&countrySet=$COUNTRY_SET&limit=1"
+        val url = "$BASE_SEARCH/$encoded.json?key=$apiKey&language=$geocodeLanguage&countrySet=$countrySet&limit=1"
         val json = httpGet(url) ?: return null
         val hit = try {
             val results = JSONObject(json).optJSONArray("results") ?: return null

@@ -763,6 +763,15 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Pays d'activité : restreint le géocodage à ce pays et fixe la langue des
+  /// résultats. Distinct de `appLanguage` — `fr` ne sépare pas la France de la
+  /// Belgique ni de la Suisse, et c'est le PAYS qui désambiguïse une adresse.
+  @objc func setMarketCountry(_ code: String) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(code, forKey: "marketCountry")
+    }
+  }
+
   /// Préférences utilisateur pour le verdict natif (seuils + include pickup).
   /// Lus par AnalyzeRideIntent au moment du calcul de rentabilité.
   @objc func setScannerPreferences(_ minHourlyRate: NSNumber,

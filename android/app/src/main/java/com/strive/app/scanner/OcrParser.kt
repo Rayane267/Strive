@@ -102,8 +102,8 @@ object OcrParser {
             // EN
             "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
         ).any { text.contains(it) }
-        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*€""").containsMatchIn(text)
-            || Regex("""€\s*\d""").containsMatchIn(text)
+        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*(?:€|£|CHF)""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+            || Regex("""(?:€|£|CHF)\s*\d""", RegexOption.IGNORE_CASE).containsMatchIn(text)
         val hasKm = Regex("""\d[\d.,]*\s*km""").containsMatchIn(text)
         val hasMin = Regex("""\d+\s*min""").containsMatchIn(text)
         return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
@@ -119,14 +119,20 @@ object OcrParser {
         "faubourg", "fg.", "voie", "sq.", "square",
         // EN
         "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
+        // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
+        // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
+        "close", "court", "crescent", "terrace", "gardens", "mews", "row",
+        "walk", "grove", "hill", "park", "rise", "green", "wharf", "embankment",
         // ES
-        "calle", "avenida", "plaza", "paseo", "carretera", "camino", "ronda",
+        // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
+        // adresses espagnoles ne portent aucun mot de voie reconnaissable.
+        "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
         // IT
         "via", "viale", "corso", "piazza", "strada", "vicolo", "largo",
         // NL
         "straat", "laan", "plein", "gracht",
         // PT
-        "travessa", "rua",
+        "travessa", "rua", "praça", "praca", "estrada", "alameda",
         // POIs VTC — FR/EN + traductions EU
         "gare", "aéroport", "aeroport", "airport", "terminal",
         "porte", "hôpital", "hopital", "hospital", "station",
@@ -140,9 +146,17 @@ object OcrParser {
         "straße", "strasse", "str.", "gasse", "weg", "allee", "platz",
         "damm", "ufer", "ring",
     )
+    // Mots qui ne sont JAMAIS une adresse. Les cinq marchés non francophones
+    // ont les leurs : sans eux, un « Aceptar » ou un « Annehmen » seul sur sa
+    // ligne pouvait passer pour une adresse.
     private val nonAddressWords = setOf(
         "uber", "bolt", "heetch", "total", "fare", "gain", "tarif",
         "accepted", "accepté", "min", "km", "estimated", "estimé",
+        "aceptar", "aceptado", "estimado", "tarifa", "ganancia",
+        "aceitar", "aceite", "ganho",
+        "accetta", "accettata", "stimato", "tariffa", "guadagno",
+        "aanvaarden", "aanvaard", "geschat", "tarief", "inkomsten",
+        "annehmen", "angenommen", "geschätzt", "geschaetzt", "einnahmen",
     )
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
@@ -152,7 +166,10 @@ object OcrParser {
     // qu'un "5€" sec est presque toujours un pourboire, un pack ou une note —
     // contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift). La regex reste plus
     // large que le plancher fareMin (8 €), qui écarte ensuite 6 et 7.
-    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6}|[6-9])\s*€""")
+    // Le symbole n'est plus l'euro en dur : une offre londonienne (« £16.40 ») ou
+    // genevoise (« CHF 24.50 ») ne déclenchait jamais ce repli. Mirror du JS.
+    private val CURRENCY_REGEX = Regex("""€|£|CHF""", RegexOption.IGNORE_CASE)
+    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6}|[6-9])\s*(?:€|£|CHF)""", RegexOption.IGNORE_CASE)
     // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
     private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")
     private val DISTANCE_REGEX = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
@@ -163,9 +180,7 @@ object OcrParser {
     // Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration (aligne TS/Swift).
     // ATTENTION : « charge » seul est PROSCRIT — « prise en charge » designe le pickup.
     private val EV_CONTEXT_REGEX = Regex(
-        """(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)""",
-        RegexOption.IGNORE_CASE,
-    )
+        """(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)""", RegexOption.IGNORE_CASE)
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
     //
@@ -188,6 +203,37 @@ object OcrParser {
      * Cible réelle observée : "1l.8 km" (ML Kit lit le 1 comme un L minuscule).
      * Safe pour les adresses : "Libération" n'a pas de digit adjacent à son "l".
      */
+    /**
+     * MILES → KILOMÈTRES, avant toute autre lecture.
+     *
+     * Les plateformes affichent des miles au Royaume-Uni, et toutes les
+     * expressions de ce parser sont ancrées sur « km » : un écran londonien ne
+     * rendait AUCUNE distance, donc aucun verdict, alors que le prix avait été lu.
+     *
+     * On réécrit le texte plutôt que d'ajouter une unité à chaque expression :
+     * celles-ci sont réglées au cas par cas sur des captures réelles, avec leurs
+     * indices de groupe et leurs gardes. Tout l'aval — bornes de plausibilité,
+     * colonne `rides.distance_km` — raisonne en kilomètres.
+     *
+     * BRANCHÉ DANS `normalizeOcrDigits` et non à l'entrée, contrairement au JS et
+     * au Swift : ici les blocs sont des `Text.TextBlock` de ML Kit, dont le
+     * texte est en lecture seule et ne se reconstruit pas. Tous les endroits qui
+     * lisent une distance passent par cette normalisation, la couverture est
+     * donc la même.
+     *
+     * « min » n'est pas touché : le `(?![a-z])` empêche « mi » de mordre dessus.
+     */
+    private val MILES_REGEX =
+        Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])""", RegexOption.IGNORE_CASE)
+
+    private fun milesToKm(s: String): String {
+        if (!s.contains("mi", ignoreCase = true)) return s
+        return MILES_REGEX.replace(s) { m ->
+            val value = m.groupValues[1].replace(" ", "").replace(",", ".").toDoubleOrNull()
+            if (value == null) m.value else String.format(java.util.Locale.US, "%.1f km", value * 1.609344)
+        }
+    }
+
     private fun normalizeOcrDigits(s: String): String {
         // Cas ciblés :
         //   "ll.8", "1l.8", "l1.8"  → "11.8"  (run de l/I avant ".X")
@@ -195,7 +241,7 @@ object OcrParser {
         //   "1l8", "1o8"            → "118", "108"   (lettre isolée entre chiffres)
         // Les runs l/I/o/O à côté de lettres (ex: "Libération") ne matchent pas
         // grâce aux lookbehind/lookahead `(?<![a-zA-Zà-ü])`.
-        return s
+        return milesToKm(s)
             // Runs l/I avant ".X" ou avant un nombre décimal "X.Y"
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=[.,]\d)""")) { "1".repeat(it.value.length) }
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=\d[.,]\d)""")) { "1".repeat(it.value.length) }
@@ -365,7 +411,7 @@ object OcrParser {
         // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
         // matcher un code postal ou une heure qui contiendrait la même suite.
         val glued = "$euros${"%02d".format(cents)}"
-        return blocks.firstOrNull { it.text.contains(glued) && it.text.contains("€") }
+        return blocks.firstOrNull { it.text.contains(glued) && CURRENCY_REGEX.containsMatchIn(it.text) }
             ?.boundingBox?.centerY()
     }
 
@@ -887,7 +933,7 @@ object OcrParser {
         if (Regex("""[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$""").containsMatchIn(text)) return true
         // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris",
         //    "Libération, 94430 Sucy". Couvre les adresses SANS mot de voie connu.
-        if (Regex("""\b\d{4,5}\b""").containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
+        if (Regex("""\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
         // 6. Segment avec virgule SUIVIE d'une lettre + assez de lettres :
         //    "Châtelet, Paris". On exige ", lettre" (pas une virgule décimale type
         //    "4,79") sinon une ligne note/tarif passe pour une adresse.
@@ -946,7 +992,7 @@ object OcrParser {
                     // Adresse avec code postal (4-5 chiffres) = signal fort, jamais
                     // évincée même loin d'un bloc km/min (cas Heetch : adresses sans
                     // métrique à proximité).
-                    if (Regex("""\b\d{4,5}\b""").containsMatchIn(b.text)) return@filter true
+                    if (Regex("""\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b""", RegexOption.IGNORE_CASE).containsMatchIn(b.text)) return@filter true
                     val y = b.boundingBox?.centerY() ?: return@filter false
                     metricYs.any { Math.abs(it - y) <= radius }
                 }

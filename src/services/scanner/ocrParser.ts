@@ -29,6 +29,21 @@ const UBER_ONLY_MODES = ['uberx', 'uberxl', 'uberpool', 'berline', 'comfort elec
 const BOLT_ONLY_MODES = ['bolt xl', 'bolt comfort', 'bolt premium', 'bolt plus'];
 
 // Tolère les espaces internes autour du séparateur : "17 , 18 €" ou "11 . 8 km"
+/**
+ * Symboles monétaires reconnus à l'écran.
+ *
+ * `PRICE_REGEX` n'exige aucun symbole — un montant décimal suffit — mais deux
+ * REPLIS en réclamaient un, et il était écrit « € » : sur une offre londonienne
+ * (« £16.40 ») ou genevoise (« CHF 24.50 »), ces replis ne mordaient jamais. Ils
+ * ne servent que quand l'OCR a perdu la virgule, donc la panne était
+ * intermittente — le pire mode de défaillance à diagnostiquer.
+ */
+const CURRENCY_REGEX = /€|£|CHF/i;
+
+// Écrit en littéral, et pas construit par `new RegExp` à partir d'un morceau
+// partagé : dans un gabarit, `\d` n'est pas une séquence d'échappement connue et
+// se réduit à `d`. L'expression devenait `(d{2,6}|...)`, cinq fixtures tombaient.
+
 const PRICE_REGEX    = /(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)/;
 const DISTANCE_REGEX = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km/i;
 const DURATION_REGEX = /(\d{1,3})\s*min/i;
@@ -40,7 +55,7 @@ const DURATION_REGEX = /(\d{1,3})\s*min/i;
 // ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup et
 // apparaît sur presque toutes les offres. On ne matche que « recharge ».
 const EV_CONTEXT_REGEX =
-  /(autonomie|recharg|borne\s|batterie|électrique|electrique|kwh|\bev\b|charging|battery|\brange\b)/i;
+  /(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)/i;
 // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min" avec séparateurs variés (•·-–—:, espaces)
 //
 // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
@@ -62,16 +77,24 @@ const ADDRESS_STREET_KEYWORDS = [
   'chemin', 'ch.', 'route', 'rte', 'rte.', 'passage',
   'quai', 'villa', 'cité', 'cite', 'esplanade', 'cours',
   'faubourg', 'fg.', 'voie', 'sq.', 'square',
-  // EN
+  // EN / UK. Les cinq premiers suffisaient pour une adresse britannique
+  // « de manuel » ; les suivants sont ce que porte réellement le tissu urbain
+  // anglais, où « Close », « Crescent » et « Gardens » sont aussi courants que
+  // « Street ». Sans eux, « 14 Elmwood Gardens » ne passait que par la structure
+  // chiffre-d'abord, et une adresse sans numéro ne passait pas du tout.
   'street', 'road', 'lane', 'drive', 'st.', 'rd.', 'ave.', 'way',
-  // ES
-  'calle', 'avenida', 'plaza', 'paseo', 'carretera', 'camino', 'ronda',
+  'close', 'court', 'crescent', 'terrace', 'gardens', 'mews', 'row',
+  'walk', 'grove', 'hill', 'park', 'rise', 'green', 'wharf', 'embankment',
+  // ES — « c/ » est l'abréviation ordinaire de « calle » sur les plaques comme
+  // dans les applis ; sans elle, la moitié des adresses espagnoles ne portent
+  // aucun mot de voie reconnaissable.
+  'calle', 'c/', 'avenida', 'avda', 'plaza', 'paseo', 'carretera', 'camino', 'ronda',
   // IT
   'via', 'viale', 'corso', 'piazza', 'strada', 'vicolo', 'largo',
   // NL
   'straat', 'laan', 'plein', 'gracht',
   // PT
-  'travessa', 'rua',
+  'travessa', 'rua', 'praça', 'praca', 'estrada', 'alameda',
   // POIs FR/EN + traductions EU
   'gare', 'aéroport', 'aeroport', 'airport', 'terminal',
   'porte', 'hôpital', 'hopital', 'hospital', 'station',
@@ -85,6 +108,46 @@ const ADDRESS_STREET_SUFFIXES = [
   'damm', 'ufer', 'ring',
 ];
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Code postal : signal fort d'adresse, et sans ambiguïté.
+ *
+ * Le motif était purement numérique (4 à 5 chiffres) — parfait pour 75011,
+ * 1000 Bruxelles ou 1200-001 Lisbonne, aveugle au Royaume-Uni où le code postal
+ * est alphanumérique (« SW1A 1AA », « M1 1AE », « B33 8TH »). Les adresses
+ * londoniennes perdaient donc leur signal le plus fiable : elles se faisaient
+ * évincer dès qu'elles tombaient loin d'un bloc km/min à l'écran.
+ */
+const POSTCODE_REGEX = /\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i;
+
+/**
+ * MILES → KILOMÈTRES, avant toute autre lecture.
+ *
+ * Les plateformes affichent des miles au Royaume-Uni. Toutes les expressions de
+ * ce parser sont ancrées sur « km » : un écran londonien ne rendait donc AUCUNE
+ * distance, et `parseBlocks` sortait sur `distanceKm === null` — pas de verdict
+ * du tout, alors que le prix, lui, avait été lu.
+ *
+ * On réécrit le texte plutôt que d'ajouter une unité à chaque expression. Ces
+ * expressions sont réglées au cas par cas sur des captures d'écran réelles, avec
+ * leurs indices de groupe et leurs gardes contre les faux positifs ; y toucher
+ * pour une unité coûterait bien plus cher que ce que ça règle. Et le reste de la
+ * chaîne — `RATE_MIN`/`RATE_MAX`, `isSane`, la colonne `rides.distance_km` —
+ * raisonne en kilomètres : c'est à l'ENTRÉE qu'il faut convertir, pas à la
+ * sortie. Le mile ne revient qu'à l'affichage, via `market.distanceUnit`.
+ *
+ * « min » n'est pas touché : `(?![a-z])` empêche « mi » de mordre dessus.
+ */
+const MILES_REGEX = /(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü])/gi;
+
+export const milesToKm = (text: string): string =>
+  text.replace(MILES_REGEX, (_m, raw: string) => {
+    const value = parseFloat(raw.replace(/\s+/g, '').replace(',', '.'));
+    if (!Number.isFinite(value)) return _m;
+    // Une décimale : c'est la précision qu'affichent les plateformes, et les
+    // expressions en aval n'en acceptent pas plus de deux.
+    return `${(value * 1.609344).toFixed(1)} km`;
+  });
 
 // Helper : nettoie espaces internes autour du séparateur décimal avant parseFloat
 const cleanNum = (raw: string) => raw.replace(/\s+/g, '').replace(',', '.');
@@ -111,8 +174,17 @@ const normalizeOcrDigits = (s: string) =>
 
 // Mots à exclure des candidats adresse
 const NON_ADDRESS_WORDS = [
+  // FR / EN
   'uber', 'bolt', 'heetch', 'total', 'fare', 'gain', 'tarif',
   'accepted', 'accepté', 'min', 'km', 'estimated', 'estimé',
+  // ES / PT / IT / NL / DE — les libellés de BOUTON des autres marchés. Sans
+  // eux, un « Aceptar » ou un « Annehmen » seul sur sa ligne pouvait être pris
+  // pour une adresse, et évincer la vraie.
+  'aceptar', 'aceptado', 'estimado', 'tarifa', 'ganancia',
+  'aceitar', 'aceite', 'ganho',
+  'accetta', 'accettata', 'stimato', 'tariffa', 'guadagno',
+  'aanvaarden', 'aanvaard', 'geschat', 'tarief', 'inkomsten',
+  'annehmen', 'angenommen', 'geschätzt', 'geschaetzt', 'einnahmen',
 ];
 
 // ─── Sanity bounds ────────────────────────────────────────────────────────────
@@ -131,6 +203,9 @@ export function parseBlocks(
   screenHeight: number,
 ): ScanResult | null {
   if (blocks.length === 0) return null;
+
+  // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
+  blocks = blocks.map(b => (/mi/i.test(b.text) ? { ...b, text: milesToKm(b.text) } : b));
 
   const fullText = blocks.map(b => b.text).join(' ').toLowerCase();
   const platform = detectPlatform(fullText);
@@ -253,7 +328,7 @@ function extractFare(
       // existe (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un
       // pourboire suggéré, un pack ou une note — cf. fixture canonique. La regex
       // reste plus large que le plancher FARE_MIN (8 €), qui écarte 6 et 7.
-      const glued = /(\d{2,6}|[6-9])\s*€/.exec(deRated);
+      const glued = /(\d{2,6}|[6-9])\s*(?:€|£|CHF)/i.exec(deRated);
       if (glued) {
         const raw = parseInt(glued[1], 10);
         value = raw > FARE_MAX ? raw / 100 : raw;
@@ -596,7 +671,7 @@ function findAddressBlocks(
         // Une adresse avec code postal (4-5 chiffres) est un signal fort et sans
         // ambiguïté → jamais évincée, même loin d'un bloc km/min (cas Heetch dont
         // les adresses n'ont aucune métrique à proximité).
-        if (/\b\d{4,5}\b/.test(b.text)) return true;
+        if (POSTCODE_REGEX.test(b.text)) return true;
         const cy = b.y + b.height / 2;
         return metricYs.some(my => Math.abs(my - cy) <= radius);
       });
@@ -626,11 +701,11 @@ function locateFareBlockY(blocks: TextBlock[], fare: number): number | null {
   const centsStr = cents.toString().padStart(2, '0');
   const patterns = [`${euros},${centsStr}`, `${euros}.${centsStr}`];
   let match = blocks.find(b => patterns.some(p => b.text.includes(p)));
-  // Repli : tarif collé sans virgule ("1743€") — on exige le € pour éviter de
+  // Repli : tarif collé sans virgule ("1743€") — on exige un symbole pour éviter de
   // matcher un code postal ou une heure qui contiendrait la même suite.
   if (!match) {
     const glued = `${euros}${centsStr}`;
-    match = blocks.find(b => b.text.includes(glued) && b.text.includes('€'));
+    match = blocks.find(b => b.text.includes(glued) && CURRENCY_REGEX.test(b.text));
   }
   if (!match) return null;
   return match.y + match.height / 2;

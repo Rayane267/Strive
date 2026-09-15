@@ -257,6 +257,13 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.setAppLanguage(reactContext, lang)
     }
 
+    /** Pays d'activité : restreint le géocodage à ce pays et fixe la langue des
+     *  résultats. Mirror iOS (clé `marketCountry` de l'App Group). */
+    @ReactMethod
+    fun setMarketCountry(code: String) {
+        TomTomService.marketCountry = code
+    }
+
     /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
     @ReactMethod
     fun setTomTomApiKey(key: String) {
