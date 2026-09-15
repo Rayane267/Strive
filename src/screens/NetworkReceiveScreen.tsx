@@ -19,6 +19,7 @@ import SplitBar from '../components/SplitBar';
 import AvatarView from '../components/AvatarView';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
+import { decimalSeparator } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
@@ -94,7 +95,7 @@ const NetworkReceiveScreen = () => {
               <Feather name="navigation" size={12} color={colors.primary} />
               <Text style={styles.distText}>
                 {t('rideNetwork.receive.toPickup', {
-                  km: offer.toPickupKm.toFixed(1).replace('.', i18n.language === 'fr' ? ',' : '.'),
+                  km: offer.toPickupKm.toFixed(1).replace('.', decimalSeparator(i18n.language)),
                   min: offer.toPickupMin,
                 })}
               </Text>

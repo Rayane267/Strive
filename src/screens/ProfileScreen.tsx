@@ -29,6 +29,7 @@ import LanguageSheet from '../components/LanguageSheet';
 import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
+import { LANGUAGE_NAMES } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -746,7 +747,10 @@ const ProfileScreen = () => {
             icon: 'translate',
             iconLib: 'mc',
             title: t('preferences.language', 'Langue'),
-            value: i18n.language === 'fr' ? 'Français' : 'English',
+            // Le nom de la langue COURANTE, pas un ternaire à deux branches :
+            // choisir l'espagnol affichait « English », puisque tout ce qui
+            // n'était pas le français tombait dans l'autre branche.
+            value: LANGUAGE_NAMES[i18n.language] ?? i18n.language,
             onPress: () => setLangSheetVisible(true),
           },
           // Un interrupteur qui ne peut pas s'allumer n'est pas un interrupteur.

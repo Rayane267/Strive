@@ -17,6 +17,7 @@ import AnimatedEntrance from '../components/AnimatedEntrance';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
+import { decimalSeparator } from '../utils/market';
 import { useAuth } from '../context/AuthContext';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { fetchRidesInRange } from '../services/ridesService';
@@ -54,6 +55,12 @@ const MIN_TOTAL = 40;
 
 /** Heures étiquetées sous la grille — les 24 ne tiennent pas en largeur. */
 const LABELLED_HOURS = [0, 6, 12, 18];
+
+/** Étiquette BCP-47 par langue, pour les noms de jours et de mois du système. */
+const DATE_LOCALES: Record<string, string> = {
+  fr: 'fr-FR', en: 'en-GB', es: 'es-ES', pt: 'pt-PT',
+  nl: 'nl-BE', de: 'de-CH', it: 'it-CH',
+};
 
 const BestHoursScreen = () => {
   const market = useMarket();
@@ -139,7 +146,10 @@ const BestHoursScreen = () => {
     load();
   }, [load]);
 
-  const locale = i18n.language === 'fr' ? 'fr-FR' : 'en-US';
+  // Étiquette de locale complète pour `toLocaleString` : les cinq langues
+  // ajoutées tombaient toutes sur `en-US`, donc des jours en anglais dans une
+  // app en espagnol.
+  const locale = DATE_LOCALES[i18n.language] ?? 'en-US';
 
   // 1er janvier 2024 est un lundi : la semaine de référence se déroule donc
   // dans le même ordre que la grille, sans table de correspondance à maintenir.
@@ -165,7 +175,7 @@ const BestHoursScreen = () => {
   );
 
   const money = (v: number) =>
-    `${v.toFixed(2).replace('.', i18n.language === 'fr' ? ',' : '.')} ${market.symbol}`;
+    `${v.toFixed(2).replace('.', decimalSeparator(i18n.language))} ${market.symbol}`;
 
   const slotLabel = (cell: HourCell) =>
     t('bestHours.slot', {

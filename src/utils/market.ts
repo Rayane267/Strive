@@ -24,6 +24,10 @@
  * détermine ses cotisations — d'où le réglage manuel qui prime (`profiles.country`).
  */
 
+// `i18n` pour la seule langue courante — aucun cycle : `i18n.ts` n'importe rien
+// d'ici.
+import i18n from '../i18n';
+
 /** Pays couverts. L'ordre suit l'ouverture des marchés. */
 export type CountryCode = 'FR' | 'BE' | 'CH' | 'ES' | 'PT' | 'GB';
 
@@ -338,6 +342,25 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   it: 'Italiano',
 };
 
+/**
+ * Langues qui écrivent les décimales avec une VIRGULE.
+ *
+ * L'anglais est le seul des sept à utiliser le point. Tant qu'il n'y avait que
+ * le français et l'anglais, un `language === 'fr' ? ',' : '.'` disait vrai ;
+ * avec l'espagnol, le portugais, le néerlandais, l'allemand et l'italien il
+ * devient faux cinq fois sur sept, et un chauffeur madrilène lisait « 1.5 € ».
+ *
+ * C'est une affaire de LANGUE et non de marché : un Espagnol écrit 1,5 qu'il
+ * roule à Madrid ou à Londres.
+ */
+const DECIMAL_COMMA_LANGUAGES = ['fr', 'es', 'pt', 'nl', 'de', 'it'];
+
+/** « , » ou « . », selon la langue affichée. */
+export function decimalSeparator(language: string | undefined): string {
+  const base = (language ?? 'en').split('-')[0];
+  return DECIMAL_COMMA_LANGUAGES.includes(base) ? ',' : '.';
+}
+
 /** Code ISO de la devise, pour l'afficher à côté du symbole (« € EUR »). */
 export const CURRENCY_CODE: Record<Currency, string> = {
   EUR: 'EUR',
@@ -400,12 +423,17 @@ export function getMarket(stored?: string | null): Market {
 export function formatMoney(
   amount: number,
   market: Market,
-  { decimals = 0 }: { decimals?: number } = {},
+  {
+    decimals = 0,
+    language,
+  }: { decimals?: number; language?: string } = {},
 ): string {
   const n = decimals > 0 ? amount.toFixed(decimals) : String(Math.round(amount));
   const [int, dec] = n.split('.');
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  const body = dec ? `${grouped},${dec}` : grouped;
+  // La décimale suit la LANGUE, le symbole suit le MARCHÉ : un chauffeur
+  // londonien qui lit l'app en espagnol veut « £14,50 », pas « £14.50 ».
+  const body = dec ? `${grouped}${decimalSeparator(language ?? i18n.language)}${dec}` : grouped;
   return market.currency === 'GBP' ? `${market.symbol}${body}` : `${body} ${market.symbol}`;
 }
 
