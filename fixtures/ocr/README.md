@@ -18,11 +18,17 @@ Chaque fichier est un tableau de cas :
   "name": "slug-unique-du-cas",
   "description": "contexte (optionnel)",
   "screenHeight": 1920,
+  "country": "GB",
   "blocks": [ { "text": "…", "x": 50, "y": 200, "width": 200, "height": 40 } ],
   "expected": { … } | null
 }
 ```
 
+- `country` : pays d'activité du chauffeur. **Absent = `FR`**, soit le
+  comportement historique au caractère près — les fixtures existantes ne
+  bougent pas. Il compte : c'est lui qui autorise la conversion des miles
+  et le recollage du code postal sortant. Une capture britannique jouée
+  sans lui ne rend aucune distance.
 - `expected: null` → le parse doit échouer (retour null / nil).
 - `expected.platform` / `fare` / `distanceKm` : toujours assertés.
 - `expected.durationMin` : asserté seulement si la clé est présente

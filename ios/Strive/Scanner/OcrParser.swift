@@ -69,6 +69,14 @@ final class OcrParser {
   /// une adresse — au risque d'évincer la vraie. Consultés au UK seulement.
   private let ukOnlyStreetKeywords = ["close", "court", "park", "green"]
 
+  /// Code postal SORTANT seul, suivi d'une ville : « TW6, Hounslow ».
+  ///
+  /// C'est la forme qu'Uber affiche au Royaume-Uni — jamais le code complet.
+  /// La virgule est obligatoire : la carte derrière l'offre est couverte de
+  /// numéros de route (« E05 », « A421 », « M1 ») qui ont exactement la forme
+  /// d'un code sortant. Exiger « code, ville » les écarte tous.
+  private let ukOutwardPattern = #"\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]"#
+
   /// Pays d'activité du chauffeur, écrit en App Group par
   /// `ScanBridge.setMarketCountry`. Il n'entre en jeu QUE pour ce qui serait
   /// faux en France : les miles et les quatre mots ci-dessus.
@@ -895,6 +903,28 @@ final class OcrParser {
           && isContinuationLine(head: head, tail: b)
       })
     }
+
+    // Symétrique, pour le Royaume-Uni : retire l'EN-TÊTE « TW6, Hounslow »
+    // quand la ligne de détail la suit immédiatement.
+    //
+    // Uber écrit le lieu de prise en charge sur deux lignes là-bas, et les
+    // deux passent pour des adresses. Deux candidats pour UN lieu décalent
+    // tout : la ligne de détail prenait le slot de la destination, et la vraie
+    // destination tombait hors des deux premiers — donc aucun itinéraire.
+    //
+    // Écartée ici, recollée à l'affichage par `mergeAddressContinuation`.
+    if marketCountry == "GB" {
+      candidates = candidates.filter { b in
+        guard matches(b.text, pattern: ukOutwardPattern, caseInsensitive: true),
+              b.text.trimmingCharacters(in: .whitespacesAndNewlines).count <= 40
+        else { return true }
+        return !candidates.contains(where: { tail in
+          !(tail.box.left == b.box.left && tail.box.top == b.box.top)
+            && isUkOutwardHead(head: b, tail: tail)
+        })
+      }
+    }
+
     return dedupOverlappingAddresses(candidates)
   }
 
@@ -976,6 +1006,35 @@ final class OcrParser {
     return true
   }
 
+  /// La ligne `tail` suit-elle immédiatement l'en-tête `head` (même colonne,
+  /// collée dessous) ? Sert à reconnaître la paire « code postal / détail ».
+  private func isUkOutwardHead(head: OcrTextBlock, tail: OcrTextBlock) -> Bool {
+    guard tail.box.top >= head.box.bottom else { return false }
+    guard Double(tail.box.top - head.box.bottom) <= Double(head.box.height) * 1.5 else { return false }
+    let overlap = min(head.box.right, tail.box.right) - max(head.box.left, tail.box.left)
+    guard Double(overlap) >= Double(min(head.box.width, tail.box.width)) * 0.5 else { return false }
+    // Deux codes sortants qui se suivent, c'est un départ et une arrivée.
+    return !matches(tail.text, pattern: ukOutwardPattern, caseInsensitive: true)
+  }
+
+  /// Recolle devant l'adresse le « TW6, Hounslow » écarté des candidats.
+  ///
+  /// Choisir l'une des deux lignes aurait coûté quelque chose dans les deux
+  /// sens : c'est l'en-tête qui GÉOCODE — « Terminal 3, Level 3, Row A » ne
+  /// désigne aucun point sur Terre sans sa ville — mais c'est le détail que le
+  /// chauffeur lit pour trouver son client dans un parking d'aéroport.
+  private func withUkOutwardPrefix(_ merged: String, addrBlock: OcrTextBlock, allBlocks: [OcrTextBlock]) -> String {
+    guard marketCountry == "GB" else { return merged }
+    guard !matches(merged, pattern: ukOutwardPattern, caseInsensitive: true) else { return merged }
+    guard let above = allBlocks.first(where: { other in
+      !(other.box.left == addrBlock.box.left && other.box.top == addrBlock.box.top)
+        && matches(other.text, pattern: ukOutwardPattern, caseInsensitive: true)
+        && other.text.trimmingCharacters(in: .whitespacesAndNewlines).count <= 40
+        && isUkOutwardHead(head: other, tail: addrBlock)
+    }) else { return merged }
+    return "\(above.text.trimmingCharacters(in: .whitespacesAndNewlines)), \(merged)"
+  }
+
   private func mergeAddressContinuation(addrBlock: OcrTextBlock, allBlocks: [OcrTextBlock], screenHeight: Int) -> String {
     var result = cleanAddressText(addrBlock.text).trimmingCharacters(in: .whitespacesAndNewlines)
     var current = addrBlock
@@ -993,7 +1052,7 @@ final class OcrParser {
       usedBoxes.append([cont.box.left, cont.box.top])
       current = cont
     }
-    return result
+    return withUkOutwardPrefix(result, addrBlock: addrBlock, allBlocks: allBlocks)
   }
 
   // MARK: - Sanity

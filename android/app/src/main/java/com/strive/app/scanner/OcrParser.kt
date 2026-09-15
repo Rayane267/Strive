@@ -120,6 +120,16 @@ object OcrParser {
     private val ukOnlyStreetKeywords = listOf("close", "court", "park", "green")
 
     /**
+     * Code postal SORTANT seul, suivi d'une ville : « TW6, Hounslow ».
+     *
+     * C'est la forme qu'Uber affiche au Royaume-Uni — jamais le code complet.
+     * La virgule est obligatoire : la carte derrière l'offre est couverte de
+     * numéros de route (« E05 », « A421 », « M1 ») qui ont exactement la forme
+     * d'un code sortant. Exiger « code, ville » les écarte tous.
+     */
+    private val ukOutwardRegex = Regex("""\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]""", RegexOption.IGNORE_CASE)
+
+    /**
      * Pays d'activité du chauffeur, posé par `ScanBridge.setMarketCountry`.
      * Il n'entre en jeu QUE pour ce qui serait faux en France : les miles et
      * les quatre mots ci-dessus.
@@ -390,20 +400,59 @@ object OcrParser {
         return true
     }
 
+    /**
+     * La ligne `tail` suit-elle immédiatement l'en-tête `head` (même colonne,
+     * collée dessous) ? Sert à reconnaître la paire « code postal / détail ».
+     */
+    private fun isUkOutwardHead(head: Text.TextBlock, tail: Text.TextBlock): Boolean {
+        val h = head.boundingBox ?: return false
+        val t = tail.boundingBox ?: return false
+        if (t.top < h.bottom) return false
+        if ((t.top - h.bottom) > h.height() * 1.5) return false
+        val overlap = minOf(h.right, t.right) - maxOf(h.left, t.left)
+        if (overlap < minOf(h.width(), t.width()) * 0.5) return false
+        // Deux codes sortants qui se suivent, c'est un départ et une arrivée.
+        return !ukOutwardRegex.containsMatchIn(tail.text)
+    }
+
+    /**
+     * Recolle devant l'adresse le « TW6, Hounslow » écarté des candidats.
+     *
+     * Choisir l'une des deux lignes aurait coûté quelque chose dans les deux
+     * sens : c'est l'en-tête qui GÉOCODE — « Terminal 3, Level 3, Row A » ne
+     * désigne aucun point sur Terre sans sa ville — mais c'est le détail que le
+     * chauffeur lit pour trouver son client dans un parking d'aéroport.
+     */
+    private fun withUkOutwardPrefix(
+        merged: String,
+        addrBlock: Text.TextBlock,
+        allBlocks: List<Text.TextBlock>,
+    ): String {
+        if (marketCountry != "GB") return merged
+        if (ukOutwardRegex.containsMatchIn(merged)) return merged
+        val above = allBlocks.firstOrNull { other ->
+            other !== addrBlock &&
+                ukOutwardRegex.containsMatchIn(other.text) &&
+                other.text.trim().length <= 40 &&
+                isUkOutwardHead(other, addrBlock)
+        } ?: return merged
+        return "${above.text.trim()}, $merged"
+    }
+
     private fun mergeAddressContinuation(
         addrBlock: Text.TextBlock,
         allBlocks: List<Text.TextBlock>,
         screenHeight: Int,
     ): String {
         var result = cleanAddressText(addrBlock.text).trim()
-        if (addrBlock.boundingBox == null) return result
+        if (addrBlock.boundingBox == null) return withUkOutwardPrefix(result, addrBlock, allBlocks)
         var current = addrBlock
         val used = mutableListOf(current)
         // Une adresse peut être coupée sur plusieurs lignes → on enchaîne les
         // continuations (max 3) tant qu'on en trouve une sous la précédente.
         repeat(3) {
             val cont = allBlocks.firstOrNull { c -> used.none { it === c } && isContinuationLine(current, c) }
-                ?: return result
+                ?: return withUkOutwardPrefix(result, addrBlock, allBlocks)
             val contText = cleanAddressText(cont.text).trim()
             // Tiret en fin de ligne OU en début de la suite (mot coupé) → collage
             // direct ; sinon espace de mot (newline, converti en espace pour TomTom).
@@ -412,7 +461,7 @@ object OcrParser {
             used.add(cont)
             current = cont
         }
-        return result
+        return withUkOutwardPrefix(result, addrBlock, allBlocks)
     }
 
     /**
@@ -1029,6 +1078,23 @@ object OcrParser {
         // évincée). Re-fusionnées à l'affichage par mergeAddressContinuation.
         candidates = candidates.filter { b ->
             candidates.none { head -> head !== b && isContinuationLine(head, b) }
+        }
+
+        // Symétrique, pour le Royaume-Uni : retire l'EN-TÊTE « TW6, Hounslow »
+        // quand la ligne de détail la suit immédiatement.
+        //
+        // Uber écrit le lieu de prise en charge sur deux lignes là-bas, et les
+        // deux passent pour des adresses. Deux candidats pour UN lieu décalent
+        // tout : la ligne de détail prenait le slot de la destination, et la
+        // vraie destination tombait hors des deux premiers — donc aucun
+        // itinéraire calculé.
+        //
+        // Écartée ici, recollée à l'affichage par `mergeAddressContinuation`.
+        if (marketCountry == "GB") {
+            candidates = candidates.filter { b ->
+                if (!ukOutwardRegex.containsMatchIn(b.text) || b.text.trim().length > 40) true
+                else candidates.none { tail -> tail !== b && isUkOutwardHead(b, tail) }
+            }
         }
         if (BuildConfig.DEBUG) Log.d("StriveScan", "  après filtre continuation: ${candidates.map { it.text.replace("\n", " ") }}")
 

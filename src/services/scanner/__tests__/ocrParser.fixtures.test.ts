@@ -27,6 +27,14 @@ interface FixtureCase {
   name: string;
   description?: string;
   screenHeight: number;
+  /**
+   * Pays d'activité du chauffeur. Absent = 'FR', soit le comportement
+   * historique au caractère près : les fixtures existantes ne bougent pas.
+   *
+   * Il compte pour de vrai — c'est lui qui autorise la conversion des miles.
+   * Une capture britannique jouée sans lui ne rendrait aucune distance.
+   */
+  country?: string;
   blocks: TextBlock[];
   expected: FixtureExpected | null;
 }
@@ -52,7 +60,7 @@ for (const file of fixtureFiles) {
   describe(`fixtures/ocr/${file}`, () => {
     for (const c of cases) {
       it(c.name, () => {
-        const result = parseBlocks(c.blocks, c.screenHeight);
+        const result = parseBlocks(c.blocks, c.screenHeight, c.country ?? 'FR');
 
         if (c.expected === null) {
           expect(result).toBeNull();

@@ -141,6 +141,19 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const POSTCODE_REGEX = /\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i;
 
 /**
+ * Code postal SORTANT seul, suivi d'une ville : « TW6, Hounslow », « CV1,
+ * Coventry ». C'est la forme qu'Uber affiche au Royaume-Uni — jamais le code
+ * complet.
+ *
+ * ── POURQUOI LA VIRGULE EST OBLIGATOIRE ───────────────────────────────────
+ * « E05 », « A421 », « M1 » : la carte affichée derrière la carte d'offre est
+ * couverte de numéros de route qui ont exactement la forme d'un code sortant.
+ * Exiger « code, ville » les écarte tous, et c'est de toute façon la seule
+ * forme qui nous intéresse : un code nu ne géocode pas mieux qu'une route.
+ */
+const UK_OUTWARD_REGEX = /\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]/i;
+
+/**
  * MILES → KILOMÈTRES, avant toute autre lecture.
  *
  * Les plateformes affichent des miles au Royaume-Uni. Toutes les expressions de
@@ -266,7 +279,7 @@ export function parseBlocks(
     platform,
     fare,
     distanceKm,
-    durationMin: extractDuration(blocks, pickupAddrBlock, destAddrBlock),
+    durationMin: extractDuration(blocks, pickupAddrBlock, destAddrBlock, distanceKm),
     pickupAddress:     pickupAddrBlock ? mergeAddressContinuation(pickupAddrBlock, blocks) : undefined,
     destinationAddress: destAddrBlock ? mergeAddressContinuation(destAddrBlock, blocks) : undefined,
     pickupDurationMin: pickup?.durationMin,
@@ -299,10 +312,55 @@ function mergeAddressContinuation(addrBlock: TextBlock, allBlocks: TextBlock[]):
     return true;
   });
 
-  if (!continuation) return baseText;
-  const contText = continuation.text.trim();
-  return baseText.endsWith('-') ? `${baseText}${contText}` : `${baseText}\n${contText}`;
+  const merged = !continuation
+    ? baseText
+    : baseText.endsWith('-')
+      ? `${baseText}${continuation.text.trim()}`
+      : `${baseText}\n${continuation.text.trim()}`;
+
+  return withUkOutwardPrefix(merged, addrBlock, allBlocks);
 }
+
+/**
+ * Recolle devant l'adresse le « TW6, Hounslow » qui la précède à l'écran.
+ *
+ * `collapseUkOutwardPairs` a écarté ce bloc des candidats pour qu'il ne décale
+ * pas le couple départ/arrivée ; il reste dans les blocs bruts, et c'est ici
+ * qu'il reprend sa place.
+ *
+ * ── POURQUOI ON GARDE LES DEUX LIGNES ─────────────────────────────────────
+ * Choisir aurait coûté quelque chose dans les deux sens. C'est l'en-tête qui
+ * GÉOCODE : « Terminal 3, Level 3, Row A » ne désigne aucun point sur Terre
+ * sans sa ville, TomTom rendait un échec, et la course retombait sur un
+ * itinéraire estimé — donc sans le trafic réel, qui est la raison d'être de
+ * l'app. Mais c'est la ligne de détail que le chauffeur lit pour trouver son
+ * client dans un parking d'aéroport. Les deux disent le même endroit, elles
+ * n'ont aucune raison de s'exclure.
+ */
+function withUkOutwardPrefix(
+  merged: string,
+  addrBlock: TextBlock,
+  allBlocks: TextBlock[],
+): string {
+  if (scanCountry !== 'GB') return merged;
+  if (UK_OUTWARD_REGEX.test(merged)) return merged;
+  const addrRight = addrBlock.x + addrBlock.width;
+
+  const above = allBlocks.find(other => {
+    if (other === addrBlock) return false;
+    const otherBottom = other.y + other.height;
+    // Juste au-dessus, et collée : une ligne plus haute appartient à autre chose.
+    if (otherBottom > addrBlock.y) return false;
+    if (addrBlock.y - otherBottom > addrBlock.height * 1.5) return false;
+    const xOverlap = Math.min(addrRight, other.x + other.width) - Math.max(addrBlock.x, other.x);
+    if (xOverlap < Math.min(addrBlock.width, other.width) * 0.5) return false;
+    const t = other.text.trim();
+    return t.length <= 40 && UK_OUTWARD_REGEX.test(t);
+  });
+
+  return above ? `${above.text.trim()}, ${merged}` : merged;
+}
+
 
 // ─── Détection plateforme ─────────────────────────────────────────────────────
 
@@ -550,11 +608,27 @@ function extractDuration(
   blocks: TextBlock[],
   pickupAddr?: TextBlock,
   destAddr?: TextBlock,
+  /**
+   * Distance de la course, déjà extraite. Sert à reconnaître la ligne de
+   * RÉSUMÉ parmi les lignes « N min (D km) » — voir ci-dessous.
+   */
+  courseDistanceKm?: number | null,
 ): number | null {
   const candidates: { value: number; y: number }[] = [];
 
   for (const block of blocks) {
-    if (/km/i.test(block.text)) continue;
+    // Une ligne qui porte des km est, presque toujours, le bloc d'APPROCHE
+    // (« 3 min (0.4 km) ») : ses minutes ne sont pas celles de la course, et
+    // les prendre divisait le tarif par un temps dix fois trop court.
+    //
+    // L'exception est le résumé de course, qu'Uber écrit exactement dans la
+    // même forme au Royaume-Uni : « 55 mins (26.9 mi) ». Là-bas la durée
+    // n'existe NULLE PART ailleurs sur l'écran — l'écarter revenait à n'avoir
+    // aucune durée, donc aucun €/h tant que TomTom n'avait pas répondu.
+    //
+    // On les distingue sans ambiguïté par la distance : celle du résumé est la
+    // distance de la course, par définition.
+    if (/km/i.test(block.text) && !isCourseSummary(block.text, courseDistanceKm)) continue;
     // Bloc d'info véhicule électrique → ces minutes ne sont pas la course.
     if (EV_CONTEXT_REGEX.test(block.text)) continue;
     const normalizedText = normalizeOcrDigits(block.text);
@@ -575,6 +649,22 @@ function extractDuration(
   }
 
   return candidates[0].value;
+}
+
+/**
+ * Cette ligne « N min … D km » est-elle le RÉSUMÉ de la course ?
+ *
+ * Vrai quand la distance qu'elle porte est celle de la course. La tolérance
+ * est large d'un dixième parce que les deux valeurs viennent du même texte,
+ * mais pas forcément du même arrondi : la conversion des miles écrit une
+ * décimale, et la distance retenue a pu passer par un autre chemin.
+ */
+function isCourseSummary(text: string, courseDistanceKm?: number | null): boolean {
+  if (!courseDistanceKm) return false;
+  const m = /(\d{1,3}(?:[.,]\d{1,2})?)\s*km/i.exec(normalizeOcrDigits(text));
+  if (!m) return false;
+  const km = parseFloat(m[1].replace(',', '.'));
+  return Number.isFinite(km) && Math.abs(km - courseDistanceKm) <= 0.1;
 }
 
 // ─── Extraction pickup info (ligne combinée "X min • X,X km") ─────────────────
@@ -664,9 +754,16 @@ function isAddressBlock(block: TextBlock): boolean {
     new RegExp(`[a-zà-üß]+${escapeRegex(s)}(?![a-zà-üß])`, 'i').test(text)
   )) return true;
 
-  // 3. Structure digit-first (FR/UK) : "10 rue de la Paix"
+  // 3. Code sortant + ville : « TW6, Hounslow ». C'est la SEULE forme
+  //    d'adresse qu'Uber affiche au Royaume-Uni pour situer un lieu, et elle
+  //    ne ressemble à aucune des structures ci-dessous — la destination d'une
+  //    course britannique n'était donc pas détectée du tout, et sans elle
+  //    TomTom n'a pas d'itinéraire à calculer.
+  if (scanCountry === 'GB' && UK_OUTWARD_REGEX.test(text)) return true;
+
+  // 4. Structure digit-first (FR/UK) : "10 rue de la Paix"
   if (/^\d{1,4}\s+[a-zà-ü]{5,}/i.test(text)) return true;
-  // 4. Structure word-then-digit (DE/ES/IT) : "Hauptstraße 10", "Calle Alcalá, 10"
+  // 5. Structure word-then-digit (DE/ES/IT) : "Hauptstraße 10", "Calle Alcalá, 10"
   if (/[a-zà-üß]{5,}[\s,]+\d{1,4}\s*$/i.test(text)) return true;
   return false;
 }
@@ -719,7 +816,63 @@ function findAddressBlocks(
     }
   }
 
-  return dedupOverlappingAddresses(candidates);
+  return collapseUkOutwardPairs(dedupOverlappingAddresses(candidates));
+}
+
+/**
+ * Recolle « TW6, Hounslow » à la ligne de détail qui la suit.
+ *
+ * Uber écrit le lieu de prise en charge sur DEUX lignes au Royaume-Uni :
+ *
+ *     TW6, Hounslow
+ *     Terminal 3, Level 3, Row A (Short Stay Car Park 3)
+ *
+ * Les deux sont des candidats une fois le code sortant reconnu — et deux
+ * candidats pour UN lieu décalent tout : la ligne de détail prenait la place de
+ * la destination, et la vraie destination tombait hors des deux premiers.
+ *
+ * On les fusionne donc en un seul candidat plutôt que de choisir. Choisir
+ * aurait coûté quelque chose dans les deux sens : c'est la première ligne qui
+ * GÉOCODE — « Terminal 3, Level 3, Row A » ne désigne aucun point sur Terre
+ * sans sa ville, TomTom rendait un échec et la course retombait sur un
+ * itinéraire estimé, donc sans trafic réel — mais c'est la seconde que le
+ * chauffeur lit pour trouver son client.
+ *
+ * ROYAUME-UNI SEULEMENT, par `isAddressBlock` : ailleurs le code sortant n'est
+ * jamais un candidat, et cette fonction ne trouve rien à fusionner.
+ */
+function collapseUkOutwardPairs(candidates: TextBlock[]): TextBlock[] {
+  if (scanCountry !== 'GB' || candidates.length < 2) return candidates;
+
+  const out: TextBlock[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const head = candidates[i];
+    const next = candidates[i + 1];
+    const isOutwardOnly =
+      UK_OUTWARD_REGEX.test(head.text) && head.text.trim().length <= 40;
+
+    if (isOutwardOnly && next) {
+      const headBottom = head.y + head.height;
+      const adjacent = next.y >= headBottom && next.y - headBottom <= head.height * 1.5;
+      const xOverlap =
+        Math.min(head.x + head.width, next.x + next.width) - Math.max(head.x, next.x);
+      const overlapping = xOverlap >= Math.min(head.width, next.width) * 0.5;
+      // La ligne suivante ne doit pas être elle-même un code sortant : deux
+      // codes qui se suivent, ce sont un départ et une arrivée, pas un lieu.
+      if (adjacent && overlapping && !UK_OUTWARD_REGEX.test(next.text)) {
+        // On garde la ligne de DÉTAIL comme candidat et on écarte l'en-tête.
+        // Le code postal n'est pas perdu : `mergeAddressContinuation` le
+        // retrouve dans les blocs bruts et le recolle devant.
+        //
+        // Écarter plutôt que fusionner n'est pas un détail d'implémentation :
+        // ML Kit ne laisse pas fabriquer de bloc côté Android, et les trois
+        // parsers doivent rendre la même chaîne sur la même capture.
+        continue;
+      }
+    }
+    out.push(head);
+  }
+  return out;
 }
 
 /**
