@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
@@ -40,6 +40,8 @@ import ScanPreview from '../components/ScanPreview';
 import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney } from '../utils/market';
 
 const { width, height } = Dimensions.get('window');
 
@@ -224,7 +226,8 @@ const TAG_ROWS = IS_IOS
 const QUICKREF_STEPS = [1, 2, 3, 4];
 
 const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
-  const { t } = useTranslation();
+  const { t } = useMarketT();
+  const market = useMarket();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const closeTutorial = () => {
@@ -449,7 +452,13 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
     const opacity = scrollX.interpolate({ inputRange, outputRange: [0, 1, 0], extrapolate: 'clamp' });
 
-    const tipText = t(item.tip, { defaultValue: '' });
+    // `{{floor}}` : le seuil donné en exemple est celui du marché.
+    // Conseiller « 20 €/h » à Londres, c'est conseiller un chiffre qui n'a
+    // cours nulle part.
+    const tipText = t(item.tip, {
+      defaultValue: '',
+      floor: formatMoney(market.thresholds.hourly, market),
+    });
     const isInstall = item.key === 'install';
     const isTrigger = item.key === 'trigger';
     const isRecap = item.key === 'recap';

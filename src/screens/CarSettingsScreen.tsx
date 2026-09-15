@@ -272,8 +272,8 @@ const CarSettingsScreen = () => {
       if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 3) {
         hapticError();
         showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.priceInvalid', {
-          defaultValue: 'Prix invalide (entre 0,01 et 3 {{unit}}).',
-          unit: `${market.symbol}/kWh`,
+          defaultValue: 'Prix invalide (entre 0,01 et 3 {{rate}}).',
+          rate: `${market.symbol}/kWh`,
         }) });
         return;
       }
@@ -293,8 +293,8 @@ const CarSettingsScreen = () => {
           type: 'error',
           title: t('common.error', 'Erreur'),
           message: t('carSettings.errors.fuelPriceInvalid', {
-            defaultValue: 'Prix invalide (entre 0,01 et 10 {{unit}}).',
-            unit: `${market.symbol}/L`,
+            defaultValue: 'Prix invalide (entre 0,01 et 10 {{rate}}).',
+            rate: `${market.symbol}/L`,
           }),
         });
         return;

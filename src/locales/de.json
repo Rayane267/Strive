@@ -89,10 +89,10 @@
     "plus": "Plus-Mitglied",
     "free": "Gratis-Mitglied",
     "upgradeLink": "Zu Plus wechseln →",
-    "subscriptionSub": "20 Scans/Tag, €/Std. live…",
+    "subscriptionSub": "20 Scans/Tag, {{cur}}/Std. live…",
     "subscriptionSubActive": "Kündigen, Tarif wechseln…",
     "upgradeCardTitle": "Wechsle zu Strive Plus",
-    "upgradeCardSub": "20 Scans/Tag · €/Std. live · Ohne Bindung",
+    "upgradeCardSub": "20 Scans/Tag · {{cur}}/Std. live · Ohne Bindung",
     "verified": "GEPRÜFTER PARTNER",
     "emailLabel": "E-MAIL",
     "phoneLabel": "TELEFON",
@@ -274,7 +274,7 @@
       "title": "Hör auf, mit Verlust zu fahren",
       "sub": "Plus rechnet sich mit einer einzigen vermiedenen Fahrt",
       "perk1": "20 Scans/Tag",
-      "perk2": "{{unit}} live",
+      "perk2": "{{rate}} live",
       "perk3": "Verlauf"
     },
     "liveActivityPermission": {
@@ -296,7 +296,7 @@
     "info2": "Credits verfallen nie.",
     "info3": "Wechsle zu Plus oder Premium für ein höheres Tageslimit.",
     "upgradeTitle": "Zu Plus wechseln — 20 Scans/Tag",
-    "upgradeSubtitle": "Monatsabo ab 4.99 €",
+    "upgradeSubtitle": "Monatsabo ab {{price}}",
     "purchaseSuccess": "Kauf bestätigt!",
     "creditsAdded": "{{count}} Scan(s) deinem Konto hinzugefügt.",
     "purchaseError": "Fehler",
@@ -321,7 +321,7 @@
     "activeHours": "Aktive Stunden",
     "appDist": "Verteilung",
     "hourlyRate": "Stundensatz",
-    "priceKm": "Preis / km",
+    "priceKm": "Preis / {{unit}}",
     "loading": "Daten werden geladen…",
     "empty": {
       "title": "Noch keine Daten",
@@ -368,10 +368,7 @@
     "empty": "Heute keine Fahrt gescannt.",
     "emptyHint": "Deine Scans erscheinen hier.",
     "emptyCta": "Einen Scan starten",
-    "perHour": "/Std.",
-    "perKm": "/km",
     "min": "Min.",
-    "km": "km",
     "acceptRate": "Annahmequote",
     "filterAll": "Alle · {{count}}",
     "selectDates": "Daten auswählen",
@@ -396,7 +393,6 @@
     "avgCons": "Durchschnittsverbrauch",
     "manualInput": "Manuelle Eingabe (L/100 km)",
     "fuelCost": "Treibstoffkosten",
-    "priceLiter": "Preis pro Liter (€)",
     "proFeatures": "PRO-FUNKTIONEN",
     "upgradeReq": "Abo erforderlich",
     "feat1Title": "Genauer Verbrauch",
@@ -508,8 +504,8 @@
       "required": "Bitte fülle alle Pflichtfelder aus.",
       "saveFailed": "Die Daten konnten nicht gespeichert werden. Versuch es erneut.",
       "consInvalid": "Ungültiger Verbrauch (zwischen 0.1 und 99.9).",
-      "priceInvalid": "Ungültiger Preis (zwischen 0.01 und 3 {{unit}}).",
-      "fuelPriceInvalid": "Ungültiger Preis (zwischen 0.01 und 10 {{unit}})."
+      "priceInvalid": "Ungültiger Preis (zwischen 0.01 und 3 {{rate}}).",
+      "fuelPriceInvalid": "Ungültiger Preis (zwischen 0.01 und 10 {{rate}})."
     },
     "success": {
       "saved": "Profil erfolgreich aktualisiert."
@@ -526,7 +522,7 @@
     "openAccessibility": "Bedienungshilfen öffnen",
     "step1": {
       "title": "Willkommen bei Strive",
-      "desc": "Nimm keine Fahrt mehr blind an. Wir zeigen dir, was sie wirklich bringt – €/Std. und €/km, Verkehr inklusive."
+      "desc": "Nimm keine Fahrt mehr blind an. Wir zeigen dir, was sie wirklich bringt – {{cur}}/Std. und {{cur}}/{{unit}}, Verkehr inklusive."
     },
     "step2": {
       "title": "Richte den Scanner ein",
@@ -542,18 +538,15 @@
       "verdictTake": "ANNEHMEN",
       "verdictThreshold": "Beide Werte liegen über deinen Schwellen ✓",
       "glance": "Was du auf einen Blick siehst:",
-      "metricHr": "€/Std.",
       "metricHrSub": "Stundensatz (mit Anfahrt)",
-      "metricKm": "€/km",
-      "metricKmSub": "Tarif pro gefahrenem km",
       "metricTotal": "Total",
       "metricTotalSub": "Gesamteinnahmen der Fahrt",
       "customizeCta": "Meine Schwellen anpassen",
       "verdictMaybe": "VIELLEICHT",
       "verdictSkip": "ABLEHNEN",
       "hintGood": "Beide Werte liegen über deinen Schwellen ✓",
-      "hintAverage": "Guter €/km, aber der €/Std. zieht nicht mit – du entscheidest",
-      "hintBad": "€/Std. zu tief, lange Distanz – besser meiden"
+      "hintAverage": "Guter {{cur}}/{{unit}}, aber der {{cur}}/Std. zieht nicht mit – du entscheidest",
+      "hintBad": "{{cur}}/Std. zu tief, lange Distanz – besser meiden"
     },
     "quickRef": {
       "ios": {
@@ -562,7 +555,7 @@
         "step2": "Tippe auf AssistiveTouch",
         "step2Sub": "Ohne die App zu verlassen",
         "step3": "Lies das Urteil",
-        "step3Sub": "Echte €/Std. und €/km, Verkehr inklusive",
+        "step3Sub": "Echte {{cur}}/Std. und {{cur}}/{{unit}}, Verkehr inklusive",
         "step4": "Markiere die Fahrt",
         "step4Sub": "Angenommen oder abgelehnt – das füllt deine Statistik"
       },
@@ -572,7 +565,7 @@
         "step2": "Tippe auf die Blase",
         "step2Sub": "Wenn das Angebot erscheint",
         "step3": "Lies das Urteil",
-        "step3Sub": "Echte €/Std. und €/km, Verkehr inklusive",
+        "step3Sub": "Echte {{cur}}/Std. und {{cur}}/{{unit}}, Verkehr inklusive",
         "step4": "Markiere die Fahrt",
         "step4Sub": "Angenommen oder abgelehnt – das füllt deine Statistik"
       }
@@ -655,8 +648,8 @@
       "step3": "Tipp: Tippe auf die Blase, wenn das Angebot auf deinem VTC-Bildschirm erscheint. Kein App-Wechsel nötig.",
       "step3_ios": "Tipp: Das Doppeltippen auf der Rückseite funktioniert auch mit einer (dünnen) Hülle. Kein App-Wechsel nötig.",
       "step4": "Der Tab Statistik zeigt deine Einnahmen pro Tag, pro Plattform und deinen Stundensatz in Echtzeit.",
-      "step5": "Rat: Beginne mit einer Schwelle von mindestens 20 €/Std. und passe sie danach anhand deiner Ergebnisse an.",
-      "step5_ios": "Rat: Beginne mit einer Schwelle von mindestens 20 €/Std. und passe sie danach anhand deiner Ergebnisse an."
+      "step5": "Rat: Beginne mit einer Schwelle von mindestens {{floor}}/Std. und passe sie danach anhand deiner Ergebnisse an.",
+      "step5_ios": "Rat: Beginne mit einer Schwelle von mindestens {{floor}}/Std. und passe sie danach anhand deiner Ergebnisse an."
     },
     "restartVideo": "Video erneut ansehen",
     "recap": {
@@ -717,12 +710,12 @@
       "a5": "Auf Android: Google Play → Abos. Auf iOS: Einstellungen → Dein Name → Abos. Suche Strive und tippe auf Kündigen.",
       "q6": "Sind meine Daten sicher?",
       "a6": "Ja. Der Scan läuft auf deinem Gerät und es wird kein Bildschirmfoto aufbewahrt. Deine Fahrten werden sicher gespeichert, nie verkauft oder weitergegeben, und Strive hat keinerlei Verbindung zu den VTC-Plattformen. Du kannst jederzeit alles unter Profil → Konto löschen.",
-      "q7": "Wie wird mein Stundensatz (€/Std.) berechnet?",
-      "a7": "Strive geht vom Tarif der Fahrt aus, rechnet die Anfahrtszeit zum Kunden dazu und berechnet die tatsächliche Fahrzeit mit dem Verkehr in Echtzeit. Du erhältst deinen echten €/Std., keine Luftlinien-Schätzung.",
+      "q7": "Wie wird mein Stundensatz ({{cur}}/Std.) berechnet?",
+      "a7": "Strive geht vom Tarif der Fahrt aus, rechnet die Anfahrtszeit zum Kunden dazu und berechnet die tatsächliche Fahrzeit mit dem Verkehr in Echtzeit. Du erhältst deinen echten {{cur}}/Std., keine Luftlinien-Schätzung.",
       "q8": "Wie funktionieren Treibstoffkosten und Nettogewinn?",
       "a8": "Ausgehend vom Verbrauch deines Fahrzeugs (L/100 km, oder kWh/100 km bei Elektro) und vom Treibstoffpreis zieht Strive die Kosten jeder Fahrt ab, um deinen Nettogewinn zu zeigen. Bei Elektro kannst du deinen eigenen kWh-Preis unter Profil → Fahrzeug festlegen.",
       "q9": "Was ist der Qualitätswert der Fahrten?",
-      "a9": "Ein Wert von 100, der jeder Fahrt zugeteilt wird, indem ihre €/Std. und €/km mit deinen Schwellen verglichen werden: grün darüber, orange knapp, rot darunter. In der Statistik siehst du auch die Durchschnittsqualität deiner angenommenen Fahrten.",
+      "a9": "Ein Wert von 100, der jeder Fahrt zugeteilt wird, indem ihre {{cur}}/Std. und {{cur}}/{{unit}} mit deinen Schwellen verglichen werden: grün darüber, orange knapp, rot darunter. In der Statistik siehst du auch die Durchschnittsqualität deiner angenommenen Fahrten.",
       "q10": "Wie viele Scans pro Tag?",
       "a10": "3 Scans pro Tag im Gratis-Tarif, 20 pro Tag mit Strive Plus.",
       "q11": "Wie kontaktiere ich den Support?",
@@ -841,7 +834,7 @@
         "sub": "Angebot erfassen → sofortiges Urteil auf deinem Bildschirm."
       },
       "hourly": {
-        "title": "€/Std. live",
+        "title": "{{cur}}/Std. live",
         "sub": "Sieh deinen echten Stundensatz bei jeder Fahrt."
       },
       "filter": {
@@ -850,14 +843,14 @@
       },
       "threshold": {
         "title": "Deine Schwelle, deine Regeln",
-        "sub": "Lege deinen Mindest-€/Std. fest, Strive sortiert."
+        "sub": "Lege deinen Mindest-{{cur}}/Std. fest, Strive sortiert."
       }
     },
     "feat": {
       "scan": "20 Scans pro Tag",
       "scanText": "statt 3 – genug für einen ganzen Arbeitstag.",
       "threshold": "Deine Schwelle, nicht unsere",
-      "thresholdText": "du legst fest, ab welchem €/Std. sich eine Fahrt lohnt.",
+      "thresholdText": "du legst fest, ab welchem {{cur}}/Std. sich eine Fahrt lohnt.",
       "fuel": "Das Netto, nicht das Brutto",
       "fuelText": "der Treibstoff deines Modells bei jeder Fahrt abgezogen, kein Durchschnitt.",
       "history": "Deine ganze Woche",
@@ -876,7 +869,6 @@
     "cancelHint": "Zum Kündigen geh in die Einstellungen von {{store}}.",
     "popular": "BELIEBT",
     "trialRibbon": "7 TAGE GRATIS",
-    "trialFreeLabel": "0.00 € während 7 Tagen",
     "trialThenPrice": "danach {{price}}/Monat",
     "trialHint": "Während der Testphase jederzeit kündbar",
     "monthlyHint": "Ohne Bindung, kündbar in 1 Klick",
@@ -901,8 +893,6 @@
     "plusHeader": "Plus",
     "monthlyTab": "Monatlich",
     "yearlyTab": "Jährlich",
-    "monthlyFallbackPrice": "9.99 €",
-    "yearlyFallbackPrice": "89.99 €",
     "perMonthShort": "/Monat",
     "perYearShort": "/Jahr",
     "perMonthEquiv": "also {{price}}/Monat",
@@ -949,7 +939,7 @@
         "plus": "7 Tage"
       },
       "hourly": {
-        "label": "Stundensatz €/Std.",
+        "label": "Stundensatz {{cur}}/Std.",
         "plus": "Live"
       },
       "support": {
@@ -975,8 +965,8 @@
     "benefit": {
       "plus": {
         "scans": "20 Scans pro Tag statt 3",
-        "thresholds": "Deine Schwellen €/Std. und €/km, nicht unsere",
-        "traffic": "Der €/Std. mit echtem Verkehr berechnet",
+        "thresholds": "Deine Schwellen {{cur}}/Std. und {{cur}}/{{unit}}, nicht unsere",
+        "traffic": "Der {{cur}}/Std. mit echtem Verkehr berechnet",
         "fuel": "Der Treibstoff deines Modells abgezogen",
         "history": "Deine Statistik über 7 Tage am Stück"
       },
@@ -996,8 +986,6 @@
       "premium": "Premium"
     },
     "heroSubPremium": "Keine Grenze mehr, und die App sagt dir, wann du arbeiten sollst – nicht nur, welche Fahrt du nehmen sollst.",
-    "premiumMonthlyFallbackPrice": "19.99 €",
-    "premiumYearlyFallbackPrice": "179.99 €",
     "upgradeTitle": "Was Premium hinzufügt",
     "upgradeSub": "Du behältst alles, was Plus dir schon gibt.",
     "upgradeProrata": "Der Wechsel erfolgt sofort. {{store}} zieht die bereits bezahlte Plus-Zeit ab.",
@@ -1265,7 +1253,7 @@
       "nearby": "Fahrten in der Nähe",
       "nearbyCount_one": "{{count}} verfügbar",
       "nearbyCount_other": "{{count}} verfügbar",
-      "toPickup": "in {{km}} km · {{min}} Min.",
+      "toPickup": "in {{km}} {{unit}} · {{min}} Min.",
       "posted": "vor {{min}} Min.",
       "net": "NETTO FÜR DICH",
       "grossNote": "Von {{gross}} vereinbart · {{referrer}} an den Vermittler · {{platform}} an Strive",

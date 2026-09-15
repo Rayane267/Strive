@@ -14,7 +14,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
@@ -25,14 +25,25 @@ import { buyScanPack, restorePurchases, getStorePrices, isIAPAvailable } from '.
 import { waitForProfileUpdate } from '../services/profileService';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney } from '../utils/market';
 
 // Flip à `true` quand la boutique sera prête. Tant que false, l'onglet reste
 // visible mais affiche un placeholder "Bientôt disponible".
 const SHOP_AVAILABLE = false;
 
+/// Le prix d'appel affiché sous le bandeau « Passer à Plus ».
+///
+/// Il vivait dans les sept fichiers de traduction, libellé « 4,99€ » : une
+/// devise écrite en dur dans une phrase, là où c'est un montant. Le store
+/// reste la source de vérité côté abonnement ; ici c'est une accroche, et
+/// elle suit la devise du marché.
+const ENTRY_PRICE = 4.99;
+
 const ShopScreen = () => {
   const navigation = useNavigation<any>();
-  const { t } = useTranslation();
+  const { t } = useMarketT();
+  const market = useMarket();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, profile, refreshProfile } = useAuth();
   const [purchasing, setPurchasing] = useState<string | null>(null);
@@ -223,7 +234,11 @@ const ShopScreen = () => {
             />
             <View style={styles.upgradeBannerText}>
               <Text style={styles.upgradeBannerTitle}>{t('shop.upgradeTitle')}</Text>
-              <Text style={styles.upgradeBannerSub}>{t('shop.upgradeSubtitle')}</Text>
+              <Text style={styles.upgradeBannerSub}>
+                {t('shop.upgradeSubtitle', {
+                  price: formatMoney(ENTRY_PRICE, market, { decimals: 2 }),
+                })}
+              </Text>
             </View>
             <Feather name="chevron-right" size={20} color={colors.background} />
           </TouchableOpacity>

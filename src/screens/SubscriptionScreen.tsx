@@ -25,7 +25,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { Toast, useToast } from '../components/Toast';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import {
   buySubscription,
   restorePurchases,
@@ -43,6 +43,7 @@ import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
+import { useMarket } from '../hooks/useMarket';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -61,14 +62,14 @@ const TRIAL_DAYS = 7;
 
 /// Montants de repli, en clair, quand le store ne répond pas.
 ///
-/// Jumeaux NUMÉRIQUES de `subscription.monthlyFallbackPrice` /
-/// `yearlyFallbackPrice`, qui n'existaient qu'en chaîne formatée : sans eux, le
-/// prix hebdomadaire et l'ancrage annuel — les deux chiffres qui font choisir —
-/// disparaissaient dès que RevenueCat était injoignable, et l'écran ne montrait
-/// plus que deux prix bruts sans point de comparaison.
+/// Ils ont remplacé des chaînes déjà formatées (« 9,99 € ») logées dans les sept
+/// fichiers de traduction : une devise écrite en dur, que le chauffeur londonien
+/// lisait en euros, et un doublon dont la moitié numérique manquait — le prix
+/// hebdomadaire et l'ancrage annuel, les deux chiffres qui font choisir,
+/// disparaissaient dès que RevenueCat était injoignable.
 ///
-/// ⚠️ À garder synchro avec les deux clés i18n ci-dessus. Le store reste la
-/// source de vérité : ces valeurs ne servent QUE quand il ne répond pas.
+/// Le store reste la source de vérité ; ces montants ne servent QUE quand il ne
+/// répond pas, et `money()` les habille alors de la devise du marché.
 const FALLBACK_AMOUNT: Record<SellTier, Record<Cycle, number>> = {
   plus:    { monthly: 9.99,  yearly: 89.99 },
   premium: { monthly: 19.99, yearly: 179.99 },
@@ -149,7 +150,8 @@ const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useMarketT();
+  const market = useMarket();
 
   /// L'écran est le même quel qu'en soit le chemin, mais pas le moment. Arriver
   /// ici parce qu'on vient d'épuiser ses 30 scans offerts, ce n'est pas y venir
@@ -286,7 +288,7 @@ const SubscriptionScreen = () => {
   const rawOf = (cy: Cycle) =>
     pkgOf(sellTier, cy)?.rawPrice || FALLBACK_AMOUNT[sellTier][cy];
   const currencyOf = (cy: Cycle) =>
-    pkgOf(sellTier, cy)?.currencyCode || 'EUR';
+    pkgOf(sellTier, cy)?.currencyCode || market.currency;
 
   const money = (amount: number, currency: string): string => {
     try {
@@ -325,16 +327,7 @@ const SubscriptionScreen = () => {
   const isTrial = (cy: Cycle) => !!trialByProduct[PRODUCT_ID[sellTier][cy]];
 
   const priceOf = (cy: Cycle) =>
-    pkgOf(sellTier, cy)?.priceString ??
-    t(
-      sellTier === 'premium'
-        ? cy === 'yearly'
-          ? 'subscription.premiumYearlyFallbackPrice'
-          : 'subscription.premiumMonthlyFallbackPrice'
-        : cy === 'yearly'
-          ? 'subscription.yearlyFallbackPrice'
-          : 'subscription.monthlyFallbackPrice',
-    );
+    pkgOf(sellTier, cy)?.priceString ?? money(rawOf(cy), currencyOf(cy));
 
   const mainPriceText = priceOf(cycle);
 

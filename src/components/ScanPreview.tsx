@@ -37,7 +37,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
 import { useMarket } from '../hooks/useMarket';
@@ -80,7 +80,7 @@ export function buildPreviewData(market: Market) {
 }
 
 const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
-  const { t } = useTranslation();
+  const { t } = useMarketT();
   const market = useMarket();
   const [idx, setIdx] = useState(0);
   const previews = useMemo(() => buildPreviewData(market), [market]);

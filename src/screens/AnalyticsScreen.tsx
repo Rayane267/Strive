@@ -20,7 +20,7 @@ import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
@@ -73,7 +73,7 @@ const AnalyticsScreen = () => {
   const market = useMarket();
   /** Montants à deux décimales, dans la devise du marché. */
   const money2 = (n: number) => formatMoney(n, market, { decimals: 2 });
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useMarketT();
   const { user } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();

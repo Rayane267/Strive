@@ -2121,7 +2121,7 @@ const DashboardScreen = () => {
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
                   <Feather name="trending-up" size={12} color={colors.textMuted} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', { defaultValue: '{{unit}} en direct', unit: hourlyUnit(market) })}</Text>
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', { defaultValue: '{{rate}} en direct', rate: hourlyUnit(market) })}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>

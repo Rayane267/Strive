@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 
 import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
@@ -19,7 +19,7 @@ import SplitBar from '../components/SplitBar';
 import AvatarView from '../components/AvatarView';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
-import { decimalSeparator } from '../utils/market';
+import { decimalSeparator, toMarketDistance } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
@@ -54,7 +54,7 @@ const HOWTO_SEEN_KEY = '@strive_network_howto';
  */
 const NetworkReceiveScreen = () => {
   const market = useMarket();
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useMarketT();
   const navigation = useNavigation<any>();
 
   const [howtoOpen, setHowtoOpen] = useState(false);
@@ -95,7 +95,9 @@ const NetworkReceiveScreen = () => {
               <Feather name="navigation" size={12} color={colors.primary} />
               <Text style={styles.distText}>
                 {t('rideNetwork.receive.toPickup', {
-                  km: offer.toPickupKm.toFixed(1).replace('.', decimalSeparator(i18n.language)),
+                  km: toMarketDistance(offer.toPickupKm, market)
+                    .toFixed(1)
+                    .replace('.', decimalSeparator(i18n.language)),
                   min: offer.toPickupMin,
                 })}
               </Text>

@@ -41,7 +41,7 @@ import { supabase } from '../services/supabase';
 import { registerPushToken, unregisterPushToken, getNotificationStatus, isPushEffectivelyOn } from '../services/notificationService';
 import { openSettingsFor } from '../utils/appSettings';
 import { useAuth } from '../context/AuthContext';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import AvatarView from '../components/AvatarView';
 import { hapticLight } from '../utils/haptics';
 import { fetchRides, effectiveFare } from '../services/ridesService';
@@ -103,7 +103,7 @@ type MenuItem = {
 const ProfileScreen = () => {
   const market = useMarket();
   const navigation = useNavigation<any>();
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useMarketT();
   const tabBarHeight = useBottomTabBarHeight();
   const { profile, user, refreshProfile } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);

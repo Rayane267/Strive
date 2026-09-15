@@ -89,10 +89,10 @@
     "plus": "Miembro Plus",
     "free": "Miembro gratuito",
     "upgradeLink": "Pasar a Plus →",
-    "subscriptionSub": "20 escaneos/día, €/h en directo…",
+    "subscriptionSub": "20 escaneos/día, {{cur}}/h en directo…",
     "subscriptionSubActive": "Cancelar, cambiar de plan…",
     "upgradeCardTitle": "Pásate a Strive Plus",
-    "upgradeCardSub": "20 escaneos/día · €/h en directo · Sin permanencia",
+    "upgradeCardSub": "20 escaneos/día · {{cur}}/h en directo · Sin permanencia",
     "verified": "SOCIO VERIFICADO",
     "emailLabel": "CORREO",
     "phoneLabel": "TELÉFONO",
@@ -274,7 +274,7 @@
       "title": "Deja de conducir a pérdida",
       "sub": "Plus se paga solo con un único viaje evitado",
       "perk1": "20 escaneos/día",
-      "perk2": "{{unit}} en directo",
+      "perk2": "{{rate}} en directo",
       "perk3": "Historial"
     },
     "liveActivityPermission": {
@@ -296,7 +296,7 @@
     "info2": "Los créditos nunca caducan.",
     "info3": "Pásate a Plus o Premium para tener una cuota diaria mayor.",
     "upgradeTitle": "Pásate a Plus — 20 escaneos/día",
-    "upgradeSubtitle": "Suscripción mensual desde 4,99 €",
+    "upgradeSubtitle": "Suscripción mensual desde {{price}}",
     "purchaseSuccess": "¡Compra confirmada!",
     "creditsAdded": "{{count}} escaneo(s) añadido(s) a tu cuenta.",
     "purchaseError": "Error",
@@ -321,7 +321,7 @@
     "activeHours": "Horas activas",
     "appDist": "Reparto",
     "hourlyRate": "Tarifa por hora",
-    "priceKm": "Precio / km",
+    "priceKm": "Precio / {{unit}}",
     "loading": "Cargando los datos…",
     "empty": {
       "title": "Aún no hay datos",
@@ -368,10 +368,7 @@
     "empty": "Hoy no has escaneado ningún viaje.",
     "emptyHint": "Tus escaneos aparecerán aquí.",
     "emptyCta": "Iniciar un escaneo",
-    "perHour": "/h",
-    "perKm": "/km",
     "min": "min",
-    "km": "km",
     "acceptRate": "Tasa acept.",
     "filterAll": "Todo · {{count}}",
     "selectDates": "Seleccionar las fechas",
@@ -396,7 +393,6 @@
     "avgCons": "Consumo medio",
     "manualInput": "Entrada manual (L/100 km)",
     "fuelCost": "Coste del combustible",
-    "priceLiter": "Precio por litro (€)",
     "proFeatures": "FUNCIONES PRO",
     "upgradeReq": "Suscripción necesaria",
     "feat1Title": "Consumo preciso",
@@ -508,8 +504,8 @@
       "required": "Rellena todos los campos obligatorios.",
       "saveFailed": "No se han podido guardar los datos. Inténtalo de nuevo.",
       "consInvalid": "Consumo no válido (entre 0,1 y 99,9).",
-      "priceInvalid": "Precio no válido (entre 0,01 y 3 {{unit}}).",
-      "fuelPriceInvalid": "Precio no válido (entre 0,01 y 10 {{unit}})."
+      "priceInvalid": "Precio no válido (entre 0,01 y 3 {{rate}}).",
+      "fuelPriceInvalid": "Precio no válido (entre 0,01 y 10 {{rate}})."
     },
     "success": {
       "saved": "Perfil actualizado correctamente."
@@ -526,7 +522,7 @@
     "openAccessibility": "Abrir Accesibilidad",
     "step1": {
       "title": "Bienvenido a Strive",
-      "desc": "No vuelvas a aceptar un viaje a ciegas. Te mostramos lo que deja de verdad — €/h y €/km, tráfico incluido."
+      "desc": "No vuelvas a aceptar un viaje a ciegas. Te mostramos lo que deja de verdad — {{cur}}/h y {{cur}}/{{unit}}, tráfico incluido."
     },
     "step2": {
       "title": "Configura el escáner",
@@ -542,18 +538,15 @@
       "verdictTake": "ACEPTAR",
       "verdictThreshold": "Las dos métricas superan tus umbrales ✓",
       "glance": "Lo que ves de un vistazo:",
-      "metricHr": "€/h",
       "metricHrSub": "Tarifa por hora (con aproximación)",
-      "metricKm": "€/km",
-      "metricKmSub": "Tarifa por km recorrido",
       "metricTotal": "Total",
       "metricTotalSub": "Ganancias totales del viaje",
       "customizeCta": "Personalizar mis umbrales",
       "verdictMaybe": "QUIZÁ",
       "verdictSkip": "RECHAZAR",
       "hintGood": "Las dos métricas superan tus umbrales ✓",
-      "hintAverage": "Buen €/km pero el €/h no acompaña — tú decides",
-      "hintBad": "€/h demasiado bajo, mucha distancia — a evitar"
+      "hintAverage": "Buen {{cur}}/{{unit}} pero el {{cur}}/h no acompaña — tú decides",
+      "hintBad": "{{cur}}/h demasiado bajo, mucha distancia — a evitar"
     },
     "quickRef": {
       "ios": {
@@ -562,7 +555,7 @@
         "step2": "Pulsa AssistiveTouch",
         "step2Sub": "Sin salir de la aplicación",
         "step3": "Lee el veredicto",
-        "step3Sub": "€/h y €/km reales, tráfico incluido",
+        "step3Sub": "{{cur}}/h y {{cur}}/{{unit}} reales, tráfico incluido",
         "step4": "Marca el viaje",
         "step4Sub": "Aceptado o rechazado — es lo que llena tus estadísticas"
       },
@@ -572,7 +565,7 @@
         "step2": "Toca la burbuja",
         "step2Sub": "Cuando aparezca la oferta",
         "step3": "Lee el veredicto",
-        "step3Sub": "€/h y €/km reales, tráfico incluido",
+        "step3Sub": "{{cur}}/h y {{cur}}/{{unit}} reales, tráfico incluido",
         "step4": "Marca el viaje",
         "step4Sub": "Aceptado o rechazado — es lo que llena tus estadísticas"
       }
@@ -596,7 +589,7 @@
     },
     "step3": {
       "title": "Acepta o rechaza en un instante",
-      "desc": "Toca la burbuja cuando aparezca una oferta. Strive te muestra la tarifa por hora y por km en tiempo real. Verde = adelante, rojo = rechazar."
+      "desc": "Toca la burbuja cuando aparezca una oferta. Strive te muestra la tarifa por hora y por {{unit}} en tiempo real. Verde = adelante, rojo = rechazar."
     },
     "iosTrigger": {
       "recommended": "★ Recomendado — Lo más rápido",
@@ -655,8 +648,8 @@
       "step3": "Consejo: toca la burbuja cuando la oferta aparezca en tu pantalla VTC. No hace falta cambiar de app.",
       "step3_ios": "Consejo: el doble toque en la parte trasera funciona incluso con funda (fina). No hace falta cambiar de app.",
       "step4": "La pestaña Estadísticas muestra tus ganancias por día, por plataforma y tu tarifa por hora en tiempo real.",
-      "step5": "Consejo: empieza con un umbral mínimo de 20 €/h y ajústalo después según tus resultados.",
-      "step5_ios": "Consejo: empieza con un umbral mínimo de 20 €/h y ajústalo después según tus resultados."
+      "step5": "Consejo: empieza con un umbral mínimo de {{floor}}/h y ajústalo después según tus resultados.",
+      "step5_ios": "Consejo: empieza con un umbral mínimo de {{floor}}/h y ajústalo después según tus resultados."
     },
     "restartVideo": "Volver a ver el vídeo",
     "recap": {
@@ -712,17 +705,17 @@
       "q3": "¿Por qué no aparece la burbuja?",
       "a3": "Comprueba que los dos permisos están concedidos en la pantalla de configuración: «Mostrar sobre otras apps» y «Servicio de accesibilidad» deben estar activados.",
       "q4": "¿Cómo cambio mis umbrales mínimos?",
-      "a4": "Ve a Perfil → Preferencias de viaje. Ajusta los controles de la tarifa por hora y por km. Los cambios se aplican de inmediato.",
+      "a4": "Ve a Perfil → Preferencias de viaje. Ajusta los controles de la tarifa por hora y por {{unit}}. Los cambios se aplican de inmediato.",
       "q5": "¿Cómo cancelo mi suscripción Plus?",
       "a5": "En Android: Google Play → Suscripciones. En iOS: Ajustes → Tu nombre → Suscripciones. Busca Strive y pulsa Cancelar.",
       "q6": "¿Están seguros mis datos?",
       "a6": "Sí. El escaneo se hace en tu dispositivo y no se guarda ninguna captura de pantalla. Tus viajes se almacenan de forma segura, nunca se venden ni se ceden, y Strive no tiene ningún vínculo con las plataformas VTC. Puedes borrarlo todo cuando quieras desde Perfil → Cuenta.",
-      "q7": "¿Cómo se calcula mi tarifa por hora (€/h)?",
-      "a7": "Strive parte de la tarifa del viaje, suma el tiempo de aproximación hasta el cliente y calcula el tiempo de trayecto real con el tráfico en tiempo real. Obtienes tu €/h real, no una estimación en línea recta.",
+      "q7": "¿Cómo se calcula mi tarifa por hora ({{cur}}/h)?",
+      "a7": "Strive parte de la tarifa del viaje, suma el tiempo de aproximación hasta el cliente y calcula el tiempo de trayecto real con el tráfico en tiempo real. Obtienes tu {{cur}}/h real, no una estimación en línea recta.",
       "q8": "¿Cómo funcionan el coste de combustible y el beneficio neto?",
       "a8": "A partir del consumo de tu vehículo (L/100 km, o kWh/100 km en eléctrico) y del precio del combustible, Strive descuenta el coste de cada viaje para mostrar tu beneficio neto. En eléctrico puedes fijar tu propio precio por kWh en Perfil → Vehículo.",
       "q9": "¿Qué es la puntuación de calidad de los viajes?",
-      "a9": "Una puntuación sobre 100 que se asigna a cada viaje comparando sus €/h y €/km con tus umbrales: verde por encima, naranja cerca, rojo por debajo. En Estadísticas también ves la calidad media de tus viajes aceptados.",
+      "a9": "Una puntuación sobre 100 que se asigna a cada viaje comparando sus {{cur}}/h y {{cur}}/{{unit}} con tus umbrales: verde por encima, naranja cerca, rojo por debajo. En Estadísticas también ves la calidad media de tus viajes aceptados.",
       "q10": "¿Cuántos escaneos al día?",
       "a10": "3 escaneos al día con el plan gratuito, 20 al día con Strive Plus.",
       "q11": "¿Cómo contacto con el soporte?",
@@ -841,7 +834,7 @@
         "sub": "Captura la oferta → veredicto instantáneo en tu pantalla."
       },
       "hourly": {
-        "title": "€/h en directo",
+        "title": "{{cur}}/h en directo",
         "sub": "Mira tu tarifa por hora real en cada viaje."
       },
       "filter": {
@@ -850,14 +843,14 @@
       },
       "threshold": {
         "title": "Tu umbral, tus reglas",
-        "sub": "Define tu €/h mínimo y Strive hace la criba."
+        "sub": "Define tu {{cur}}/h mínimo y Strive hace la criba."
       }
     },
     "feat": {
       "scan": "20 escaneos al día",
       "scanText": "en lugar de 3 — suficiente para aguantar una jornada completa.",
       "threshold": "Tu umbral, no el nuestro",
-      "thresholdText": "tú fijas el €/h a partir del cual un viaje merece la pena.",
+      "thresholdText": "tú fijas el {{cur}}/h a partir del cual un viaje merece la pena.",
       "fuel": "El neto, no el bruto",
       "fuelText": "el combustible de tu modelo descontado en cada viaje, no una media.",
       "history": "Tu semana entera",
@@ -876,7 +869,6 @@
     "cancelHint": "Para cancelar, ve a los ajustes de {{store}}.",
     "popular": "POPULAR",
     "trialRibbon": "7 DÍAS GRATIS",
-    "trialFreeLabel": "0,00 € durante 7 días",
     "trialThenPrice": "después {{price}}/mes",
     "trialHint": "Cancelable en cualquier momento durante la prueba",
     "monthlyHint": "Sin permanencia, cancelable en 1 clic",
@@ -901,8 +893,6 @@
     "plusHeader": "Plus",
     "monthlyTab": "Mensual",
     "yearlyTab": "Anual",
-    "monthlyFallbackPrice": "9,99 €",
-    "yearlyFallbackPrice": "89,99 €",
     "perMonthShort": "/mes",
     "perYearShort": "/año",
     "perMonthEquiv": "es decir {{price}}/mes",
@@ -949,7 +939,7 @@
         "plus": "7 días"
       },
       "hourly": {
-        "label": "Tarifa por hora €/h",
+        "label": "Tarifa por hora {{cur}}/h",
         "plus": "En directo"
       },
       "support": {
@@ -975,8 +965,8 @@
     "benefit": {
       "plus": {
         "scans": "20 escaneos al día en lugar de 3",
-        "thresholds": "Tus umbrales €/h y €/km, no los nuestros",
-        "traffic": "El €/h calculado con el tráfico real",
+        "thresholds": "Tus umbrales {{cur}}/h y {{cur}}/{{unit}}, no los nuestros",
+        "traffic": "El {{cur}}/h calculado con el tráfico real",
         "fuel": "El combustible de tu modelo descontado",
         "history": "Tus estadísticas de 7 días seguidos"
       },
@@ -996,8 +986,6 @@
       "premium": "Premium"
     },
     "heroSubPremium": "Sin ningún límite, y la app te dice cuándo trabajar — no solo qué viaje aceptar.",
-    "premiumMonthlyFallbackPrice": "19,99 €",
-    "premiumYearlyFallbackPrice": "179,99 €",
     "upgradeTitle": "Lo que añade Premium",
     "upgradeSub": "Conservas todo lo que ya te da Plus.",
     "upgradeProrata": "El cambio es inmediato. {{store}} descuenta el tiempo ya pagado de Plus.",
@@ -1265,7 +1253,7 @@
       "nearby": "Viajes cerca",
       "nearbyCount_one": "{{count}} disponible",
       "nearbyCount_other": "{{count}} disponibles",
-      "toPickup": "a {{km}} km · {{min}} min",
+      "toPickup": "a {{km}} {{unit}} · {{min}} min",
       "posted": "hace {{min}} min",
       "net": "NETO PARA TI",
       "grossNote": "Sobre {{gross}} acordados · {{referrer}} para quien lo trajo · {{platform}} para Strive",

@@ -89,10 +89,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
-    "subscriptionSub": "20 scans/day, live €/h...",
+    "subscriptionSub": "20 scans/day, live {{cur}}/h...",
     "subscriptionSubActive": "Cancel, change plan...",
     "upgradeCardTitle": "Upgrade to Strive Plus",
-    "upgradeCardSub": "20 scans/day · Live €/h · No commitment",
+    "upgradeCardSub": "20 scans/day · Live {{cur}}/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -274,7 +274,7 @@
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
       "perk1": "20 scans/day",
-      "perk2": "Live {{unit}}",
+      "perk2": "Live {{rate}}",
       "perk3": "History"
     },
     "liveActivityPermission": {
@@ -296,7 +296,7 @@
     "info2": "Credits never expire.",
     "info3": "Upgrade to Plus or Premium for a higher daily quota.",
     "upgradeTitle": "Go Plus — 20 scans/day",
-    "upgradeSubtitle": "Monthly plan from €4.99",
+    "upgradeSubtitle": "Monthly plan from {{price}}",
     "purchaseSuccess": "Purchase confirmed!",
     "creditsAdded": "{{count}} scan(s) added to your account.",
     "purchaseError": "Error",
@@ -321,7 +321,7 @@
     "activeHours": "Active Hours",
     "appDist": "App Distribution",
     "hourlyRate": "Hourly Rate",
-    "priceKm": "Price / km",
+    "priceKm": "Price / {{unit}}",
     "loading": "Loading data…",
     "empty": {
       "title": "No data yet",
@@ -368,10 +368,7 @@
     "empty": "No rides scanned today.",
     "emptyHint": "Your scans will appear here.",
     "emptyCta": "Start a scan",
-    "perHour": "/hr",
-    "perKm": "/km",
     "min": "min",
-    "km": "km",
     "acceptRate": "Accept. rate",
     "filterAll": "All · {{count}}",
     "selectDates": "Select date range",
@@ -396,7 +393,6 @@
     "avgCons": "Average Consumption",
     "manualInput": "Manual input (L/100km)",
     "fuelCost": "Fuel Cost",
-    "priceLiter": "Price per Liter (€)",
     "proFeatures": "PRO FEATURES",
     "upgradeReq": "Upgrade required",
     "feat1Title": "Precise Fuel Consumption",
@@ -508,8 +504,8 @@
       "required": "Please fill in all required fields.",
       "saveFailed": "Unable to save data. Please try again.",
       "consInvalid": "Invalid consumption (between 0.1 and 99.9).",
-      "priceInvalid": "Invalid price (between 0.01 and 3 {{unit}}).",
-      "fuelPriceInvalid": "Invalid price (between 0.01 and 10 {{unit}})."
+      "priceInvalid": "Invalid price (between 0.01 and 3 {{rate}}).",
+      "fuelPriceInvalid": "Invalid price (between 0.01 and 10 {{rate}})."
     },
     "success": {
       "saved": "Profile updated successfully."
@@ -526,7 +522,7 @@
     "openAccessibility": "Open Accessibility",
     "step1": {
       "title": "Welcome to Strive",
-      "desc": "Never accept a ride blind again. We show you what it actually pays — real €/h and €/km, traffic included."
+      "desc": "Never accept a ride blind again. We show you what it actually pays — real {{cur}}/h and {{cur}}/{{unit}}, traffic included."
     },
     "step2": {
       "title": "Set up the scanner",
@@ -542,18 +538,15 @@
       "verdictTake": "TAKE",
       "verdictThreshold": "Both metrics exceed your minimums ✓",
       "glance": "What you see at a glance:",
-      "metricHr": "€/hr",
       "metricHrSub": "Hourly rate (with pickup)",
-      "metricKm": "€/km",
-      "metricKmSub": "Rate per km driven",
       "metricTotal": "Total",
       "metricTotalSub": "Total trip earnings",
       "customizeCta": "Customize my thresholds",
       "verdictMaybe": "MAYBE",
       "verdictSkip": "SKIP",
       "hintGood": "Both metrics exceed your minimums ✓",
-      "hintAverage": "Good €/km but the €/h doesn't follow — your call",
-      "hintBad": "€/h too low, long distance — skip this one"
+      "hintAverage": "Good {{cur}}/{{unit}} but the {{cur}}/h doesn't follow — your call",
+      "hintBad": "{{cur}}/h too low, long distance — skip this one"
     },
     "quickRef": {
       "ios": {
@@ -562,7 +555,7 @@
         "step2": "Press AssistiveTouch",
         "step2Sub": "Without leaving the app",
         "step3": "Read the verdict",
-        "step3Sub": "Real €/h and €/km, traffic included",
+        "step3Sub": "Real {{cur}}/h and {{cur}}/{{unit}}, traffic included",
         "step4": "Mark the ride",
         "step4Sub": "Taken or declined — that's what fills your stats"
       },
@@ -572,7 +565,7 @@
         "step2": "Tap the bubble",
         "step2Sub": "When the offer appears",
         "step3": "Read the verdict",
-        "step3Sub": "Real €/h and €/km, traffic included",
+        "step3Sub": "Real {{cur}}/h and {{cur}}/{{unit}}, traffic included",
         "step4": "Mark the ride",
         "step4Sub": "Taken or declined — that's what fills your stats"
       }
@@ -596,7 +589,7 @@
     },
     "step3": {
       "title": "Accept or decline instantly",
-      "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline."
+      "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and {{unit}} rates in real time. Green = go, Red = decline."
     },
     "iosTrigger": {
       "recommended": "★ Recommended — Fastest option",
@@ -655,8 +648,8 @@
       "step3": "Pro tip: tap the bubble when an offer appears on your VTC app. No need to switch apps.",
       "step3_ios": "Pro tip: Back Tap works through a thin case. No need to switch apps.",
       "step4": "The Analytics tab shows daily earnings, platform breakdown and your real-time hourly rate.",
-      "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
-      "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
+      "step5": "Tip: start with a {{floor}}/hr minimum threshold, then adjust based on your actual results.",
+      "step5_ios": "Tip: start with a {{floor}}/hr minimum threshold, then adjust based on your actual results."
     },
     "restartVideo": "Replay video",
     "recap": {
@@ -712,17 +705,17 @@
       "q3": "Why doesn't the bubble appear?",
       "a3": "Make sure both permissions are granted in the scanner setup screen: \"Display over other apps\" and \"Accessibility service\" must both be enabled.",
       "q4": "How do I change my minimum rates?",
-      "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-km rate. Changes apply immediately.",
+      "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-{{unit}} rate. Changes apply immediately.",
       "q5": "How do I cancel my Plus subscription?",
       "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
       "q6": "Is my data safe?",
       "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account.",
-      "q7": "How is my hourly rate (€/h) calculated?",
-      "a7": "Strive starts from the ride fare, adds the pickup time to reach the rider, and computes the real drive time using live traffic. You get your true €/h, not a straight-line guess.",
+      "q7": "How is my hourly rate ({{cur}}/h) calculated?",
+      "a7": "Strive starts from the ride fare, adds the pickup time to reach the rider, and computes the real drive time using live traffic. You get your true {{cur}}/h, not a straight-line guess.",
       "q8": "How do fuel cost and net profit work?",
-      "a8": "From your vehicle's consumption (L/100km, or kWh/100km for electric) and the fuel price, Strive deducts each ride's cost to show your net profit. For electric, you can set your own €/kWh price in Profile → Vehicle.",
+      "a8": "From your vehicle's consumption (L/100km, or kWh/100km for electric) and the fuel price, Strive deducts each ride's cost to show your net profit. For electric, you can set your own {{cur}}/kWh price in Profile → Vehicle.",
       "q9": "What is the ride quality score?",
-      "a9": "A score out of 100 given to each ride by comparing its €/h and €/km to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
+      "a9": "A score out of 100 given to each ride by comparing its {{cur}}/h and {{cur}}/{{unit}} to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
       "q10": "How many scans per day?",
       "a10": "3 scans per day on the free plan, 20 per day with Strive Plus.",
       "q11": "How do I contact support?",
@@ -833,7 +826,7 @@
         "sub": "Snap the offer → instant verdict on your screen."
       },
       "hourly": {
-        "title": "Live €/h",
+        "title": "Live {{cur}}/h",
         "sub": "See your real hourly rate on every ride."
       },
       "filter": {
@@ -842,14 +835,14 @@
       },
       "threshold": {
         "title": "Your threshold, your rules",
-        "sub": "Set your min €/h, Strive filters the rest."
+        "sub": "Set your min {{cur}}/h, Strive filters the rest."
       }
     },
     "feat": {
       "scan": "20 scans a day",
       "scanText": "instead of 3 — enough to cover a full day's shift.",
       "threshold": "Your floor, not ours",
-      "thresholdText": "you set the €/h at which a ride is worth taking.",
+      "thresholdText": "you set the {{cur}}/h at which a ride is worth taking.",
       "fuel": "Net, not gross",
       "fuelText": "your model's real fuel consumption deducted on every ride, not an average.",
       "history": "Your whole week",
@@ -868,7 +861,6 @@
     "cancelHint": "To cancel, go to your {{store}} settings.",
     "popular": "POPULAR",
     "trialRibbon": "7 DAYS FREE",
-    "trialFreeLabel": "€0.00 for 7 days",
     "trialThenPrice": "then {{price}}/mo",
     "trialHint": "Cancel anytime during the trial",
     "monthlyHint": "No commitment, cancel in 1 tap",
@@ -893,8 +885,6 @@
     "plusHeader": "Plus",
     "monthlyTab": "Monthly",
     "yearlyTab": "Yearly",
-    "monthlyFallbackPrice": "€9.99",
-    "yearlyFallbackPrice": "€89.99",
     "perMonthShort": "/mo",
     "perYearShort": "/yr",
     "perMonthEquiv": "just {{price}}/mo",
@@ -941,7 +931,7 @@
         "plus": "7 days"
       },
       "hourly": {
-        "label": "Hourly rate €/h",
+        "label": "Hourly rate {{cur}}/h",
         "plus": "Live"
       },
       "support": {
@@ -967,8 +957,8 @@
     "benefit": {
       "plus": {
         "scans": "20 scans a day instead of 3",
-        "thresholds": "Your own €/h and €/km thresholds",
-        "traffic": "€/h based on real traffic, not straight-line",
+        "thresholds": "Your own {{cur}}/h and {{cur}}/{{unit}} thresholds",
+        "traffic": "{{cur}}/h based on real traffic, not straight-line",
         "fuel": "Your model's fuel cost deducted",
         "history": "Your stats over 7 days at a time"
       },
@@ -988,8 +978,6 @@
       "premium": "Premium"
     },
     "heroSubPremium": "No limits left, and the app tells you when to drive — not just which ride to take.",
-    "premiumMonthlyFallbackPrice": "€19.99",
-    "premiumYearlyFallbackPrice": "€179.99",
     "upgradeTitle": "What Premium adds",
     "upgradeSub": "You keep everything Plus already gives you.",
     "upgradeProrata": "The change is immediate. {{store}} credits the time you already paid on Plus.",
@@ -1257,7 +1245,7 @@
       "nearby": "Rides nearby",
       "nearbyCount_one": "{{count}} available",
       "nearbyCount_other": "{{count}} available",
-      "toPickup": "{{km}} km · {{min}} min away",
+      "toPickup": "{{km}} {{unit}} · {{min}} min away",
       "posted": "{{min}} min ago",
       "net": "NET FOR YOU",
       "grossNote": "Out of {{gross}} agreed · {{referrer}} to the driver who brought it · {{platform}} to Strive",

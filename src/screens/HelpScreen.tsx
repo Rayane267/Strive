@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { radius } from '../theme/radius';
@@ -33,7 +33,9 @@ const SUPPORT_EMAIL = 'contact@striveapp.fr';
 const FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11'] as const;
 
 const HelpScreen = () => {
-  const { t } = useTranslation();
+  // Les questions sont interrogées par clef construite : la devise ne peut
+  // pas être passée question par question.
+  const { t } = useMarketT();
   const navigation = useNavigation<any>();
   const [openKey, setOpenKey] = useState<string | null>(null);
 
