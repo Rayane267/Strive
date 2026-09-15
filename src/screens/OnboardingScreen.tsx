@@ -547,9 +547,14 @@ const OnboardingScreen = ({
             driver_status: regime?.id ?? null,
             social_rate: regime?.rate ?? null,
             min_hourly_rate: derived.hourly,
-            // La colonne dit « km » pour des raisons d'historique ; au
-            // Royaume-Uni elle porte des £ par MILE. C'est `profiles.country`
-            // qui en donne l'unité.
+            // DES KILOMÈTRES, sur les six marchés — la colonne dit ce qu'elle
+            // porte. Le commentaire affirmait ici l'inverse (« au Royaume-Uni
+            // elle porte des £ par MILE »), reste d'un état antérieur : depuis
+            // que les seuils sont posés par kilomètre partout, le scanner, la
+            // bulle et le verdict natif comparent tous cette valeur à un
+            // `km_rate` métrique. `derived.distance` sort de `thresholds.scale`,
+            // qui est métrique lui aussi — rien à convertir, et surtout rien à
+            // « corriger » en s'appuyant sur l'ancienne note.
             min_km_rate: derived.distance,
           })
         : Promise.resolve(),

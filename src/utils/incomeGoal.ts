@@ -148,7 +148,12 @@ export function deriveThreshold(
  * L'échelle NE SE DÉRIVE PAS de l'objectif : il faudrait connaître la vitesse
  * moyenne du chauffeur, inconnue à l'onboarding. Elle est donc calée sur les
  * paliers du tutoriel — et c'est le marché qui dit lesquels, puisqu'un palier
- * britannique s'exprime en £ par mile.
+ * britannique s'exprime en livres.
+ *
+ * PAR KILOMÈTRE, y compris au Royaume-Uni : `thresholds.scale` est métrique sur
+ * les six marchés, et la valeur qui sort d'ici part telle quelle dans
+ * `preferences.min_km_rate`, que le verdict natif compare à un `km_rate`
+ * métrique. Le mile n'existe qu'à l'affichage, via `toMarketRate`.
  */
 export function distanceForHourly(hourly: number, market: Market): number {
   const scale = market.thresholds.scale;

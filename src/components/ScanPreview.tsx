@@ -41,7 +41,7 @@ import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, type Market } from '../utils/market';
+import { formatMoney, toMarketDistance, type Market } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { strokeWidth } from '../theme/stroke';
@@ -67,13 +67,25 @@ export function buildPreviewData(market: Market) {
     // Puis on RELIT l'horaire et le kilométrique depuis ce tarif : ce que la
     // maquette montre doit se vérifier de tête avec les deux autres chiffres.
     const hourly = Math.round((fare * 60) / c.duration);
-    const rate = floor.distance * c.rateX;
-    const distance = (fare / rate).toFixed(1);
+    // `floor.distance` est un seuil PAR KILOMÈTRE sur les six marchés, Royaume-Uni
+    // compris — `utils/market.ts` le pose ainsi pour que la comparaison au
+    // `km_rate` des courses reste homogène. La distance qu'on en tire est donc
+    // en kilomètres, et il faut la ramener à l'unité du chauffeur avant de lui
+    // coller « mi » derrière.
+    //
+    // Sans ça, la maquette britannique montrait une course de 9,7 km étiquetée
+    // « 9.7mi » et un taux par kilomètre étiqueté « /mi » : un seuil 1,6× trop
+    // bas, sur l'écran même qui explique au chauffeur ce que l'app sait faire.
+    const distanceKm = fare / (floor.distance * c.rateX);
+    const distance = toMarketDistance(distanceKm, market).toFixed(1);
     return {
       ...c,
       fare,
       hourly,
       distance,
+      // Relu depuis la distance AFFICHÉE, et arrondie : les trois chiffres de la
+      // carte doivent se vérifier de tête les uns par les autres, dans l'unité
+      // que le chauffeur a sous les yeux.
       km: (fare / Number(distance)).toFixed(2),
     };
   });
