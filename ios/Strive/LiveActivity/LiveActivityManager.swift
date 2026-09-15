@@ -531,8 +531,14 @@ final class LiveActivityManager {
     // `minimal` porte une pastille pleine du verdict plutôt qu'un glyphe fin —
     // voir StriveLiveActivity.swift.
     let verdict = verdictLevel == 2 ? "✅" : verdictLevel == 1 ? "⚠️" : "❌"
-    let alertTitle = "\(platform.capitalized) · \(String(format: "%.0f€", fare)) · \(verdict)"
-    let alertBody = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", hourlyRate, kmRate, durationMin, distanceKm)
+    let alertTitle = "\(platform.capitalized) · \(StriveMarket.money(fare)) · \(verdict)"
+    // Quatre unités dans une ligne, et trois dépendent du marché.
+    let alertBody = [
+      StriveMarket.perHour(hourlyRate),
+      StriveMarket.perDistance(kmRate),
+      "\(durationMin)min",
+      StriveMarket.distanceText(distanceKm),
+    ].joined(separator: " · ")
     let alert = AlertConfiguration(
         title: LocalizedStringResource(stringLiteral: alertTitle),
         body: LocalizedStringResource(stringLiteral: alertBody),

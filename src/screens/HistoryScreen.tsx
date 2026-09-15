@@ -59,6 +59,7 @@ import {
   hourlyUnit,
   distanceUnitLabel,
   toMarketDistance,
+  toMarketRate,
   type Market,
 } from '../utils/market';
 import ScreenField from '../components/ScreenField';
@@ -205,7 +206,7 @@ const RideCard = React.memo(
             </Text>
             <View style={styles.rateDivider} />
             <Text style={[styles.rateValue, { color: rateColor }]}>
-              {Number(ride.km_rate || 0).toFixed(2)}
+              {toMarketRate(Number(ride.km_rate) || 0, market).toFixed(2)}
               <Text style={styles.rateUnit}>{distanceUnitLabel(market)}</Text>
             </Text>
           </View>

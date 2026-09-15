@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Tableau de bord",
     "subtitle": "Tableau de bord en direct",
-    "kmRate": "€/KM",
     "greeting": "Bonjour, {{name}} 👋",
     "greetingDefault": "Chauffeur",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € sous votre objectif cette semaine",
-      "lossSub": "≈ {{eur}} €/mois à ce rythme",
+      "lossTitle": "≈ {{amount}} sous votre objectif cette semaine",
+      "lossSub": "≈ {{amount}}/mois à ce rythme",
       "cta": "Repère chaque course sous-payée → Strive Plus",
       "prideTitle_one": "💪 {{count}} course non rentable évitée cette semaine",
       "prideTitle_other": "💪 {{count}} courses non rentables évitées cette semaine",
@@ -309,7 +308,7 @@
     "title": "Mes Statistiques",
     "weeklyBilan": {
       "title": "Bilan de la semaine",
-      "loss": "≈ {{eur}} € sous votre objectif cette semaine",
+      "loss": "≈ {{amount}} sous votre objectif cette semaine",
       "avoided_one": "💪 {{count}} course non rentable évitée",
       "avoided_other": "💪 {{count}} courses non rentables évitées"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Activer l'identificateur",
     "enableTripIdSub": "Analyser les offres via le raccourci AssistiveTouch",
     "minimums": "Vos minimums",
-    "minHr": "Minimum €/h",
-    "minKm": "Minimum €/km",
+    "minHr": "Minimum {{cur}}/h",
+    "minKm": "Minimum {{cur}}/{{unit}}",
     "dayReset": "Reset de la journée",
     "dayResetSub": "Heure à laquelle vos stats du jour se réinitialisent",
     "dayReset4am": "Reset à 4h du matin",
@@ -1036,7 +1035,7 @@
     "weeklyRecap": {
       "title": "📊 Votre bilan de la semaine",
       "body": "Venez voir combien vous pourriez gagner de plus avec Strive.",
-      "bodyLoss": "≈ {{eur}} € sous votre objectif cette semaine. Voyez comment éviter ça."
+      "bodyLoss": "≈ {{amount}} sous votre objectif cette semaine. Voyez comment éviter ça."
     }
   },
   "tier": {

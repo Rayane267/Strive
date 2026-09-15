@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Panel",
     "subtitle": "Panel en directo",
-    "kmRate": "€/KM",
     "greeting": "Hola, {{name}} 👋",
     "greetingDefault": "Conductor",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Vuelve mañana para escanear de nuevo."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € por debajo de tu objetivo esta semana",
-      "lossSub": "≈ {{eur}} €/mes a este ritmo",
+      "lossTitle": "≈ {{amount}} por debajo de tu objetivo esta semana",
+      "lossSub": "≈ {{amount}}/mes a este ritmo",
       "cta": "Detecta cada viaje mal pagado → Strive Plus",
       "prideTitle_one": "💪 {{count}} viaje no rentable evitado esta semana",
       "prideTitle_other": "💪 {{count}} viajes no rentables evitados esta semana",
@@ -309,7 +308,7 @@
     "title": "Mis estadísticas",
     "weeklyBilan": {
       "title": "Balance de la semana",
-      "loss": "≈ {{eur}} € por debajo de tu objetivo esta semana",
+      "loss": "≈ {{amount}} por debajo de tu objetivo esta semana",
       "avoided_one": "💪 {{count}} viaje no rentable evitado",
       "avoided_other": "💪 {{count}} viajes no rentables evitados"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Activar el identificador",
     "enableTripIdSub": "Analizar las ofertas mediante el atajo AssistiveTouch",
     "minimums": "Tus mínimos",
-    "minHr": "Mínimo €/h",
-    "minKm": "Mínimo €/km",
+    "minHr": "Mínimo {{cur}}/h",
+    "minKm": "Mínimo {{cur}}/{{unit}}",
     "dayReset": "Reinicio del día",
     "dayResetSub": "Hora a la que se reinician tus estadísticas del día",
     "dayReset4am": "Reinicio a las 4:00",
@@ -1044,7 +1043,7 @@
     "weeklyRecap": {
       "title": "📊 Tu balance de la semana",
       "body": "Ven a ver cuánto más podrías ganar con Strive.",
-      "bodyLoss": "≈ {{eur}} € por debajo de tu objetivo esta semana. Mira cómo evitarlo."
+      "bodyLoss": "≈ {{amount}} por debajo de tu objetivo esta semana. Mira cómo evitarlo."
     }
   },
   "tier": {

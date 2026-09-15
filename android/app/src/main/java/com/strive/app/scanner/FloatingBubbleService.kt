@@ -646,10 +646,10 @@ class FloatingBubbleService : Service() {
      */
     fun updateMetrics(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double) {
         mainHandler.post {
-            hourlyRateView?.text = "€%.0f".format(hourlyRate)
-            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
+            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
-            distanceView?.text = "%.1f km".format(distanceKm)
+            distanceView?.text = MarketFormat.distanceText(this, distanceKm)
         }
     }
 
@@ -664,10 +664,10 @@ class FloatingBubbleService : Service() {
         verdictLevel: Int,
     ) {
         mainHandler.post {
-            hourlyRateView?.text = "€%.0f".format(hourlyRate)
-            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
+            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
-            distanceView?.text = "%.1f km".format(distanceKm)
+            distanceView?.text = MarketFormat.distanceText(this, distanceKm)
             updateVerdict(verdictLevel)
         }
     }
@@ -829,7 +829,7 @@ class FloatingBubbleService : Service() {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { marginEnd = dpToPx(6) })
         val hourlyRateTv = TextView(this).apply {
-            text = "€%.0f".format(hourlyRate)
+            text = MarketFormat.money(this@FloatingBubbleService, hourlyRate, 0)
             textSize = 21f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
@@ -850,7 +850,7 @@ class FloatingBubbleService : Service() {
         }
         val fareBadge = TextView(this).apply {
             // Net de carburant si la préférence est active (affichage seul).
-            text = "€%.0f".format(m.displayFare)
+            text = MarketFormat.money(this@FloatingBubbleService, m.displayFare, 0)
             textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4))
@@ -870,7 +870,7 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
         }
         val kmRateTv = TextView(this).apply {
-            text = "↑€%.2f/km".format(kmRate)
+            text = "↑" + MarketFormat.perDistance(this@FloatingBubbleService, kmRate)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
@@ -953,7 +953,8 @@ class FloatingBubbleService : Service() {
         durationView = durationTv
         rightCol.addView(durationTv)
         val distanceTv = TextView(this).apply {
-            text = "%.1f km".format(m.totalDistanceKm)
+            text = MarketFormat.distanceText(
+                this@FloatingBubbleService, m.totalDistanceKm)
             textSize = 12f; setTextColor(Color.parseColor("#888888"))
             includeFontPadding = false
         }
@@ -1186,7 +1187,8 @@ class FloatingBubbleService : Service() {
         // équivalent du dashboard de la Live Activity iOS. Avant le 1ᵉ push : texte d'invite.
         if (hasSessionKpi) {
             builder.setContentTitle(
-                "%.0f € · %.0f €/h".format(todayEarnings, todayHourlyRate)
+                MarketFormat.money(this, todayEarnings, 0) + " · " +
+                    MarketFormat.perHour(this, todayHourlyRate)
             ).setContentText(
                 "%.1f km · %dh%02d %s".format(
                     todayKm, onlineMinutes / 60, onlineMinutes % 60,
@@ -1219,9 +1221,14 @@ class FloatingBubbleService : Service() {
         val m = computeMetrics(result)
         val verdict = when (m.level) { 2 -> "✅"; 1 -> "⚠️"; else -> "❌" }
         // displayFare = net de carburant si l'option est active, sinon brut.
-        val title = "%s · %.0f€ · %s".format(result.platform.name, m.displayFare, verdict)
-        val body = "%.0f€/h · %.2f€/km · %dmin · %.1fkm".format(
-            m.hourlyRate, m.kmRate, m.totalDurationMin, m.totalDistanceKm
+        val title = "%s · %s · %s".format(
+            result.platform.name, MarketFormat.money(this, m.displayFare, 0), verdict)
+        // Quatre unites dans une seule ligne, et trois dependaient du marche.
+        val body = "%s · %s · %dmin · %s".format(
+            MarketFormat.perHour(this, m.hourlyRate),
+            MarketFormat.perDistance(this, m.kmRate),
+            m.totalDurationMin,
+            MarketFormat.distanceText(this, m.totalDistanceKm),
         )
 
         fun decisionPi(status: String, requestCode: Int): android.app.PendingIntent {

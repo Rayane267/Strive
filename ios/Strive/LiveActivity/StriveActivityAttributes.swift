@@ -2,6 +2,88 @@ import Foundation
 import ActivityKit
 import AppIntents
 
+/// Devise et unité de distance du chauffeur, pour tout ce que le NATIF affiche :
+/// la Dynamic Island, l'écran verrouillé, les notifications, CarPlay.
+///
+/// Le « € » était écrit en dur à une dizaine d'endroits. Un chauffeur londonien
+/// voyait donc son verdict en euros sur l'écran verrouillé alors que l'app, elle,
+/// lui parlait en livres — deux monnaies pour la même course, et celle qui compte
+/// au moment de décider était la fausse.
+///
+/// POSÉ ICI parce que ce fichier est déjà partagé entre l'app et la Widget
+/// Extension : la Live Activity a besoin du symbole, et un nouveau fichier
+/// demanderait de toucher au projet Xcode pour rien.
+///
+/// Le pays vient de l'App Group, où `ScanBridge.setMarketCountry` l'écrit. Il
+/// n'est PAS mis en cache : il change quand le chauffeur corrige sa devise, et
+/// un scan doit le voir tout de suite.
+public enum StriveMarket {
+  static var country: String {
+    let gid = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: gid)?.string(forKey: "marketCountry") ?? "FR"
+  }
+
+  /// « € », « CHF » ou « £ ».
+  public static var symbol: String {
+    switch country {
+    case "GB": return "£"
+    case "CH": return "CHF"
+    default:   return "€"
+    }
+  }
+
+  /// « km » partout, « mi » au Royaume-Uni.
+  public static var distanceUnit: String { country == "GB" ? "mi" : "km" }
+
+  /// Le scanner rend toujours des kilomètres — c'est ce que stocke
+  /// `rides.distance_km`, et les bornes de plausibilité raisonnent dessus. La
+  /// conversion n'a lieu qu'ici, au dernier pixel.
+  public static func distance(_ km: Double) -> Double {
+    country == "GB" ? km / 1.609344 : km
+  }
+
+  /// La livre se pose AVANT le nombre, l'euro et le franc après. S'y tromper
+  /// suffit à faire lire le prix comme une traduction automatique, et c'est le
+  /// premier chiffre que le chauffeur regarde.
+  ///
+  /// Espace avant « CHF » seulement : c'est un mot, et « 37CHF » se lit comme
+  /// une coquille. Les glyphes, eux, restent collés — l'îlot compact et la
+  /// pastille de tarif comptent leurs points de largeur.
+  public static func money(_ value: Double, decimals: Int = 0) -> String {
+    let s = String(format: "%.\(decimals)f", value)
+    if symbol == "£" { return "£" + s }
+    return symbol.count > 1 ? s + " " + symbol : s + symbol
+  }
+
+  /// « 57€/h », « £37/h ».
+  public static func perHour(_ value: Double) -> String { money(value, decimals: 0) + "/h" }
+
+  /// Un taux « par kilomètre » ramené à l'unité du marché.
+  ///
+  /// Le tarif divisé par la distance donne toujours des « par kilomètre » — c'est
+  /// en kilomètres que le parser rend la course, sur les six marchés. Coller
+  /// « /mi » derrière sans convertir affichait donc 0,80 £/mile là où le chauffeur
+  /// gagne 1,29 £/mile : un tiers de son revenu effacé par une étiquette.
+  ///
+  /// Un taux par mile est PLUS GRAND que le même taux par kilomètre — on parcourt
+  /// plus de chemin pour le gagner. D'où la multiplication, là où une distance se
+  /// divise. Affichage seulement : les seuils, eux, restent au kilomètre.
+  public static func rate(_ perKm: Double) -> Double {
+    country == "GB" ? perKm * 1.609344 : perKm
+  }
+
+  /// « 3.15€/km », « £3.24/mi ». Prend un taux PAR KILOMÈTRE.
+  public static func perDistance(_ perKm: Double) -> String {
+    money(rate(perKm), decimals: 2) + "/" + distanceUnit
+  }
+
+  /// « 5.4km », « 3.4mi ».
+  public static func distanceText(_ km: Double) -> String {
+    String(format: "%.1f", distance(km)) + distanceUnit
+  }
+}
+
 /// Attributs Live Activity Strive — partagés entre l'app principale et la
 /// Widget Extension (cible `StriveWidget`).
 ///
@@ -17,9 +99,11 @@ public struct StriveActivityAttributes: ActivityAttributes {
   /// Mise à jour via `Activity.update(...)` quand TomTom répond après l'OCR.
   public struct State: Codable, Hashable {
     public let platform: String     // UBER, BOLT, HEETCH, SCANNING, IDLE, ERROR
-    public let fare: Double         // €
-    public let hourlyRate: Double   // €/h
-    public let kmRate: Double       // €/km
+    /// Dans la devise du marché — voir `StriveMarket`. Les valeurs voyagent
+    /// nues : c'est l'affichage qui met le symbole.
+    public let fare: Double
+    public let hourlyRate: Double
+    public let kmRate: Double
     public let distanceKm: Double
     public let durationMin: Int
     /// 0 = rouge (refuse), 1 = orange (limite), 2 = vert (accepte)
@@ -153,7 +237,6 @@ struct RideDecisionIntent: LiveActivityIntent {
 /// n'ajoutait plus rien aux gains du jour, précisément dans le cas (app
 /// suspendue) que cet incrément natif existe pour couvrir.
 ///
-/// Le montant porté est le tarif AFFICHÉ (net de carburant si l'option est
 /// Le prix d'une course, tel qu'il doit s'afficher.
 ///
 /// POURQUOI PAS `%.0f` PARTOUT. Toutes les surfaces de scan arrondissaient à
@@ -169,10 +252,11 @@ struct RideDecisionIntent: LiveActivityIntent {
 public func striveFareText(_ fare: Double) -> String {
   let rounded = (fare * 100).rounded() / 100
   return rounded == rounded.rounded()
-    ? String(format: "%.0f€", rounded)
-    : String(format: "%.2f€", rounded)
+    ? StriveMarket.money(rounded, decimals: 0)
+    : StriveMarket.money(rounded, decimals: 2)
 }
 
+/// Le montant porté est le tarif AFFICHÉ (net de carburant si l'option est
 /// active), cohérent avec ce que la carte montre — `lastScanResult.fare` est
 /// brut et faisait monter les gains en brut sous un affichage net.
 func lastScannedFareKm(appGroupId: String) -> (fare: Double, km: Double) {

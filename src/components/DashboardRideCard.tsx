@@ -17,7 +17,13 @@ import { elevation } from '../theme/elevation';
 import { stroke, strokeWidth } from '../theme/stroke';
 import { Ride } from '../types/database';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, hourlyUnit, toMarketDistance } from '../utils/market';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  toMarketDistance,
+  toMarketRate,
+} from '../utils/market';
 import { effectiveFare } from '../services/ridesService';
 import { formatTimeAgo } from '../utils/dateUtils';
 import AnimatedEntrance from './AnimatedEntrance';
@@ -113,10 +119,16 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
                 </View>
               </View>
               <View style={styles.tripMetricCol}>
-                <Text style={styles.tripMetricLabel}>{t('dashboard.kmRate')}</Text>
+                <Text style={styles.tripMetricLabel}>
+                  {distanceUnitLabel(market).toUpperCase()}
+                </Text>
                 <View style={styles.tripMetricItem}>
                   <Feather name="navigation" size={13} color={colors.primary} />
-                  <Text style={styles.tripMetricText}>{kmRate.toFixed(2)}</Text>
+                  {/* Le taux est stocké au kilomètre ; c'est ici, et nulle part
+                      avant, qu'il devient un taux au mile. */}
+                  <Text style={styles.tripMetricText}>
+                    {toMarketRate(kmRate, market).toFixed(2)}
+                  </Text>
                 </View>
               </View>
             </View>

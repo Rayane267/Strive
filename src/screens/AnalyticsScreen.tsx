@@ -53,8 +53,14 @@ import { Skeleton } from '../components/Skeleton';
 import { cacheStats, getCachedStats } from '../services/offlineService';
 import { fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, hourlyUnit, distanceUnitLabel } from '../utils/market';
-import { calendarLocale } from '../utils/calendarLocales';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  toMarketDistance,
+  toMarketRate,
+} from '../utils/market';
+import { calendarLocale, CALENDAR_LOCALES } from '../utils/calendarLocales';
 
 
 const PLATFORMS = [
@@ -282,9 +288,11 @@ const AnalyticsScreen = () => {
       }, 0) || 0;
 
       // ── Daily breakdown for charts ──
-      const dayLabels = i18n.language === 'fr'
-        ? ['Di','Lu','Ma','Me','Je','Ve','Sa']
-        : ['Su','Mo','Tu','We','Th','Fr','Sa'];
+      // Les mêmes abréviations que les calendriers de l'app, et dans les
+      // mêmes sept langues : un ternaire binaire laissait cinq d'entre elles
+      // sur l'anglais.
+      const dayLabels =
+        CALENDAR_LOCALES[calendarLocale(i18n.language)].dayNamesShort;
       const todayStr = getBusinessDayKey(new Date(), resetHour);
 
       const dailyMap = new Map<string, { earnings: number; distance: number; hours: number }>();
@@ -334,7 +342,15 @@ const AnalyticsScreen = () => {
         isToday: p.isToday,
       })));
       setHourlyTrend(toRateSeries(folded, 'hours'));
-      setKmTrend(toRateSeries(folded, 'distance'));
+      // La courbe porte l'unité du marché dans sa légende : ses points
+      // doivent la porter aussi, sinon un chauffeur britannique lit des
+      // taux au kilomètre sous une étiquette « £/mi ».
+      setKmTrend(
+        toRateSeries(folded, 'distance').map(p => ({
+          ...p,
+          value: toMarketRate(p.value, market),
+        })),
+      );
 
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
@@ -661,7 +677,9 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.heroStatDiv} />
                 <View style={styles.heroStat}>
-                  <Text style={styles.heroStatVal}>{stats.totalDistance.toFixed(1)} km</Text>
+                  <Text style={styles.heroStatVal}>
+                    {toMarketDistance(stats.totalDistance, market).toFixed(1)} {market.distanceUnit}
+                  </Text>
                   <Text style={styles.heroStatLbl}>{t('analytics.distance')}</Text>
                 </View>
                 <View style={styles.heroStatDiv} />
@@ -738,7 +756,9 @@ const AnalyticsScreen = () => {
                   <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
                   {weeklyBilan.lossWeek > 0 && (
                     <Text style={styles.bilanLoss}>
-                      {t('analytics.weeklyBilan.loss', { eur: weeklyBilan.lossWeek.toFixed(0) })}
+                      {t('analytics.weeklyBilan.loss', {
+                        amount: formatMoney(weeklyBilan.lossWeek, market),
+                      })}
                     </Text>
                   )}
                   {weeklyBilan.avoided > 0 && (

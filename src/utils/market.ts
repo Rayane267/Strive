@@ -152,15 +152,17 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * compare pas terme à terme, et n'a pas à l'être : chacun se lit dans l'argent
  * que le chauffeur encaisse.
  *
- * `unit` : au Royaume-Uni le plancher de distance s'exprime PAR MILE. Ce n'est
- * pas une affaire de devise mais d'unité — un mile fait 1,609 km, donc le
- * plancher par mile vaut d'autant plus. Sans cette conversion, un plancher de
- * 0,64 £/mile reviendrait à 0,40 £/km : sous tout ce qui est rentable.
+ * TOUJOURS PAR KILOMÈTRE, Y COMPRIS AU ROYAUME-UNI. Le seuil est comparé à
+ * `tarif / distance_km`, et cette division se fait en kilomètres partout — les
+ * parsers convertissent les miles dès la lecture, et `rides.distance_km` ne
+ * stocke que des kilomètres. Un seuil déjà exprimé par mile se retrouvait donc
+ * comparé à un taux par kilomètre : la barre britannique était 1,6× trop haute,
+ * et une course correcte passait pour un refus. Le mile n'apparaît qu'à
+ * l'affichage, via `toMarketRate`.
  */
-function thresholdsFrom(multiplier: number, unit: DistanceUnit = 'km'): Thresholds {
-  const perUnit = unit === 'mi' ? KM_PER_MILE : 1;
+function thresholdsFrom(multiplier: number): Thresholds {
   const hourly = round05(BASE.hourly * multiplier);
-  const distance = round2(BASE.distance * multiplier * perUnit);
+  const distance = round2(BASE.distance * multiplier);
   return {
     hourly,
     distance,
@@ -316,12 +318,12 @@ export const MARKETS: Record<CountryCode, Market> = {
       { id: 'company', rate: 0.45, base: 'profit' },
       { id: 'employee', rate: 0, base: 'revenue' },
     ],
-    // ×0,64 → 16 £/h, et 1,03 £ PAR MILE (le multiple donne 0,64 du kilomètre,
-    // que la conversion porte au mile). Médiane à £19/h brut (étude Oxford),
+    // ×0,64 → 16 £/h et 0,64 £/km — soit 1,03 £ par mile une fois affiché.
+    // Médiane à £19/h brut (étude Oxford),
     // fourchette £15–25 — £18–25 à Londres ; après carburant, assurance, véhicule
     // et licence il reste £11–17/h. Le plancher se pose là où la course cesse de
     // payer le siège.
-    thresholds: thresholdsFrom(0.64, 'mi'),
+    thresholds: thresholdsFrom(0.64),
   },
 };
 
@@ -498,4 +500,34 @@ export const distanceUnitLabel = (market: Market) =>
  */
 export function toMarketDistance(km: number, market: Market): number {
   return market.distanceUnit === 'mi' ? km / KM_PER_MILE : km;
+}
+
+/**
+ * Taux « par kilomètre » ramené à l'unité du marché.
+ *
+ * `rides.km_rate` vaut toujours tarif ÷ kilomètres, sur les six marchés, et les
+ * seuils se comparent à cette valeur-là. Mais un chauffeur britannique compte en
+ * miles : 0,80 £/km, c'est 1,29 £/mile, et c'est le second chiffre qu'il
+ * reconnaît. La conversion est donc un pur geste d'affichage — elle ne doit
+ * JAMAIS entrer dans une comparaison, sous peine de décaler la barre de 1,6×.
+ *
+ * Un taux par mile est PLUS GRAND que le même taux par kilomètre : on parcourt
+ * plus de chemin pour le gagner. D'où la multiplication, là où une distance,
+ * elle, se divise.
+ */
+export function toMarketRate(ratePerKm: number, market: Market): number {
+  return market.distanceUnit === 'mi' ? ratePerKm * KM_PER_MILE : ratePerKm;
+}
+
+/**
+ * Le chemin inverse : ce que le chauffeur règle dans SON unité, ramené au
+ * kilomètre pour être stocké et comparé.
+ *
+ * `preferences.min_km_rate` porte des kilomètres sur les six marchés — le
+ * scanner, la bulle et le verdict natif en dépendent. Un curseur gradué en
+ * miles doit donc redescendre ici avant d'être enregistré, sinon la barre
+ * monte de 1,6× sans que personne ne l'ait demandé.
+ */
+export function fromMarketRate(rate: number, market: Market): number {
+  return market.distanceUnit === 'mi' ? rate / KM_PER_MILE : rate;
 }

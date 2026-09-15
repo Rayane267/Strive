@@ -26,7 +26,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, hourlyUnit, distanceUnitLabel } from '../utils/market';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  decimalSeparator,
+  toMarketRate,
+  fromMarketRate,
+} from '../utils/market';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { scannerService } from '../services/scanner';
 import { fetchFuelPrice } from '../services/fuelService';
@@ -51,7 +58,7 @@ const PreferencesScreen = () => {
   /// un point, seul endroit de l'app a le faire.
   const dec = (v: number, digits = 2) => {
     const out = v.toFixed(digits);
-    return i18n.language.startsWith('fr') ? out.replace('.', ',') : out;
+    return out.replace('.', decimalSeparator(i18n.language));
   };
 
   // --- ÉTATS ---
@@ -282,7 +289,9 @@ const PreferencesScreen = () => {
                 <View style={styles.sliderIconWrap}>
                   <Feather name="clock" size={14} color={colors.textMuted} />
                 </View>
-                <Text style={styles.sliderLabel}>{t('preferences.minHr', 'Tarif/heure min.')}</Text>
+                <Text style={styles.sliderLabel}>
+                  {t('preferences.minHr', { cur: market.symbol, defaultValue: 'Tarif/heure min.' })}
+                </Text>
               </View>
               <View style={styles.sliderValueBadge}>
                 <Text style={styles.sliderValueText}>
@@ -317,29 +326,44 @@ const PreferencesScreen = () => {
                 <View style={styles.sliderIconWrap}>
                   <MaterialCommunityIcons name="map-marker-distance" size={14} color={colors.textMuted} />
                 </View>
-                <Text style={styles.sliderLabel}>{t('preferences.minKm', 'Tarif/km min.')}</Text>
+                <Text style={styles.sliderLabel}>
+                  {t('preferences.minKm', {
+                    cur: market.symbol,
+                    unit: market.distanceUnit,
+                    defaultValue: 'Tarif/{{unit}} min.',
+                  })}
+                </Text>
               </View>
               <View style={styles.sliderValueBadge}>
                 <Text style={styles.sliderValueText}>
-                  {dec(isPaid ? minKm : market.thresholds.distance)} {distanceUnitLabel(market)}
+                  {dec(toMarketRate(isPaid ? minKm : market.thresholds.distance, market))}{' '}
+                  {distanceUnitLabel(market)}
                 </Text>
               </View>
             </View>
+            {/* Gradué dans l'unité du chauffeur, stocké au kilomètre : la base
+                et le verdict natif ne connaissent que des kilomètres, et une
+                valeur par mile enregistrée telle quelle relèverait la barre de
+                1,6× sans que personne ne l'ait demandé. */}
             <Slider
               style={styles.slider}
-              minimumValue={0.3}
-              maximumValue={4.0}
+              minimumValue={toMarketRate(0.3, market)}
+              maximumValue={toMarketRate(4.0, market)}
               step={0.05}
-              value={isPaid ? minKm : market.thresholds.distance}
-              onValueChange={isPaid ? setMinKm : undefined}
+              value={toMarketRate(isPaid ? minKm : market.thresholds.distance, market)}
+              onValueChange={isPaid ? v => setMinKm(fromMarketRate(v, market)) : undefined}
               disabled={!isPaid}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FFF"
             />
             <View style={styles.sliderRange}>
-              <Text style={styles.sliderRangeText}>{dec(0.3)} {market.symbol}</Text>
-              <Text style={styles.sliderRangeText}>{dec(4)} {market.symbol}</Text>
+              <Text style={styles.sliderRangeText}>
+                {dec(toMarketRate(0.3, market))} {market.symbol}
+              </Text>
+              <Text style={styles.sliderRangeText}>
+                {dec(toMarketRate(4, market))} {market.symbol}
+              </Text>
             </View>
           </View>
 

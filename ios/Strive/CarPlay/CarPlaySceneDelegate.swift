@@ -133,11 +133,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     return [
       CPInformationItem(
         title: localized(fr: "Par heure", en: "Per hour"),
-        detail: hourlyRate.map { String(format: "%.0f €/h", $0) } ?? "—"
+        detail: hourlyRate.map { StriveMarket.perHour($0) } ?? "—"
       ),
       CPInformationItem(
         title: localized(fr: "Gains", en: "Earnings"),
-        detail: String(format: "%.0f €", earnings)
+        detail: StriveMarket.money(earnings)
       ),
       CPInformationItem(
         title: localized(fr: "En ligne", en: "Online"),
@@ -145,7 +145,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
       ),
       CPInformationItem(
         title: localized(fr: "Distance", en: "Distance"),
-        detail: String(format: "%.0f km", km)
+        detail: String(format: "%.0f %@", StriveMarket.distance(km), StriveMarket.distanceUnit)
       ),
     ]
   }

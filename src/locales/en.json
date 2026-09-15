@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Driver Profit",
     "subtitle": "Live Dashboard",
-    "kmRate": "€/KM",
     "greeting": "Hello, {{name}} 👋",
     "greetingDefault": "Driver",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
     "weeklyTease": {
-      "lossTitle": "≈ €{{eur}} below your target this week",
-      "lossSub": "≈ €{{eur}}/mo at this rate",
+      "lossTitle": "≈ {{amount}} below your target this week",
+      "lossSub": "≈ {{amount}}/month at this rate",
       "cta": "Catch every underpaid ride → Strive Plus",
       "prideTitle_one": "💪 {{count}} unprofitable ride dodged this week",
       "prideTitle_other": "💪 {{count}} unprofitable rides dodged this week",
@@ -309,7 +308,7 @@
     "title": "My Analytics",
     "weeklyBilan": {
       "title": "This week's recap",
-      "loss": "≈ €{{eur}} below your target this week",
+      "loss": "≈ {{amount}} below your target this week",
       "avoided_one": "💪 {{count}} unprofitable ride dodged",
       "avoided_other": "💪 {{count}} unprofitable rides dodged"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Enable Trip Identifier",
     "enableTripIdSub": "Analyze offers via the AssistiveTouch shortcut",
     "minimums": "Your minimums",
-    "minHr": "Minimum €/hr",
-    "minKm": "Minimum €/km",
+    "minHr": "Minimum {{cur}}/hr",
+    "minKm": "Minimum {{cur}}/{{unit}}",
     "dayReset": "Day reset time",
     "dayResetSub": "Time at which your daily stats reset",
     "dayReset4am": "Reset at 4 AM",
@@ -1036,7 +1035,7 @@
     "weeklyRecap": {
       "title": "📊 Your week in review",
       "body": "See how much more you could earn with Strive.",
-      "bodyLoss": "≈ €{{eur}} below your target this week. See how to fix it."
+      "bodyLoss": "≈ {{amount}} below your target this week. See how to avoid it."
     }
   },
   "tier": {

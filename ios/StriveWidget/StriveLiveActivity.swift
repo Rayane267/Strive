@@ -203,7 +203,9 @@ struct StriveLiveActivity: Widget {
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(lockGreen)
         } else if isRecap {
-          Text(String(format: "%.2f/km", context.state.kmRate))
+          // Sans symbole — la place manque dans la région compacte — mais
+          // l'unité et la valeur suivent le marché.
+          Text(String(format: "%.2f/%@", StriveMarket.rate(context.state.kmRate), StriveMarket.distanceUnit))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
             .lineLimit(1)
@@ -211,7 +213,7 @@ struct StriveLiveActivity: Widget {
         } else if isIdle {
           EmptyView()
         } else {
-          Text("€\(Int(context.state.hourlyRate))/h")
+          Text(StriveMarket.perHour(context.state.hourlyRate))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
             .lineLimit(1)
@@ -418,7 +420,7 @@ private struct LockScreenView: View {
         if !isScanning && !isError {
           HStack(spacing: 0) {
             VStack(spacing: 2) {
-              Text(String(format: "%.0f€", state.todayEarnings))
+              Text(StriveMarket.money(state.todayEarnings))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -435,7 +437,7 @@ private struct LockScreenView: View {
               .frame(width: 1, height: 32)
 
             VStack(spacing: 2) {
-              Text(String(format: "%.0f€", state.todayHourlyRate))
+              Text(StriveMarket.money(state.todayHourlyRate))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(accent)
                 .lineLimit(1)
@@ -545,15 +547,15 @@ private struct SessionDashboard: View {
     HStack(spacing: 8) {
       // Les gains portent la ligne : c'est le seul chiffre que le chauffeur
       // vient chercher, les deux autres le qualifient.
-      Text(String(format: "%.0f€", state.todayEarnings))
+      Text(StriveMarket.money(state.todayEarnings))
         .font(.system(size: 17, weight: .heavy))
         .foregroundColor(.white)
       dot
-      Text(String(format: "%.0f€/h", state.todayHourlyRate))
+      Text(StriveMarket.perHour(state.todayHourlyRate))
         .font(.system(size: 15, weight: .bold))
         .foregroundColor(laAccent)
       dot
-      Text(String(format: "%.0fkm", state.todayKm))
+      Text(String(format: "%.0f%@", StriveMarket.distance(state.todayKm), StriveMarket.distanceUnit))
         .font(.system(size: 15, weight: .bold))
         .foregroundColor(.white.opacity(0.55))
     }
@@ -570,7 +572,7 @@ private struct HourlyRate: View {
   let level: Int
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
-      Text("€\(Int(value))")
+      Text(StriveMarket.money(value))
         .font(.system(size: 19, weight: .heavy))
         .foregroundColor(.white)
         .lineLimit(1)
@@ -587,7 +589,7 @@ private struct FarePill: View {
   let fare: Double
   let level: Int
   var body: some View {
-    Text(String(format: "€%.0f", fare))
+    Text(StriveMarket.money(fare))
       .font(.system(size: 14, weight: .bold))
       .foregroundColor(.white)
       .lineLimit(1)
@@ -612,7 +614,7 @@ private struct KmRateText: View {
       Image(systemName: "arrow.up.right")
         .font(.system(size: 12, weight: .heavy))
         .foregroundColor(verdictColor(level))
-      Text(String(format: "€%.2f/km", value))
+      Text(StriveMarket.perDistance(value))
         .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.white)
         .lineLimit(1)
@@ -656,7 +658,7 @@ private struct RouteRow: View {
         Text("\(durationMin)min")
           .font(.system(size: 14, weight: .bold))
           .foregroundColor(.white)
-        Text(String(format: "%.1fkm", distanceKm))
+        Text(StriveMarket.distanceText(distanceKm))
           .font(.system(size: 11, weight: .semibold))
           .foregroundColor(.white.opacity(0.55))
       }

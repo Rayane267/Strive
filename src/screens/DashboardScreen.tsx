@@ -2069,10 +2069,14 @@ const DashboardScreen = () => {
             {weeklyTease.state === 'loss' ? (
               <>
                 <Text style={styles.teaseTitle}>
-                  {t('dashboard.weeklyTease.lossTitle', { eur: weeklyTease.lossWeek.toFixed(0) })}
+                  {t('dashboard.weeklyTease.lossTitle', {
+                    amount: formatMoney(weeklyTease.lossWeek, market),
+                  })}
                 </Text>
                 <Text style={styles.teaseSub}>
-                  {t('dashboard.weeklyTease.lossSub', { eur: weeklyTease.lossMonth.toFixed(0) })}
+                  {t('dashboard.weeklyTease.lossSub', {
+                    amount: formatMoney(weeklyTease.lossMonth, market),
+                  })}
                 </Text>
                 <Text style={styles.teaseCta}>{t('dashboard.weeklyTease.cta')}</Text>
               </>

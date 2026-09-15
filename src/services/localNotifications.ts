@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n';
 import { getBusinessDayKey } from '../utils/dateUtils';
+import { getMarket, formatMoney } from '../utils/market';
 
 const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
@@ -174,7 +175,12 @@ export function scheduleWeeklyRecap(lossEur?: number) {
 
   const delayMs = next.getTime() - now.getTime();
   const body = lossEur && lossEur >= 10
-    ? i18n.t('notifications.weeklyRecap.bodyLoss', { eur: Math.round(lossEur) })
+    // Pas de contexte React ici : le marché est déduit de la région de
+    // l'appareil, faute du pays du profil. Une notification en euros à un
+    // chauffeur londonien reste moins coûteuse qu'un chiffre sans devise.
+    ? i18n.t('notifications.weeklyRecap.bodyLoss', {
+        amount: formatMoney(lossEur, getMarket()),
+      })
     : i18n.t('notifications.weeklyRecap.body');
   scheduleNative('weekly-recap', i18n.t('notifications.weeklyRecap.title'), body, delayMs);
 }

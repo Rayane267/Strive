@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Live dashboard",
-    "kmRate": "€/KM",
     "greeting": "Hallo, {{name}} 👋",
     "greetingDefault": "Chauffeur",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Kom morgen terug om opnieuw te scannen."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € onder je doel deze week",
-      "lossSub": "≈ {{eur}} €/maand in dit tempo",
+      "lossTitle": "≈ {{amount}} onder je doel deze week",
+      "lossSub": "≈ {{amount}}/maand in dit tempo",
       "cta": "Herken elke onderbetaalde rit → Strive Plus",
       "prideTitle_one": "💪 {{count}} onrendabele rit vermeden deze week",
       "prideTitle_other": "💪 {{count}} onrendabele ritten vermeden deze week",
@@ -309,7 +308,7 @@
     "title": "Mijn statistieken",
     "weeklyBilan": {
       "title": "Balans van de week",
-      "loss": "≈ {{eur}} € onder je doel deze week",
+      "loss": "≈ {{amount}} onder je doel deze week",
       "avoided_one": "💪 {{count}} onrendabele rit vermeden",
       "avoided_other": "💪 {{count}} onrendabele ritten vermeden"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Ritherkenning inschakelen",
     "enableTripIdSub": "Aanbiedingen analyseren via de AssistiveTouch-opdracht",
     "minimums": "Jouw minima",
-    "minHr": "Minimum €/u",
-    "minKm": "Minimum €/km",
+    "minHr": "Minimum {{cur}}/u",
+    "minKm": "Minimum {{cur}}/{{unit}}",
     "dayReset": "Dagreset",
     "dayResetSub": "Uur waarop je dagstatistieken op nul gaan",
     "dayReset4am": "Reset om 4 uur",
@@ -1044,7 +1043,7 @@
     "weeklyRecap": {
       "title": "📊 Je balans van de week",
       "body": "Kom kijken hoeveel je meer zou kunnen verdienen met Strive.",
-      "bodyLoss": "≈ {{eur}} € onder je doel deze week. Bekijk hoe je dat vermijdt."
+      "bodyLoss": "≈ {{amount}} onder je doel deze week. Bekijk hoe je dat voorkomt."
     }
   },
   "tier": {

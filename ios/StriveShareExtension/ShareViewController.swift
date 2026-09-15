@@ -809,18 +809,18 @@ class ShareViewController: UIViewController {
     platformBadge.backgroundColor = color
 
     // Fare
-    fareLabel.text = String(format: "%.2f €", result.fare)
+    fareLabel.text = StriveMarket.money(result.fare, decimals: 2)
 
     // Rates — valeurs autoritatives si fournies, sinon recalcul de secours.
     let durationMin = result.durationMin ?? Int(result.distanceKm / 25 * 60)
     let hourlyRate = hourlyRateOverride ?? result.fare / (Double(durationMin) / 60.0)
     let kmRate = kmRateOverride ?? result.fare / result.distanceKm
 
-    hourlyRateLabel.text = String(format: "%.0f €/h", hourlyRate)
-    kmRateLabel.text = String(format: "%.2f €/km", kmRate)
+    hourlyRateLabel.text = StriveMarket.perHour(hourlyRate)
+    kmRateLabel.text = StriveMarket.perDistance(kmRate)
 
     // Stats
-    distanceLabel.text = String(format: "%.1f km", result.distanceKm)
+    distanceLabel.text = StriveMarket.distanceText(result.distanceKm)
     durationLabel.text = "\(durationMin) min"
 
     // Addresses

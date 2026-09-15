@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Pannello",
     "subtitle": "Pannello in diretta",
-    "kmRate": "€/KM",
     "greeting": "Ciao, {{name}} 👋",
     "greetingDefault": "Autista",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Torna domani per scansionare di nuovo."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € sotto il tuo obiettivo questa settimana",
-      "lossSub": "≈ {{eur}} €/mese a questo ritmo",
+      "lossTitle": "≈ {{amount}} sotto il tuo obiettivo questa settimana",
+      "lossSub": "≈ {{amount}}/mese a questo ritmo",
       "cta": "Riconosci ogni corsa mal pagata → Strive Plus",
       "prideTitle_one": "💪 {{count}} corsa non redditizia evitata questa settimana",
       "prideTitle_other": "💪 {{count}} corse non redditizie evitate questa settimana",
@@ -309,7 +308,7 @@
     "title": "Le mie statistiche",
     "weeklyBilan": {
       "title": "Bilancio della settimana",
-      "loss": "≈ {{eur}} € sotto il tuo obiettivo questa settimana",
+      "loss": "≈ {{amount}} sotto il tuo obiettivo questa settimana",
       "avoided_one": "💪 {{count}} corsa non redditizia evitata",
       "avoided_other": "💪 {{count}} corse non redditizie evitate"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Attiva l'identificatore",
     "enableTripIdSub": "Analizza le offerte tramite il comando AssistiveTouch",
     "minimums": "I tuoi minimi",
-    "minHr": "Minimo €/h",
-    "minKm": "Minimo €/km",
+    "minHr": "Minimo {{cur}}/h",
+    "minKm": "Minimo {{cur}}/{{unit}}",
     "dayReset": "Reset della giornata",
     "dayResetSub": "Ora in cui le tue statistiche del giorno si azzerano",
     "dayReset4am": "Reset alle 4",
@@ -1044,7 +1043,7 @@
     "weeklyRecap": {
       "title": "📊 Il tuo bilancio della settimana",
       "body": "Vieni a vedere quanto potresti guadagnare in più con Strive.",
-      "bodyLoss": "≈ {{eur}} € sotto il tuo obiettivo questa settimana. Scopri come evitarlo."
+      "bodyLoss": "≈ {{amount}} sotto il tuo obiettivo questa settimana. Scopri come evitarlo."
     }
   },
   "tier": {

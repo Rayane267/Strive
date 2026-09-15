@@ -198,7 +198,6 @@
   "dashboard": {
     "title": "Übersicht",
     "subtitle": "Live-Übersicht",
-    "kmRate": "€/KM",
     "greeting": "Hallo, {{name}} 👋",
     "greetingDefault": "Fahrer",
     "banner": {
@@ -264,8 +263,8 @@
       "comeBackTomorrow": "Komm morgen wieder, um erneut zu scannen."
     },
     "weeklyTease": {
-      "lossTitle": "≈ {{eur}} € unter deinem Ziel diese Woche",
-      "lossSub": "≈ {{eur}} €/Monat in diesem Tempo",
+      "lossTitle": "≈ {{amount}} unter deinem Ziel diese Woche",
+      "lossSub": "≈ {{amount}}/Monat in diesem Tempo",
       "cta": "Erkenne jede schlecht bezahlte Fahrt → Strive Plus",
       "prideTitle_one": "💪 {{count}} unrentable Fahrt diese Woche vermieden",
       "prideTitle_other": "💪 {{count}} unrentable Fahrten diese Woche vermieden",
@@ -309,7 +308,7 @@
     "title": "Meine Statistik",
     "weeklyBilan": {
       "title": "Bilanz der Woche",
-      "loss": "≈ {{eur}} € unter deinem Ziel diese Woche",
+      "loss": "≈ {{amount}} unter deinem Ziel diese Woche",
       "avoided_one": "💪 {{count}} unrentable Fahrt vermieden",
       "avoided_other": "💪 {{count}} unrentable Fahrten vermieden"
     },
@@ -422,8 +421,8 @@
     "enableTripId": "Fahrtenerkennung aktivieren",
     "enableTripIdSub": "Angebote über den AssistiveTouch-Kurzbefehl auswerten",
     "minimums": "Deine Minima",
-    "minHr": "Minimum €/Std.",
-    "minKm": "Minimum €/km",
+    "minHr": "Minimum {{cur}}/Std.",
+    "minKm": "Minimum {{cur}}/{{unit}}",
     "dayReset": "Tagesreset",
     "dayResetSub": "Uhrzeit, zu der deine Tagesstatistik zurückgesetzt wird",
     "dayReset4am": "Reset um 4 Uhr",
@@ -1044,7 +1043,7 @@
     "weeklyRecap": {
       "title": "📊 Deine Bilanz der Woche",
       "body": "Schau nach, wie viel mehr du mit Strive verdienen könntest.",
-      "bodyLoss": "≈ {{eur}} € unter deinem Ziel diese Woche. Sieh, wie du das vermeidest."
+      "bodyLoss": "≈ {{amount}} unter deinem Ziel diese Woche. So vermeidest du das."
     }
   },
   "tier": {

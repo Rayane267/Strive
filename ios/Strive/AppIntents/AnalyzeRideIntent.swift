@@ -360,8 +360,13 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
       sendLocalNotification(
         title: "\(result.scan.platform.rawValue) · \(striveFareText(result.displayFare)) · \(verdict)",
-        body: String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm",
-                     result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm),
+        // Quatre unités dans une ligne, et trois dépendent du marché.
+        body: [
+          StriveMarket.perHour(result.hourlyRate),
+          StriveMarket.perDistance(result.kmRate),
+          "\(result.totalDurationMin)min",
+          StriveMarket.distanceText(result.totalDistanceKm),
+        ].joined(separator: " · "),
         category: "STRIVE_SCAN_RESULT", rideId: rideId,
         // Même niveau que le repli : un verdict de course ne vaut que dans les
         // secondes qui suivent, et un chauffeur en appel est justement celui qui
@@ -398,7 +403,12 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         )
       }
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
-      var body = String(format: "%.0f€/h · %.2f€/km · %dmin · %.1fkm", result.hourlyRate, result.kmRate, result.totalDurationMin, result.totalDistanceKm)
+      var body = [
+        StriveMarket.perHour(result.hourlyRate),
+        StriveMarket.perDistance(result.kmRate),
+        "\(result.totalDurationMin)min",
+        StriveMarket.distanceText(result.totalDistanceKm),
+      ].joined(separator: " · ")
       // Le chauffeur a masqué la carte (ou iOS l'a terminée) alors que sa session
       // tourne toujours : sans un mot ici, il croit sa session fermée et ne sait
       // pas que la carte revient d'elle-même. `Activity.request()` étant interdit
@@ -422,10 +432,14 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     }
     markPresented()
     incrementScanCount()
-    let summary = String(
-      format: "%@ · %.2f€ · %.0f€/h · %.2f€/km",
-      result.scan.platform.rawValue, result.scan.fare, result.hourlyRate, result.kmRate
-    )
+    // Retour parlé à Siri : même devise que la carte, sinon le chiffre entendu
+    // et le chiffre lu ne sont pas le même.
+    let summary = [
+      result.scan.platform.rawValue,
+      StriveMarket.money(result.scan.fare, decimals: 2),
+      StriveMarket.perHour(result.hourlyRate),
+      StriveMarket.perDistance(result.kmRate),
+    ].joined(separator: " · ")
     saveResultForMainApp(result, rideId: rideId, scanTs: scanTs, geminiUsed: geminiUsed) { done(summary) }
   }
 
