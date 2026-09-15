@@ -15,6 +15,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -132,6 +133,7 @@ const FUEL_KEYS = ['essence', 'diesel', 'electric'] as const;
 type FuelKey = typeof FUEL_KEYS[number];
 
 const CarSettingsScreen = () => {
+  const market = useMarket();
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
@@ -155,6 +157,7 @@ const CarSettingsScreen = () => {
   const [fuelType, setFuelType] = useState<FuelKey>('essence');
   const [avgCons, setAvgCons] = useState('');
   const [elecPrice, setElecPrice] = useState('');
+  const [fuelPrice, setFuelPrice] = useState('');
   const { toast, showToast, dismissToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'make' | 'model' | 'year' | 'fuel' | null>(null);
@@ -165,10 +168,10 @@ const CarSettingsScreen = () => {
 
   // Signature des champs éditables → « dirty state ». Le bouton Enregistrer ne
   // s'active que si la valeur courante diffère de la dernière valeur chargée/sauvée.
-  const sigOf = (f: { make: string; model: string; year: string; regNum: string; fuelType: string; avgCons: string; elecPrice: string }) =>
-    JSON.stringify([f.make, f.model, f.year, f.regNum, f.fuelType, f.avgCons.trim(), f.elecPrice.trim()]);
-  const currentSig = sigOf({ make, model, year, regNum, fuelType, avgCons, elecPrice });
-  const [savedSig, setSavedSig] = useState(() => sigOf({ make: '', model: '', year: '2022', regNum: '', fuelType: 'essence', avgCons: '', elecPrice: '' }));
+  const sigOf = (f: { make: string; model: string; year: string; regNum: string; fuelType: string; avgCons: string; elecPrice: string; fuelPrice: string }) =>
+    JSON.stringify([f.make, f.model, f.year, f.regNum, f.fuelType, f.avgCons.trim(), f.elecPrice.trim(), f.fuelPrice.trim()]);
+  const currentSig = sigOf({ make, model, year, regNum, fuelType, avgCons, elecPrice, fuelPrice });
+  const [savedSig, setSavedSig] = useState(() => sigOf({ make: '', model: '', year: '2022', regNum: '', fuelType: 'essence', avgCons: '', elecPrice: '', fuelPrice: '' }));
   const isDirty = currentSig !== savedSig;
 
   useEffect(() => {
@@ -181,6 +184,7 @@ const CarSettingsScreen = () => {
         fuelType: (profile.fuel_type && (FUEL_KEYS as readonly string[]).includes(profile.fuel_type)) ? (profile.fuel_type as FuelKey) : 'essence',
         avgCons: profile.avg_cons ? profile.avg_cons.toString() : '',
         elecPrice: profile.elec_price ? profile.elec_price.toString() : '',
+        fuelPrice: profile.fuel_price ? profile.fuel_price.toString() : '',
       };
       setMake(next.make);
       setModel(next.model);
@@ -189,6 +193,7 @@ const CarSettingsScreen = () => {
       setFuelType(next.fuelType);
       setAvgCons(next.avgCons);
       setElecPrice(next.elecPrice);
+      setFuelPrice(next.fuelPrice);
       setSavedSig(sigOf(next));
     }
   }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -266,10 +271,35 @@ const CarSettingsScreen = () => {
       const parsedPrice = parseFloat(elecPrice.replace(',', '.'));
       if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 3) {
         hapticError();
-        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.priceInvalid', 'Prix invalide (entre 0.01 et 3 €/kWh).') });
+        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.priceInvalid', {
+          defaultValue: 'Prix invalide (entre 0,01 et 3 {{unit}}).',
+          unit: `${market.symbol}/kWh`,
+        }) });
         return;
       }
       elecPriceToSave = parsedPrice;
+    }
+    // Prix au litre (carburants liquides). Optionnel : vide = on retombe sur la
+    // table pour la France, sur le repli ailleurs.
+    let fuelPriceToSave: number | null = null;
+    if (fuelType !== 'electric' && fuelPrice.trim() !== '') {
+      const parsed = parseFloat(fuelPrice.replace(',', '.'));
+      // Même borne que la contrainte SQL : une faute de frappe à 18,50 pour 1,85
+      // ferait un coût carburant dix fois trop grand et un bénéfice net négatif
+      // sur toutes les courses, sans que rien ne le signale.
+      if (isNaN(parsed) || parsed <= 0 || parsed > 10) {
+        hapticError();
+        showToast({
+          type: 'error',
+          title: t('common.error', 'Erreur'),
+          message: t('carSettings.errors.fuelPriceInvalid', {
+            defaultValue: 'Prix invalide (entre 0,01 et 10 {{unit}}).',
+            unit: `${market.symbol}/L`,
+          }),
+        });
+        return;
+      }
+      fuelPriceToSave = parsed;
     }
     setIsSaving(true);
     try {
@@ -282,6 +312,7 @@ const CarSettingsScreen = () => {
         fuel_type: fuelType || null,
         avg_cons: consToSave,
         elec_price: elecPriceToSave,
+        fuel_price: fuelPriceToSave,
       });
       hapticSuccess();
       // Rafraîchit le profile global pour que la prochaine ouverture pré-remplisse les champs.
@@ -449,6 +480,47 @@ const CarSettingsScreen = () => {
                 />
               </View>
 
+              {/* Prix au litre : proposé dès que le véhicule brûle quelque chose.
+                  Hors de France c'est la SEULE source — aucun relevé n'alimente
+                  `fuel_prices` ailleurs — et en France il prime sur le relevé
+                  parisien, parce que le chauffeur fait le plein toujours à la
+                  même station et la connaît mieux qu'une moyenne régionale. */}
+              {fuelType !== 'electric' && (
+                <>
+                  <View style={styles.cardDivider} />
+                  <View style={styles.consRow}>
+                    <View style={styles.consLeft}>
+                      <View style={styles.consIconWrap}>
+                        <MaterialCommunityIcons name="gas-station" size={18} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.consTitle}>{t('carSettings.fuelPrice', 'Prix du carburant')}</Text>
+                        <Text style={styles.consSub}>
+                          {market.symbol}/L
+                          {market.fuelKey ? ` · ${t('carSettings.fuelPriceAuto', 'auto si vide')}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <TextInput
+                      style={styles.smallInput}
+                      value={fuelPrice}
+                      onChangeText={text => {
+                        let cleaned = text.replace(',', '.').replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                        if (parts[1] !== undefined && parts[1].length > 2) cleaned = parts[0] + '.' + parts[1].slice(0, 2);
+                        setFuelPrice(cleaned);
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="1.85"
+                      placeholderTextColor={colors.textDimmed}
+                      maxLength={5}
+                      onFocus={() => setOpenDropdown(null)}
+                    />
+                  </View>
+                </>
+              )}
+
               {fuelType === 'electric' && (
                 <>
                   <View style={styles.cardDivider} />
@@ -459,7 +531,7 @@ const CarSettingsScreen = () => {
                       </View>
                       <View>
                         <Text style={styles.consTitle}>{t('carSettings.elecPrice', 'Prix de recharge')}</Text>
-                        <Text style={styles.consSub}>€/kWh</Text>
+                        <Text style={styles.consSub}>{market.symbol}/kWh</Text>
                       </View>
                     </View>
                     <TextInput

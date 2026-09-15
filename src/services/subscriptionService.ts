@@ -18,16 +18,20 @@ const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
 };
 
 /**
- * Seuils de rentabilité imposés au tier free (non personnalisables).
- * La personnalisation des seuils est un avantage Plus → on force ces valeurs
- * basiques pour les comptes free, où qu'ils soient lus.
+ * Les seuils imposés au palier gratuit ont déménagé dans `utils/market.ts`
+ * (`market.thresholds`).
  *
- * ⚠️ DOIT rester égal au preset `casual` de TutorialScreen (« Débutant ») :
- * c'est le réglage que le compte gratuit subit, et le tuto le lui présente.
- * Les deux avaient divergé (tuto 20 / 0,80 vs appliqué 25 / 1,20), donc le
- * chauffeur voyait des verdicts sans rapport avec ce qu'il avait choisi.
+ * Ils étaient écrits ici en euros par kilomètre — 25 €/h et 1,10 €/km — donc
+ * faux dès qu'on sort de la zone euro : un chauffeur britannique se voyait
+ * imposer un plancher libellé dans une devise qui n'est pas la sienne, et
+ * exprimé par kilomètre quand son écran parle en miles.
+ *
+ * ⚠️ Ils doivent toujours rester égaux au preset `casual` de TutorialScreen
+ * (« Débutant ») : c'est le réglage que le compte gratuit subit, et le tuto le
+ * lui présente. Les deux avaient divergé une fois (tuto 20 / 0,80 vs appliqué
+ * 25 / 1,20) et le chauffeur voyait des verdicts sans rapport avec ce qu'il
+ * avait choisi.
  */
-export const FREE_THRESHOLDS = { hourly: 25, km: 1.10 } as const;
 
 // Cache mémoire des limites fetched depuis la DB. Préchauffé au démarrage
 // via `fetchPlanLimits()` ; getPlanLimits() lit ce cache en priorité.

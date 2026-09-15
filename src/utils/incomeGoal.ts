@@ -6,86 +6,51 @@
  * d'heures tu roules » sont immédiats — et suffisent à calculer le premier.
  */
 
-import { FREE_THRESHOLDS } from '../services/subscriptionService';
+import { MARKETS, DEFAULT_COUNTRY, type Market } from './market';
 
 /** Semaines moyennes par mois (52 / 12). */
 export const WEEKS_PER_MONTH = 4.33;
 
-/**
- * Échelle €/h → €/km. Le kilométrique NE SE DÉRIVE PAS de l'objectif : il
- * faudrait connaître la vitesse moyenne du chauffeur, inconnue à l'onboarding.
- * On le cale donc sur les paliers du tutoriel (Débutant / Standard / Exigeant).
- * Doit rester aligné avec PRESETS dans TutorialScreen.
- */
-const KM_SCALE: ReadonlyArray<{ hourly: number; km: number }> = [
-  { hourly: 25, km: 1.10 },
-  { hourly: 32, km: 1.35 },
-  { hourly: 42, km: 1.70 },
-];
+
 
 /**
- * Taux de charges sociales par statut — part du chiffre d'affaires qui part
- * avant que le chauffeur ne touche quoi que ce soit.
- *
- * Ce sont des ordres de grandeur, pas des barèmes : la vraie valeur dépend du
- * régime fiscal, de l'ACRE, du versement libératoire… D'où l'option `autre`,
- * qui laisse saisir son taux réel.
- *
- * `salarie` est à 0 : un chauffeur employé ne reverse rien lui-même, son
- * objectif net se compare directement au chiffre d'affaires qu'il génère.
+ * Les taux de cotisations ont déménagé dans `utils/market.ts` : ils dépendent du
+ * pays, et un module qui calcule un seuil n'a pas à savoir lequel. Ce fichier ne
+ * reçoit plus qu'un NOMBRE et la BASE sur laquelle il porte — le reste est une
+ * question de régime, pas d'arithmétique.
  */
-export const SOCIAL_RATES = {
-  // 21,2 % du CA — micro-BIC « prestations de services commerciales », la
-  // catégorie dont relève le transport de personnes. C'est le taux Urssaf 2026,
-  // pas les 22 % arrondis d'avant. À NE PAS confondre avec les 25,6 % des
-  // « autres prestations de services » (micro-BNC), qui montent avec la réforme
-  // 2026 mais ne concernent pas le VTC.
-  //
-  // Rien n'est déductible de cette base : ni carburant, ni leasing, ni péages.
-  // C'est le prix de la simplicité du micro — et c'est pourquoi les charges
-  // fixes sont remontées au brut dans `deriveThreshold` pour ce statut.
-  //
-  // Un créateur sous ACRE paie environ 15,9 % la première année. On ne le
-  // demande pas : l'onboarding ne propose plus de taux libre (un taux sans sa
-  // base n'est pas interprétable), donc il est compté à 21,2 %. Son seuil sort
-  // un peu haut — sens prudent — et le curseur de Préférences le corrige.
-  auto_entrepreneur: 0.212,
-  // Part de l'enveloppe de rémunération absorbée par les cotisations. En SASU,
-  // 100 € de brut coûtent ~145 € et laissent ~78 € net, soit ~46 % de
-  // l'enveloppe ; en EURL, ~45 % du bénéfice pour un gérant majoritaire. Les
-  // deux tombent près de 45 %.
-  //
-  // ⚠️ Cette base n'est PAS celle de l'auto-entrepreneur. 21,2 % portent sur le
-  // chiffre d'affaires, 45 % sur la rémunération. Les comparer directement n'a
-  // aucun sens — d'où la base rappelée sous chaque option à l'écran.
-  societe: 0.45,
-  salarie: 0,
-} as const;
-
-export type DriverStatus = keyof typeof SOCIAL_RATES | 'autre';
 
 export type GoalInput = {
-  /** Revenu NET mensuel visé, en euros. */
+  /** Revenu NET mensuel visé, dans la devise du marché. */
   monthlyGoal: number;
   /** Heures travaillées par semaine. */
   weeklyHours: number;
-  /** Charges fixes mensuelles (LOA, assurance…), en euros. */
+  /** Charges fixes mensuelles (LOA, assurance…), dans la devise du marché. */
   fixedCosts: number;
-  /** Part du CA reversée en charges sociales (0,22 = 22 %). */
+  /** Part prélevée en cotisations sociales (0,212 = 21,2 %). */
   socialRate: number;
   /**
-   * Statut du chauffeur. Il ne sert qu'à UNE chose : savoir si les charges
-   * fixes se déduisent avant ou après les cotisations. Voir `deriveThreshold`.
-   * Absent → traitement auto-entrepreneur, qui était le comportement d'origine.
+   * Ce sur quoi `socialRate` porte. Ne sert qu'à UNE chose : savoir si les
+   * charges fixes se déduisent avant ou après les cotisations. Voir
+   * `deriveThreshold`.
+   *
+   * Absent → `revenue`, le traitement du micro-entrepreneur français, qui était
+   * le comportement d'origine. C'est aussi le sens prudent : il remonte les
+   * charges au brut, donc il ne sous-estime jamais le seuil.
    */
-  status?: DriverStatus;
+  base?: 'revenue' | 'profit';
 };
 
 export type DerivedThreshold = {
   /** Seuil horaire retenu, plancher de rentabilité appliqué. */
   hourly: number;
-  /** Seuil kilométrique correspondant sur l'échelle. */
-  km: number;
+  /**
+   * Seuil par unité de distance, DANS L'UNITÉ DU MARCHÉ : par kilomètre
+   * partout, par mile au Royaume-Uni. Le nom de la colonne qui le stocke
+   * (`profiles.min_km_rate`) dit « km » pour des raisons d'historique ;
+   * `profiles.country` est ce qui en donne l'unité.
+   */
+  distance: number;
   /** Ce que l'objectif seul exigeait, avant plancher. */
   rawHourly: number;
   /**
@@ -116,7 +81,11 @@ const roundHalf = (n: number) => Math.round(n * 2) / 2;
  * seuil sous la rentabilité et l'app validerait des courses qui, une fois
  * l'usure et les charges comptées, coûtent de l'argent au chauffeur.
  */
-export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
+export function deriveThreshold(
+  input: GoalInput,
+  /** Marché du chauffeur — il porte le plancher, l'échelle et l'unité. */
+  market: Market = MARKETS[DEFAULT_COUNTRY],
+): DerivedThreshold | null {
   const { monthlyGoal, weeklyHours, fixedCosts, socialRate } = input;
   if (!Number.isFinite(weeklyHours) || weeklyHours <= 0) return null;
   if (!Number.isFinite(monthlyGoal) || monthlyGoal < 0) return null;
@@ -146,21 +115,23 @@ export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
   // 7 764 € réels, soit 68,5 €/h au lieu de 59,5 €/h sur 130 heures. Le
   // chauffeur refusait des courses qui lui convenaient.
   //
-  // Statut inconnu (« autre ») → traitement auto-entrepreneur, celui d'origine :
-  // on ne devine pas un régime. L'onboarding ne peut plus en produire, mais des
-  // profils créés avant en portent, et l'API reste ouverte.
-  const chargesBeforeContributions = input.status === 'societe';
+  // C'est exactement ce que porte `base` : « profit » veut dire que les charges
+  // sont déjà déduites quand les cotisations s'appliquent. La Belgique (20,5 %
+  // du revenu NET), la Suisse (10,6 % du revenu net) et le sole trader
+  // britannique (NI sur le bénéfice) sont dans ce cas ; le micro-entrepreneur
+  // français et le trabalhador independente portugais, non.
+  const chargesBeforeContributions = input.base === 'profit';
   const requiredRevenue = chargesBeforeContributions
     ? monthlyGoal / (1 - rate) + costs
     : (monthlyGoal + costs) / (1 - rate);
   const rawHourly = roundHalf(requiredRevenue / monthlyHours);
 
-  const floored = rawHourly < FREE_THRESHOLDS.hourly;
-  const hourly = floored ? FREE_THRESHOLDS.hourly : rawHourly;
+  const floored = rawHourly < market.thresholds.hourly;
+  const hourly = floored ? market.thresholds.hourly : rawHourly;
 
   return {
     hourly,
-    km: kmForHourly(hourly),
+    distance: distanceForHourly(hourly, market),
     rawHourly,
     requiredRevenue: Math.round(requiredRevenue),
     monthlyHours: Math.round(monthlyHours),
@@ -169,26 +140,33 @@ export function deriveThreshold(input: GoalInput): DerivedThreshold | null {
 }
 
 /**
- * €/km correspondant à un €/h, par interpolation linéaire sur l'échelle des
- * paliers. Au-delà du dernier palier on prolonge la pente plutôt que de plafonner :
- * un chauffeur très exigeant doit voir son kilométrique suivre.
+ * Seuil par unité de distance correspondant à un seuil horaire, par
+ * interpolation linéaire sur l'échelle du marché. Au-delà du dernier palier on
+ * prolonge la pente plutôt que de plafonner : un chauffeur très exigeant doit
+ * voir son kilométrique suivre.
+ *
+ * L'échelle NE SE DÉRIVE PAS de l'objectif : il faudrait connaître la vitesse
+ * moyenne du chauffeur, inconnue à l'onboarding. Elle est donc calée sur les
+ * paliers du tutoriel — et c'est le marché qui dit lesquels, puisqu'un palier
+ * britannique s'exprime en £ par mile.
  */
-export function kmForHourly(hourly: number): number {
-  const first = KM_SCALE[0];
-  const last = KM_SCALE[KM_SCALE.length - 1];
-  if (hourly <= first.hourly) return first.km;
+export function distanceForHourly(hourly: number, market: Market): number {
+  const scale = market.thresholds.scale;
+  const first = scale[0];
+  const last = scale[scale.length - 1];
+  if (hourly <= first.hourly) return first.distance;
 
-  for (let i = 0; i < KM_SCALE.length - 1; i++) {
-    const a = KM_SCALE[i], b = KM_SCALE[i + 1];
+  for (let i = 0; i < scale.length - 1; i++) {
+    const a = scale[i], b = scale[i + 1];
     if (hourly <= b.hourly) {
       const ratio = (hourly - a.hourly) / (b.hourly - a.hourly);
-      return round2(a.km + ratio * (b.km - a.km));
+      return round2(a.distance + ratio * (b.distance - a.distance));
     }
   }
   // Prolongation au-delà du dernier palier, à la pente du dernier segment.
-  const a = KM_SCALE[KM_SCALE.length - 2];
-  const slope = (last.km - a.km) / (last.hourly - a.hourly);
-  return round2(last.km + (hourly - last.hourly) * slope);
+  const a = scale[scale.length - 2];
+  const slope = (last.distance - a.distance) / (last.hourly - a.hourly);
+  return round2(last.distance + (hourly - last.hourly) * slope);
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;

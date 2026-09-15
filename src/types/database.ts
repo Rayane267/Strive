@@ -43,6 +43,12 @@ export interface Profile {
   /** Fuseau IANA du téléphone (ex. "Europe/Paris") — sert au reset du quota à
    *  minuit local. Synchronisé depuis le Dashboard, uniquement s'il a changé. */
   timezone?: string | null;
+  /** Pays d'activité (ISO 3166-1 alpha-2) — décide de la devise, de l'unité de
+   *  distance, de la ligne de `fuel_prices` et du régime de cotisations. Voir
+   *  `utils/market.ts`. null = pas encore connu, l'app retombe sur la région de
+   *  l'appareil. Ce n'est PAS la langue : `fr` ne sépare pas la France de la
+   *  Belgique ni de la Suisse. */
+  country?: string | null;
   // Admin
   is_admin?: boolean;
   // Véhicule (CarSettingsScreen)
@@ -52,8 +58,13 @@ export interface Profile {
   car_reg?: string | null;
   fuel_type?: string | null;
   avg_cons?: number | null;
-  /** Prix €/kWh personnalisé (véhicule électrique). null → repli DEFAULT_FUEL_PRICE.electric. */
+  /** Prix du kWh saisi par le chauffeur (véhicule électrique). null → repli
+   *  `DEFAULT_FUEL_PRICE.electric`. */
   elec_price?: number | null;
+  /** Prix au litre saisi par le chauffeur. Prime sur la table `fuel_prices`, et
+   *  c'est la SEULE source hors de France, où aucun relevé n'alimente la table
+   *  (`market.fuelKey === null`). */
+  fuel_price?: number | null;
 }
 
 export interface Ride {
