@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import * as Sentry from '@sentry/react-native';
 import {
   Animated,
   Dimensions,
@@ -23,6 +24,7 @@ import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
+import { supabase } from '../services/supabase';
 import { scannerService } from '../services/scanner';
 import {
   MARKETS,
@@ -165,12 +167,44 @@ const LanguageSheet = ({
     setSavingCountry(true);
     try {
       await updateProfile(user.id, { country });
+
+      // ── LES SEUILS REPARTENT SUR LE PLANCHER DU NOUVEAU MARCHÉ ────────────
+      //
+      // `min_hourly_rate` et `min_km_rate` sont des NOMBRES NUS : la colonne ne
+      // porte pas de devise. Un chauffeur qui avait réglé 25 €/h et passe à la
+      // livre se retrouvait avec « 25 £/h » — sa barre montait de 15 % sans
+      // qu'il ait rien demandé, et rien ne le lui disait. Le kilométrique était
+      // pire encore : 1,10 €/km s'affichait 1,77 £/mi, l'unité ayant changé en
+      // plus de la monnaie.
+      //
+      // On ne peut pas convertir — l'app n'a pas de taux de change, et n'a
+      // aucune raison d'en avoir. On repose donc les seuils sur le plancher du
+      // marché d'arrivée, celui que l'onboarding aurait proposé. Le chauffeur
+      // les retrouve dans Préférences et les rajuste s'il le souhaite : un
+      // chiffre juste qu'il peut changer vaut mieux qu'un chiffre faux qu'il ne
+      // voit pas.
+      const floor = MARKETS[country].thresholds;
+      await supabase
+        .from('preferences')
+        .update({ min_hourly_rate: floor.hourly, min_km_rate: floor.distance })
+        .eq('id', user.id);
+
       await refreshProfile?.();
       // Le natif géocode avec ce pays : sans ce rappel, le prochain scan
       // chercherait encore l'adresse dans l'ancien.
       scannerService.setMarketCountry?.(country);
-    } catch {
+      // Et il verdicte avec ces seuils-là : la bulle et la Live Activity
+      // garderaient sinon l'ancienne barre jusqu'au prochain focus du Dashboard.
+      scannerService.setThresholds?.(floor.hourly, floor.distance);
+    } catch (error: any) {
       // On ferme quand même : réessayer est un geste, pas une impasse.
+      //
+      // Mais on le SIGNALE. Un échec muet ici est indiscernable d'un succès :
+      // la feuille se referme, le chauffeur croit avoir choisi la livre, et
+      // toute l'app continue en euros. C'est exactement ce qui arrive si la
+      // migration `20260915_profile_country.sql` n'a pas tourné — la colonne
+      // manque, PostgREST refuse l'écriture, et rien ne le dit.
+      Sentry.captureException(error, { tags: { flow: 'market_country' }, extra: { country } });
     } finally {
       setSavingCountry(false);
       onClose();

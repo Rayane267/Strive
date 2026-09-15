@@ -20,7 +20,20 @@ const PROFILE_COLUMNS =
   // `check_scan_quota` en est le seul écrivain) : l'exposer ne risque rien et
   // évite au client de recalculer un substitut à partir des courses.
   'daily_scans_count, daily_scans_day, ' +
-  'car_make, car_model, car_year, car_reg, fuel_type, avg_cons, elec_price';
+  'car_make, car_model, car_year, car_reg, fuel_type, avg_cons, elec_price, ' +
+  // ⚠️ LE MARCHÉ DU CHAUFFEUR. Sans `country` ici, `useMarket()` lit
+  // `undefined` et rend le marché par défaut : la feuille de langue
+  // enregistrait bien la livre, et TOUTE l'app continuait d'afficher des
+  // euros et des kilomètres. Le choix était pris, écrit, relu — et jeté ici.
+  //
+  // `fuel_price` pour la même raison : c'est le prix à la pompe saisi par le
+  // chauffeur, seule source hors de France. Absent de la projection, le
+  // champ se rouvrait vide et la déduction carburant retombait sur le repli.
+  //
+  // `timezone` : le Dashboard compare la zone de l'appareil à celle-ci pour
+  // décider s'il faut la mettre à jour. En lisant `undefined` il concluait
+  // « elle a changé » à chaque montage et réécrivait pour rien.
+  'country, fuel_price, timezone';
 
 /**
  * Trois issues, et il faut les distinguer — les confondre a enfermé des comptes.
