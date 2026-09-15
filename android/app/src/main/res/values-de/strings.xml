@@ -1,7 +1,6 @@
 <resources>
-<!-- Généré à la main — Android résout lui-même la bonne ressource à partir
-     du Locale posé par FloatingBubbleService.setAppLanguage. Il n'y a rien à
-     écrire en Kotlin : le dossier SUFFIT. -->
+  <!-- ⚠️ FICHIER GÉNÉRÉ — source : src/locales/de.json, clé `native`.
+       npm run gen:native. Les clés inconnues du script sont conservées. -->
   <string name="app_name">Strive</string>
   <string name="accessibility_service_description">Strive ist ein professionelles Werkzeug für Mietwagenfahrer. Dieser Bedienungshilfen-Dienst wird ausschließlich verwendet, um den Bildschirm der Apps Uber, Bolt und Heetch zu erfassen, wenn der Nutzer die Scan-Taste antippt, um die Fahrtdaten (Tarif, Distanz, Adressen) automatisch per lokaler OCR auszulesen. Es werden keine personenbezogenen Daten gelesen oder erhoben. Die Analyse läuft auf dem Gerät und startet nur auf ausdrückliche Anforderung des Fahrers.</string>
   <string name="scanner_not_a_ride">Kein Fahrtangebot erkannt</string>

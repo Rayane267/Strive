@@ -1,7 +1,6 @@
 <resources>
-<!-- Généré à la main — Android résout lui-même la bonne ressource à partir
-     du Locale posé par FloatingBubbleService.setAppLanguage. Il n'y a rien à
-     écrire en Kotlin : le dossier SUFFIT. -->
+  <!-- ⚠️ FICHIER GÉNÉRÉ — source : src/locales/nl.json, clé `native`.
+       npm run gen:native. Les clés inconnues du script sont conservées. -->
   <string name="app_name">Strive</string>
   <string name="accessibility_service_description">Strive is een professioneel hulpmiddel voor taxichauffeurs. Deze toegankelijkheidsdienst wordt uitsluitend gebruikt om het scherm van de apps Uber, Bolt en Heetch vast te leggen wanneer de gebruiker op de scanknop tikt, om automatisch de ritgegevens (tarief, afstand, adressen) via lokale OCR te halen. Er worden geen persoonsgegevens gelezen of verzameld. De analyse gebeurt op het toestel en start alleen op uitdrukkelijk verzoek van de chauffeur.</string>
   <string name="scanner_not_a_ride">Geen ritaanbod gevonden</string>

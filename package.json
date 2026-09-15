@@ -11,6 +11,7 @@
     "ios:rn": "react-native run-ios",
     "ios:release": "ENVFILE=.env.production react-native run-ios --mode=Release",
     "lint": "eslint .",
+    "gen:native": "node scripts/gen-native-strings.mjs",
     "start": "react-native start",
     "start:prod": "ENVFILE=.env.production react-native start --reset-cache",
     "test": "jest",
