@@ -452,7 +452,9 @@
     "thresholdLockCta": "Set your own with Plus",
     "pushBlocked": "Blocked in your phone settings — tap to re-enable",
     "country": "Country and currency",
-    "countrySub": "It sets your currency, your contributions and your profitability threshold."
+    "countrySub": "It sets your currency, your contributions and your profitability threshold.",
+    "currency": "Your currency",
+    "currencySub": "The one you'll read on every ride."
   },
   "upgrade": {
     "title": "Upgrade to Pro",

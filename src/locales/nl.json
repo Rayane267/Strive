@@ -452,7 +452,9 @@
     "thresholdLockCta": "Stel de jouwe in met Plus",
     "pushBlocked": "Geblokkeerd in de telefooninstellingen — tik om ze opnieuw in te schakelen",
     "country": "Land en munt",
-    "countrySub": "Bepaalt je munt, je bijdragen en je rendabiliteitsdrempel."
+    "countrySub": "Bepaalt je munt, je bijdragen en je rendabiliteitsdrempel.",
+    "currency": "Je munt",
+    "currencySub": "Die je bij elke rit zult lezen."
   },
   "upgrade": {
     "title": "Naar Pro",

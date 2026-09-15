@@ -452,7 +452,9 @@
     "thresholdLockCta": "Imposta i tuoi con Plus",
     "pushBlocked": "Bloccate nelle impostazioni del telefono — tocca per riattivarle",
     "country": "Paese e valuta",
-    "countrySub": "Determina la tua valuta, i tuoi contributi e la tua soglia di redditività."
+    "countrySub": "Determina la tua valuta, i tuoi contributi e la tua soglia di redditività.",
+    "currency": "La tua valuta",
+    "currencySub": "Quella che leggerai a ogni corsa."
   },
   "upgrade": {
     "title": "Passa a Pro",

@@ -452,7 +452,9 @@
     "thresholdLockCta": "Defina os seus com o Plus",
     "pushBlocked": "Bloqueadas nas definições do telemóvel — toque para as reativar",
     "country": "País e moeda",
-    "countrySub": "Define a sua moeda, as suas contribuições e o seu limiar de rentabilidade."
+    "countrySub": "Define a sua moeda, as suas contribuições e o seu limiar de rentabilidade.",
+    "currency": "A sua moeda",
+    "currencySub": "A que verá em cada viagem."
   },
   "upgrade": {
     "title": "Passar a Pro",

@@ -402,6 +402,51 @@ export function detectCountry(): CountryCode | null {
 }
 
 /**
+ * Le marché correspondant à une DEVISE, quand c'est tout ce que le chauffeur a
+ * dit.
+ *
+ * Une devise ne désigne pas toujours un pays : le franc et la livre, oui, mais
+ * l'euro en couvre quatre. Or un euro est un euro — l'affichage, l'unité de
+ * distance et le prix du carburant saisi à la main sont identiques dans les
+ * quatre. Il ne reste que le PLANCHER DE RENTABILITÉ, qui va de 25 €/h en France
+ * à 10 €/h au Portugal, et qu'on ne peut pas demander sans reposer la question
+ * du pays.
+ *
+ * On le déduit donc, dans cet ordre :
+ *   1. la région de l'appareil, si elle désigne un pays de cette devise ;
+ *   2. la langue choisie, quand elle n'en désigne qu'un (pt → PT, es → ES,
+ *      nl → BE) — le français en couvre trois, il ne tranche rien ;
+ *   3. le premier marché de la devise, faute de mieux.
+ *
+ * Et si la déduction tombe à côté, rien n'est perdu : le régime de cotisations
+ * est demandé explicitement à l'onboarding, et le plancher se corrige d'un
+ * curseur dans Préférences.
+ */
+const LANGUAGE_TO_COUNTRY: Record<string, CountryCode> = {
+  pt: 'PT',
+  es: 'ES',
+  nl: 'BE',
+  de: 'CH',
+  it: 'CH',
+  en: 'GB',
+};
+
+export function countryForCurrency(currency: Currency, language?: string): CountryCode {
+  const candidates = (Object.keys(MARKETS) as CountryCode[]).filter(
+    c => MARKETS[c].currency === currency,
+  );
+  if (candidates.length === 1) return candidates[0];
+
+  const region = detectCountry();
+  if (region && candidates.includes(region)) return region;
+
+  const byLanguage = LANGUAGE_TO_COUNTRY[(language ?? '').split('-')[0]];
+  if (byLanguage && candidates.includes(byLanguage)) return byLanguage;
+
+  return candidates[0];
+}
+
+/**
  * Le marché à appliquer : le choix explicite du chauffeur d'abord, la région de
  * l'appareil ensuite, la France en dernier recours.
  */

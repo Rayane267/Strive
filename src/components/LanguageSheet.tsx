@@ -24,7 +24,14 @@ import { space } from '../theme/spacing';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { scannerService } from '../services/scanner';
-import { MARKETS, LANGUAGE_NAMES, CURRENCY_CODE, type CountryCode } from '../utils/market';
+import {
+  MARKETS,
+  LANGUAGE_NAMES,
+  CURRENCY_CODE,
+  countryForCurrency,
+  type CountryCode,
+  type Currency,
+} from '../utils/market';
 import { SUPPORTED } from '../i18n';
 
 /**
@@ -121,6 +128,34 @@ const LanguageSheet = ({
    * plancher de rentabilité. Écrit sur le profil : il PRIME sur la région de
    * l'appareil, qui n'était qu'une valeur par défaut.
    */
+  /**
+   * Les devises proposées, avec les pays qu'elles recouvrent.
+   *
+   * Dérivée de `MARKETS` et non listée à la main : ajouter un marché ajoute sa
+   * devise ici, ou le range sous celle qui existe déjà, sans rien à retoucher.
+   */
+  const currencies = React.useMemo(() => {
+    const byCurrency = new Map<Currency, CountryCode[]>();
+    for (const code of Object.keys(MARKETS) as CountryCode[]) {
+      const cur = MARKETS[code].currency;
+      byCurrency.set(cur, [...(byCurrency.get(cur) ?? []), code]);
+    }
+    return [...byCurrency.entries()];
+  }, []);
+
+  /**
+   * Une devise choisie s'applique tout de suite — aucune question de plus.
+   *
+   * Un euro étant un euro, le pays ne porte plus que le plancher de
+   * rentabilité : `countryForCurrency` le déduit de la région de l'appareil,
+   * puis de la langue. Le régime de cotisations, lui, reste demandé en clair à
+   * l'onboarding — c'est le chauffeur qui le connaît, pas son fuseau.
+   */
+  const pickCurrency = (currency: Currency) => {
+    hapticLight();
+    applyCountry(countryForCurrency(currency, i18n.language));
+  };
+
   const applyCountry = async (country: CountryCode) => {
     hapticLight();
     if (!user?.id || country === profile?.country) {
@@ -215,12 +250,9 @@ const LanguageSheet = ({
             </>
           ) : (
             <>
-              <Text style={styles.title}>{t('preferences.country', 'Pays et devise')}</Text>
+              <Text style={styles.title}>{t('preferences.currency', 'Votre devise')}</Text>
               <Text style={styles.subtitle}>
-                {t(
-                  'preferences.countrySub',
-                  'Il fixe votre devise, vos cotisations et votre seuil de rentabilité.',
-                )}
+                {t('preferences.currencySub', 'Celle que vous lirez sur chaque course.')}
               </Text>
 
               <ScrollView
@@ -228,15 +260,26 @@ const LanguageSheet = ({
                 contentContainerStyle={styles.options}
                 showsVerticalScrollIndicator={false}
               >
-                {(Object.keys(MARKETS) as CountryCode[]).map(code => {
-                  const m = MARKETS[code];
+                {/* LES DEVISES, et rien d'autre. Un euro est un euro : entre la
+                    France, la Belgique, l'Espagne et le Portugal, l'affichage,
+                    l'unité de distance et le carburant saisi à la main sont
+                    identiques. Demander le pays par-dessus, c'était poser une
+                    question dont le chauffeur ne voyait pas l'objet. */}
+                {currencies.map(([currency, countries]) => {
+                  const m = MARKETS[countries[0]];
+                  const iso = CURRENCY_CODE[currency];
                   return (
                     <Option
-                      key={code}
-                      label={`${t(`countries.${code.toLowerCase()}`)}  ·  ${m.symbol} ${CURRENCY_CODE[m.currency]}`}
-                      selected={profile?.country === code}
+                      key={currency}
+                      // « CHF CHF » n'aurait aucun sens : quand le symbole EST
+                      // le code, on ne l'écrit qu'une fois.
+                      label={m.symbol === iso ? iso : `${m.symbol}  ${iso}`}
+                      selected={
+                        !!profile?.country &&
+                        MARKETS[profile.country as CountryCode]?.currency === currency
+                      }
                       disabled={savingCountry}
-                      onPress={() => applyCountry(code)}
+                      onPress={() => pickCurrency(currency)}
                     />
                   );
                 })}
@@ -253,12 +296,15 @@ const LanguageSheet = ({
 
 const Option = ({
   label,
+  sub,
   onPress,
   selected,
   muted,
   disabled,
 }: {
   label: string;
+  /** Seconde ligne, plus discrète — le pays derrière la devise. */
+  sub?: string;
   onPress: () => void;
   selected?: boolean;
   muted?: boolean;
@@ -274,7 +320,7 @@ const Option = ({
     ]}
     accessibilityRole="button"
     accessibilityState={{ selected: !!selected }}
-    accessibilityLabel={label}
+    accessibilityLabel={sub ? `${label}, ${sub}` : label}
   >
     <Text
       style={[
@@ -285,6 +331,7 @@ const Option = ({
     >
       {label}
     </Text>
+    {sub ? <Text style={styles.optionSub}>{sub}</Text> : null}
   </Pressable>
 );
 
@@ -328,6 +375,11 @@ const styles = StyleSheet.create({
 
   // Plafonné à 60 % de la hauteur : au-delà, la feuille mangerait tout l'écran
   // et on ne verrait plus ce qu'elle recouvre.
+  optionSub: {
+    color: colors.textDimmed,
+    fontSize: 12.5,
+    marginTop: 2,
+  },
   optionsScroll: { maxHeight: Dimensions.get('window').height * 0.6 },
   options: { marginTop: space.xl, gap: space.sm, paddingBottom: space.xs },
   // 56 px : la feuille se manipule d'une main, souvent en marchant.

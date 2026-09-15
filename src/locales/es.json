@@ -452,7 +452,9 @@
     "thresholdLockCta": "Fija los tuyos con Plus",
     "pushBlocked": "Bloqueadas en los ajustes del teléfono — pulsa para reactivarlas",
     "country": "País y moneda",
-    "countrySub": "Define tu moneda, tus cotizaciones y tu umbral de rentabilidad."
+    "countrySub": "Define tu moneda, tus cotizaciones y tu umbral de rentabilidad.",
+    "currency": "Tu moneda",
+    "currencySub": "La que verás en cada viaje."
   },
   "upgrade": {
     "title": "Pasar a Pro",

@@ -452,7 +452,9 @@
     "thresholdLockCta": "Fixez les vôtres avec Plus",
     "pushBlocked": "Bloquées dans les réglages du téléphone — appuyez pour les réactiver",
     "country": "Pays et devise",
-    "countrySub": "Il fixe votre devise, vos cotisations et votre seuil de rentabilité."
+    "countrySub": "Il fixe votre devise, vos cotisations et votre seuil de rentabilité.",
+    "currency": "Votre devise",
+    "currencySub": "Celle que vous lirez sur chaque course."
   },
   "upgrade": {
     "title": "Passer en Pro",

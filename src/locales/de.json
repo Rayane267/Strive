@@ -452,7 +452,9 @@
     "thresholdLockCta": "Setze deine eigenen mit Plus",
     "pushBlocked": "In den Telefoneinstellungen blockiert – tippe, um sie wieder zu aktivieren",
     "country": "Land und Währung",
-    "countrySub": "Bestimmt deine Währung, deine Beiträge und deine Rentabilitätsschwelle."
+    "countrySub": "Bestimmt deine Währung, deine Beiträge und deine Rentabilitätsschwelle.",
+    "currency": "Deine Währung",
+    "currencySub": "Die, die du bei jeder Fahrt liest."
   },
   "upgrade": {
     "title": "Zu Pro wechseln",
