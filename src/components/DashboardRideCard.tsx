@@ -23,7 +23,6 @@ import {
   distanceUnitLabel,
   toMarketDistance,
   toMarketRate,
-  displayForRide,
 } from '../utils/market';
 import { effectiveFare } from '../services/ridesService';
 import { formatTimeAgo } from '../utils/dateUtils';
@@ -53,11 +52,13 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
   const { t } = useTranslation();
   const rawPlatform = ride.platform ? ride.platform.toString().toUpperCase().trim() : 'UBER';
   const isPending = ride.status === 'PENDING';
-  const current = useMarket();
-  // La course s'affiche dans la devise qu'elle a rapportée, pas dans celle
-  // du jour : un chauffeur qui a changé de marché ne voit pas ses anciennes
-  // courses changer de monnaie sous ses yeux.
-  const display = displayForRide(ride.currency, current);
+  // La course arrive DÉJÀ convertie dans la devise lue (cf. `displayPendingRides`
+  // côté Dashboard) : la carte n'a qu'un marché à connaître, celui du chauffeur.
+  // En pratique une offre en attente vient d'être scannée, donc elle est déjà
+  // dans la bonne monnaie — sauf si le chauffeur a changé de devise entre deux
+  // courses, et c'est précisément le cas où deux monnaies cohabiteraient à
+  // l'écran sans que rien ne le dise.
+  const display = useMarket();
   // La course est stockée en kilomètres, quelle que soit l'origine du scan — on
   // la ramène à l'unité que le chauffeur lit sur ses propres offres.
   const distance = toMarketDistance(Number(ride.distance_km) || 0, display);

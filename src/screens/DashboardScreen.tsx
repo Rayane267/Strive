@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -57,7 +57,8 @@ import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
 import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
-import { getFxRates, normalizeRides } from '../services/fxService';
+import { getFxRates, inCurrency, normalizeRides } from '../services/fxService';
+import { useFxRates } from '../hooks/useFxRates';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
@@ -210,12 +211,30 @@ const SESSION_MAX_MS = 14 * 3600_000;       // durée max d'une session
 
 const DashboardScreen = () => {
   const market = useMarket();
+  // Les taux servent aux courses affichees : lignes et totaux dans une seule
+  // monnaie, celle que le chauffeur lit.
+  const fxRates = useFxRates();
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
 
   const [rides, setRides] = useState<Ride[]>([]);
+  /**
+   * Les courses du jour, ramenées à la devise lue — une seule fois, pour tout
+   * l'écran.
+   *
+   * Les cartes en sortent, et les totaux qui partent au NATIF aussi : ce sont
+   * eux qui remplissent l'écran verrouillé et la Dynamic Island, et ils
+   * sommaient des `effectiveFare` bruts. Un chauffeur qui a scanné à Paris le
+   * matin et à Londres l'après-midi voyait donc ses deux monnaies additionnées
+   * telles quelles derrière un seul symbole — un total qui ne désigne rien,
+   * affiché avec l'assurance d'un vrai.
+   */
+  const displayRides = useMemo(
+    () => rides.map(r => inCurrency(r, market.currency, fxRates)),
+    [rides, market.currency, fxRates],
+  );
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
   // `scan_debug_opt_out` : opposition à la capture de diagnostic
@@ -1240,7 +1259,7 @@ const DashboardScreen = () => {
     // Après une lecture réussie, un vrai zéro se pousse normalement : c'est le
     // début de journée, et il est alors exact.
     if (!dayLoadedRef.current) return;
-    const accepted = rides.filter(r => r.status === 'ACCEPTED');
+    const accepted = displayRides.filter(r => r.status === 'ACCEPTED');
     const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
     const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
     const onlineSeconds = todayOnlineBaseSecondsRef.current + sessionSecondsRef.current;
@@ -1250,7 +1269,7 @@ const DashboardScreen = () => {
       todayKm: totalKm,
       onlineMinutes: Math.floor(onlineSeconds / 60),
     });
-  }, [rides]);
+  }, [displayRides]);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
@@ -1457,7 +1476,7 @@ const DashboardScreen = () => {
               );
             }
           }
-          const accepted = rides.filter(r => r.status === 'ACCEPTED');
+          const accepted = displayRides.filter(r => r.status === 'ACCEPTED');
           const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
           const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
           const onlineHrStart = todayOnlineBaseSecondsRef.current / 3600;
@@ -1775,7 +1794,21 @@ const DashboardScreen = () => {
     });
   }, [acceptedCount]);
 
-  const pendingRides = rides.filter(r => r.status === 'PENDING');
+  // Ramenées à la devise lue avant d'atteindre les cartes, comme l'Historique.
+  //
+  // Une offre en attente vient presque toujours d'être scannée, donc elle est
+  // déjà dans la bonne monnaie et la conversion ne fait rien. Le cas qu'elle
+  // couvre est celui d'un chauffeur qui change de devise avec des offres encore
+  // à l'écran : sans ça, deux monnaies cohabiteraient dans la même liste sans
+  // que rien ne les distingue, et c'est sur ces cartes-là qu'il accepte ou
+  // refuse.
+  //
+  // Mémoïsé : `DashboardRideCard` est `React.memo`, un tableau reconstruit à
+  // chaque rendu lui ferait perdre tout l'intérêt.
+  const pendingRides = useMemo(
+    () => displayRides.filter(r => r.status === 'PENDING'),
+    [displayRides],
+  );
 
   // Défilement de l'écran, partagé par toutes les surfaces de verre qu'il porte.
   // Le champ étant fixe à l'appareil, c'est cette valeur qui dit à chaque surface

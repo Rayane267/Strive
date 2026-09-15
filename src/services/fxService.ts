@@ -1,17 +1,23 @@
 /**
  * Taux de change entre les trois devises des marchés couverts.
  *
- * ── CE QUE ÇA SERT, ET CE QUE ÇA NE SERT PAS ──────────────────────────────
- * UNIQUEMENT à consolider des TOTAUX. Une course garde toujours ce qu'elle a
- * rapporté : `rides.currency` est figée à la création, et la ligne d'historique
- * affiche « 20 € » pour une course parisienne même après un passage à la livre.
- * C'est la somme — gains du jour, de la semaine, des Stats — qui a besoin d'une
- * monnaie commune, parce qu'additionner 200 € et 150 £ ne désigne rien.
+ * ── UNE SEULE MONNAIE À L'ÉCRAN ───────────────────────────────────────────
+ * Tout ce qui s'affiche passe par ici : les totaux, mais aussi chaque LIGNE de
+ * course. Un historique où la ligne porte « 20 € » et la somme des livres ne
+ * laisse comparer aucun chiffre à son voisin — et la somme, elle, doit bien
+ * choisir une monnaie, parce qu'additionner 200 € et 150 £ ne désigne rien.
  *
- * Le chiffre converti est donc un chiffre de LECTURE, pas un chiffre de compte.
- * Les écrans qui en affichent un le disent (`history.otherCurrency`), pour que
- * le chauffeur sache que son total contient une estimation et pourquoi il ne
- * tombera pas au centime sur son relevé.
+ * La devise d'origine n'est pas perdue pour autant : `rides.currency` et
+ * `rides.fx_rate_eur` restent figées en base. C'est ce qui rend la conversion
+ * reproductible, et ce d'où repartirait une ligne si on voulait réafficher un
+ * jour ce que le chauffeur a réellement encaissé.
+ *
+ * Le chiffre converti est donc un chiffre de LECTURE, pas un chiffre de compte,
+ * et ça pèse plus lourd depuis que les lignes le sont aussi : le montant d'une
+ * course parisienne n'est plus celui qui figure sur le relevé Uber. Les écrans
+ * concernés le disent (`history.otherCurrency`), et ce compteur est désormais le
+ * SEUL indice qu'une estimation est à l'écran — le voir disparaître, ce serait
+ * rendre l'estimation invisible.
  *
  * ── LE TAUX DU JOUR, PAS CELUI DE LA COURSE ───────────────────────────────
  * Un taux historique par course serait plus juste comptablement, mais

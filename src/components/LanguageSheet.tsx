@@ -212,12 +212,17 @@ const LanguageSheet = ({
       // pire encore : 1,10 €/km s'affichait 1,77 £/mi, l'unité ayant changé en
       // plus de la monnaie.
       //
-      // On ne peut pas convertir — l'app n'a pas de taux de change, et n'a
-      // aucune raison d'en avoir. On repose donc les seuils sur le plancher du
-      // marché d'arrivée, celui que l'onboarding aurait proposé. Le chauffeur
-      // les retrouve dans Préférences et les rajuste s'il le souhaite : un
-      // chiffre juste qu'il peut changer vaut mieux qu'un chiffre faux qu'il ne
-      // voit pas.
+      // ON NE CONVERTIT PAS, ALORS QU'ON POURRAIT. `fxService` existe, et
+      // 25 €/h donnerait bien 21 £/h — mais ce serait le mauvais chiffre. Un
+      // seuil de rentabilité n'est pas un montant qu'on transporte d'un pays à
+      // l'autre : il dit ce qu'une course doit rapporter POUR QUE LA JOURNÉE
+      // TIENNE, et ça dépend du marché, pas du taux de change. 25 €/h est le
+      // plancher français ; le plancher britannique est à 16 £/h, pas à 21.
+      //
+      // On repose donc les seuils sur le plancher du marché d'arrivée, celui
+      // que l'onboarding aurait proposé. Le chauffeur les retrouve dans
+      // Préférences et les rajuste s'il le souhaite : un chiffre juste qu'il
+      // peut changer vaut mieux qu'un chiffre faux qu'il ne voit pas.
       const floor = MARKETS[country].thresholds;
       await supabase
         .from('preferences')

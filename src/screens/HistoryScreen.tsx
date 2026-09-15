@@ -61,7 +61,6 @@ import {
   toMarketDistance,
   toMarketRate,
   dateLocale,
-  displayForRide,
   type Market,
 } from '../utils/market';
 import { inCurrency, countConverted } from '../services/fxService';
@@ -91,8 +90,9 @@ const RideCard = React.memo(
     t,
     minHourly,
     minKm,
-    market: current,
+    market: display,
   }: {
+    /** DÉJÀ convertie dans la devise lue — cf. `displayRides` dans l'écran. */
     ride: Ride;
     t: any;
     minHourly: number;
@@ -101,10 +101,16 @@ const RideCard = React.memo(
      *  mémoïsée et rendue par centaines dans la liste. */
     market: Market;
   }) => {
-    // La ligne s'affiche dans la devise que la course a rapportée. Un chauffeur
-    // qui déménage garde ses courses parisiennes en euros — avec leurs
-    // kilomètres — au lieu de les voir devenir des livres et des miles.
-    const display = displayForRide(ride.currency, current);
+    // ── UNE SEULE MONNAIE, LIGNES COMPRISES ──────────────────────────────
+    // La carte affichait la devise que la course avait rapportée, et le total
+    // celle du chauffeur : une liste en euros sous une somme en livres, sans
+    // qu'aucun des deux chiffres ne soit comparable à son voisin. Tout est
+    // maintenant ramené à la devise lue, en amont dans `displayRides`, et la
+    // carte n'a plus qu'un marché à connaître — celui du chauffeur.
+    //
+    // Ce que ça coûte, et c'est assumé : le montant d'une course parisienne
+    // n'est plus celui que le chauffeur a encaissé. C'est `history.otherCurrency`
+    // qui porte l'avertissement, juste sous le total.
     const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
     const isDeclined = ride.status === 'DECLINED';
     const isPending = ride.status === 'PENDING';
@@ -546,25 +552,42 @@ const HistoryScreen = () => {
   const declined = rides.filter(r => r.status === 'DECLINED').length;
   const acceptRate =
     rides.length > 0 ? Math.round((accepted / rides.length) * 100) : 0;
-  // Chaque LIGNE garde sa monnaie ; le TOTAL, lui, a besoin d'une monnaie
-  // commune — additionner 200 € et 150 £ ne désigne rien. Les courses d'une
-  // autre devise y sont donc converties, au taux figé à leur scan, et l'écran
-  // le dit juste dessous plutôt que de le taire.
-  const acceptedRides = rides.filter(r => r.status === 'ACCEPTED');
-  const dailyTotal = acceptedRides.reduce(
-    (sum, r) => sum + effectiveFare(inCurrency(r, market.currency, fxRates)),
-    0,
+  // ── TOUT DANS LA DEVISE LUE, LIGNES COMPRISES ────────────────────────────
+  // La ligne gardait la monnaie de la course, le total prenait celle du
+  // chauffeur : une liste en euros sous une somme en livres, où aucun chiffre
+  // ne se comparait à son voisin. Une seule monnaie à l'écran, au taux figé au
+  // scan — un mois passé ne bouge donc pas parce que la livre a bougé depuis.
+  //
+  // Converties UNE fois, à la source de l'écran : les lignes et le total sortent
+  // de la même liste, donc la somme affichée est forcément celle des lignes
+  // affichées. Convertir séparément, c'était laisser les deux diverger au
+  // premier arrondi.
+  const displayRides = useMemo(
+    () => rides.map(r => inCurrency(r, market.currency, fxRates)),
+    [rides, market.currency, fxRates],
   );
-  const otherCurrencyCount = countConverted(acceptedRides, market.currency);
+
+  // COMPTÉ SUR LES COURSES D'ORIGINE, et pas sur `displayRides` : une fois
+  // normalisées, elles portent toutes la devise cible et `countConverted` n'y
+  // trouverait plus rien. Or c'est ce compteur qui dit au chauffeur pourquoi son
+  // total ne tombera pas au centime sur son relevé de plateforme — maintenant
+  // que les lignes elles aussi sont converties, il est le seul indice qui reste.
+  const otherCurrencyCount = countConverted(
+    rides.filter(r => r.status === 'ACCEPTED'),
+    market.currency,
+  );
+
+  const acceptedRides = displayRides.filter(r => r.status === 'ACCEPTED');
+  const dailyTotal = acceptedRides.reduce((sum, r) => sum + effectiveFare(r), 0);
 
   const filteredRides = useMemo(
     () =>
-      rides.filter(r => {
+      displayRides.filter(r => {
         if (filter === 'accepted') return r.status === 'ACCEPTED';
         if (filter === 'declined') return r.status === 'DECLINED';
         return true;
       }),
-    [rides, filter],
+    [displayRides, filter],
   );
 
   const renderRideCard = useCallback(

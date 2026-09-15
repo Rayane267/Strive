@@ -519,36 +519,19 @@ export function formatMoney(
   return cur.before ? `${cur.symbol}${body}` : `${body} ${cur.symbol}`;
 }
 
-/**
- * Comment s'affiche une COURSE, d'après la devise figée à sa création.
+/*
+ * `displayForRide` vivait ici : elle rendait l'affichage de la devise FIGÉE à la
+ * course, pour qu'une ligne d'historique parisienne reste en euros après un
+ * passage à la livre.
  *
- * Une course garde ce qu'elle a rapporté. Un chauffeur qui passe de l'euro à la
- * livre ne voit pas ses courses parisiennes devenir des livres : elles restent
- * en euros, avec leurs kilomètres, parce que c'est ce qu'il a encaissé et roulé.
- *
- * Le repli sur l'affichage COURANT n'est pas qu'une commodité : les courses
- * antérieures à la colonne `currency` n'ont pas de devise en base, et elles
- * étaient toutes en euros, d'un seul marché. Il leur redonne exactement
- * l'affichage qu'elles avaient.
- *
- * ── UN ACCÈS DE TABLE, PLUS UNE DÉDUCTION ─────────────────────────────────
- * Cette fonction rendait un `Market`, qu'elle obtenait en déduisant un PAYS de
- * la devise (`countryForCurrency`) — donc en interrogeant `Intl` pour deviner
- * une région, par carte de liste et à chaque rendu, afin de retrouver un
- * symbole que `CURRENCIES` donne directement. La déduction n'avait aucun effet
- * visible : quatre pays partagent l'euro et s'affichent tous pareil. Seul le
- * plancher de rentabilité les sépare, et il ne s'applique qu'à la course du
- * jour — jamais à une ligne d'historique.
+ * Retirée avec le passage à une monnaie unique à l'écran. Les courses sont
+ * désormais converties en amont — `displayRides` dans l'Historique,
+ * `pendingRides` au Dashboard — et toute surface d'affichage lit le
+ * marché du chauffeur, un point c'est tout. La devise d'origine reste en base
+ * (`rides.currency`, `rides.fx_rate_eur`) : c'est elle qui rend la conversion
+ * reproductible, et c'est de là qu'une ligne repartirait si on voulait un jour
+ * réafficher ce que le chauffeur a réellement encaissé.
  */
-export function displayForRide(
-  currency: string | null | undefined,
-  current: CurrencyDisplay,
-): CurrencyDisplay {
-  if (!currency || currency === current.currency) return current;
-  // Une devise inconnue (course d'un marché pas encore ouvert, colonne libre)
-  // retombe sur l'affichage courant plutôt que de rendre `undefined`.
-  return CURRENCIES[currency as Currency] ?? current;
-}
 
 /**
  * La locale à donner à `Intl` : la LANGUE dit les mots, le MARCHÉ dit la région.
