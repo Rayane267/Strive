@@ -34,6 +34,27 @@
  * une seule langue, et le fichier généré modifié à la main.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+
+/**
+ * FINS DE LIGNE — pourquoi ces deux fonctions existent.
+ *
+ * Les blocs générés sont assemblés avec `join('\n')`, donc en LF. Les fichiers
+ * cibles, eux, arrivent sur le disque en CRLF dès que `core.autocrlf=true` est
+ * actif — c'est le cas du poste Windows, et `.gitattributes` documente déjà les
+ * dégâts que ça fait ailleurs.
+ *
+ * Les comparer tels quels, c'est comparer des fins de ligne et non du contenu :
+ * `--check` signalait une dérive permanente alors que les soixante libellés
+ * étaient identiques à l'octet près. Pire, la régénération censée « corriger »
+ * écrivait un bloc LF dans un fichier CRLF et y laissait des fins de ligne
+ * mélangées, que git signalait à son tour — le remède nourrissait le symptôme.
+ *
+ * On lit donc la convention du fichier CIBLE et on lui rend le bloc dans la
+ * sienne. Normaliser la seule comparaison aurait réparé le check et laissé
+ * l'écriture fautive.
+ */
+const eolOf = s => (s.includes('\r\n') ? '\r\n' : '\n');
+const toEol = (s, eol) => s.replace(/\r\n/g, '\n').replace(/\n/g, eol);
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -138,7 +159,8 @@ const swiftBlock = [
   if (i < 0 || j < 0) {
     problems.push(`${SWIFT} : bornes <generated:native-strings> introuvables`);
   } else {
-    const next = src.slice(0, i) + swiftBlock + src.slice(j + CLOSE.length);
+    const next =
+      src.slice(0, i) + toEol(swiftBlock, eolOf(src)) + src.slice(j + CLOSE.length);
     if (next !== src) {
       if (check) problems.push(`${SWIFT} a dérivé de src/locales`);
       else { writeFileSync(p, next, 'utf8'); wrote.push(SWIFT); }
@@ -180,9 +202,8 @@ for (const lang of LANGS) {
   }
   for (const k of kept) lines.push('  ' + k);
   lines.push('</resources>');
-  const next = lines.join('\n') + '\n';
-
   const prev = existsSync(p) ? readFileSync(p, 'utf8') : null;
+  const next = toEol(lines.join('\n') + '\n', prev ? eolOf(prev) : '\n');
   if (prev !== next) {
     if (check) problems.push(`${rel} a dérivé de src/locales`);
     else {
