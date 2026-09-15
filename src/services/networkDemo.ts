@@ -16,6 +16,8 @@
  * d'un coup d'œil ce qu'il faudra remplacer par une requête.
  */
 
+import { formatMoney, decimalSeparator, type Market } from '../utils/market';
+
 /**
  * Le réseau est EN SUSPENS — mis hors de portée pour la v1.
  *
@@ -85,12 +87,12 @@ export function parseFare(input: string): number {
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-export function money(value: number, lang: string): string {
-  // Le symbole reste l'euro : ces cartes de démonstration décrivent le réseau
-  // français, seul ouvert à ce jour. Elles suivront `market.symbol` le jour où
-  // le réseau s'ouvrira ailleurs — avec des montants et des villes de là-bas,
-  // pas seulement un autre signe devant les mêmes.
-  return `${value.toFixed(2).replace('.', lang === 'fr' ? ',' : '.')} €`;
+export function money(value: number, market: Market, lang: string): string {
+  // Le symbole suit le marché comme partout ailleurs. Les cartes de
+  // démonstration décrivent encore des courses françaises — c'est le seul
+  // réseau ouvert — mais un chauffeur suisse qui les ouvre lit au moins ses
+  // montants dans SA monnaie, plutôt qu'un euro qui ne lui dit rien.
+  return formatMoney(value, market, { decimals: 2, language: lang });
 }
 
 /**
@@ -99,7 +101,9 @@ export function money(value: number, lang: string): string {
  */
 export function moneyParts(value: number, lang: string) {
   const [int, dec] = value.toFixed(2).split('.');
-  return { int, dec, sep: lang === 'fr' ? ',' : '.' };
+  // La virgule décimale suit la LANGUE et non le marché : un chauffeur
+  // londonien qui lit l'app en français écrit « 52,50 », pas « 52.50 ».
+  return { int, dec, sep: decimalSeparator(lang) };
 }
 
 // ─── Identité de l'apporteur ─────────────────────────────────────────────────

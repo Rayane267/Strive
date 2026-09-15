@@ -61,7 +61,7 @@ const ShopScreen = () => {
   }, []);
 
   const getPriceLabel = (pack: typeof SCAN_PACKS[number]): string =>
-    storePrices[pack.productId] || pack.priceLabel;
+    storePrices[pack.productId] || formatMoney(pack.price, market, { decimals: 2 });
 
   const handlePurchase = async (pack: typeof SCAN_PACKS[number]) => {
     if (!user) return;

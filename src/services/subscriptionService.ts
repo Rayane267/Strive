@@ -71,13 +71,18 @@ export async function fetchPlanLimits(): Promise<void> {
 }
 
 // Doit rester synchro avec public.subscription_products (seed migration).
-// quantity/price/priceLabel sont des fallbacks UI — la source de vérité finale
-// est le store (priceString via getStorePrices) + scan_credits en DB.
+// quantity/price sont des fallbacks UI — la source de vérité finale est le
+// store (priceString via getStorePrices) + scan_credits en DB.
+//
+// `priceLabel` a été retiré : c'était le même montant une seconde fois, déjà
+// habillé d'un « € » en dur. Un chauffeur londonien dont le store ne répondait
+// pas se voyait proposer « 0,49€ » pour un produit facturé en livres. L'écran
+// habille désormais `price` avec la devise du marché.
 export const SCAN_PACKS = [
-  { id: 'pack_xs', productId: 'strive_scan_pack_xs', quantity: 1,  price: 0.49, priceLabel: '0,49€' },
-  { id: 'pack_s',  productId: 'strive_scan_pack_s',  quantity: 3,  price: 0.99, priceLabel: '0,99€', savings: '-32%' },
-  { id: 'pack_m',  productId: 'strive_scan_pack_m',  quantity: 5,  price: 1.49, priceLabel: '1,49€', savings: '-39%' },
-  { id: 'pack_l',  productId: 'strive_scan_pack_l',  quantity: 10, price: 2.49, priceLabel: '2,49€', savings: '-49%' },
+  { id: 'pack_xs', productId: 'strive_scan_pack_xs', quantity: 1,  price: 0.49 },
+  { id: 'pack_s',  productId: 'strive_scan_pack_s',  quantity: 3,  price: 0.99, savings: '-32%' },
+  { id: 'pack_m',  productId: 'strive_scan_pack_m',  quantity: 5,  price: 1.49, savings: '-39%' },
+  { id: 'pack_l',  productId: 'strive_scan_pack_l',  quantity: 10, price: 2.49, savings: '-49%' },
 ] as const;
 
 export function getPlanTier(tier?: string | null): PlanTier {

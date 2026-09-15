@@ -63,7 +63,7 @@ const NetworkOfferScreen = () => {
   const split = splitFare(fare);
   const classicCut = Math.round(fare * CLASSIC_PLATFORM_RATE * 100) / 100;
   const ready = pickup.trim().length > 0 && dropoff.trim().length > 0 && fare > 0;
-  const m = (v: number) => money(v, i18n.language);
+  const m = (v: number) => money(v, market, i18n.language);
 
   const publish = () => {
     if (!ready) return;

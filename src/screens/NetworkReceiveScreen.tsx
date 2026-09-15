@@ -68,7 +68,7 @@ const NetworkReceiveScreen = () => {
       .finally(() => setHowtoChecked(true));
   }, []);
 
-  const m = (v: number) => money(v, i18n.language);
+  const m = (v: number) => money(v, market, i18n.language);
 
   const closeHowto = () => {
     setHowtoOpen(false);
@@ -131,7 +131,9 @@ const NetworkReceiveScreen = () => {
               </Text>
             </View>
             <View style={styles.tripMeta}>
-              <Text style={styles.tripMetaText}>{offer.tripKm} km</Text>
+              <Text style={styles.tripMetaText}>
+                {toMarketDistance(offer.tripKm, market).toFixed(1)} {market.distanceUnit}
+              </Text>
               <Text style={styles.tripMetaText}>{offer.tripMin} min</Text>
             </View>
           </View>
