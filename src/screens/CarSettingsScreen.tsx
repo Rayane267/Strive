@@ -16,6 +16,13 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import PlanBadge from '../components/PlanBadge';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
+import { useMarketT } from '../hooks/useMarketT';
+import {
+  consumptionUnit,
+  consumptionBounds,
+  toMarketConsumption,
+  fromMarketConsumption,
+} from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -135,7 +142,7 @@ type FuelKey = typeof FUEL_KEYS[number];
 const CarSettingsScreen = () => {
   const market = useMarket();
   const navigation = useNavigation<any>();
-  const { t } = useTranslation();
+  const { t } = useMarketT();
   const { user, profile, refreshProfile } = useAuth();
   const { isConnected } = useNetworkStatus();
 
@@ -158,6 +165,10 @@ const CarSettingsScreen = () => {
   const [avgCons, setAvgCons] = useState('');
   const [elecPrice, setElecPrice] = useState('');
   const [fuelPrice, setFuelPrice] = useState('');
+
+  // L'unité dépend du marché ET du carburant : le Royaume-Uni compte en
+  // miles par gallon, et en miles par kWh quand la voiture est électrique.
+  const consUnit = consumptionUnit(market, fuelType === 'electric');
   const { toast, showToast, dismissToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'make' | 'model' | 'year' | 'fuel' | null>(null);
@@ -182,7 +193,18 @@ const CarSettingsScreen = () => {
         year: profile.car_year || '2022',
         regNum: profile.car_reg || '',
         fuelType: (profile.fuel_type && (FUEL_KEYS as readonly string[]).includes(profile.fuel_type)) ? (profile.fuel_type as FuelKey) : 'essence',
-        avgCons: profile.avg_cons ? profile.avg_cons.toString() : '',
+        // Stockée aux 100 km, relue en mpg au Royaume-Uni. Le `toFixed(1)`
+        // n'intervient QUE là où il y a conversion : arrondir une valeur
+        // métrique au chargement rendrait le formulaire sale d'entrée.
+        avgCons: profile.avg_cons
+          ? market.distanceUnit === 'mi'
+            ? toMarketConsumption(
+                profile.avg_cons,
+                market,
+                profile.fuel_type === 'electric',
+              ).toFixed(1)
+            : profile.avg_cons.toString()
+          : '',
         elecPrice: profile.elec_price ? profile.elec_price.toString() : '',
         fuelPrice: profile.fuel_price ? profile.fuel_price.toString() : '',
       };
@@ -196,7 +218,7 @@ const CarSettingsScreen = () => {
       setFuelPrice(next.fuelPrice);
       setSavedSig(sigOf(next));
     }
-  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile, market]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Garde-fou : prévient avant de quitter avec des modifs non enregistrées.
   useEffect(() => {
@@ -258,12 +280,29 @@ const CarSettingsScreen = () => {
     let consToSave: number | null = null;
     if (avgCons.trim() !== '') {
       const parsedCons = parseFloat(avgCons.replace(',', '.'));
-      if (isNaN(parsedCons) || parsedCons <= 0 || parsedCons > 99.9) {
+      // Les bornes portent sur ce que le chauffeur TAPE. Au mpg l'échelle
+      // s'inverse — « moins c'est mieux » devient « plus c'est mieux » — et un
+      // intervalle métrique appliqué tel quel refuserait toutes les voitures.
+      const bounds = consumptionBounds(market, fuelType === 'electric');
+      if (isNaN(parsedCons) || parsedCons < bounds.min || parsedCons > bounds.max) {
         hapticError();
-        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.consInvalid', 'Consommation invalide (entre 0.1 et 99.9).') });
+        showToast({ type: 'error', title: t('common.error', 'Erreur'), message: t('carSettings.errors.consInvalid', {
+          defaultValue: 'Consommation invalide (entre {{min}} et {{max}} {{consUnit}}).',
+          min: bounds.min,
+          max: bounds.max,
+          consUnit: bounds.unit,
+        }) });
         return;
       }
-      consToSave = parsedCons;
+      // Toujours enregistrée aux 100 km : c'est ce que lit `computeFuelCost`,
+      // et le coût d'une course se calcule en litres et en kilomètres.
+      //
+      // QUATRE décimales et non trois : l'inversion concentre les grandes
+      // valeurs affichées dans les petites valeurs stockées, et 200 mpg tombe
+      // sur 1,412 L/100 km. À trois décimales l'aller-retour rendait 200,1 —
+      // le formulaire se réouvrait « modifié » sans que rien n'ait bougé.
+      consToSave =
+        Math.round(fromMarketConsumption(parsedCons, market, fuelType === 'electric') * 10000) / 10000;
     }
     // Prix €/kWh (électrique uniquement). Optionnel → null si vide.
     let elecPriceToSave: number | null = null;
@@ -451,9 +490,7 @@ const CarSettingsScreen = () => {
                   </View>
                   <View>
                     <Text style={styles.consTitle}>{t('settings.avgCons', 'Consommation moy.')}</Text>
-                    <Text style={styles.consSub}>
-                      {fuelType === 'electric' ? 'kWh/100km' : 'L/100km'}
-                    </Text>
+                    <Text style={styles.consSub}>{consUnit}</Text>
                   </View>
                 </View>
                 <TextInput
@@ -475,7 +512,7 @@ const CarSettingsScreen = () => {
                   keyboardType="decimal-pad"
                   placeholder="0.0"
                   placeholderTextColor={colors.textDimmed}
-                  maxLength={4}
+                  maxLength={5}
                   onFocus={() => setOpenDropdown(null)}
                 />
               </View>

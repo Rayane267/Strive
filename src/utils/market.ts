@@ -531,3 +531,92 @@ export function toMarketRate(ratePerKm: number, market: Market): number {
 export function fromMarketRate(rate: number, market: Market): number {
   return market.distanceUnit === 'mi' ? rate / KM_PER_MILE : rate;
 }
+
+/**
+ * Le gallon IMPÉRIAL, 4,546 L — pas le gallon américain de 3,785 L.
+ *
+ * Les deux s'écrivent « mpg » et se confondent d'autant plus facilement que le
+ * chiffre américain est 20 % plus petit pour la même voiture. Se tromper de
+ * gallon ferait sous-estimer d'un cinquième le coût carburant de chaque course,
+ * et le bénéfice net affiché serait systématiquement trop beau.
+ */
+export const LITRES_PER_IMPERIAL_GALLON = 4.54609;
+
+/**
+ * Le pont entre « litres aux 100 km » et « miles au gallon ».
+ *
+ * Les deux unités sont l'INVERSE l'une de l'autre : l'une compte le carburant
+ * pour une distance fixe, l'autre la distance pour un carburant fixe. La
+ * conversion est donc une division, dans les deux sens — `mpg = 282,48 / (L/100
+ * km)` autant que `L/100 km = 282,48 / mpg`. Une multiplication, ici, donnerait
+ * un chiffre qui a l'air plausible et qui est faux.
+ *
+ * 282,48 = (100 km ÷ 1,609 km par mile) × 4,546 L par gallon.
+ */
+export const MPG_FACTOR = (100 / KM_PER_MILE) * LITRES_PER_IMPERIAL_GALLON;
+
+/**
+ * Même inversion pour l'électrique : le Royaume-Uni compte en MILES PAR kWh
+ * quand le continent compte en kWh aux 100 km.
+ *
+ * 62,14 = 100 km ÷ 1,609 km par mile.
+ */
+export const MI_PER_KWH_FACTOR = 100 / KM_PER_MILE;
+
+/** « L/100km », « kWh/100km », ou « mpg » / « mi/kWh » au Royaume-Uni. */
+export function consumptionUnit(market: Market, electric: boolean): string {
+  if (market.distanceUnit === 'mi') return electric ? 'mi/kWh' : 'mpg';
+  return electric ? 'kWh/100km' : 'L/100km';
+}
+
+/**
+ * Bornes de saisie, dans l'unité que le chauffeur a sous les yeux.
+ *
+ * Écrites à la main et non déduites des bornes métriques : l'inversion rend
+ * l'intervalle absurde dès qu'on le traduit mécaniquement (0,1 L/100 km
+ * deviendrait 2 825 mpg, et une faute de frappe à 450 passerait). Chaque
+ * fenêtre couvre largement le parc réel et rien au-delà :
+ *
+ *   5–200 mpg     → 56,5 à 1,4 L/100 km   (du 4×4 à l'hybride rechargeable)
+ *   0,7–20 mi/kWh  → 88,8 à 3,1 kWh/100 km (du van électrique au deux-roues)
+ *
+ * Toutes retombent à l'intérieur des bornes métriques : la valeur enregistrée
+ * reste valide quelle que soit la porte d'entrée.
+ */
+export function consumptionBounds(
+  market: Market,
+  electric: boolean,
+): { min: number; max: number; unit: string } {
+  const unit = consumptionUnit(market, electric);
+  if (market.distanceUnit === 'mi') {
+    return electric ? { min: 0.7, max: 20, unit } : { min: 5, max: 200, unit };
+  }
+  return { min: 0.1, max: 99.9, unit };
+}
+
+/**
+ * Consommation stockée (toujours aux 100 km) → unité du marché.
+ *
+ * `profiles.avg_cons` reste métrique sur les six marchés, comme
+ * `rides.distance_km` : c'est ce qui entre dans `computeFuelCost`, et le coût
+ * carburant d'une course se calcule sur des kilomètres et des litres. Le mpg
+ * n'existe qu'entre le champ de saisie et l'œil du chauffeur.
+ */
+export function toMarketConsumption(
+  per100km: number,
+  market: Market,
+  electric: boolean,
+): number {
+  if (market.distanceUnit !== 'mi' || !(per100km > 0)) return per100km;
+  return (electric ? MI_PER_KWH_FACTOR : MPG_FACTOR) / per100km;
+}
+
+/** Le chemin inverse, pour ce que le chauffeur tape. */
+export function fromMarketConsumption(
+  value: number,
+  market: Market,
+  electric: boolean,
+): number {
+  if (market.distanceUnit !== 'mi' || !(value > 0)) return value;
+  return (electric ? MI_PER_KWH_FACTOR : MPG_FACTOR) / value;
+}

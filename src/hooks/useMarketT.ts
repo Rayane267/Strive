@@ -17,8 +17,10 @@
  * chaque appel peut toujours les surcharger.
  *
  * ── CE QUE LES TRADUCTIONS PEUVENT UTILISER ───────────────────────────────
- * `{{cur}}`   le symbole : « € », « CHF », « £ »
- * `{{unit}}`  l'unité de distance : « km », ou « mi » au Royaume-Uni
+ * `{{cur}}`       le symbole : « € », « CHF », « £ »
+ * `{{unit}}`      l'unité de distance : « km », ou « mi » au Royaume-Uni
+ * `{{cons}}`      la consommation : « L/100km », ou « mpg » au Royaume-Uni
+ * `{{consElec}}`  la même en électrique : « kWh/100km », ou « mi/kWh »
  *
  * Volontairement PAS de `{{hr}}` tout fait : « par heure » s'abrège
  * différemment selon la langue (« /h », « /hr », « /u », « /Std. ») et cette
@@ -28,6 +30,7 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMarket } from './useMarket';
+import { consumptionUnit } from '../utils/market';
 
 type TOptions = Record<string, unknown>;
 
@@ -37,7 +40,12 @@ export function useMarketT() {
 
   const marketT = useCallback(
     (key: string | string[], options?: TOptions | string): string => {
-      const vars = { cur: market.symbol, unit: market.distanceUnit };
+      const vars = {
+        cur: market.symbol,
+        unit: market.distanceUnit,
+        cons: consumptionUnit(market, false),
+        consElec: consumptionUnit(market, true),
+      };
       // Second argument en chaîne = valeur par défaut, forme courante d'i18next
       // qu'on ne peut pas casser sans réécrire des dizaines d'appels.
       const opts =
