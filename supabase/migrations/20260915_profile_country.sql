@@ -91,6 +91,42 @@ comment on column public.profiles.fuel_price is
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Régimes sociaux : de trois statuts français à six identifiants de marché
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SANS CE BLOC, L'ONBOARDING NE S'ENREGISTRE PLUS. `preferences.driver_status`
+-- porte une contrainte qui n'admet que 'auto_entrepreneur', 'societe',
+-- 'salarie' et 'autre' — les trois statuts français plus l'échappatoire. La
+-- colonne reçoit désormais l'identifiant du régime tel que `market.regimes` le
+-- nomme : 'auto', 'company', 'employee', 'independent', 'autonomo',
+-- 'sole_trader'. Les six violent la contrainte, donc l'upsert de fin
+-- d'onboarding échouerait — en silence pour le chauffeur, qui passerait à
+-- l'écran suivant avec ses réponses perdues.
+--
+-- Les ANCIENNES valeurs restent admises : des milliers de lignes les portent,
+-- et rien ne justifie de les réécrire. 'autre' disparaît en revanche des
+-- nouvelles écritures — l'onboarding ne propose plus de taux libre depuis que
+-- chaque marché a ses régimes nommés.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+alter table public.preferences
+  drop constraint if exists preferences_driver_status_values;
+alter table public.preferences
+  add constraint preferences_driver_status_values
+  check (driver_status is null
+         or driver_status in (
+           -- Nouvelles : identifiants de `src/utils/market.ts`
+           'auto', 'company', 'employee', 'independent', 'autonomo', 'sole_trader',
+           -- Historiques : conservées pour les lignes déjà écrites
+           'auto_entrepreneur', 'societe', 'salarie', 'autre'
+         ));
+
+comment on column public.preferences.driver_status is
+  'Régime social déclaré, tel que market.regimes le nomme (auto | company | '
+  'employee | independent | autonomo | sole_trader). Les valeurs françaises '
+  'historiques restent admises. Indicatif — le calcul utilise social_rate.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- TESTS POST-MIGRATION
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 1. La colonne existe et tous les profils sont français :
@@ -108,5 +144,10 @@ comment on column public.profiles.fuel_price is
 --
 --    `fuel_prices` n'est PAS touchée : elle garde sa seule ligne `paris`.
 --
--- 4. Un chauffeur français ne voit AUCUN changement : 'FR' rend exactement les
+-- 4. Les nouveaux régimes passent la contrainte :
+--    insert into preferences (id, driver_status) values ('<uuid>', 'sole_trader')
+--      on conflict (id) do update set driver_status = 'sole_trader';
+--    → OK. Et 'auto_entrepreneur' passe toujours, pour les lignes existantes.
+--
+-- 5. Un chauffeur français ne voit AUCUN changement : 'FR' rend exactement les
 --    valeurs d'avant — ligne `paris`, micro-BIC à 21,2 %, plancher 25 €/h.

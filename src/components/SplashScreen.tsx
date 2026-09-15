@@ -58,7 +58,24 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ ready = false, onFinish }) 
     intro.start(({ finished }) => {
       if (finished) setIntroDone(true);
     });
-    return () => intro.stop();
+
+    // FILET DE SÉCURITÉ, et il n'est pas décoratif.
+    //
+    // `finished` vaut `false` dès que l'animation est interrompue — et si
+    // personne ne repasse `introDone` à vrai, `onFinish` n'est jamais appelé :
+    // `RootNavigator` garde le splash affiché, pour toujours. Le seul recours
+    // serait de tuer l'app. Un état où l'on ne sort plus ne se rattrape pas au
+    // cas par cas, il se rend impossible : passé la durée totale de la séquence,
+    // on rend la main quoi qu'il soit arrivé à l'animation.
+    const failsafe = setTimeout(
+      () => setIntroDone(true),
+      INTRO_DELAY + INTRO_DURATION + HOLD_DURATION + 1500,
+    );
+
+    return () => {
+      intro.stop();
+      clearTimeout(failsafe);
+    };
   }, [loaderFade]);
 
   const finish = useCallback(() => {
