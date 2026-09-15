@@ -215,14 +215,24 @@ public enum StriveMarket {
   /// Espace avant « CHF » seulement : c'est un mot, et « 37CHF » se lit comme
   /// une coquille. Les glyphes, eux, restent collés — l'îlot compact et la
   /// pastille de tarif comptent leurs points de largeur.
+  /// Un nombre écrit dans la convention décimale de la LANGUE de l'app.
+  ///
+  /// `String(format:)` écrit toujours un POINT, quelle que soit la locale. Un
+  /// chauffeur français lisait donc « 19.61€ » sur son écran verrouillé et
+  /// « 19,61 € » dans l'app, pour la même course. La virgule suit la LANGUE, le
+  /// symbole suit la DEVISE — les deux se choisissent séparément et n'ont aucune
+  /// raison de se suivre.
+  ///
+  /// Pose ici plutôt que dans `money` parce que tout ce qui s'affiche n'est pas
+  /// un montant : une distance et un taux nu ont le même besoin, et les deux
+  /// s'écrivaient encore au point.
+  public static func number(_ value: Double, decimals: Int) -> String {
+    String(format: "%.\(decimals)f", value)
+      .replacingOccurrences(of: ".", with: decimalSeparator)
+  }
+
   public static func money(_ value: Double, decimals: Int = 0) -> String {
-    // `String(format:)` écrit toujours un POINT décimal, quelle que soit la
-    // locale. Un chauffeur français lisait donc « 19.61€ » sur son écran
-    // verrouillé et « 19,61 € » dans l'app, pour la même course. La virgule
-    // suit la LANGUE, le symbole suit le MARCHÉ — les deux se choisissent
-    // séparément et n'ont aucune raison de se suivre.
-    let s = String(format: "%.\(decimals)f", value)
-      .replacingOccurrences(of: ".", with: StriveMarket.decimalSeparator)
+    let s = number(value, decimals: decimals)
     if symbol == "£" { return "£" + s }
     return symbol.count > 1 ? s + " " + symbol : s + symbol
   }
@@ -256,8 +266,18 @@ public enum StriveMarket {
 
   /// « 5.4km », « 3.4mi ».
   public static func distanceText(_ km: Double) -> String {
-    String(format: "%.1f", distance(km))
-      .replacingOccurrences(of: ".", with: decimalSeparator) + distanceUnit
+    number(distance(km), decimals: 1) + distanceUnit
+  }
+
+  /// « 1,29/mi » — le taux et son unité, SANS le symbole monétaire.
+  ///
+  /// L'îlot compact de la Dynamic Island n'a pas la place du symbole, et
+  /// l'assumait déjà. Il écrivait en revanche « 1.29/mi » au point décimal,
+  /// pendant que la même course affichait « 1,29 £/mi » une fois l'îlot
+  /// déployé : deux écritures du même chiffre, à deux doigts d'écart. La place
+  /// manquait pour le symbole, pas pour la virgule.
+  public static func perDistanceBare(_ perKm: Double) -> String {
+    number(rate(perKm), decimals: 2) + "/" + distanceUnit
   }
 }
 

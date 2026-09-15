@@ -203,9 +203,10 @@ struct StriveLiveActivity: Widget {
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(lockGreen)
         } else if isRecap {
-          // Sans symbole — la place manque dans la région compacte — mais
-          // l'unité et la valeur suivent le marché.
-          Text(String(format: "%.2f/%@", StriveMarket.rate(context.state.kmRate), StriveMarket.distanceUnit))
+          // Sans symbole — la place manque dans la région compacte — mais la
+          // valeur, l'unité et la virgule décimale suivent le marché et la
+          // langue, comme partout ailleurs.
+          Text(StriveMarket.perDistanceBare(context.state.kmRate))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
             .lineLimit(1)
@@ -454,7 +455,10 @@ private struct LockScreenView: View {
               .frame(width: 1, height: 32)
 
             VStack(spacing: 2) {
-              Text(String(format: "%.1f", StriveMarket.distance(state.todayKm)))
+              // La valeur seule : l'unité vit dans le Text d'en dessous, pour
+              // son propre corps de police. La virgule, elle, appartient au
+              // nombre — `distanceText` ne convient donc pas ici.
+              Text(StriveMarket.number(StriveMarket.distance(state.todayKm), decimals: 1))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
               Text(StriveMarket.distanceUnit.uppercased())
