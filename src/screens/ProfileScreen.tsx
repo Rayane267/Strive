@@ -29,7 +29,7 @@ import LanguageSheet from '../components/LanguageSheet';
 import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
-import { LANGUAGE_NAMES } from '../utils/market';
+import { LANGUAGE_NAMES, dateLocale, decimalSeparator } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -686,13 +686,17 @@ const ProfileScreen = () => {
             <View style={styles.earnTexts}>
               <Text style={styles.earnLabel}>{t('profile.weekEarnings')}</Text>
               <View style={styles.earnAmountRow}>
+                {/* `toLocaleString('fr-FR')` était épinglé au français : un
+                    chauffeur allemand lisait ses gains groupés à la française.
+                    Le groupement suit la langue comme le reste. */}
                 <Text style={styles.earnWhole}>
-                  {Math.floor(weekEarnings).toLocaleString('fr-FR')}
+                  {Math.floor(weekEarnings).toLocaleString(dateLocale(i18n.language, market))}
                 </Text>
                 {/* Les centimes en retrait : ils comptent, mais ce sont les
                     euros qui se lisent d'un coup d'œil. */}
                 <Text style={styles.earnCents}>
-                  ,{Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} {market.symbol}
+                  {decimalSeparator(i18n.language)}
+                  {Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} {market.symbol}
                 </Text>
               </View>
             </View>

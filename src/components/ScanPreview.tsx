@@ -120,7 +120,7 @@ const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
             </View>
             <View style={styles.diRouteStats}>
               <Text style={styles.diRouteDuration}>{p.duration}min</Text>
-              <Text style={styles.diRouteDistance}>{p.distance}km</Text>
+              <Text style={styles.diRouteDistance}>{p.distance}{market.distanceUnit}</Text>
             </View>
             <View style={[styles.diRouteCircle, { backgroundColor: p.color }]}>
               <Feather name={p.icon} size={12} color="#000" />

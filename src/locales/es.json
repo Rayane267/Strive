@@ -22,7 +22,8 @@
     "stay": "Quedarme",
     "leave": "Salir",
     "back": "Atrás",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "dateRange": "Del {{start}} al {{end}}"
   },
   "errors": {
     "profileLoadFailed": "No se ha podido cargar tu perfil.",

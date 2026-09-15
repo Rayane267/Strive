@@ -22,7 +22,8 @@
     "stay": "Blijven",
     "leave": "Sluiten",
     "back": "Terug",
-    "close": "Sluiten"
+    "close": "Sluiten",
+    "dateRange": "{{start}} – {{end}}"
   },
   "errors": {
     "profileLoadFailed": "Je profiel kon niet worden geladen.",

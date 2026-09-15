@@ -60,6 +60,7 @@ import {
   distanceUnitLabel,
   toMarketDistance,
   toMarketRate,
+  dateLocale,
   type Market,
 } from '../utils/market';
 import ScreenField from '../components/ScreenField';
@@ -517,17 +518,16 @@ const HistoryScreen = () => {
   };
 
   const getHeaderDateText = () => {
-    const isFr = i18n.language === 'fr';
+    // La langue dit le mois, le marché dit l'ordre des éléments.
+    const loc = dateLocale(i18n.language, market);
     const fmt = (d: Date) =>
-      d.toLocaleDateString(isFr ? 'fr-FR' : 'en-US', {
-        day: 'numeric',
-        month: 'short',
-      });
+      d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
     if (dateRange.start.toDateString() === dateRange.end.toDateString())
       return fmt(dateRange.start);
-    return isFr
-      ? `Du ${fmt(dateRange.start)} au ${fmt(dateRange.end)}`
-      : `${fmt(dateRange.start)} – ${fmt(dateRange.end)}`;
+    return t('common.dateRange', {
+      start: fmt(dateRange.start),
+      end: fmt(dateRange.end),
+    });
   };
 
   // ── Computed ────────────────────────────────────────────────────────────────

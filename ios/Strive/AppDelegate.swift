@@ -223,18 +223,21 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   private static let declineActionId = "STRIVE_DECLINE"
 
   private func registerScanResultCategory() {
-    // Anglais uniquement si l'app est réglée en anglais, français sinon — même
-    // règle que partout ailleurs (la locale système ne fait pas foi).
-    let appLang = UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-    let fr = !(appLang?.hasPrefix("en") ?? false)
+    // Les deux boutons du verdict, dans la langue choisie DANS Strive — la
+    // locale système ne fait pas foi. Ils étaient les derniers à ne connaître
+    // que deux langues : un chauffeur espagnol voyait « Course prise » sous un
+    // résultat par ailleurs entièrement en espagnol.
+    //
+    // Les libellés sont ceux de la bulle Android, au mot près : c'est le même
+    // geste sur les deux plateformes, il n'a pas à se dire deux fois.
     let accept = UNNotificationAction(
       identifier: Self.acceptActionId,
-      title: fr ? "✅ Course prise" : "✅ Ride taken",
+      title: StriveNativeStrings.get("bubbleRideTaken"),
       options: []
     )
     let decline = UNNotificationAction(
       identifier: Self.declineActionId,
-      title: fr ? "❌ Refusée" : "❌ Declined",
+      title: StriveNativeStrings.get("bubbleRideDeclined"),
       options: [.destructive]
     )
     let category = UNNotificationCategory(

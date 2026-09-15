@@ -484,6 +484,23 @@ export function formatMoney(
   return market.currency === 'GBP' ? `${market.symbol}${body}` : `${body} ${market.symbol}`;
 }
 
+/**
+ * La locale à donner à `Intl` : la LANGUE dit les mots, le MARCHÉ dit la région.
+ *
+ * Les deux se choisissent séparément, et leur croisement n'est pas une curiosité :
+ * un chauffeur français à Londres lit l'app en français et travaille en livres.
+ * « fr-GB » lui rend des mois français avec les conventions britanniques, ce qui
+ * est exactement ce qu'il veut.
+ *
+ * Sans région, « en » tombe sur l'américain : « Sep 5 » là où un Londonien
+ * écrit « 5 Sept ». La date est le genre de détail qu'on ne remarque que
+ * lorsqu'il est faux.
+ */
+export function dateLocale(language: string | undefined, market: Market): string {
+  const base = (language ?? 'en').split('-')[0];
+  return `${base}-${market.country}`;
+}
+
 /** Suffixe des seuils : « €/h », « £/h », « CHF/h ». */
 export const hourlyUnit = (market: Market) => `${market.symbol}/h`;
 

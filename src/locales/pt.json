@@ -22,7 +22,8 @@
     "stay": "Ficar",
     "leave": "Sair",
     "back": "Voltar",
-    "close": "Fechar"
+    "close": "Fechar",
+    "dateRange": "De {{start}} a {{end}}"
   },
   "errors": {
     "profileLoadFailed": "Não foi possível carregar o seu perfil.",

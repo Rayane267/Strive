@@ -59,6 +59,7 @@ import {
   distanceUnitLabel,
   toMarketDistance,
   toMarketRate,
+  dateLocale,
 } from '../utils/market';
 import { calendarLocale, CALENDAR_LOCALES } from '../utils/calendarLocales';
 
@@ -500,12 +501,15 @@ const AnalyticsScreen = () => {
 
   const getHeaderDateText = () => {
     if (!dateRange?.start) return '…';
-    const isFr = i18n.language === 'fr';
     const s = dateRange.start;
     const e = dateRange.end;
-    const fmt = (d: Date) => d.toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+    // La langue dit le mois, le marché dit l'ordre des éléments.
+    const loc = dateLocale(i18n.language, market);
+    const fmt = (d: Date) => d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
     if (s.toDateString() === e.toDateString()) return fmt(s);
-    return isFr ? `Du ${fmt(s)} au ${fmt(e)}` : `${fmt(s)} – ${fmt(e)}`;
+    // « Du … au … » en français, un simple tiret en anglais : la tournure
+    // appartient à la langue, elle ne se déduit pas.
+    return t('common.dateRange', { start: fmt(s), end: fmt(e) });
   };
 
   const formatDuration = (minutes: number) => {
