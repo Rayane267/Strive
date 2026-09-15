@@ -42,7 +42,7 @@ import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 
-import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits, FREE_THRESHOLDS } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
@@ -55,6 +55,8 @@ import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, hourlyUnit } from '../utils/market';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
@@ -190,6 +192,7 @@ const SESSION_INACTIVITY_MS = 2 * 3600_000; // 2h sans course scannée
 const SESSION_MAX_MS = 14 * 3600_000;       // durée max d'une session
 
 const DashboardScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
@@ -269,7 +272,7 @@ const DashboardScreen = () => {
     registerPushToken(user.id, false);
     const cleanup = setupNotificationListeners();
     return cleanup;
-  }, [user?.id]);
+  }, [user?.id, market.thresholds.hourly, market.thresholds.distance]);
 
   // Résolue quand l'effet de restauration ci-dessous a tranché : session reprise,
   // clôturée, ou aucune session ouverte. Le handler de scan l'attend avant de
@@ -406,6 +409,10 @@ const DashboardScreen = () => {
     // notifications iOS) doivent suivre la langue choisie dans l'app, pas celle
     // du téléphone.
     NativeModules.ScanBridge?.setAppLanguage?.(i18n.language);
+    // Et le PAYS, qui est autre chose que la langue : c'est lui qui désambiguïse
+    // une adresse au géocodage (il y a des « Victoria Street » dans plusieurs des
+    // treize pays couverts) et qui fixe la langue des résultats TomTom.
+    scannerService.setMarketCountry?.(market.country);
     // Sync timezone du téléphone vers profile (reset quota au midnight local).
     // Écriture UNIQUEMENT si la valeur a changé : l'appel était inconditionnel et
     // repartait à chaque montage du Dashboard, pour un fuseau qui ne bouge
@@ -418,7 +425,7 @@ const DashboardScreen = () => {
         }
       } catch {}
     }
-  }, [user?.id, i18n.language, profile?.timezone]);
+  }, [user?.id, i18n.language, profile?.timezone, market.country]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -517,7 +524,11 @@ const DashboardScreen = () => {
     const fuelType = profile?.fuel_type ?? 'essence';
     fuelRef.current = { ...fuelRef.current, avgCons, fuelType };
     if (avgCons > 0) {
-      fetchFuelPrice(fuelType, profile?.elec_price).then(fuelPrice => {
+      fetchFuelPrice(
+        fuelType,
+        { elecPrice: profile?.elec_price, fuelPrice: profile?.fuel_price },
+        market,
+      ).then(fuelPrice => {
         fuelRef.current = { avgCons, fuelType, fuelPrice };
         // Même formule que computeFuelCost, ramenée au km.
         setFuelPerKm(fuelPrice > 0 ? (avgCons / 100) * fuelPrice : 0);
@@ -525,7 +536,7 @@ const DashboardScreen = () => {
     } else {
       setFuelPerKm(0);
     }
-  }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price]);
+  }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price, profile?.fuel_price, market]);
 
   // Prix net de carburant dans la Live Activity — affichage seul, le verdict et
   // les tarifs enregistrés restent bruts.
@@ -1517,8 +1528,12 @@ const DashboardScreen = () => {
         // en aval (verdict, push natif, tease) prennent donc le seuil forcé.
         const isFreeTier = tierRef.current === 'free';
         setPreferences({
-          min_hourly_rate: isFreeTier ? FREE_THRESHOLDS.hourly : (Number.isFinite(minHourly) ? minHourly : 25),
-          min_km_rate: isFreeTier ? FREE_THRESHOLDS.km : (Number.isFinite(minKm) ? minKm : 1.2),
+          min_hourly_rate: isFreeTier
+            ? market.thresholds.hourly
+            : (Number.isFinite(minHourly) ? minHourly : market.thresholds.hourly),
+          min_km_rate: isFreeTier
+            ? market.thresholds.distance
+            : (Number.isFinite(minKm) ? minKm : market.thresholds.distance),
           // Approche incluse par défaut : seul un choix explicite `false` la désactive.
           include_pickup: prefsData.include_pickup ?? true,
           // Même verrou que les seuils : la déduction carburant est une fonction
@@ -1628,7 +1643,7 @@ const DashboardScreen = () => {
         scheduleRefreshRef.current();
       }
     }
-  }, [user?.id]);
+  }, [user?.id, market.thresholds.hourly, market.thresholds.distance]);
 
   // Sync la ref pour handleStatusUpdate.catch (déclaré avant fetchData).
   useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
@@ -1931,16 +1946,16 @@ const DashboardScreen = () => {
         </View>
 
         <AnimatedEntrance step={1} focal style={styles.statRow}>
-          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${formatMoney(Number(stats.earnings) || 0, market)}`}>
             <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
-            <Text style={styles.statValue}>{stats.earnings}€</Text>
+            <Text style={styles.statValue}>{formatMoney(Number(stats.earnings) || 0, market)}</Text>
             <MaterialCommunityIcons name="cash" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
-          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate} ${hourlyUnit(market)}`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
             {/* En blanc comme les deux autres : le vert distinguait ce chiffre
                 sans raison, alors que les trois disent la même journée. */}
-            <Text style={styles.statValue}>{stats.avgRate}€/h</Text>
+            <Text style={styles.statValue}>{stats.avgRate} {hourlyUnit(market)}</Text>
             <Feather name="trending-up" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
           <View
@@ -2102,7 +2117,7 @@ const DashboardScreen = () => {
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
                   <Feather name="trending-up" size={12} color={colors.textMuted} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', '€/h en direct')}</Text>
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', { defaultValue: '{{unit}} en direct', unit: hourlyUnit(market) })}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>

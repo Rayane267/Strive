@@ -39,7 +39,6 @@ import {
 import {
   getEffectivePlanTier,
   getMaxRangeSpanDays,
-  FREE_THRESHOLDS,
 } from '../services/subscriptionService';
 import { effectiveFare, fetchRidesInRange } from '../services/ridesService';
 import { Ride } from '../types/database';
@@ -53,6 +52,14 @@ import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
 import { stroke, strokeWidth } from '../theme/stroke';
 import { FIELD_TOP } from '../theme/field';
+import { useMarket } from '../hooks/useMarket';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  toMarketDistance,
+  type Market,
+} from '../utils/market';
 import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 
@@ -160,11 +167,15 @@ const RideCard = React.memo(
     t,
     minHourly,
     minKm,
+    market,
   }: {
     ride: Ride;
     t: any;
     minHourly: number;
     minKm: number;
+    /** Passé en prop et non lu par `useMarket` : la carte est mémoïsée et
+     *  rendue par centaines dans la liste. */
+    market: Market;
   }) => {
     const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
     const isDeclined = ride.status === 'DECLINED';
@@ -246,11 +257,12 @@ const RideCard = React.memo(
                 adjustsFontSizeToFit
                 minimumFontScale={0.6}
               >
-                {fare.toFixed(2)}€
+                {formatMoney(fare, market, { decimals: 2 })}
               </Text>
               <Text style={styles.fareMeta} numberOfLines={1}>
                 {ride.duration_min || 0} {t('history.min')} ·{' '}
-                {ride.distance_km || 0} {t('history.km')}
+                {toMarketDistance(Number(ride.distance_km) || 0, market).toFixed(1)}{' '}
+                {market.distanceUnit}
                 {' · '}
                 {formatTimeAgo(ride.created_at, t)}
               </Text>
@@ -270,12 +282,12 @@ const RideCard = React.memo(
           <View style={styles.rateRow}>
             <Text style={[styles.rateValue, { color: rateColor }]}>
               {Number(ride.hourly_rate || 0).toFixed(0)}
-              <Text style={styles.rateUnit}>€/h</Text>
+              <Text style={styles.rateUnit}>{hourlyUnit(market)}</Text>
             </Text>
             <View style={styles.rateDivider} />
             <Text style={[styles.rateValue, { color: rateColor }]}>
               {Number(ride.km_rate || 0).toFixed(2)}
-              <Text style={styles.rateUnit}>€/km</Text>
+              <Text style={styles.rateUnit}>{distanceUnitLabel(market)}</Text>
             </Text>
           </View>
 
@@ -327,6 +339,7 @@ const RideCard = React.memo(
 type FilterType = 'all' | 'accepted' | 'declined';
 
 const HistoryScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();
@@ -339,15 +352,15 @@ const HistoryScreen = () => {
   const isPaid = planTier !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
-  // Défaut aligné sur FREE_THRESHOLDS (1.10 et non 1.2) : le tutoriel et le
+  // Défaut aligné sur le plancher du marché (1,00 €/km en France) : le tutoriel et le
   // scanner utilisent cette valeur, un défaut divergent produisait un score
   // différent le temps que les préférences arrivent.
   const [thresholds, setThresholds] = useState<{
     minHourly: number;
     minKm: number;
   }>({
-    minHourly: FREE_THRESHOLDS.hourly,
-    minKm: FREE_THRESHOLDS.km,
+    minHourly: market.thresholds.hourly,
+    minKm: market.thresholds.distance,
   });
 
   useEffect(() => {
@@ -372,15 +385,15 @@ const HistoryScreen = () => {
           setThresholds({
             minHourly: isPaid
               ? Number(data?.min_hourly_rate ?? 25) || 25
-              : FREE_THRESHOLDS.hourly,
+              : market.thresholds.hourly,
             minKm: isPaid
-              ? Number(data?.min_km_rate ?? FREE_THRESHOLDS.km) ||
-                FREE_THRESHOLDS.km
-              : FREE_THRESHOLDS.km,
+              ? Number(data?.min_km_rate ?? market.thresholds.distance) ||
+                market.thresholds.distance
+              : market.thresholds.distance,
           });
           setDateRange({ start: getDayStart(h), end: getDayStart(h) });
         });
-    }, [user, isPaid]),
+    }, [user, isPaid, market.thresholds.hourly, market.thresholds.distance]),
   );
 
   const [rides, setRides] = useState<Ride[]>([]);
@@ -625,10 +638,11 @@ const HistoryScreen = () => {
           t={t}
           minHourly={thresholds.minHourly}
           minKm={thresholds.minKm}
+          market={market}
         />
       </ListItemEntrance>
     ),
-    [t, thresholds],
+    [t, thresholds, market],
   );
 
   const todayDate = new Date().toLocaleDateString(i18n.language, {
@@ -721,7 +735,7 @@ const HistoryScreen = () => {
                 adjustsFontSizeToFit
                 minimumFontScale={0.6}
               >
-                {dailyTotal.toFixed(2)}€
+                {formatMoney(dailyTotal, market, { decimals: 2 })}
               </Text>
             </View>
             <View style={styles.acceptBlock}>

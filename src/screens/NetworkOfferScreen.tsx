@@ -20,6 +20,7 @@ import AnimatedEntrance from '../components/AnimatedEntrance';
 import NetworkDirectionSwitch from '../components/NetworkDirectionSwitch';
 import SplitBar from '../components/SplitBar';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
@@ -49,6 +50,7 @@ import {
  * plutôt qu'une mention légale.
  */
 const NetworkOfferScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<any>();
 
@@ -169,7 +171,7 @@ const NetworkOfferScreen = () => {
                   maxLength={6}
                   selectTextOnFocus
                 />
-                <Text style={styles.fareCurrency}>€</Text>
+                <Text style={styles.fareCurrency}>{market.symbol}</Text>
               </View>
               <Text style={styles.cardHint}>{t('rideNetwork.offer.fareHint')}</Text>
             </View>

@@ -18,6 +18,7 @@ import NetworkDirectionSwitch from '../components/NetworkDirectionSwitch';
 import SplitBar from '../components/SplitBar';
 import AvatarView from '../components/AvatarView';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
@@ -51,6 +52,7 @@ const HOWTO_SEEN_KEY = '@strive_network_howto';
  * rouvrir.
  */
 const NetworkReceiveScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<any>();
 
@@ -122,7 +124,7 @@ const NetworkReceiveScreen = () => {
               {/* Le chiffre héros : l'entier porte, les décimales reculent. */}
               <Text style={styles.netValue}>
                 {net.int}
-                <Text style={styles.netDecimals}>{net.sep}{net.dec} €</Text>
+                <Text style={styles.netDecimals}>{net.sep}{net.dec} {market.symbol}</Text>
               </Text>
             </View>
             <View style={styles.tripMeta}>

@@ -16,6 +16,8 @@ import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
 import { stroke, strokeWidth } from '../theme/stroke';
 import { Ride } from '../types/database';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, hourlyUnit, toMarketDistance } from '../utils/market';
 import { effectiveFare } from '../services/ridesService';
 import { formatTimeAgo } from '../utils/dateUtils';
 import AnimatedEntrance from './AnimatedEntrance';
@@ -44,7 +46,10 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
   const { t } = useTranslation();
   const rawPlatform = ride.platform ? ride.platform.toString().toUpperCase().trim() : 'UBER';
   const isPending = ride.status === 'PENDING';
-  const distance = Number(ride.distance_km) || 0;
+  const market = useMarket();
+  // La course est stockée en kilomètres, quelle que soit l'origine du scan — on
+  // la ramène à l'unité que le chauffeur lit sur ses propres offres.
+  const distance = toMarketDistance(Number(ride.distance_km) || 0, market);
   const fare = effectiveFare(ride);
   const fareIsConfirmed = ride.fare_final != null;
   const hourlyRate = Number(ride.hourly_rate || 0);
@@ -72,7 +77,7 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
             <View style={[styles.ratePill, level === 2 && styles.ratePillGood, level === 1 && styles.ratePillMid]}>
               <Feather name="trending-up" size={12} color={level === 2 ? colors.background : level === 1 ? '#3A2A00' : colors.textMuted} />
               <Text style={[styles.ratePillText, level === 2 && styles.ratePillTextGood, level === 1 && styles.ratePillTextMid]}>
-                {hourlyRate.toFixed(0)}€/h
+                {hourlyRate.toFixed(0)} {hourlyUnit(market)}
               </Text>
             </View>
             <View style={styles.timeAgoPill}>
@@ -91,13 +96,13 @@ const DashboardRideCard = React.memo(({ ride, index, preferences, onAccept, onDe
             )}
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fare.toFixed(2)}€</Text>
+            <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatMoney(fare, market, { decimals: 2 })}</Text>
             <View style={styles.tripMetrics}>
               <View style={styles.tripMetricCol}>
                 <Text style={styles.tripMetricLabel}>{t('dashboard.distance')}</Text>
                 <View style={styles.tripMetricItem}>
                   <MaterialCommunityIcons name="map-marker" size={14} color={colors.primary} />
-                  <Text style={styles.tripMetricText}>{distance} km</Text>
+                  <Text style={styles.tripMetricText}>{distance.toFixed(1)} {market.distanceUnit}</Text>
                 </View>
               </View>
               <View style={styles.tripMetricCol}>

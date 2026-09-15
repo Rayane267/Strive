@@ -9,10 +9,13 @@ import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney } from '../utils/market';
 
 interface DayData {
   label: string;      // ex: "Lun", "Mar"
-  earnings: number;   // euros
+  /** Gains du jour, dans la devise du marché. */
+  earnings: number;
   isToday?: boolean;
 }
 
@@ -22,9 +25,11 @@ interface Props {
 }
 
 const EarningsChart: React.FC<Props> = ({ data, title }) => {
+  const market = useMarket();
   if (data.length === 0) return null;
 
   const maxVal = Math.max(...data.map(d => d.earnings), 1);
+  const money = (n: number) => formatMoney(n, market);
 
   return (
     <View style={styles.container}>
@@ -32,9 +37,9 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
       <View style={styles.chartArea}>
         {/* Y-axis labels */}
         <View style={styles.yAxis}>
-          <Text style={styles.yLabel}>€{Math.round(maxVal)}</Text>
-          <Text style={styles.yLabel}>€{Math.round(maxVal / 2)}</Text>
-          <Text style={styles.yLabel}>€0</Text>
+          <Text style={styles.yLabel}>{money(maxVal)}</Text>
+          <Text style={styles.yLabel}>{money(maxVal / 2)}</Text>
+          <Text style={styles.yLabel}>{money(0)}</Text>
         </View>
         {/* Bars */}
         <View style={styles.barsContainer}>
@@ -66,7 +71,7 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
                   {day.label}
                 </Text>
                 {day.earnings > 0 && (
-                  <Text style={styles.barValue}>€{Math.round(day.earnings)}</Text>
+                  <Text style={styles.barValue}>{money(day.earnings)}</Text>
                 )}
               </View>
             );

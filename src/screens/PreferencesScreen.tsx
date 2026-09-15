@@ -24,7 +24,9 @@ import { supabase } from '../services/supabase';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { FREE_THRESHOLDS, getEffectivePlanTier } from '../services/subscriptionService';
+import { getEffectivePlanTier } from '../services/subscriptionService';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, hourlyUnit, distanceUnitLabel } from '../utils/market';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { scannerService } from '../services/scanner';
 import { fetchFuelPrice } from '../services/fuelService';
@@ -36,6 +38,7 @@ import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 
 const PreferencesScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
@@ -61,7 +64,7 @@ const PreferencesScreen = () => {
   // computeFuelCost renvoie 0 sans consommation : l'option n'aurait aucun effet.
   const hasFuelData = (profile?.avg_cons ?? 0) > 0;
   /// État AFFICHÉ du toggle carburant. Forcé à off en free — même logique que les
-  /// curseurs de seuils, qui montrent FREE_THRESHOLDS plutôt que la valeur stockée.
+  /// curseurs de seuils, qui montrent le plancher du marché plutôt que la valeur stockée.
   /// Un compte free ayant activé l'option avant ce verrou ne la voit donc plus
   /// active, ce qui est honnête : sans données véhicule, elle n'avait aucun effet.
   const fuelToggleOn = isPaid && deductFuel;
@@ -175,7 +178,11 @@ const PreferencesScreen = () => {
         // on lui pousse un coût au km déjà calculé (0 = rien à déduire).
         const avgCons = profile?.avg_cons ?? 0;
         const fuelPrice = avgCons > 0
-          ? await fetchFuelPrice(profile?.fuel_type ?? 'essence', profile?.elec_price)
+          ? await fetchFuelPrice(
+              profile?.fuel_type ?? 'essence',
+              { elecPrice: profile?.elec_price, fuelPrice: profile?.fuel_price },
+              market,
+            )
           : 0;
         scannerService.setFuelDeduction(
           deductFuel,
@@ -278,7 +285,9 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minHr', 'Tarif/heure min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{(isPaid ? minHr : FREE_THRESHOLDS.hourly)}€/h</Text>
+                <Text style={styles.sliderValueText}>
+                  {isPaid ? minHr : market.thresholds.hourly} {hourlyUnit(market)}
+                </Text>
               </View>
             </View>
             <Slider
@@ -286,7 +295,7 @@ const PreferencesScreen = () => {
               minimumValue={10}
               maximumValue={80}
               step={1}
-              value={isPaid ? minHr : FREE_THRESHOLDS.hourly}
+              value={isPaid ? minHr : market.thresholds.hourly}
               onValueChange={isPaid ? setMinHr : undefined}
               disabled={!isPaid}
               minimumTrackTintColor={colors.primary}
@@ -294,8 +303,8 @@ const PreferencesScreen = () => {
               thumbTintColor="#FFF"
             />
             <View style={styles.sliderRange}>
-              <Text style={styles.sliderRangeText}>10€</Text>
-              <Text style={styles.sliderRangeText}>80€</Text>
+              <Text style={styles.sliderRangeText}>{formatMoney(10, market)}</Text>
+              <Text style={styles.sliderRangeText}>{formatMoney(80, market)}</Text>
             </View>
           </View>
 
@@ -311,7 +320,9 @@ const PreferencesScreen = () => {
                 <Text style={styles.sliderLabel}>{t('preferences.minKm', 'Tarif/km min.')}</Text>
               </View>
               <View style={styles.sliderValueBadge}>
-                <Text style={styles.sliderValueText}>{dec(isPaid ? minKm : FREE_THRESHOLDS.km)}€/km</Text>
+                <Text style={styles.sliderValueText}>
+                  {dec(isPaid ? minKm : market.thresholds.distance)} {distanceUnitLabel(market)}
+                </Text>
               </View>
             </View>
             <Slider
@@ -319,7 +330,7 @@ const PreferencesScreen = () => {
               minimumValue={0.3}
               maximumValue={4.0}
               step={0.05}
-              value={isPaid ? minKm : FREE_THRESHOLDS.km}
+              value={isPaid ? minKm : market.thresholds.distance}
               onValueChange={isPaid ? setMinKm : undefined}
               disabled={!isPaid}
               minimumTrackTintColor={colors.primary}
@@ -327,8 +338,8 @@ const PreferencesScreen = () => {
               thumbTintColor="#FFF"
             />
             <View style={styles.sliderRange}>
-              <Text style={styles.sliderRangeText}>{dec(0.3)}€</Text>
-              <Text style={styles.sliderRangeText}>{dec(4)}€</Text>
+              <Text style={styles.sliderRangeText}>{dec(0.3)} {market.symbol}</Text>
+              <Text style={styles.sliderRangeText}>{dec(4)} {market.symbol}</Text>
             </View>
           </View>
 

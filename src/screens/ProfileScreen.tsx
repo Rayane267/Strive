@@ -28,6 +28,7 @@ import Toggle from '../components/Toggle';
 import LanguageSheet from '../components/LanguageSheet';
 import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { elevation } from '../theme/elevation';
@@ -99,6 +100,7 @@ type MenuItem = {
 };
 
 const ProfileScreen = () => {
+  const market = useMarket();
   const navigation = useNavigation<any>();
   const { t, i18n } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
@@ -689,7 +691,7 @@ const ProfileScreen = () => {
                 {/* Les centimes en retrait : ils comptent, mais ce sont les
                     euros qui se lisent d'un coup d'œil. */}
                 <Text style={styles.earnCents}>
-                  ,{Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} €
+                  ,{Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} {market.symbol}
                 </Text>
               </View>
             </View>

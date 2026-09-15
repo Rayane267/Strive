@@ -11,46 +11,86 @@
  * Les valeurs sont crédibles et non arrondies : une démonstration dont les
  * chiffres ne tombent pas juste se retourne contre le produit qu'elle vend.
  *
- * `hourly` et `km` sont DÉRIVÉS de `fare`, `duration` et `distance` — ils ne
- * s'inventent pas. Verte : 17 € / 18 min = 57 €/h, 17 € / 5,4 km = 3,15 €/km.
- * Orange : 9 € / 28 min = 19 €/h, 9 € / 7 km = 1,29 €/km. Contre les seuils du
- * gratuit (25 €/h, 1,10 €/km), l'orange passe au km et échoue à l'heure : c'est
- * exactement le « peut-être » qu'elle doit illustrer.
+ * ELLES SONT DÉRIVÉES DU PLANCHER DU MARCHÉ, pas écrites en dur.
  *
- * Rouge : 11 € / 42 min = 16 €/h, 11 € / 10,3 km = 1,07 €/km — les deux sous
- * les seuils, ce qui est bien le piège annoncé. Elle affichait auparavant 22 €
- * pour 15 €/h et 0,78 €/km : deux valeurs qui ne dérivaient de rien, et 22 €
- * sur 42 min font en réalité 31 €/h avec 2,14 €/km, soit une EXCELLENTE course
- * étiquetée « à éviter ». La démonstration se contredisait elle-même.
+ * Toute la démonstration tient à la carte du MILIEU : elle passe au kilomètre
+ * et échoue à l'heure, et c'est ça, le « peut-être » qu'elle illustre. Les trois
+ * cartes étaient calées sur le plancher français (25 €/h, 1,10 €/km) : au
+ * Royaume-Uni, où le plancher est à 16 £/h et 1,13 £/mile, la même course passait
+ * les DEUX critères et la nuance disparaissait — l'app se montrait en train de
+ * dire « peut-être » à une bonne course.
+ *
+ * Les trois cartes sont donc posées en MULTIPLES du plancher (`×2,28` à l'heure
+ * pour la verte, `×0,76` pour l'orange…), ces multiples étant exactement ceux
+ * que donnaient les valeurs françaises d'origine. Le tarif se déduit ensuite de
+ * la durée, et la distance du tarif : `hourly` et `km` restent DÉRIVÉS de ce
+ * qu'on affiche à côté, ils ne s'inventent pas. En France ça donne 17 € pour
+ * 18 min, soit 57 €/h et 2,88 €/km sur 5,9 km.
+ *
+ * La rouge échouait déjà aux deux critères et continue. Elle affichait
+ * autrefois 22 € pour 15 €/h et 0,78 €/km : deux valeurs qui ne dérivaient de
+ * rien, et 22 € sur 42 min font en réalité 31 €/h avec 2,14 €/km, soit une
+ * EXCELLENTE course étiquetée « à éviter ». La démonstration se contredisait.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { hapticLight } from '../utils/haptics';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, type Market } from '../utils/market';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { strokeWidth } from '../theme/stroke';
 
-export const PREVIEW_DATA = [
-  { hourly: 57, fare: 17, km: '3.15', duration: 18, distance: '5.4', color: '#00C752', icon: 'check' as const, verdictKey: 'tutorial.iosPreview.verdictTake', hintKey: 'tutorial.iosPreview.hintGood' },
-  { hourly: 19, fare: 9,  km: '1.29', duration: 28, distance: '7.0', color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
-  { hourly: 16, fare: 11, km: '1.07', duration: 42, distance: '10.3', color: '#F04444', icon: 'x' as const, verdictKey: 'tutorial.iosPreview.verdictSkip', hintKey: 'tutorial.iosPreview.hintBad' },
-];
+/**
+ * Les trois cartes, en multiples du plancher du marché.
+ *
+ * `hourlyX` et `rateX` viennent des valeurs françaises d'origine rapportées au
+ * plancher de l'époque : 57/25 = 2,28 ; 3,15/1,10 = 2,864. Les durées, elles,
+ * sont absolues — une course de 18 minutes en est une partout.
+ */
+const PREVIEW_SHAPE = [
+  { hourlyX: 2.28,  rateX: 2.864, duration: 18, color: '#00C752', icon: 'check' as const,          verdictKey: 'tutorial.iosPreview.verdictTake',  hintKey: 'tutorial.iosPreview.hintGood' },
+  { hourlyX: 0.76,  rateX: 1.173, duration: 28, color: '#FF9900', icon: 'alert-triangle' as const, verdictKey: 'tutorial.iosPreview.verdictMaybe', hintKey: 'tutorial.iosPreview.hintAverage' },
+  { hourlyX: 0.64,  rateX: 0.973, duration: 42, color: '#F04444', icon: 'x' as const,              verdictKey: 'tutorial.iosPreview.verdictSkip',  hintKey: 'tutorial.iosPreview.hintBad' },
+] as const;
+
+export function buildPreviewData(market: Market) {
+  const floor = market.thresholds;
+  return PREVIEW_SHAPE.map(c => {
+    // Le tarif d'abord, arrondi à l'euro — c'est ce qu'affiche une offre.
+    const fare = Math.round((floor.hourly * c.hourlyX * c.duration) / 60);
+    // Puis on RELIT l'horaire et le kilométrique depuis ce tarif : ce que la
+    // maquette montre doit se vérifier de tête avec les deux autres chiffres.
+    const hourly = Math.round((fare * 60) / c.duration);
+    const rate = floor.distance * c.rateX;
+    const distance = (fare / rate).toFixed(1);
+    return {
+      ...c,
+      fare,
+      hourly,
+      distance,
+      km: (fare / Number(distance)).toFixed(2),
+    };
+  });
+}
 
 const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
   const { t } = useTranslation();
+  const market = useMarket();
   const [idx, setIdx] = useState(0);
-  const p = PREVIEW_DATA[idx];
+  const previews = useMemo(() => buildPreviewData(market), [market]);
+  const p = previews[idx];
 
   return (
     <View style={[styles.block, style]}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => { hapticLight(); setIdx((idx + 1) % PREVIEW_DATA.length); }}
+        onPress={() => { hapticLight(); setIdx((idx + 1) % previews.length); }}
         accessibilityRole="button"
         accessibilityLabel={t(p.verdictKey)}
       >
@@ -58,16 +98,16 @@ const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
           <View style={styles.diRowTop}>
             <Text style={styles.diPlatform}>Uber</Text>
             <View style={styles.diHourly}>
-              <Text style={styles.diHourlyValue}>€{p.hourly}</Text>
+              <Text style={styles.diHourlyValue}>{formatMoney(p.hourly, market)}</Text>
               <Text style={styles.diHourlyUnit}>/h</Text>
             </View>
             <View style={{ flex: 1 }} />
             <View style={[styles.diFarePill, { backgroundColor: p.color + '46', borderColor: p.color + 'D9' }]}>
-              <Text style={styles.diFarePillTxt}>€{p.fare}</Text>
+              <Text style={styles.diFarePillTxt}>{formatMoney(p.fare, market)}</Text>
             </View>
             <View style={styles.diKmRate}>
               <Feather name="arrow-up-right" size={11} color={p.color} />
-              <Text style={styles.diKmRateTxt}>€{p.km}/km</Text>
+              <Text style={styles.diKmRateTxt}>{market.symbol}{p.km}/{market.distanceUnit}</Text>
             </View>
           </View>
           <View style={styles.diRouteRow}>
@@ -97,7 +137,7 @@ const ScanPreview = ({ style }: { style?: StyleProp<ViewStyle> }) => {
       <Text style={styles.previewHintTxt}>{t(p.hintKey)}</Text>
 
       <View style={styles.previewDots}>
-        {PREVIEW_DATA.map((d, i) => (
+        {previews.map((d, i) => (
           <TouchableOpacity
             key={i}
             onPress={() => { hapticLight(); setIdx(i); }}

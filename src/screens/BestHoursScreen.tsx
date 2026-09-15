@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
 import { useAuth } from '../context/AuthContext';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { fetchRidesInRange } from '../services/ridesService';
@@ -55,6 +56,7 @@ const MIN_TOTAL = 40;
 const LABELLED_HOURS = [0, 6, 12, 18];
 
 const BestHoursScreen = () => {
+  const market = useMarket();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
@@ -163,7 +165,7 @@ const BestHoursScreen = () => {
   );
 
   const money = (v: number) =>
-    `${v.toFixed(2).replace('.', i18n.language === 'fr' ? ',' : '.')} €`;
+    `${v.toFixed(2).replace('.', i18n.language === 'fr' ? ',' : '.')} ${market.symbol}`;
 
   const slotLabel = (cell: HourCell) =>
     t('bestHours.slot', {

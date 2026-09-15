@@ -43,14 +43,15 @@ import { hapticLight, hapticSuccess } from '../utils/haptics';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { getPlusPackages } from '../services/iapService';
+import { deriveThreshold } from '../utils/incomeGoal';
 import {
-  deriveThreshold,
-  SOCIAL_RATES,
-  DriverStatus,
-} from '../utils/incomeGoal';
+  getMarket,
+  formatMoney,
+  hourlyUnit,
+  type SocialRegime,
+} from '../utils/market';
 import {
   getEffectivePlanTier,
-  FREE_THRESHOLDS,
   fetchPlanLimits,
 } from '../services/subscriptionService';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -88,31 +89,17 @@ const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
 //
 // Ailleurs « Autre » demande un MONTANT, que le chauffeur connaît. Ici il
 // demandait un TAUX, et un taux sans sa base ne veut rien dire : 21,2 % portent
-// sur le chiffre d'affaires, 45 % sur la rémunération — l'écran le rappelle
-// sous chaque option. Le chiffre saisi à la main n'en désignait aucune, et
-// `deriveThreshold` le traitait alors en auto-entrepreneur faute de mieux.
-// L'option promettait donc une précision qu'elle ne pouvait pas tenir.
+// sur le chiffre d'affaires, 20,5 % sur le revenu net — l'écran le rappelle
+// sous chaque option. Le chiffre saisi à la main n'en désignait aucune.
 //
-// Ce que ça coûte : le créateur sous ACRE (~15,9 % la première année) est
-// compté à 21,2 %. Son chiffre d'affaires requis monte, donc son seuil aussi —
-// il refusera quelques courses qu'il aurait pu prendre, jamais l'inverse. Et
-// c'est rattrapable d'un geste : le taux ne sert qu'à calculer le €/h de
-// départ, que le curseur de Préférences ajuste ensuite.
-const STATUS_CHOICES: (number | null)[] = [
-  SOCIAL_RATES.auto_entrepreneur,
-  SOCIAL_RATES.societe,
-  SOCIAL_RATES.salarie,
-];
+// LES OPTIONS NE SONT PLUS UNE CONSTANTE : elles dépendent du pays. Un
+// indépendant belge, un autónomo espagnol et un sole trader britannique ne sont
+// pas trois traductions du micro-entrepreneur français — ce sont trois régimes,
+// avec trois taux et deux bases différentes. Ils viennent de `market.regimes`.
 
-/**
- * Milliers séparés par une espace insécable. `toLocaleString` dépend d'un Intl
- * dont la présence varie selon la build Hermes ; sur un montant entier en euros
- * la règle tient en une ligne.
- */
-const formatEuros = (n: number) =>
-  `${Math.round(n)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} €`;
+// `formatEuros` a déménagé dans `utils/market.ts` sous le nom `formatMoney` : le
+// symbole, sa place (« £24 » mais « 24 € ») et le séparateur de milliers
+// dépendent du marché, et les écrire ici les figeait en euros.
 
 /**
  * Une démonstration, les quatre questions, puis l'écran de résultat.
@@ -364,7 +351,15 @@ const OnboardingScreen = ({
   const [weeklyHours, setWeeklyHours] = useState<number | null>(null);
   const [monthlyGoal, setMonthlyGoal] = useState<number | null>(null);
   const [fixedCosts, setFixedCosts] = useState<number | null>(null);
-  const [socialRate, setSocialRate] = useState<number | null>(null);
+  /**
+   * Index du régime choisi dans `market.regimes`, et non son TAUX.
+   *
+   * Le taux ne peut pas servir d'identité : en Espagne l'autónomo et le salarié
+   * valent tous les deux 0 — le RETA est une cotisation forfaitaire, pas un
+   * pourcentage — et sélectionner l'un allumait l'autre. L'index désigne une
+   * ligne, toujours une seule.
+   */
+  const [regimeIndex, setRegimeIndex] = useState<number | null>(null);
 
   /** Champ en saisie libre, ou null si tout est sur des pastilles. */
   // Les deux mesures qui pilotent la hauteur des réponses (cf.
@@ -373,22 +368,38 @@ const OnboardingScreen = ({
   const [viewportH, setViewportH] = useState(0);
   const [headH, setHeadH] = useState(0);
 
+  // Pays d'activité : le profil d'abord, la région de l'appareil ensuite. C'est
+  // lui qui porte la devise, l'unité de distance, le plancher de rentabilité et
+  // les régimes proposés deux écrans plus loin.
+  const market = getMarket(profile?.country);
+  const money = (n: number) => formatMoney(n, market);
+  /** Plancher de rentabilité du marché — 25 €/h en France, 22 £/h au UK. */
+  const floorHourly = market.thresholds.hourly;
+  /** « €/h », « £/h », « CHF/h » : le suffixe suit la devise. */
+  const perHour = hourlyUnit(market);
+
   const [editing, setEditing] = useState<Step | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
-  /** Statut déduit du taux — « autre » dès que le taux est saisi à la main. */
-  const driverStatus: DriverStatus =
-    (Object.keys(SOCIAL_RATES) as (keyof typeof SOCIAL_RATES)[]).find(
-      k => socialRate !== null && SOCIAL_RATES[k] === socialRate,
-    ) ?? 'autre';
+  const regime: SocialRegime | null =
+    regimeIndex !== null ? market.regimes[regimeIndex] ?? null : null;
 
   const derived =
     monthlyGoal !== null &&
     weeklyHours !== null &&
     fixedCosts !== null &&
-    socialRate !== null
-      ? deriveThreshold({ monthlyGoal, weeklyHours, fixedCosts, socialRate, status: driverStatus })
+    regime !== null
+      ? deriveThreshold(
+          {
+            monthlyGoal,
+            weeklyHours,
+            fixedCosts,
+            socialRate: regime.rate,
+            base: regime.base,
+          },
+          market,
+        )
       : null;
 
   /** Une étape n'est franchissable qu'une fois sa question répondue. */
@@ -399,7 +410,7 @@ const OnboardingScreen = ({
     hours: weeklyHours !== null,
     goal: monthlyGoal !== null,
     costs: fixedCosts !== null,
-    status: socialRate !== null,
+    status: regimeIndex !== null,
     // Rien à répondre, et rien à toucher : l'écran avance tout seul.
     computing: true,
     result: true,
@@ -533,10 +544,13 @@ const OnboardingScreen = ({
             monthly_goal: monthlyGoal,
             weekly_hours: weeklyHours,
             fixed_costs: fixedCosts,
-            driver_status: driverStatus,
-            social_rate: socialRate,
+            driver_status: regime?.id ?? null,
+            social_rate: regime?.rate ?? null,
             min_hourly_rate: derived.hourly,
-            min_km_rate: derived.km,
+            // La colonne dit « km » pour des raisons d'historique ; au
+            // Royaume-Uni elle porte des £ par MILE. C'est `profiles.country`
+            // qui en donne l'unité.
+            min_km_rate: derived.distance,
           })
         : Promise.resolve(),
       fetchPlanLimits(),
@@ -566,7 +580,7 @@ const OnboardingScreen = ({
   ///
   /// Dérivé de `reveal` plutôt que joué à part, donc rigoureusement synchrone
   /// avec le compteur — impossible que le flou arrive avant ou après le passage.
-  const blurStart = Math.min(0.98, FREE_THRESHOLDS.hourly / (derivedHourly || FREE_THRESHOLDS.hourly));
+  const blurStart = Math.min(0.98, floorHourly / (derivedHourly || floorHourly));
   const blurProgress = reveal.interpolate({
     inputRange: [blurStart, Math.min(1, blurStart + 0.18)],
     outputRange: [0, 1],
@@ -585,7 +599,7 @@ const OnboardingScreen = ({
   /// proportion qui porte l'argument — plus le seuil est haut, plus la barre du
   /// gratuit paraît courte, et l'écart se voit sans qu'on ait à le nommer.
   const freeShare = derivedHourly
-    ? Math.min(100, Math.round((FREE_THRESHOLDS.hourly / derivedHourly) * 100))
+    ? Math.min(100, Math.round((floorHourly / derivedHourly) * 100))
     : 100;
 
   /// Les barres poussent depuis la gauche. `transformOrigin` évite de connaître
@@ -615,7 +629,7 @@ const OnboardingScreen = ({
     if (reduceMotion) {
       reveal.setValue(1);
       intro.setValue(1);
-      setCounted(derivedHourly ?? FREE_THRESHOLDS.hourly);
+      setCounted(derivedHourly ?? floorHourly);
       pitchAnim.setValue(1);
       return;
     }
@@ -623,7 +637,7 @@ const OnboardingScreen = ({
     pitchAnim.setValue(0);
     intro.setValue(0);
 
-    const target = derivedHourly ?? FREE_THRESHOLDS.hourly;
+    const target = derivedHourly ?? floorHourly;
     const id = reveal.addListener(({ value }) => setCounted(Math.round(value * target)));
 
     const seq: Animated.CompositeAnimation[] = [
@@ -651,7 +665,7 @@ const OnboardingScreen = ({
     ]);
     sequence.start();
     return () => { sequence.stop(); reveal.removeListener(id); };
-  }, [step, reveal, pitchAnim, intro, reduceMotion, derivedHourly]);
+  }, [step, reveal, pitchAnim, intro, reduceMotion, derivedHourly, floorHourly]);
 
   const go = (next: number) => {
     // L'écran de calcul ne se traverse QUE vers l'avant : il repart tout seul
@@ -704,15 +718,27 @@ const OnboardingScreen = ({
           monthly_goal: monthlyGoal,
           weekly_hours: weeklyHours,
           fixed_costs: fixedCosts,
-          driver_status: driverStatus,
-          social_rate: socialRate,
-          // Le seuil dérivé est enregistré même en gratuit (où FREE_THRESHOLDS
+          driver_status: regime?.id ?? null,
+          social_rate: regime?.rate ?? null,
+          // Le seuil dérivé est enregistré même en gratuit (où le plancher du marché
           // s'applique de toute façon) : le jour où le chauffeur passe Plus, son
           // seuil est déjà là et on ne lui repose pas les questions.
           ...(derived
-            ? { min_hourly_rate: derived.hourly, min_km_rate: derived.km }
+            ? { min_hourly_rate: derived.hourly, min_km_rate: derived.distance }
             : {}),
         });
+
+        // Le pays est FIGÉ ici, au moment où les réponses sont données.
+        //
+        // Il a servi à choisir les régimes proposés, le plancher et la devise de
+        // cet écran : le laisser dépendre de la région du téléphone ensuite ferait
+        // qu'un chauffeur en vacances relirait son seuil avec les cotisations
+        // d'un autre pays. Ce qu'il a répondu et ce avec quoi on le calcule
+        // doivent rester la même chose.
+        await supabase
+          .from('profiles')
+          .update({ country: market.country })
+          .eq('id', user.id);
       }
     } catch (e) {
       // On laisse passer l'utilisateur, mais pas l'échec : c'est le seul endroit
@@ -961,7 +987,7 @@ const OnboardingScreen = ({
           choices: GOAL_CHOICES,
           value: monthlyGoal,
           onPick: setMonthlyGoal,
-          labelFor: v => formatEuros(v),
+          labelFor: v => money(v),
         });
 
       case 'costs':
@@ -970,31 +996,22 @@ const OnboardingScreen = ({
           value: fixedCosts,
           onPick: setFixedCosts,
           zeroLabel: t('onboarding.costs.none'),
-          labelFor: v => (v === 0 ? t('onboarding.costs.none') : formatEuros(v)),
+          labelFor: v => (v === 0 ? t('onboarding.costs.none') : money(v)),
         });
 
       case 'status':
+        // Les options sont les régimes du PAYS, et la valeur manipulée est leur
+        // index — pas leur taux, qui n'est pas une identité (cf. `regimeIndex`).
         return renderOptionList({
-          choices: STATUS_CHOICES,
-          value: socialRate,
-          onPick: setSocialRate,
-          isPercent: true,
-          labelFor: v =>
-            v === SOCIAL_RATES.auto_entrepreneur
-              ? t('onboarding.status.auto')
-              : v === SOCIAL_RATES.societe
-              ? t('onboarding.status.company')
-              : t('onboarding.status.employee'),
+          choices: market.regimes.map((_, i) => i),
+          value: regimeIndex,
+          onPick: setRegimeIndex,
+          labelFor: i => t(`onboarding.status.${market.regimes[i].id}`),
           // Le taux AVEC sa base. Les deux chiffres ne portent pas sur la même
-          // chose — 21 % du chiffre d'affaires contre 45 % de la rémunération —
-          // et posés nus côte à côte ils feraient conclure que la société coûte
-          // deux fois plus cher, ce qui est faux.
-          subFor: v =>
-            v === SOCIAL_RATES.auto_entrepreneur
-              ? t('onboarding.status.autoSub')
-              : v === SOCIAL_RATES.societe
-              ? t('onboarding.status.companySub')
-              : t('onboarding.status.employeeSub'),
+          // chose — 21,2 % du chiffre d'affaires en France contre 20,5 % du
+          // revenu NET en Belgique — et posés nus côte à côte ils feraient
+          // conclure que les deux pays coûtent pareil, ce qui est faux.
+          subFor: i => t(`onboarding.status.${market.regimes[i].id}Sub`),
         });
 
       case 'computing':
@@ -1079,8 +1096,8 @@ const OnboardingScreen = ({
 
       case 'result': {
         if (!derived) return null;
-        const locked = derived.hourly > FREE_THRESHOLDS.hourly && !isPremium;
-        const personalRate = `${derived.hourly.toFixed(0)} €/h`;
+        const locked = derived.hourly > floorHourly && !isPremium;
+        const personalRate = `${derived.hourly.toFixed(0)} ${perHour}`;
         return (
           <View style={styles.decision}>
             <Animated.Text style={[styles.decisionKicker, enterAt(0.04, 0.24)]}>
@@ -1115,7 +1132,7 @@ const OnboardingScreen = ({
                         : null,
                     ]}
                   >
-                    {counted} €/h
+                    {counted} {perHour}
                   </Animated.Text>
                   {locked ? (
                     <Animated.View
@@ -1126,7 +1143,7 @@ const OnboardingScreen = ({
                       ]}
                     >
                       <BlurredNumber
-                        text={`${counted} €/h`}
+                        text={`${counted} ${perHour}`}
                         style={styles.rateValue}
                         mask={styles.maskPillBig}
                       />
@@ -1163,7 +1180,7 @@ const OnboardingScreen = ({
                       ]}
                     />
                   </View>
-                  <Text style={styles.barValue}>{FREE_THRESHOLDS.hourly} €/h</Text>
+                  <Text style={styles.barValue}>{floorHourly} {perHour}</Text>
                 </View>
 
                 <View style={styles.barRow}>
@@ -1189,7 +1206,7 @@ const OnboardingScreen = ({
                             { opacity: blurProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
                           ]}
                         >
-                          {counted} €/h
+                          {counted} {perHour}
                         </Animated.Text>
                         <Animated.View
                           style={[
@@ -1199,7 +1216,7 @@ const OnboardingScreen = ({
                           ]}
                         >
                           <BlurredNumber
-                            text={`${counted} €/h`}
+                            text={`${counted} ${perHour}`}
                             style={styles.barValueOn}
                             mask={styles.maskPillSmall}
                           />
@@ -1220,9 +1237,9 @@ const OnboardingScreen = ({
             </Animated.Text>
             <Animated.Text style={[styles.answersLine, enterAt(0.68, 1)]}>
               {t('onboarding.result.answersLine', {
-                goal: formatEuros(monthlyGoal ?? 0),
+                goal: money(monthlyGoal ?? 0),
                 hours: derived.monthlyHours,
-                revenue: formatEuros(derived.requiredRevenue),
+                revenue: money(derived.requiredRevenue),
               })}
             </Animated.Text>
           </View>
@@ -1235,7 +1252,7 @@ const OnboardingScreen = ({
     step === 'result' &&
     !!derived &&
     !isPremium &&
-    derived.hourly > FREE_THRESHOLDS.hourly;
+    derived.hourly > floorHourly;
 
   const title = t(`onboarding.${step}.title`);
   // Chaque question porte deja sa phrase d'explication en traduction — elle n'a

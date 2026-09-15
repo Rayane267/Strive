@@ -31,7 +31,7 @@ import { stroke, strokeWidth } from '../theme/stroke';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
 import { hapticSelection } from '../utils/haptics';
-import { getEffectivePlanTier, getMaxRangeSpanDays, FREE_THRESHOLDS, type PlanTier } from '../services/subscriptionService';
+import { getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
 import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
@@ -52,6 +52,8 @@ import AnimatedEntrance from '../components/AnimatedEntrance';
 import { Skeleton } from '../components/Skeleton';
 import { cacheStats, getCachedStats } from '../services/offlineService';
 import { fetchFuelPrice } from '../services/fuelService';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, hourlyUnit, distanceUnitLabel } from '../utils/market';
 
 LocaleConfig.locales['fr'] = {
   monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
@@ -75,6 +77,9 @@ const PLATFORMS = [
 ] as const;
 
 const AnalyticsScreen = () => {
+  const market = useMarket();
+  /** Montants à deux décimales, dans la devise du marché. */
+  const money2 = (n: number) => formatMoney(n, market, { decimals: 2 });
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
@@ -203,7 +208,7 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, elec_price')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, elec_price, fuel_price')
         .eq('id', user.id)
         .single();
 
@@ -258,12 +263,13 @@ const AnalyticsScreen = () => {
       // score qualité calculé sur des seuils que le scanner n'a jamais
       // appliqués — la carte et le verdict de la même course se contredisent.
       const isFree = tier === 'free';
+      const floor = market.thresholds;
       const minHourly = isFree
-        ? FREE_THRESHOLDS.hourly
-        : Number(prefsData?.min_hourly_rate ?? 25) || 25;
+        ? floor.hourly
+        : Number(prefsData?.min_hourly_rate ?? floor.hourly) || floor.hourly;
       const minKm = isFree
-        ? FREE_THRESHOLDS.km
-        : Number(prefsData?.min_km_rate ?? FREE_THRESHOLDS.km) || FREE_THRESHOLDS.km;
+        ? floor.distance
+        : Number(prefsData?.min_km_rate ?? floor.distance) || floor.distance;
       setQualityScore(computeQualityScore(rides as any, minHourly, minKm));
 
       const acceptedRides = rides.filter((r: any) => r.status === 'ACCEPTED');
@@ -349,7 +355,11 @@ const AnalyticsScreen = () => {
       // carburants liquides, prix €/kWh perso pour l'électrique).
       const avgCons = profileData?.avg_cons ?? 0;
       const fuelType = profileData?.fuel_type ?? 'essence';
-      const fuelPrice = avgCons > 0 ? await fetchFuelPrice(fuelType, profileData?.elec_price) : 0;
+      const fuelPrice = avgCons > 0 ? await fetchFuelPrice(
+              fuelType,
+              { elecPrice: profileData?.elec_price, fuelPrice: profileData?.fuel_price },
+              market,
+            ) : 0;
       const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
       const newStats = {
@@ -384,7 +394,7 @@ const AnalyticsScreen = () => {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user, dateRange, resetHour, i18n.language]);
+  }, [user, dateRange, resetHour, i18n.language, market]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -618,7 +628,7 @@ const AnalyticsScreen = () => {
             <View
               style={styles.heroCard}
               accessible
-              accessibilityLabel={`${t('analytics.netProfit')}: €${stats.totalProfit.toFixed(2)}`}
+              accessibilityLabel={`${t('analytics.netProfit')}: ${money2(stats.totalProfit)}`}
             >
               <SafeGradient
                 colors={['#0F2D1F', '#0A150E']}
@@ -635,7 +645,7 @@ const AnalyticsScreen = () => {
               <TouchableOpacity onPress={toggleProfitView} activeOpacity={hasFuelData ? 0.7 : 1}>
                 <Animated.View style={{ transform: [{ scale: flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.92, 1] }) }] }}>
                   <Text style={styles.heroAmount}>
-                    €{displayProfit.toFixed(2)}
+                    {money2(displayProfit)}
                   </Text>
                 </Animated.View>
                 {hasFuelData && (
@@ -651,7 +661,7 @@ const AnalyticsScreen = () => {
                       </Text>
                     </View>
                     {showNet && (
-                      <Text style={styles.fuelDetail}>-{stats.fuelCost.toFixed(2)}€ ⛽</Text>
+                      <Text style={styles.fuelDetail}>-{money2(stats.fuelCost)} ⛽</Text>
                     )}
                   </View>
                 )}
@@ -699,7 +709,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.hourlyRate')}</Text>
-                  <Text style={styles.kpiValue}>€{displayHourly.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>{money2(displayHourly)}</Text>
                 </View>
               </View>
               <View style={styles.kpiCard}>
@@ -722,7 +732,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.priceKm')}</Text>
-                  <Text style={styles.kpiValue}>€{displayPerKm.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>{money2(displayPerKm)}</Text>
                 </View>
               </View>
             </View>
@@ -766,7 +776,7 @@ const AnalyticsScreen = () => {
               <KpiTrendChart
                 data={hourlyTrend}
                 title={t('analytics.hourlyRate').toUpperCase()}
-                unit="€/h"
+                unit={hourlyUnit(market)}
                 color={colors.primary}
               />
             )}
@@ -774,7 +784,7 @@ const AnalyticsScreen = () => {
               <KpiTrendChart
                 data={kmTrend}
                 title={t('analytics.priceKm').toUpperCase()}
-                unit="€/km"
+                unit={distanceUnitLabel(market)}
                 color="#4FC3F7"
               />
             )}
@@ -825,7 +835,7 @@ const AnalyticsScreen = () => {
                           <Text style={styles.distLabel}>{p.label}</Text>
                         </View>
                         <View style={styles.distItemRight}>
-                          <Text style={styles.distEarning}>€{earned.toFixed(2)}</Text>
+                          <Text style={styles.distEarning}>{money2(earned)}</Text>
                           <View style={[styles.distPctBadge, { backgroundColor: badgeBg }]}>
                             <Text style={[styles.distPctText, { color: badgeFg }]}>{pct}%</Text>
                           </View>

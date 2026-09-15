@@ -86,6 +86,10 @@ export function parseFare(input: string): number {
 }
 
 export function money(value: number, lang: string): string {
+  // Le symbole reste l'euro : ces cartes de démonstration décrivent le réseau
+  // français, seul ouvert à ce jour. Elles suivront `market.symbol` le jour où
+  // le réseau s'ouvrira ailleurs — avec des montants et des villes de là-bas,
+  // pas seulement un autre signe devant les mêmes.
   return `${value.toFixed(2).replace('.', lang === 'fr' ? ',' : '.')} €`;
 }
 
