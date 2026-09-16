@@ -50,3 +50,158 @@ export interface Analytics {
   support: { open: number; answered: number; closed: number; new_window: number };
   support_first_reply_minutes: number | null;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Console chauffeurs — formes renvoyées par les RPC de la migration
+   20260916_admin_drivers.sql. Toutes sont gardées par `is_admin()` côté base.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export type Tier = 'free' | 'plus' | 'premium';
+
+export const TIER: Record<Tier, { label: string; color: string }> = {
+  free:    { label: 'Gratuit', color: '#6B7280' },
+  plus:    { label: 'Plus',    color: '#00E676' },
+  premium: { label: 'Premium', color: '#3987e5' },
+};
+
+/** `admin_live()` — instantané des sessions ouvertes. */
+export interface Live {
+  generated_at: string;
+  counts: {
+    /** Sessions `online_sessions` sans `end_at` : la définition qui fait foi. */
+    sessions_open: number;
+    /** Ouvertes depuis plus de 16 h : l'app a été tuée sans refermer. */
+    stale: number;
+    /** `profiles.is_online` — le drapeau, qui peut mentir. */
+    flag_online: number;
+    /** Drapeau levé sans session ouverte : l'écart entre les deux. */
+    incoherent: number;
+  };
+  drivers: LiveDriver[];
+}
+
+export interface LiveDriver {
+  id: string;
+  email: string | null;
+  name: string | null;
+  tier: Tier;
+  country: string | null;
+  flag_online: boolean;
+  since: string;
+  minutes: number;
+  stale: boolean;
+  scans_today: number;
+  rides_today: number;
+  last_ride_at: string | null;
+}
+
+/** `admin_drivers(...)` — une page de la liste. */
+export interface DriversPage {
+  total: number;
+  limit: number;
+  offset: number;
+  rows: DriverRow[];
+}
+
+export interface DriverRow {
+  id: string;
+  email: string | null;
+  name: string | null;
+  tier: Tier;
+  status: string | null;
+  country: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  last_seen: string | null;
+  is_online: boolean;
+  session_since: string | null;
+  expires_at: string | null;
+  scans_today: number;
+  daily_scans_day: string | null;
+  credits: number;
+  welcome_credits: number;
+  welcome_expires_at: string | null;
+  scans_7d: number;
+  scans_30d: number;
+  rides_30d: number;
+  accepted_30d: number;
+  hours_30d: number | null;
+  /** Consolidé en euros au taux figé de chaque course, pas une somme brute. */
+  earnings_30d_eur: number | null;
+  avg_hourly_eur: number | null;
+  tickets_open: number;
+}
+
+/** `admin_driver(uuid)` — la fiche. */
+export interface DriverDetail {
+  id: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  country: string | null;
+  timezone: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  is_admin: boolean;
+  subscription: {
+    tier: Tier;
+    status: string | null;
+    expires_at: string | null;
+    product_id: string | null;
+  };
+  quota: {
+    scans_today: number;
+    day: string | null;
+    /** Compteur périmé : sa borne de journée est antérieure à aujourd'hui. */
+    stale: boolean;
+    credits: number;
+    welcome_credits: number;
+    welcome_expires_at: string | null;
+  };
+  vehicle: {
+    make: string | null; model: string | null; year: string | null;
+    fuel_type: string | null; avg_cons: number | null;
+  };
+  online: { flag: boolean; since: string | null };
+  activity_30d: {
+    scans: number; rides: number; accepted: number;
+    hours: number | null; earnings_eur: number | null;
+  };
+  daily: { day: string; scans: number; rides: number }[];
+  recent_rides: {
+    created_at: string;
+    platform: string | null;
+    status: string;
+    fare_estimated: number | null;
+    fare_final: number | null;
+    currency: string | null;
+    hourly_rate: number | null;
+    km_rate: number | null;
+    distance_km: number | null;
+    duration_min: number | null;
+  }[];
+  tickets: { id: string; subject: string; status: Status; created_at: string; last_message_at: string }[];
+}
+
+/** « il y a 3 h », « il y a 12 j » — l'écart lu d'un coup d'œil. */
+export const ago = (iso: string | null) => {
+  if (!iso) return 'jamais';
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const d = Math.floor(h / 24);
+  return d < 30 ? `il y a ${d} j` : `il y a ${Math.floor(d / 30)} mois`;
+};
+
+/** Durée en minutes → « 3 h 20 ». */
+export const dur = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+};
+
+export const eur = (n: number | null | undefined) =>
+  n == null ? '—' : `${n.toFixed(2).replace('.', ',')} €`;

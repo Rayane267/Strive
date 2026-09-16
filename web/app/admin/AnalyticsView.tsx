@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { Analytics } from './types';
+import { Card, Stat } from './ui';
+import LivePanel from './LivePanel';
 
 /* ──────────────────────────────────────────────────────────────────────────
    Palette data-viz — validée sur la surface #0F1311 (mode sombre) :
@@ -102,6 +104,8 @@ export default function AnalyticsView() {
           </div>
         </div>
 
+        <LivePanel />
+
         {/* KPI — la forme juste pour un chiffre seul, pas un graphe à une barre */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
@@ -172,34 +176,6 @@ function formatMinutes(m: number) {
   if (m < 60) return `${Math.round(m)} min`;
   const h = m / 60;
   return h < 48 ? `${h.toFixed(1).replace('.', ',')} h` : `${Math.round(h / 24)} j`;
-}
-
-/* ── Tuile chiffre ─────────────────────────────────────────────────────── */
-function Stat({ label, value, sub, hint }: { label: string; value: string; sub?: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-[#0F1311] p-5" title={hint}>
-      <p className="text-xs uppercase tracking-wide text-white/50">{label}</p>
-      <p className="mt-2 text-3xl font-bold tabular-nums text-white">{value}</p>
-      {sub && <p className="mt-1.5 text-xs text-white/45">{sub}</p>}
-    </div>
-  );
-}
-
-function Card({ title, subtitle, children, aside }: {
-  title: string; subtitle?: string; children: React.ReactNode; aside?: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-white/10 bg-[#0F1311] p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-white/45">{subtitle}</p>}
-        </div>
-        {aside}
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
 }
 
 function LegendKey({ color, label }: { color: string; label: string }) {
