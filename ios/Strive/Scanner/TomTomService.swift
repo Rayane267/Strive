@@ -23,6 +23,44 @@ final class TomTomService {
   /// Stockée dans App Group par `ScanBridge.setTomTomApiKey`.
   private var cachedKey: String?
 
+  /**
+   Pays d'activité du chauffeur, écrit en App Group par `ScanBridge.setMarket`.
+
+   `countrySet` listait les treize pays couverts et `language` était figé à
+   `fr-FR`. Un nom de rue existe souvent dans plusieurs pays — il y a des
+   « Victoria Street » partout — et TomTom, à `limit=1`, en choisissait une.
+   Restreindre au pays du chauffeur supprime l'ambiguïté à la source au lieu
+   d'espérer que le classement tombe juste.
+
+   Vide = on ne sait pas encore : on garde alors la liste complète, qui vaut
+   mieux qu'un pays deviné. Non mis en cache, contrairement à la clé : il change
+   quand le chauffeur corrige son pays, et un scan doit le voir tout de suite.
+   */
+  private var marketCountry: String? {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    let c = UserDefaults(suiteName: appGroupId)?.string(forKey: "marketCountry")
+    return (c?.isEmpty == false) ? c : nil
+  }
+
+  /// Le pays du chauffeur s'il est connu, sinon les treize marchés couverts.
+  private var activeCountrySet: String { marketCountry ?? Self.countrySet }
+
+  /// Langue des résultats : celle du pays. Figée à `fr-FR`, elle renvoyait des
+  /// libellés français à un chauffeur londonien.
+  private var geocodeLanguage: String {
+    // `?? ""` plutot qu'un switch sur l'Optional : le filet est gratuit et
+    // enleve toute ambiguite d'inference.
+    switch marketCountry ?? "" {
+    case "GB": return "en-GB"
+    case "ES": return "es-ES"
+    case "PT": return "pt-PT"
+    case "BE": return "fr-BE"
+    case "CH": return "fr-CH"
+    default:   return "fr-FR"
+    }
+  }
+
   private func apiKey() -> String? {
     if let k = cachedKey, !k.isEmpty { return k }
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
@@ -145,7 +183,7 @@ final class TomTomService {
           let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
     else { return nil }
 
-    let urlString = "\(Self.baseSearch)/\(encoded).json?key=\(key)&language=fr-FR&countrySet=\(Self.countrySet)&limit=1"
+    let urlString = "\(Self.baseSearch)/\(encoded).json?key=\(key)&language=\(geocodeLanguage)&countrySet=\(activeCountrySet)&limit=1"
     guard let url = URL(string: urlString),
           let data = httpGet(url),
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

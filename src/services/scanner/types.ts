@@ -19,18 +19,49 @@ export interface ScanResult {
   /** Image JPEG compressée en base64 — servie par le natif pour alimenter le fallback LLM JS */
   imageBase64?: string;
   /** Dump JSON des blocs ML Kit/Vision pour diagnostic — émis en release pour
-   *  alimenter scan_debug quand une adresse manque. Format : [{text,x,y,w,h}]. */
+   *  alimenter scan_debug quand le parsing local n'a pas suffi (adresse
+   *  manquante, ou repli Gemini natif). Format : [{text,x,y,w,h}]. */
   debugBlocks?: string;
+  /**
+   * Le pipeline NATIF a-t-il dû appeler Gemini pour produire ce résultat ?
+   *
+   * À ne pas confondre avec le repli Gemini du JS (`geminiFallback.ts`), qui ne
+   * s'exécute que pour un scan lancé depuis le Dashboard. Les scans réels
+   * viennent du raccourci iOS ou de la bulle Android : eux appellent Gemini en
+   * natif, et sans ce drapeau la télémétrie enregistrait `gemini_fallback =
+   * false` sur 100 % des scans — une constante, pas une mesure.
+   *
+   * Absent des payloads produits par un bundle natif antérieur → traiter
+   * `undefined` comme `false`.
+   */
+  geminiUsed?: boolean;
   /** Hauteur de l'image OCR (px) — nécessaire pour rejouer un cas en fixture. */
   screenHeight?: number;
-  /** Horodatage du scan (epoch s) — clé de corrélation avec la décision
-   *  Accepter/Refuser tapée sur la notification iOS. */
+  /** Horodatage du scan (epoch s). Donnée, plus clé : il date la course (jour
+   *  d'affectation, registre de quota) mais n'identifie plus rien. */
   scanTs?: number;
+  /**
+   * Identité de la course, frappée par le natif AU MOMENT DU SCAN. C'est la clé
+   * primaire en base (`rides.id`), l'entrée du journal natif, et ce que
+   * renvoient les boutons Prise/Refusée.
+   *
+   * Une seule valeur pour les trois, et connue avant l'insertion : c'est ce qui
+   * rend l'écriture idempotente (`on conflict (id) do nothing`) et permet
+   * d'appliquer une décision par simple `update … where id = rideId`, sans
+   * jamais avoir à retrouver la course.
+   *
+   * Optionnel pour une raison de transition : un bundle JS récent peut tourner
+   * sur un binaire natif antérieur, ou trouver dans le journal des entrées
+   * écrites avant la mise à jour. Absent → l'id est laissé au serveur, comme
+   * avant (`ridesService.createRide`).
+   */
+  rideId?: string;
 }
 
-/** Décision Accepter/Refuser émise par une action de notification iOS. */
+/** Décision Prise/Refusée tapée hors de l'app : bouton de la Live Activity,
+ *  action de notification, commande vocale. */
 export interface RideDecision {
-  scanTs: number;
+  rideId: string;
   status: 'ACCEPTED' | 'DECLINED';
 }
 
@@ -79,7 +110,33 @@ export interface ScannerService {
   setPreferences(includePickup: boolean): void;
   /** Seuils verdict (€/h et €/km) synchronisés au natif pour calcul TomTom en background */
   setThresholds(minHourlyRate: number, minKmRate: number): void;
+  /** Affichage du prix net de carburant dans la Live Activity. `fuelCostPerKm`
+   *  est pré-calculé côté JS (conso × prix du jour) : le natif n'a ni le type de
+   *  carburant ni le tarif à la pompe. Affichage seul — le verdict, les €/h,
+   *  les €/km et le tarif enregistré restent bruts. */
+  /**
+   * Retire le splash natif iOS. À appeler quand l'app a enfin quelque chose à
+   * montrer — sinon le natif s'efface seul au bout de 6 s. Sans effet sur
+   * Android, qui n'a pas de splash natif animé.
+   */
+  hideSplash(): void;
+  setFuelDeduction(enabled: boolean, fuelCostPerKm: number): void;
   /** Clé TomTom — permet au service natif de géocoder sans JS actif */
+  /**
+   * Le marché du chauffeur, poussé au natif en une fois — deux valeurs qui n'y
+   * servent pas à la même chose.
+   *
+   * `country` est du CALCUL : il restreint la recherche TomTom et fixe la langue
+   * des résultats, et le parser s'en sert pour les adresses britanniques. Ce
+   * n'est pas la langue de l'app — `fr` ne sépare pas la France de la Belgique
+   * ni de la Suisse.
+   *
+   * `currency` est de l'AFFICHAGE : c'est elle que lisent l'écran verrouillé, la
+   * Dynamic Island, CarPlay, la bulle Android et leurs notifications. Le natif
+   * la déduisait du pays, ce qui revenait à énumérer quatre pays pour retrouver
+   * un « € » — le même détour qu'on vient de retirer côté JS.
+   */
+  setMarket(country: string, currency: string): void;
   setTomTomApiKey(key: string): void;
   /** Purge le cache de géocodage local (adresses = PII). À appeler au logout et
    *  après suppression de compte — RGPD : le cache vit sur l'appareil, hors de
@@ -94,6 +151,27 @@ export interface ScannerService {
    *  (scan via extension/bulle = JS suspendu) en situant correctement la
    *  frontière de journée. `limit <= 0` = illimité. */
   setScanQuota(countToday: number, limit: number, resetHour: number): void;
+
+  /** Acquitte un scan du journal natif : la course est en base. Tant qu'un scan
+   *  n'est pas acquitté il est ré-émis à chaque relève — c'est ce qui garantit
+   *  qu'aucune course ne se perd. */
+  ackScan(rideId: string): void;
+  /** Les décisions Prise/Refusée en attente (boutons Live Activity, actions de
+   *  notification, commandes vocales). Lecture seule : rien n'est retiré ici.
+   *  Le Dashboard les demande quand il peut les écrire en base. */
+  getPendingRideDecisions(): Promise<RideDecision[]>;
+  /** Retire une décision de la file, une fois le statut écrit en base. Non
+   *  acquittée = conservée, et retentée à la prochaine synchro. */
+  ackRideDecision(rideId: string): void;
+  /** Met une décision prise DANS l'app dans cette même file, quand son écriture
+   *  en base n'a pas abouti — course pas encore insérée, réseau coupé, session
+   *  expirée. Elle y attend le prochain drain, comme celles tapées sur la carte
+   *  ou la notification. Dédoublonné sur `rideId` côté natif. */
+  queueRideDecision(rideId: string, status: 'ACCEPTED' | 'DECLINED'): void;
+  /** Efface le verdict affiché sur la Live Activity / la notification de
+   *  résultat, quand la décision a été prise DANS l'app. Sans effet si la carte
+   *  montre déjà une autre course. */
+  clearRideResult(rideId: string): void;
   /** Active/désactive le scanner. Android : démarre/arrête la bulle flottante.
    *  iOS : flag lu par la Share Extension + l'AppIntent (raccourci AssistiveTouch)
    *  → un scan déclenché alors que désactivé est refusé avec un message. */
@@ -112,11 +190,50 @@ export interface ScannerService {
   requestMediaProjectionPermission(): Promise<void>;
   /** Écoute les résultats de scan */
   onScanResult(cb: (result: ScanResult) => void): { remove: () => void } | undefined;
-  /** Écoute les échecs */
+  /** Écoute les échecs (signal UI, sans motif) */
   onScanFailed(cb: () => void): { remove: () => void } | undefined;
-  /** Écoute les décisions Accepter/Refuser tapées sur la notification (iOS).
-   *  Android : non implémenté (no-op). */
-  onRideDecision(cb: (decision: RideDecision) => void): { remove: () => void } | undefined;
+  /** Écoute les échecs AVEC leur motif, pour la trace de diagnostic. Émis aussi
+   *  pour les scans cassés pendant que le JS ne tournait pas : le natif les
+   *  empile (App Group / SharedPreferences) et les vide à l'abonnement. */
+  onScanFailure(
+    cb: (f: { reason: string; surface: string; platform?: string | null; detail?: string | null; occurredAt?: number | null }) => void,
+  ): { remove: () => void } | undefined;
+  /** Trace de diagnostic Live Activity, telle que stockée côté natif.
+   *  iOS uniquement — Android n'a pas de Live Activity, la trace y est vide. */
+  getDiagnostics?(): Promise<{
+    trace: string;
+    lastStep: string;
+    tracing: boolean;
+    /** Combien de fois le système a demandé chaque présentation du Dynamic
+     *  Island sur un état de résultat. Aucune API ne permet de savoir laquelle
+     *  est à l'écran : le widget compte ses propres rendus, et c'est le seul
+     *  signal disponible. Un compteur à 0 prouve l'absence ; un compteur haut
+     *  est un majorant (SwiftUI peut évaluer une vue sans l'afficher).
+     *  `since` = début de la fenêtre de mesure, en secondes epoch. */
+    presentations?: { expanded: number; compact: number; minimal: number; since: number };
+    /**
+     * LE TÉMOIN : ce que l'extension widget a RÉELLEMENT lu, écrit par elle
+     * seule au moment du rendu.
+     *
+     * L'app et le widget sont deux processus, et aucune API ne permet de
+     * demander à une extension ce qu'elle a vu. Sans cette trace, une Live
+     * Activity en français et en euros sous une app en anglais et en livres
+     * n'a aucune cause observable depuis l'app — il faut une capture d'écran
+     * et des hypothèses.
+     *
+     * `at` à 0 alors que l'îlot s'affiche est la lecture qui compte : le widget
+     * n'a rien pu écrire, donc il ne lit rien non plus, donc l'entitlement App
+     * Group manque à sa cible. Une divergence horodatée, elle, dit l'inverse —
+     * le groupe est lisible, c'est son contenu qui est faux.
+     */
+    widget?: { lang: string; currency: string; at: number };
+  }>;
+  /** Redémarre une mesure propre des présentations. iOS uniquement. */
+  resetPresentationCounters?(): void;
+  /** Active ou coupe la collecte. Éteinte, rien n'est écrit sur l'appareil ;
+   *  la couper efface aussi ce qui avait été collecté. */
+  setDiagnosticsTracing?(enabled: boolean): void;
+  clearDiagnostics?(): void;
   /** Écoute le refus de permission */
   onPermissionDenied(cb: () => void): { remove: () => void } | undefined;
 }

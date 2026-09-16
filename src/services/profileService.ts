@@ -2,26 +2,113 @@ import * as Sentry from '@sentry/react-native';
 import { supabase } from './supabase';
 import { Profile } from '../types/database';
 
-// Projection explicite : évite d'exfiltrer fcm_token, email_normalized, daily_scans_count,
+// Projection explicite : évite d'exfiltrer fcm_token, email_normalized,
 // last_reset_date, timezone — colonnes serveur non utilisées par l'UI.
 const PROFILE_COLUMNS =
   'id, first_name, last_name, email, phone, birth_date, avatar_url, is_online, ' +
   'subscription_tier, subscription_status, subscription_expires_at, ' +
   'subscription_product_id, extra_scan_credits, ' +
-  'car_make, car_model, car_year, car_reg, fuel_type, avg_cons, elec_price';
+  // Pool de bienvenue. Sans ces deux colonnes ici, `getWelcomeCredits()` lit
+  // `undefined` et rend 0 : le solde offert n'apparaît jamais et le paywall
+  // d'épuisement ne part jamais. La projection étant explicite, ajouter un
+  // champ au type TypeScript ne suffit pas — il faut le demander.
+  'welcome_credits, welcome_credits_expires_at, ' +
+  // Réservé aux comptes staff : ouvre l'écran Diagnostic sur un build de
+  // production, où `__DEV__` est faux.
+  'is_admin, ' +
+  // Le quota tel que le serveur l'applique. En lecture seule (le trigger
+  // `check_scan_quota` en est le seul écrivain) : l'exposer ne risque rien et
+  // évite au client de recalculer un substitut à partir des courses.
+  'daily_scans_count, daily_scans_day, ' +
+  'car_make, car_model, car_year, car_reg, fuel_type, avg_cons, elec_price, ' +
+  // ⚠️ LE MARCHÉ DU CHAUFFEUR. Sans `country` ici, `useMarket()` lit
+  // `undefined` et rend le marché par défaut : la feuille de langue
+  // enregistrait bien la livre, et TOUTE l'app continuait d'afficher des
+  // euros et des kilomètres. Le choix était pris, écrit, relu — et jeté ici.
+  //
+  // `fuel_price` pour la même raison : c'est le prix à la pompe saisi par le
+  // chauffeur, seule source hors de France. Absent de la projection, le
+  // champ se rouvrait vide et la déduction carburant retombait sur le repli.
+  //
+  // `timezone` : le Dashboard compare la zone de l'appareil à celle-ci pour
+  // décider s'il faut la mettre à jour. En lisant `undefined` il concluait
+  // « elle a changé » à chaque montage et réécrivait pour rien.
+  'country, fuel_price, timezone';
 
-export async function fetchProfile(userId: string): Promise<Profile | null> {
+/**
+ * Trois issues, et il faut les distinguer — les confondre a enfermé des comptes.
+ *
+ *   • `{ profile }`  — la ligne existe.
+ *   • `{ missing }`  — la requête a abouti, il n'y a PAS de ligne. État normal
+ *                      (compte tout juste créé) ou signe que le compte a été
+ *                      supprimé côté serveur alors que la session vit encore.
+ *   • `{ error }`    — vrai échec : réseau, RLS, colonne absente. Réessayer a
+ *                      un sens.
+ *
+ * `maybeSingle()` et non `single()` : ce dernier traite « zéro ligne » comme une
+ * erreur, ce qui rendait les deux derniers cas indiscernables. L'appelant posait
+ * alors l'écran « Impossible de charger votre profil » avec un bouton Réessayer
+ * qui ne pouvait rien réparer — et comme la session est stockée dans le Keychain
+ * (voir `secureStorage`), qui SURVIT à la désinstallation, la boucle ne se
+ * cassait ni en redémarrant, ni en réinstallant l'app.
+ */
+export type FetchProfileResult =
+  | { profile: Profile }
+  | { missing: true }
+  | { error: string };
+
+export async function fetchProfileResult(userId: string): Promise<FetchProfileResult> {
   const { data, error } = await supabase
     .from('profiles')
     .select(PROFILE_COLUMNS)
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     Sentry.addBreadcrumb({ category: 'profile', message: `fetchProfile failed: ${error.message}`, level: 'error' });
-    return null;
+    return { error: error.message };
   }
-  return data as unknown as Profile;
+  if (!data) {
+    Sentry.addBreadcrumb({ category: 'profile', message: 'fetchProfile: aucune ligne', level: 'warning' });
+    return { missing: true };
+  }
+  return { profile: data as unknown as Profile };
+}
+
+/** Conservé pour les appelants qui n'ont besoin que du profil ou de rien. */
+export async function fetchProfile(userId: string): Promise<Profile | null> {
+  const res = await fetchProfileResult(userId);
+  return 'profile' in res ? res.profile : null;
+}
+
+/**
+ * Met à jour le profile de l'utilisateur courant.
+ *
+ * On utilise `.update().eq('id', …)` et JAMAIS `.upsert()` : la ligne profiles
+ * existe toujours (créée à l'inscription). Un upsert reconstruit un INSERT qui
+ * échoue sur les policies RLS INSERT absentes ou les colonnes NOT NULL non
+ * fournies — c'était la source d'un bug d'enregistrement côté AccountInfo.
+ *
+ * Lève l'erreur Supabase telle quelle : c'est à l'appelant d'afficher le
+ * message UI et de logguer (code/message/details/hint).
+ */
+export async function updateProfile(
+  userId: string,
+  patch: Partial<Omit<Profile, 'id'>>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId);
+
+  if (error) {
+    Sentry.addBreadcrumb({
+      category: 'profile',
+      message: `updateProfile failed: ${error.message}`,
+      level: 'error',
+    });
+    throw error;
+  }
 }
 
 /**

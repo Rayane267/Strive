@@ -1,0 +1,17 @@
+<resources>
+  <!-- ⚠️ FICHIER GÉNÉRÉ — source : src/locales/es.json, clé `native`.
+       npm run gen:native. Les clés inconnues du script sont conservées. -->
+  <string name="app_name">Strive</string>
+  <string name="accessibility_service_description">Strive es una herramienta profesional para conductores VTC. Este servicio de accesibilidad se usa únicamente para capturar la pantalla de las apps Uber, Bolt y Heetch cuando el usuario pulsa el botón de escaneo, con el fin de extraer automáticamente los datos del viaje (tarifa, distancia, direcciones) mediante OCR local. No se lee ni se recopila ningún dato personal. El análisis se realiza en el dispositivo y solo se activa a petición expresa del conductor.</string>
+  <string name="scanner_not_a_ride">Ninguna oferta de viaje detectada</string>
+  <string name="scanner_session_required_bubble">Ponte en línea para escanear</string>
+  <string name="scanner_session_required_title">Sesión necesaria</string>
+  <string name="scanner_session_required_body">Inicia tu sesión en Strive para escanear tus viajes.</string>
+  <string name="scanner_notif_active_title">Escáner Strive activo</string>
+  <string name="scanner_notif_active_body">Toca la pastilla para escanear</string>
+  <string name="scanner_notif_online">en línea</string>
+  <string name="scanner_ride_accept">✅ Viaje aceptado</string>
+  <string name="scanner_ride_decline">❌ Rechazada</string>
+  <string name="scanner_quota_reached">Cuota alcanzada</string>
+  <string name="scanner_quota_reached_free">Cuota alcanzada · Pasa a Plus</string>
+</resources>

@@ -13,6 +13,10 @@ jest.mock('@sentry/react-native', () => ({
   captureException: jest.fn(),
   captureMessage: jest.fn(),
   addBreadcrumb: jest.fn(),
+  reactNavigationIntegration: jest.fn(() => ({
+    name: 'ReactNavigation',
+    registerNavigationContainer: jest.fn(),
+  })),
   wrap: (comp) => comp,
   ErrorBoundary: ({ children }) => children,
 }));
@@ -73,21 +77,11 @@ jest.mock('@react-native-community/blur', () => ({
 
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
-// react-native-fbsdk-next instancie un NativeEventEmitter au require (module natif
-// absent côté Jest) — on fournit une façade pour permettre le rendu de l'app.
-jest.mock('react-native-fbsdk-next', () => ({
-  LoginManager: {
-    logInWithPermissions: jest.fn().mockResolvedValue({ isCancelled: true }),
-    logOut: jest.fn(),
-  },
-  AccessToken: {
-    getCurrentAccessToken: jest.fn().mockResolvedValue(null),
-  },
-  Settings: {
-    initializeSDK: jest.fn(),
-    setAppID: jest.fn(),
-  },
-}));
+// react-native-device-info : mock officiel fourni par la lib (valeurs synchrones
+// déterministes pour getVersion/getBuildNumber utilisés par src/config/appInfo).
+jest.mock('react-native-device-info', () =>
+  require('react-native-device-info/jest/react-native-device-info-mock'),
+);
 
 // ScanBridge n'existe qu'en natif — fournit une façade vide pour les tests
 const { NativeModules } = require('react-native');

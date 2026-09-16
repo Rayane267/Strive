@@ -52,7 +52,7 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 
 **2.6 — Mesure de qualité et diagnostic**
 - **Télémétrie non nominative** : pour chaque Scan, des indicateurs agrégeables (plateforme, nombre d'adresses détectées, tranche de prix, verdict, recours ou non au traitement cloud de secours). **Cette télémétrie ne contient ni montant exact, ni adresse, ni coordonnée.**
-- **Capture de diagnostic (phase bêta, sur consentement)** : lorsque l'analyse locale ne parvient pas à lire une adresse, l'Application peut enregistrer les blocs de texte issus de l'OCR de l'écran scanné (lesquels peuvent contenir des adresses) afin d'améliorer la fiabilité de l'outil. Ces captures sont **privées, accessibles à vous seul, conservées trente (30) jours au maximum**, et réservées à la phase de test.
+- **Capture de diagnostic** : lorsque l'analyse locale ne parvient pas à lire une adresse, l'Application enregistre les blocs de texte issus de l'OCR de l'écran scanné (lesquels peuvent contenir des adresses) afin de corriger les défauts de reconnaissance. Ce traitement repose sur notre **intérêt légitime** à améliorer la fiabilité de l'outil (art. 6.1.f). Ces captures sont **privées, accessibles à vous seul, conservées trente (30) jours au maximum**, et ne sont ni revendues ni exploitées à d'autres fins. **Vous pouvez vous y opposer à tout moment** en écrivant à **contact@striveapp.fr** : la capture est alors désactivée pour votre compte et les captures existantes supprimées.
 
 ## 3. La technologie OCR : fonctionnement et garanties
 
@@ -69,8 +69,8 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 | Finalité | Base légale (RGPD) |
 |---|---|
 | Fournir le Service (scan, verdict, historique, statistiques, abonnement) | Exécution du contrat (art. 6.1.b) |
-| Améliorer la fiabilité de l'OCR, prévenir la fraude et les abus, garantir la sécurité | Intérêt légitime (art. 6.1.f) |
-| Notifications push et capture de diagnostic (bêta) | Consentement (art. 6.1.a), révocable à tout moment |
+| Améliorer la fiabilité de l'OCR (y compris la capture de diagnostic), prévenir la fraude et les abus, garantir la sécurité | Intérêt légitime (art. 6.1.f), avec droit d'opposition (art. 21) |
+| Notifications push | Consentement (art. 6.1.a), révocable à tout moment |
 | Respect de nos obligations légales (comptables, demandes légitimes) | Obligation légale (art. 6.1.c) |
 
 ## 5. Destinataires et sous-traitants
@@ -96,7 +96,7 @@ Certains prestataires (notamment Google et Sentry) peuvent traiter des données 
 ## 7. Durées de conservation
 
 - **Compte, profil, courses (adresses incluses), sessions** : conservés tant que votre compte est actif, afin de vous fournir votre historique et vos statistiques ; supprimés lors de la suppression du compte ;
-- **Captures de diagnostic (bêta)** : trente (30) jours maximum ;
+- **Captures de diagnostic** : trente (30) jours maximum ;
 - **Télémétrie non nominative** : conservée sous forme agrégée à des fins de suivi qualité ;
 - **Rapports d'erreurs (Sentry)** : selon la durée de rétention du service (généralement quatre-vingt-dix (90) jours).
 

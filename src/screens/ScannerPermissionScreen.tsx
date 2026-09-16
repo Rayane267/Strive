@@ -8,8 +8,16 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { scannerService } from '../services/scanner';
 import type { PermissionsStatus } from '../services/scanner/types';
+
+import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
+import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
 
 const IS_IOS = Platform.OS === 'ios';
 
@@ -72,32 +80,32 @@ const ScannerPermissionScreen = () => {
 
   // ── Rendu iOS ──────────────────────────────────────────────────────────────
   if (IS_IOS) {
-    // URL iCloud d'un raccourci pré-construit ("Prendre une capture" + "Analyser
-    // une course avec Strive"). Si renseignée, le tap ouvre directement la fiche
-    // d'import du raccourci dans l'app Raccourcis — un tap pour l'installer.
-    // Sinon, fallback sur l'app Raccourcis vide où l'utilisateur compose le sien.
-    const PREBUILT_SHORTCUT_URL: string | null = null; // ex: 'https://www.icloud.com/shortcuts/<id>'
-
-    const openShortcutsApp = () => {
-      if (PREBUILT_SHORTCUT_URL) {
-        Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => Linking.openURL('shortcuts://'));
-        return;
-      }
-      Linking.openURL('shortcuts://').catch(() => Linking.openSettings());
+    // Le tap ouvre la fiche d'import du raccourci dans l'app Raccourcis : un
+    // geste pour l'installer. `openShortcutsApp` ne sert plus que de filet si
+    // l'URL iCloud est injoignable — l'app Raccourcis s'ouvre alors vide, et le
+    // chauffeur doit composer le raccourci lui-même. C'est un pis-aller, pas un
+    // chemin nominal.
+    const openShortcuts = () => {
+      Linking.openURL(PREBUILT_SHORTCUT_URL).catch(() => openShortcutsApp());
     };
 
     const openIosAccessibility = () => {
-      // Drill direct vers Réglages → Accessibilité → Toucher → Toucher l'arrière.
-      // Le schéma `App-prefs:` avec `&path=` fonctionne iOS 14+ ; cascade de
-      // fallbacks si une version d'iOS rejette la route profonde.
-      Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH/BackTap')
-        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY&path=TOUCH'))
-        .catch(() => Linking.openURL('App-prefs:ACCESSIBILITY'))
-        .catch(() => Linking.openSettings());
+      // `App-prefs:ACCESSIBILITY&path=TOUCH/BackTap` visait juste, mais c'est un
+      // schéma d'URL PRIVÉ : sans effet sur les iOS récents — la cascade de
+      // `.catch` ne rattrapait rien, `openURL` résout sur un schéma inconnu — et
+      // motif de rejet en revue (règle 2.5.1). Le tutoriel l'avait déjà retiré ;
+      // cet écran gardait la vieille route, si bien que deux écrans de la même
+      // app promettaient deux destinations différentes pour le même réglage.
+      // `openSettingsFor` ne promet que ce qu'Apple autorise.
+      openSettingsFor('accessibility');
     };
 
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+            l'encoche, et `container` porte la meme couleur que son sommet : la
+            bande de statut se confond avec lui au lieu de faire un bandeau. */}
+        <ScreenField />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Feather name="x" size={20} color={colors.textMuted} />
@@ -126,7 +134,7 @@ const ScannerPermissionScreen = () => {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.stepBtn} onPress={openShortcutsApp}>
+            <TouchableOpacity style={styles.stepBtn} onPress={openShortcuts}>
               <Text style={styles.stepBtnText}>{t('scanner.iosOpenShortcuts', 'Ouvrir Raccourcis')}</Text>
               <Feather name="chevron-right" size={14} color={colors.primary} />
             </TouchableOpacity>
@@ -364,38 +372,38 @@ const ScannerPermissionScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: space.lg, paddingVertical: space.md,
     borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 36, height: 36, borderRadius: radius.full,
     backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center',
   },
   headerTitle: { color: colors.textMain, fontSize: 16, fontWeight: '700' },
 
-  body: { flex: 1, paddingHorizontal: 20, paddingTop: 32 },
+  body: { flex: 1, paddingHorizontal: space.xl, paddingTop: space.xxl },
 
-  icon: { alignSelf: 'center', marginBottom: 20 },
-  title: { color: colors.textMain, fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
+  icon: { alignSelf: 'center', marginBottom: space.xl },
+  title: { color: colors.textMain, fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: space.sm },
   subtitle: {
     color: colors.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 21,
-    marginBottom: 20, paddingHorizontal: 8,
+    marginBottom: space.xl, paddingHorizontal: space.sm,
   },
 
   disclosureBox: {
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.25)',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 24,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
+    padding: space.md,
+    marginBottom: space.xl,
   },
   disclosureHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm,
   },
   disclosureTitle: {
     color: colors.primary, fontSize: 13, fontWeight: '700',
@@ -407,61 +415,61 @@ const styles = StyleSheet.create({
   step: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    borderRadius: 18, padding: 16, marginBottom: 12,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.md, padding: space.lg, marginBottom: space.md,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   stepDone: {
-    borderColor: 'rgba(0,230,118,0.3)',
+    borderColor: stroke.edge,
     backgroundColor: 'rgba(0,230,118,0.05)',
   },
-  stepLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  stepLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md, flex: 1 },
   stepIcon: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 36, height: 36, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center', alignItems: 'center',
   },
   stepIconDone: { backgroundColor: colors.primary },
   stepNum: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
   stepText: { flex: 1 },
-  stepTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  stepTitle: { color: colors.textMain, fontSize: 14, fontWeight: '700', marginBottom: space.tight },
   stepDesc: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   stepBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
+    flexDirection: 'row', alignItems: 'center', gap: space.xs,
     backgroundColor: 'rgba(0,230,118,0.1)',
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.25)',
+    paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   stepBtnDisabled: {
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: stroke.edge,
   },
   stepBtnText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   iosIconWrap: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 36, height: 36, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
   },
 
   infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    flexDirection: 'row', alignItems: 'flex-start', gap: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12, padding: 12, marginTop: 8,
+    borderRadius: radius.sm, padding: space.md, marginTop: space.sm,
   },
   infoText: { color: colors.textDimmed, fontSize: 12, lineHeight: 18, flex: 1 },
 
   refreshBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'center', marginTop: 16,
-    paddingHorizontal: 16, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    alignSelf: 'center', marginTop: space.lg,
+    paddingHorizontal: space.lg, paddingVertical: space.sm,
   },
   refreshText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
 
-  footer: { paddingHorizontal: 20, paddingBottom: 16 },
+  footer: { paddingHorizontal: space.xl, paddingBottom: space.lg },
   startBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
     backgroundColor: colors.primary,
-    height: 56, borderRadius: 16,
+    height: 56, borderRadius: radius.full,
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5, shadowRadius: 14, elevation: 10,
   },

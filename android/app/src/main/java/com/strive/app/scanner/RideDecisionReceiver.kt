@@ -7,9 +7,13 @@ import android.content.Intent
 
 /**
  * Reçoit les taps sur les boutons Accepter / Refuser de la notification de
- * résultat de scan et relaie la décision au JS (onRideDecision) via
+ * résultat de scan et enregistre la décision (file lue par le Dashboard) via
  * ScanBridgeModule. Équivalent Android de l'AppDelegate iOS
- * (userNotificationCenter didReceive → appendRideDecision → Darwin notif).
+ * (userNotificationCenter didReceive → appendRideDecision).
+ *
+ * `rideId` est l'identité de la course, frappée au scan par la bulle et portée
+ * jusqu'ici par le PendingIntent : le Dashboard n'a rien à corréler, il écrit
+ * `update rides set status where id = rideId`.
  *
  * Déclaré dans le manifest (exported=false) : les PendingIntent ciblent
  * explicitement ce composant, aucun appel externe possible.
@@ -17,11 +21,11 @@ import android.content.Intent
 class RideDecisionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION) return
-        val scanTs = intent.getDoubleExtra(EXTRA_SCAN_TS, 0.0)
+        val rideId = intent.getStringExtra(EXTRA_RIDE_ID) ?: return
         val status = intent.getStringExtra(EXTRA_STATUS) ?: return
-        if (scanTs <= 0.0 || (status != "ACCEPTED" && status != "DECLINED")) return
+        if (rideId.isEmpty() || (status != "ACCEPTED" && status != "DECLINED")) return
 
-        ScanBridgeModule.emitRideDecision(context.applicationContext, scanTs, status)
+        ScanBridgeModule.emitRideDecision(context.applicationContext, rideId, status)
 
         // Retire la notification de résultat une fois la décision prise.
         val notifId = intent.getIntExtra(EXTRA_NOTIF_ID, -1)
@@ -33,7 +37,7 @@ class RideDecisionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION = "com.strive.app.RIDE_DECISION"
-        const val EXTRA_SCAN_TS = "scanTs"
+        const val EXTRA_RIDE_ID = "rideId"
         const val EXTRA_STATUS = "status"
         const val EXTRA_NOTIF_ID = "notifId"
     }

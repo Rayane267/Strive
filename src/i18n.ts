@@ -5,6 +5,11 @@ import { NativeModules, Platform } from 'react-native';
 
 import en from './locales/en.json';
 import fr from './locales/fr.json';
+import es from './locales/es.json';
+import pt from './locales/pt.json';
+import nl from './locales/nl.json';
+import de from './locales/de.json';
+import it from './locales/it.json';
 
 const STORE_LANGUAGE_KEY = 'user_language';
 
@@ -30,7 +35,20 @@ function getDeviceLanguage(): string {
   }
 }
 
-const SUPPORTED = ['fr', 'en'] as const;
+/**
+ * Langues effectivement TRADUITES, et rien d'autre.
+ *
+ * Y déclarer un code sans son fichier ne donne pas une app dans cette langue :
+ * i18next retombe clé par clé sur l'anglais, et le chauffeur obtient un écran
+ * moitié-moitié — pire qu'une app franchement anglaise.
+ *
+ * À AJOUTER avec l'ouverture des marchés (`utils/market.ts` les annonce déjà
+ * dans `market.locales`) : `es` (Espagne), `pt` (Portugal), `nl` (Belgique
+ * néerlandophone), puis `de`/`it` pour la Suisse. Chaque ajout se fait en deux
+ * lignes — l'import du JSON et une entrée dans `resources` — mais le JSON, lui,
+ * c'est 1 138 chaînes à traduire.
+ */
+export const SUPPORTED = ['fr', 'en', 'es', 'pt', 'nl', 'de', 'it'] as const;
 
 const languageDetectorPlugin = {
   type: 'languageDetector' as const,
@@ -62,6 +80,11 @@ const languageDetectorPlugin = {
 const resources = {
   en: { translation: en },
   fr: { translation: fr },
+  es: { translation: es },
+  pt: { translation: pt },
+  nl: { translation: nl },
+  de: { translation: de },
+  it: { translation: it },
 };
 
 i18n

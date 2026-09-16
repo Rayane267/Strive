@@ -191,12 +191,20 @@ serve(async (req: Request) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      // Le client abandonne à 12 s (AbortController côté JS, session dédiée
+      // côté natif) : tenir la function au-delà ne fait que consommer du temps
+      // d'exécution facturé pour une réponse que plus personne n'attend.
+      signal: AbortSignal.timeout(15_000),
     });
     const data = await geminiRes.json();
     // Audit (best-effort, non bloquant)
     logCall(userId, geminiRes.status, contentLength).catch(() => {});
     return jsonResponse(geminiRes.status, data, origin);
   } catch (err) {
-    return jsonResponse(502, { error: 'gemini_unreachable', detail: String(err) }, origin);
+    // `detail` n'est pas renvoyé au client : l'erreur brute expose l'infra
+    // interne (URL amont, pile Deno) à un appelant non fiable. Elle reste
+    // dans les logs de la function, où elle est utile au diagnostic.
+    console.error('gemini fetch failed', err);
+    return jsonResponse(502, { error: 'gemini_unreachable' }, origin);
   }
 });

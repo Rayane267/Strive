@@ -66,9 +66,19 @@ final class GeocodeCache {
   /// Efface TOUTES les entrées de géocodage (adresses = PII). Appelé au logout
   /// et après suppression de compte → l'effacement couvre aussi le cache local,
   /// que la RPC serveur `delete_account` ne peut pas atteindre.
+  /// Préfixes purgés : la version courante ET toutes les précédentes. Un bump de
+  /// version (g: → g2:) rend les anciennes entrées illisibles mais ne les efface
+  /// pas — et plus personne ne les lisant, le TTL ne les atteint jamais non plus.
+  /// Elles contenaient des adresses de passagers et survivaient donc au logout
+  /// comme à la suppression de compte, à rebours de la finalité de `clear()`.
+  /// ⚠️ Tout futur bump doit ajouter l'ancien préfixe ici.
+  /// `"g2:xyz".hasPrefix("g:")` est faux : les deux sont bien nécessaires.
+  private static let purgedKeyPrefixes = ["g:", "g2:"]
+
   func clear() {
     guard let defaults = defaults else { return }
-    for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(Self.keyPrefix) {
+    for key in defaults.dictionaryRepresentation().keys
+    where Self.purgedKeyPrefixes.contains(where: { key.hasPrefix($0) }) {
       defaults.removeObject(forKey: key)
     }
   }

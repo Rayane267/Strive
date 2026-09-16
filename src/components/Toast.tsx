@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -125,18 +129,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0F1C15',
-    borderRadius: 16,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 16,
-    paddingVertical: 14,
-    paddingRight: 14,
-    gap: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
+    paddingVertical: space.md,
+    paddingRight: space.md,
+    gap: space.md,
   },
   accentBar: {
     width: 4,
@@ -147,12 +147,12 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
-  textWrap: { flex: 1, gap: 2 },
+  textWrap: { flex: 1, gap: space.tight },
   title: { color: colors.textMain, fontSize: 14, fontWeight: '700', lineHeight: 19 },
   message: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
 });

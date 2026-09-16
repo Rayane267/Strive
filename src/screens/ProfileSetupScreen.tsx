@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
   Image,
   Modal,
   FlatList,
-  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -21,71 +21,26 @@ import { useTranslation } from 'react-i18next';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { useAuth } from '../context/AuthContext';
-
-// ─── Indicatifs pays ──────────────────────────────────────────────────────────
-
-const DIAL_CODES = [
-  { code: '+33',  iso: 'FR', flag: '🇫🇷', nameKey: 'countries.fr',  digits: [9] },
-  { code: '+32',  iso: 'BE', flag: '🇧🇪', nameKey: 'countries.be',  digits: [8, 9] },
-  { code: '+41',  iso: 'CH', flag: '🇨🇭', nameKey: 'countries.ch',  digits: [9] },
-  { code: '+352', iso: 'LU', flag: '🇱🇺', nameKey: 'countries.lu',  digits: [6, 7, 8, 9] },
-  { code: '+213', iso: 'DZ', flag: '🇩🇿', nameKey: 'countries.dz',  digits: [9] },
-  { code: '+212', iso: 'MA', flag: '🇲🇦', nameKey: 'countries.ma',  digits: [9] },
-  { code: '+216', iso: 'TN', flag: '🇹🇳', nameKey: 'countries.tn',  digits: [8] },
-  { code: '+221', iso: 'SN', flag: '🇸🇳', nameKey: 'countries.sn',  digits: [9] },
-  { code: '+225', iso: 'CI', flag: '🇨🇮', nameKey: 'countries.ci',  digits: [10] },
-  { code: '+237', iso: 'CM', flag: '🇨🇲', nameKey: 'countries.cm',  digits: [9] },
-  { code: '+223', iso: 'ML', flag: '🇲🇱', nameKey: 'countries.ml',  digits: [8] },
-  { code: '+224', iso: 'GN', flag: '🇬🇳', nameKey: 'countries.gn',  digits: [9] },
-  { code: '+351', iso: 'PT', flag: '🇵🇹', nameKey: 'countries.pt',  digits: [9] },
-  { code: '+34',  iso: 'ES', flag: '🇪🇸', nameKey: 'countries.es',  digits: [9] },
-  { code: '+39',  iso: 'IT', flag: '🇮🇹', nameKey: 'countries.it',  digits: [9, 10] },
-  { code: '+44',  iso: 'GB', flag: '🇬🇧', nameKey: 'countries.gb',  digits: [10] },
-  { code: '+49',  iso: 'DE', flag: '🇩🇪', nameKey: 'countries.de',  digits: [10, 11] },
-  { code: '+40',  iso: 'RO', flag: '🇷🇴', nameKey: 'countries.ro',  digits: [9] },
-  { code: '+48',  iso: 'PL', flag: '🇵🇱', nameKey: 'countries.pl',  digits: [9] },
-  { code: '+1',   iso: 'US', flag: '🇺🇸', nameKey: 'countries.us',  digits: [10] },
-];
-
-// Région (pays) de l'appareil → indicatif par défaut. On lit le code pays ISO
-// depuis la locale Intl (ex. "fr-FR" → "FR"), avec fallback NativeModules.
-function getDeviceRegion(): string | null {
-  const pickRegion = (raw?: string | null): string | null => {
-    if (typeof raw !== 'string') return null;
-    // On saute le 1er sous-tag (langue) et on cherche un token pays à 2 lettres.
-    const region = raw.split(/[-_]/).slice(1).find(p => /^[A-Za-z]{2}$/.test(p));
-    return region ? region.toUpperCase() : null;
-  };
-  try {
-    const fromIntl = pickRegion(Intl.DateTimeFormat().resolvedOptions().locale);
-    if (fromIntl) return fromIntl;
-    const raw = Platform.OS === 'ios'
-      ? NativeModules.SettingsManager?.settings?.AppleLocale ||
-        NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
-      : NativeModules.I18nManager?.localeIdentifier;
-    return pickRegion(raw);
-  } catch {
-    return null;
-  }
-}
-
-const DEFAULT_DIAL =
-  DIAL_CODES.find(d => d.iso === getDeviceRegion()) ?? DIAL_CODES[0];
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import {
+  DIAL_CODES,
+  DEFAULT_DIAL,
+  expectedLengths,
+  formatNational,
+  toE164,
+  validateNationalKey,
+} from '../utils/phoneUtils';
 
 // Normalise pour la recherche : minuscules + suppression des accents.
 const normalizeSearch = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // ─── Validation — retourne des clés i18n ─────────────────────────────────────
-
-function validatePhoneKey(number: string, dial: typeof DIAL_CODES[number]): string | null {
-  const cleaned = number.replace(/[\s\-\.\(\)]/g, '').replace(/^0+/, '');
-  if (!cleaned) return 'profile.setup.errors.phoneRequired';
-  if (!/^\d+$/.test(cleaned)) return 'profile.setup.errors.phoneInvalid';
-  if (!dial.digits.includes(cleaned.length)) return 'profile.setup.errors.phoneLength';
-  return null;
-}
 
 function validateDobKey(day: string, month: string, year: string): string | null {
   if (!day || !month || !year) return 'profile.setup.errors.dobRequired';
@@ -139,6 +94,11 @@ export default function ProfileSetupScreen() {
     firstName: '', lastName: '', phone: '', dob: '',
   });
 
+  // Chaînage du clavier. `returnKeyType="next"` DESSINE la touche mais ne fait
+  // rien tout seul : sans `onSubmitEditing`, le chauffeur appuyait sur « Suivant »
+  // et le clavier se contentait de se fermer.
+  const lastNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
   const monthRef = useRef<TextInput>(null);
   const yearRef  = useRef<TextInput>(null);
 
@@ -161,12 +121,16 @@ export default function ProfileSetupScreen() {
     setErrors(prev => ({ ...prev, [field]: '' }));
 
   const validate = (): boolean => {
-    const phoneKey = validatePhoneKey(phoneNumber, dialCode);
+    const phoneKey = validateNationalKey(phoneNumber, dialCode);
     const dobKey   = validateDobKey(dobDay, dobMonth, dobYear);
     const next = {
       firstName: firstName.trim() ? '' : t('profile.setup.errors.firstNameRequired'),
       lastName:  lastName.trim()  ? '' : t('profile.setup.errors.lastNameRequired'),
-      phone:     phoneKey ? t(phoneKey) : '',
+      // Le message de longueur annonce le nombre de chiffres attendu pour
+      // l'indicatif choisi — « invalide » seul ne dit pas quoi corriger.
+      phone:     phoneKey
+        ? t(phoneKey, { count: dialCode.digits[0], expected: expectedLengths(dialCode), code: dialCode.code })
+        : '',
       dob:       dobKey   ? t(dobKey)   : '',
     };
     setErrors(next);
@@ -180,7 +144,9 @@ export default function ProfileSetupScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t('errors.profileLoadFailed'));
 
-      const fullPhone = `${dialCode.code}${phoneNumber.replace(/[\s\-\.\(\)]/g, '')}`;
+      // `toE164` retire le préfixe national : la concaténation brute stockait
+      // « +330612345678 » (0 en trop) alors que la validation, elle, l'enlevait.
+      const fullPhone = toE164(phoneNumber, dialCode);
       const birthDate = `${dobYear}-${dobMonth.padStart(2, '0')}-${dobDay.padStart(2, '0')}`;
 
       const { error } = await supabase.from('profiles').upsert({
@@ -208,6 +174,10 @@ export default function ProfileSetupScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       <KeyboardAvoidingView
@@ -245,6 +215,8 @@ export default function ProfileSetupScreen() {
               onChangeText={v => { setFirstName(v.replace(/[^a-zA-ZÀ-ÿ\s\-']/g, '').slice(0, 40)); clearError('firstName'); }}
               autoCapitalize="words"
               returnKeyType="next"
+              onSubmitEditing={() => lastNameRef.current?.focus()}
+              submitBehavior="submit"
             />
           </View>
           <FieldError msg={errors.firstName} />
@@ -254,6 +226,7 @@ export default function ProfileSetupScreen() {
           <View style={[styles.inputWrap, !!errors.lastName && styles.inputWrapError]}>
             <Feather name="user" size={16} color={errors.lastName ? colors.danger : colors.textDimmed} style={styles.inputIcon} />
             <TextInput
+              ref={lastNameRef}
               style={styles.input}
               placeholder={t('profile.setup.placeholderLastName')}
               placeholderTextColor={colors.textDimmed}
@@ -261,6 +234,8 @@ export default function ProfileSetupScreen() {
               onChangeText={v => { setLastName(v.replace(/[^a-zA-ZÀ-ÿ\s\-']/g, '').slice(0, 40)); clearError('lastName'); }}
               autoCapitalize="words"
               returnKeyType="next"
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              submitBehavior="submit"
             />
           </View>
           <FieldError msg={errors.lastName} />
@@ -279,11 +254,12 @@ export default function ProfileSetupScreen() {
             </TouchableOpacity>
             <View style={styles.dialDivider} />
             <TextInput
+              ref={phoneRef}
               style={[styles.input, { flex: 1 }]}
               placeholder={t('profile.setup.placeholderPhone')}
               placeholderTextColor={colors.textDimmed}
               value={phoneNumber}
-              onChangeText={v => { setPhoneNumber(v.replace(/[^0-9\s\-\.]/g, '').slice(0, 15)); clearError('phone'); }}
+              onChangeText={v => { setPhoneNumber(formatNational(v, dialCode)); clearError('phone'); }}
               keyboardType="phone-pad"
               returnKeyType="next"
             />
@@ -333,6 +309,10 @@ export default function ProfileSetupScreen() {
               onChangeText={v => {
                 const n = v.replace(/\D/g, '').slice(0, 4);
                 setDobYear(n); clearError('dob');
+                // Dernier champ de la saisie, et le pavé numérique iOS n'a pas
+                // de touche Retour : sans ça le clavier restait ouvert sur le
+                // bouton de validation, qu'il fallait deviner derrière.
+                if (n.length === 4) Keyboard.dismiss();
               }}
               keyboardType="numeric"
               maxLength={4}
@@ -405,7 +385,14 @@ export default function ProfileSetupScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.dialItem, item.code === dialCode.code && styles.dialItemActive]}
-                  onPress={() => { setDialCode(item); setDialPickerOpen(false); setDialQuery(''); }}
+                  // Le découpage dépend du pays : on re-formate le numéro déjà
+                  // saisi, sinon il garde les espaces de l'indicatif précédent.
+                  onPress={() => {
+                    setDialCode(item);
+                    setPhoneNumber(prev => formatNational(prev, item));
+                    setDialPickerOpen(false);
+                    setDialQuery('');
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.dialItemFlag}>{item.flag}</Text>
@@ -443,83 +430,83 @@ const FieldError = ({ msg }: { msg: string }) => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scroll: { flexGrow: 1, paddingHorizontal: space.xl, paddingTop: space.xl, paddingBottom: space.xxl },
 
-  avatarWrap: { alignSelf: 'center', marginBottom: 24 },
-  avatar: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: colors.primary },
+  avatarWrap: { alignSelf: 'center', marginBottom: space.xl },
+  avatar: { width: 84, height: 84, borderRadius: radius.full, borderWidth: strokeWidth.control, borderColor: colors.primary },
   avatarPlaceholder: {
-    width: 84, height: 84, borderRadius: 42,
+    width: 84, height: 84, borderRadius: radius.full,
     backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center', alignItems: 'center',
   },
 
-  title: { fontSize: 26, fontWeight: '900', color: colors.textMain, marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: 28 },
+  title: { fontSize: 26, fontWeight: '900', color: colors.textMain, marginBottom: space.sm, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: space.xl },
 
   label: {
     fontSize: 11, fontWeight: '700', color: colors.primary,
-    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: space.sm,
   },
 
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: 14, marginBottom: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: space.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   inputWrapError: { borderColor: colors.danger },
-  inputIcon: { marginLeft: 14, marginRight: 2 },
-  input: { paddingVertical: 15, paddingHorizontal: 10, fontSize: 16, color: colors.textMain },
+  inputIcon: { marginLeft: space.md, marginRight: space.tight },
+  input: { paddingVertical: space.lg, paddingHorizontal: space.sm, fontSize: 16, color: colors.textMain },
 
   phoneRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: 14, marginBottom: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden',
+    backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: space.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge, overflow: 'hidden',
   },
-  dialBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 15 },
+  dialBtn: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.md, paddingVertical: space.lg },
   dialFlag: { fontSize: 20 },
   dialCode: { fontSize: 14, color: colors.textMain, fontWeight: '600' },
-  dialDivider: { width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.1)', marginRight: 4 },
+  dialDivider: { width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.1)', marginRight: space.xs },
 
   dobRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: 14, marginBottom: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 14,
+    backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: space.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge, paddingHorizontal: space.md,
   },
-  dobInput: { paddingVertical: 15, fontSize: 16, color: colors.textMain, textAlign: 'center', width: 44 },
+  dobInput: { paddingVertical: space.lg, fontSize: 16, color: colors.textMain, textAlign: 'center', width: 44 },
   dobInputYear: { width: 64 },
-  dobSep: { color: colors.textDimmed, fontSize: 18, fontWeight: '300', marginHorizontal: 2 },
+  dobSep: { color: colors.textDimmed, fontSize: 18, fontWeight: '300', marginHorizontal: space.tight },
 
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14, marginTop: 2 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginBottom: space.md, marginTop: space.tight },
   errorText: { color: colors.danger, fontSize: 12, flex: 1 },
 
   button: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: colors.primary, paddingVertical: 17, borderRadius: 14, marginTop: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
+    backgroundColor: colors.primary, paddingVertical: space.lg, borderRadius: radius.md, marginTop: space.lg,
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
   },
   buttonText: { color: colors.background, fontSize: 16, fontWeight: '800' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingHorizontal: 20 },
-  modalHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingHorizontal: space.xl },
+  modalHandle: { width: 36, height: 4, borderRadius: radius.xs, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: space.md, marginBottom: space.xs },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', marginBottom: 8,
+    paddingVertical: space.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', marginBottom: space.sm,
   },
   modalTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700' },
   dialSearchWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: colors.background, borderRadius: 12,
-    paddingHorizontal: 12, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: colors.background, borderRadius: radius.sm,
+    paddingHorizontal: space.md, marginBottom: space.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-  dialSearchIcon: { marginRight: 2 },
-  dialSearchInput: { flex: 1, paddingVertical: 11, fontSize: 15, color: colors.textMain },
-  dialEmpty: { color: colors.textDimmed, fontSize: 14, textAlign: 'center', paddingVertical: 28 },
-  dialItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  dialSearchIcon: { marginRight: space.tight },
+  dialSearchInput: { flex: 1, paddingVertical: space.md, fontSize: 15, color: colors.textMain },
+  dialEmpty: { color: colors.textDimmed, fontSize: 14, textAlign: 'center', paddingVertical: space.xl },
+  dialItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md, gap: space.md, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   dialItemActive: { backgroundColor: 'rgba(0,230,118,0.05)' },
   dialItemFlag: { fontSize: 22 },
   dialItemName: { flex: 1, color: colors.textMain, fontSize: 15 },

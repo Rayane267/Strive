@@ -6,10 +6,16 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney } from '../utils/market';
 
 interface DayData {
   label: string;      // ex: "Lun", "Mar"
-  earnings: number;   // euros
+  /** Gains du jour, dans la devise du marché. */
+  earnings: number;
   isToday?: boolean;
 }
 
@@ -19,9 +25,11 @@ interface Props {
 }
 
 const EarningsChart: React.FC<Props> = ({ data, title }) => {
+  const market = useMarket();
   if (data.length === 0) return null;
 
   const maxVal = Math.max(...data.map(d => d.earnings), 1);
+  const money = (n: number) => formatMoney(n, market);
 
   return (
     <View style={styles.container}>
@@ -29,9 +37,9 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
       <View style={styles.chartArea}>
         {/* Y-axis labels */}
         <View style={styles.yAxis}>
-          <Text style={styles.yLabel}>€{Math.round(maxVal)}</Text>
-          <Text style={styles.yLabel}>€{Math.round(maxVal / 2)}</Text>
-          <Text style={styles.yLabel}>€0</Text>
+          <Text style={styles.yLabel}>{money(maxVal)}</Text>
+          <Text style={styles.yLabel}>{money(maxVal / 2)}</Text>
+          <Text style={styles.yLabel}>{money(0)}</Text>
         </View>
         {/* Bars */}
         <View style={styles.barsContainer}>
@@ -63,7 +71,7 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
                   {day.label}
                 </Text>
                 {day.earnings > 0 && (
-                  <Text style={styles.barValue}>€{Math.round(day.earnings)}</Text>
+                  <Text style={styles.barValue}>{money(day.earnings)}</Text>
                 )}
               </View>
             );
@@ -77,17 +85,17 @@ const EarningsChart: React.FC<Props> = ({ data, title }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    padding: space.xl,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   title: {
     color: colors.textMain,
     fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   chartArea: {
     flexDirection: 'row',
@@ -96,7 +104,7 @@ const styles = StyleSheet.create({
   yAxis: {
     width: 40,
     justifyContent: 'space-between',
-    paddingBottom: 24,
+    paddingBottom: space.xl,
   },
   yLabel: {
     color: colors.textDimmed,
@@ -107,8 +115,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingBottom: 24,
-    gap: 4,
+    paddingBottom: space.xl,
+    gap: space.xs,
   },
   gridLine: {
     position: 'absolute',
@@ -128,14 +136,14 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: '100%',
-    borderRadius: 6,
+    borderRadius: radius.xs,
     minHeight: 4,
   },
   barLabel: {
     color: colors.textDimmed,
     fontSize: 10,
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   barLabelToday: {
     color: colors.primary,
@@ -145,7 +153,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 9,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: space.tight,
     position: 'absolute',
     top: -14,
   },

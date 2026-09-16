@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n';
+import { getBusinessDayKey } from '../utils/dateUtils';
+import { getMarket, formatMoney, type CurrencyDisplay } from '../utils/market';
 
 const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
@@ -89,7 +91,9 @@ export function resetInactivityReminder() {
  */
 export async function scheduleQuotaResetNotification(resetHour: number) {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // Clé sur la journée de quota (locale + resetHour), pas le jour UTC : sinon
+    // la dédup saute d'un jour dès 22h locale en UTC+2.
+    const today = getBusinessDayKey(new Date(), resetHour);
     const key = `${QUOTA_RESET_KEY}_${today}`;
     const already = await AsyncStorage.getItem(key);
     if (already) return;
@@ -112,7 +116,17 @@ export async function scheduleQuotaResetNotification(resetHour: number) {
   } catch {}
 }
 
-export function notifyQuotaReached(resetHour: number) {
+/**
+ * @param isFree      Le chauffeur est-il sur le tier gratuit ? Si oui, le message
+ *                    porte la proposition de passage à Plus — c'est le seul
+ *                    moment où elle est vraie ET utile : il vient de buter sur
+ *                    la limite, sur une course qu'il ne pourra pas évaluer.
+ * @param plusScans   Scans/jour du tier Plus, lu depuis `plan_limits` par
+ *                    l'appelant. Jamais codé en dur : la limite est modifiable
+ *                    en base, et un message qui annonce le mauvais chiffre est
+ *                    pire que pas de message du tout.
+ */
+export function notifyQuotaReached(resetHour: number, isFree = false, plusScans?: number | null) {
   const now = new Date();
   const reset = new Date();
   reset.setHours(resetHour, 0, 0, 0);
@@ -123,10 +137,20 @@ export function notifyQuotaReached(resetHour: number) {
   const mins = Math.floor((diffMs % 3600_000) / 60_000);
   const timeStr = hours > 0 ? `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}` : `${mins}min`;
 
+  // Repli sur le message neutre si la limite Plus est inconnue (cache runtime pas
+  // encore chargé) : mieux vaut ne rien promettre qu'annoncer un chiffre faux.
+  const body = isFree && plusScans
+    // `scans` et surtout pas `count` : i18next réserve `count` à la
+    // pluralisation. Il chercherait `bodyFree_one` / `bodyFree_other`, et ne
+    // retomberait sur la clé de base que faute de les trouver — le jour où une
+    // forme plurielle est ajoutée, le message change tout seul.
+    ? i18n.t('notifications.quotaReached.bodyFree', { time: timeStr, scans: plusScans })
+    : i18n.t('notifications.quotaReached.body', { time: timeStr });
+
   scheduleNative(
     'quota-reached',
     i18n.t('notifications.quotaReached.title'),
-    i18n.t('notifications.quotaReached.body', { time: timeStr }),
+    body,
     0,
   );
 }
@@ -139,9 +163,22 @@ export function notifyQuotaReached(resetHour: number) {
  * Récap hebdo (dimanche ~19h) — ré-engagement free → ouvre l'app → voit le
  * tease de perte. Reprogrammé à chaque ouverture (one-shot) ; le montant est le
  * cumul "cette semaine jusqu'ici" → ne peut que sous-estimer, jamais sur-promettre.
- * `lossEur` optionnel : si absent/faible, message générique.
+ * `loss` optionnel : si absent/faible, message générique.
+ *
+ * ── LA DEVISE VIENT DE L'APPELANT ─────────────────────────────────────────
+ * Le montant arrive déjà converti : l'appelant l'a tiré de courses ramenées à
+ * `market.currency`. Le symbole, lui, se lisait sur `getMarket()` sans argument
+ * — donc sur la région du TÉLÉPHONE, faute de profil ici. Un chauffeur
+ * britannique dont l'appareil est configuré en France recevait « 42 € » pour un
+ * manque à gagner de 42 £ : le bon nombre sous la mauvaise monnaie, et dans le
+ * seul endroit de l'app où il ne peut rien recouper.
+ *
+ * Le commentaire qui justifiait ce repli — « pas de contexte React ici » —
+ * décrivait un état revolu : l'unique appelant est le Dashboard, qui a le
+ * marché sous la main. Le repli reste pour les appels sans devise, où il vaut
+ * toujours mieux qu'un chiffre nu.
  */
-export function scheduleWeeklyRecap(lossEur?: number) {
+export function scheduleWeeklyRecap(loss?: number, cur?: CurrencyDisplay) {
   cancelNative('weekly-recap');
   const now = new Date();
   const next = new Date(now);
@@ -150,14 +187,31 @@ export function scheduleWeeklyRecap(lossEur?: number) {
   if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 7);
 
   const delayMs = next.getTime() - now.getTime();
-  const body = lossEur && lossEur >= 10
-    ? i18n.t('notifications.weeklyRecap.bodyLoss', { eur: Math.round(lossEur) })
+  const body = loss && loss >= 10
+    ? i18n.t('notifications.weeklyRecap.bodyLoss', {
+        amount: formatMoney(loss, cur ?? getMarket()),
+      })
     : i18n.t('notifications.weeklyRecap.body');
   scheduleNative('weekly-recap', i18n.t('notifications.weeklyRecap.title'), body, delayMs);
 }
 
 export function cancelWeeklyRecap() {
   cancelNative('weekly-recap');
+}
+
+/**
+ * Le serveur a refusé la course DÉFINITIVEMENT (quota dépassé, validation) —
+ * rejouer ne servirait à rien. Le chauffeur doit le savoir : c'est un revenu qui
+ * n'apparaîtra pas dans ses stats. Auparavant la course était réessayée 5 fois
+ * puis supprimée sans qu'il puisse faire le lien avec quoi que ce soit.
+ */
+export function notifyRideRejected(reason: 'quota' | 'other') {
+  scheduleNative(
+    'ride-rejected',
+    i18n.t('notifications.rideRejected.title'),
+    i18n.t(`notifications.rideRejected.${reason === 'quota' ? 'bodyQuota' : 'bodyOther'}`),
+    0,
+  );
 }
 
 export function notifySessionClosed() {

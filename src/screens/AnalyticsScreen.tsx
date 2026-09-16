@@ -5,7 +5,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Modal,
   Pressable,
@@ -13,6 +12,7 @@ import {
   Platform,
   Animated,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from '@react-native-community/blur';
@@ -20,39 +20,55 @@ import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { getEffectivePlanTier, getPlanLimits } from '../services/subscriptionService';
-import { fetchRides } from '../services/ridesService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import { hapticSelection } from '../utils/haptics';
+import { getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
+import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
 import { useNavigation } from '@react-navigation/native';
-import { getDayStart } from '../utils/dateUtils';
+import { getDayStart, getWeekStart, toLocalDateKey, getBusinessDayKey, parseLocalDateKey } from '../utils/dateUtils';
+import {
+  pickGranularity,
+  foldSeries,
+  toRateSeries,
+  type Granularity,
+  type DayPoint,
+} from '../utils/chartBuckets';
 import EarningsChart from '../components/EarningsChart';
 import KpiTrendChart from '../components/KpiTrendChart';
 import QualityScoreCard from '../components/QualityScoreCard';
 import { computeQualityScore, QualityScore } from '../utils/qualityScore';
 import AnimatedEntrance from '../components/AnimatedEntrance';
-import BrandLoader from '../components/BrandLoader';
+import { Skeleton } from '../components/Skeleton';
 import { cacheStats, getCachedStats } from '../services/offlineService';
 import { fetchFuelPrice } from '../services/fuelService';
+import { useMarket } from '../hooks/useMarket';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  toMarketDistance,
+  toMarketRate,
+  dateLocale,
+} from '../utils/market';
+import {
+  getFxRates,
+  inCurrency,
+  countConverted,
+  normalizeRides,
+} from '../services/fxService';
+import { calendarLocale, CALENDAR_LOCALES } from '../utils/calendarLocales';
 
-LocaleConfig.locales['fr'] = {
-  monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-  monthNamesShort: ['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'],
-  dayNames: ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
-  dayNamesShort: ['Di','Lu','Ma','Me','Je','Ve','Sa'],
-  today: "Aujourd'hui",
-};
-LocaleConfig.locales['en'] = {
-  monthNames: ['January','February','March','April','May','June','July','August','September','October','November','December'],
-  monthNamesShort: ['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.'],
-  dayNames: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
-  dayNamesShort: ['Su','Mo','Tu','We','Th','Fr','Sa'],
-  today: 'Today',
-};
 
 const PLATFORMS = [
   { key: 'UBER',   label: 'Uber',   color: '#FFFFFF' },
@@ -61,7 +77,10 @@ const PLATFORMS = [
 ] as const;
 
 const AnalyticsScreen = () => {
-  const { t, i18n } = useTranslation();
+  const market = useMarket();
+  /** Montants à deux décimales, dans la devise du marché. */
+  const money2 = (n: number) => formatMoney(n, market, { decimals: 2 });
+  const { t, i18n } = useMarketT();
   const { user } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
@@ -69,7 +88,7 @@ const AnalyticsScreen = () => {
   const [resetHour, setResetHour] = useState(0);
 
   useEffect(() => {
-    LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
+    LocaleConfig.defaultLocale = calendarLocale(i18n.language);
   }, [i18n.language]);
 
   // Re-read day_reset_hour on focus so a change in Preferences is picked up
@@ -90,32 +109,45 @@ const AnalyticsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(false);
+  // Payant = 'plus' OU 'premium' : c'est ce qui ouvre l'historique tout court.
+  // L'ÉTENDUE de la fenêtre, elle, dépend du tier exact (cf. getMaxRangeSpanDays),
+  // d'où deux états là où un booléen suffisait quand Plus était le seul palier.
+  const [isPaid, setIsPaid] = useState(false);
+  const [planTier, setPlanTier] = useState<PlanTier>('free');
 
   // Bilan de la semaine (Plus uniquement) : manque à gagner vs objectif + courses
-  // non rentables évitées, sur les 7 derniers jours. Insight, pas paywall.
+  // non rentables évitées, sur la semaine EN COURS. Insight, pas paywall.
+  //
+  // La fenêtre glissante de 7 jours contredisait `isCurrentWeekView` juste en
+  // dessous, qui décide de l'affichage de la carte sur un lundi de référence :
+  // le même écran appelait « semaine » deux périodes différentes.
   useEffect(() => {
-    if (!user?.id || !isPremium) { setWeeklyBilan({ lossWeek: 0, avoided: 0 }); return; }
+    if (!user?.id || !isPaid) { setWeeklyBilan({ lossWeek: 0, avoided: 0 }); return; }
     (async () => {
       try {
-        const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const since = getWeekStart(resetHour);
         const [prefsRes, weekRides] = await Promise.all([
           supabase.from('preferences').select('min_hourly_rate, min_km_rate').eq('id', user.id).single(),
           fetchRides(user.id, since),
         ]);
         const mh = Number(prefsRes.data?.min_hourly_rate ?? 25) || 25;
         const mk = Number(prefsRes.data?.min_km_rate ?? 1.2) || 1.2;
-        setWeeklyBilan(computeWeeklyBilan(weekRides, mh, mk));
+        // Les seuils sont dans la devise du chauffeur : les courses d'une autre
+        // monnaie y sont ramenées avant d'être comparées, sinon un tarif en
+        // livres passerait pour un tarif en euros.
+        const normalized = await normalizeRides(weekRides, market.currency);
+        setWeeklyBilan(computeWeeklyBilan(normalized, mh, mk));
       } catch {
         setWeeklyBilan({ lossWeek: 0, avoided: 0 });
       }
     })();
-  }, [user?.id, isPremium]);
+  }, [user?.id, isPaid, resetHour, market.currency]);
   const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
   const [tempStart, setTempStart] = useState<string | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(toLocalDateKey(new Date()));
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   const [modalAlert, setModalAlert] = useState('');
@@ -148,9 +180,7 @@ const AnalyticsScreen = () => {
   // qu'on consulte une période dont la fin est antérieure au lundi de cette semaine.
   const isCurrentWeekView = (() => {
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    weekStart.setHours(0, 0, 0, 0);
+    const weekStart = getWeekStart(resetHour);
     const end = dateRange?.end ? new Date(dateRange.end) : now;
     return end >= weekStart;
   })();
@@ -166,7 +196,13 @@ const AnalyticsScreen = () => {
   const [weeklyBilan, setWeeklyBilan] = useState<{ lossWeek: number; avoided: number }>({ lossWeek: 0, avoided: 0 });
   const [hourlyTrend, setHourlyTrend] = useState<{ label: string; value: number }[]>([]);
   const [kmTrend, setKmTrend] = useState<{ label: string; value: number }[]>([]);
+  // Nombre de courses d'une autre monnaie incluses dans les totaux, pour
+  // pouvoir le dire à l'écran plutôt que de le taire.
+  const [convertedRides, setConvertedRides] = useState(0);
   const [qualityScore, setQualityScore] = useState<QualityScore | null>(null);
+  /// Maille des graphes. Elle décide aussi de leur TITRE : « Gains par jour »
+  /// sur des barres hebdomadaires serait faux.
+  const [granularity, setGranularity] = useState<Granularity>('day');
 
   const fetchingRef = useRef(false);
   const fetchAnalytics = useCallback(async () => {
@@ -179,14 +215,14 @@ const AnalyticsScreen = () => {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, elec_price')
+        .select('subscription_tier, subscription_expires_at, avg_cons, fuel_type, elec_price, fuel_price')
         .eq('id', user.id)
         .single();
 
-      const planTier = getEffectivePlanTier(profileData);
-      getPlanLimits(planTier);
-      const canAccessHistory = planTier !== 'free';
-      setIsPremium(canAccessHistory);
+      const tier = getEffectivePlanTier(profileData);
+      const canAccessHistory = tier !== 'free';
+      setPlanTier(tier);
+      setIsPaid(canAccessHistory);
 
       let rangeStart = canAccessHistory && dateRange?.start ? new Date(dateRange.start) : getDayStart(resetHour);
       rangeStart.setHours(resetHour, 0, 0, 0);
@@ -197,16 +233,12 @@ const AnalyticsScreen = () => {
 
       // Parallélise rides + sessions + seuils (round-trips indépendants → -1 RTT)
       const [
-        { data: rides, error: ridesError },
+        rides,
         { data: sessionsData, error: sessionsError },
         { data: prefsData },
+        fxRates,
       ] = await Promise.all([
-        supabase
-          .from('rides')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('created_at', rangeStart.toISOString())
-          .lt('created_at', rangeEnd.toISOString()),
+        fetchRidesInRange(user.id, rangeStart, rangeEnd),
         supabase
           .from('online_sessions')
           .select('duration_seconds, start_at, end_at')
@@ -218,26 +250,50 @@ const AnalyticsScreen = () => {
           .select('min_hourly_rate, min_km_rate')
           .eq('id', user.id)
           .single(),
+        getFxRates(),
       ]);
 
-      if (ridesError) throw ridesError;
+      // ── UNE SEULE MONNAIE À PARTIR D'ICI ────────────────────────────────
+      // Tout ce qui suit somme, divise ou compare : gains totaux, €/h, €/km,
+      // score qualité, répartition par plateforme, courbes. Une course en livres
+      // fausserait chacun de ces calculs de la même façon, et les corriger un
+      // par un aurait laissé passer le prochain. On convertit ici, une fois.
+      //
+      // Le taux figé au scan fait foi (cf. `fx_rate_eur`) : un total de mars ne
+      // bouge pas parce que la livre a bougé en septembre.
+      const convertedCount = countConverted(rides, market.currency);
+      const normalizedRides = rides.map(r => inCurrency(r, market.currency, fxRates));
+      setConvertedRides(convertedCount);
+
       if (sessionsError) throw sessionsError;
 
-      if (!rides || rides.length === 0) {
+      if (!rides || normalizedRides.length === 0) {
         const emptyStats = { totalProfit: 0, totalDistance: 0, totalDurationMin: 0, hourlyRate: 0, pricePerKm: 0, acceptedCount: 0, fuelCost: 0, appDistribution: { UBER: 0, BOLT: 0, HEETCH: 0 }, appEarnings: { UBER: 0, BOLT: 0, HEETCH: 0 } };
         setStats(emptyStats);
         setDailyEarnings([]);
         setHourlyTrend([]);
         setKmTrend([]);
         setQualityScore(null);
+        setIsEmpty(true);
         return;
       }
+      setIsEmpty(false);
 
-      const minHourly = Number(prefsData?.min_hourly_rate ?? 25) || 25;
-      const minKm = Number(prefsData?.min_km_rate ?? 1.2) || 1.2;
-      setQualityScore(computeQualityScore(rides as any, minHourly, minKm));
+      // Seuils IMPOSÉS en free, comme au scan (DashboardScreen) : sinon un
+      // compte qui a personnalisé ses seuils avant de repasser free voit ici un
+      // score qualité calculé sur des seuils que le scanner n'a jamais
+      // appliqués — la carte et le verdict de la même course se contredisent.
+      const isFree = tier === 'free';
+      const floor = market.thresholds;
+      const minHourly = isFree
+        ? floor.hourly
+        : Number(prefsData?.min_hourly_rate ?? floor.hourly) || floor.hourly;
+      const minKm = isFree
+        ? floor.distance
+        : Number(prefsData?.min_km_rate ?? floor.distance) || floor.distance;
+      setQualityScore(computeQualityScore(normalizedRides as any, minHourly, minKm));
 
-      const acceptedRides = rides.filter((r: any) => r.status === 'ACCEPTED');
+      const acceptedRides = normalizedRides.filter((r: any) => r.status === 'ACCEPTED');
       let totalProfit = 0;
       let totalDistance = 0;
       const distribution: Record<'UBER' | 'BOLT' | 'HEETCH', number> = { UBER: 0, BOLT: 0, HEETCH: 0 };
@@ -260,14 +316,18 @@ const AnalyticsScreen = () => {
       }, 0) || 0;
 
       // ── Daily breakdown for charts ──
-      const dayLabels = i18n.language === 'fr'
-        ? ['Di','Lu','Ma','Me','Je','Ve','Sa']
-        : ['Su','Mo','Tu','We','Th','Fr','Sa'];
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Les mêmes abréviations que les calendriers de l'app, et dans les
+      // mêmes sept langues : un ternaire binaire laissait cinq d'entre elles
+      // sur l'anglais.
+      const dayLabels =
+        CALENDAR_LOCALES[calendarLocale(i18n.language)].dayNamesShort;
+      const todayStr = getBusinessDayKey(new Date(), resetHour);
 
       const dailyMap = new Map<string, { earnings: number; distance: number; hours: number }>();
       acceptedRides.forEach((ride: any) => {
-        const dateKey = new Date(ride.created_at).toISOString().split('T')[0];
+        // Jour de travail local (cf. day_reset_hour), pas le jour UTC : sinon une
+        // course de nuit atterrit dans la mauvaise barre du graphe.
+        const dateKey = getBusinessDayKey(ride.created_at, resetHour);
         const existing = dailyMap.get(dateKey) || { earnings: 0, distance: 0, hours: 0 };
         const fare = effectiveFare(ride);
         existing.earnings += fare;
@@ -276,32 +336,49 @@ const AnalyticsScreen = () => {
         dailyMap.set(dateKey, existing);
       });
 
-      // Build chart data for the date range
-      const chartDays: { label: string; earnings: number; isToday?: boolean }[] = [];
-      const hrTrend: { label: string; value: number }[] = [];
-      const kmTrendData: { label: string; value: number }[] = [];
+      // Série JOURNALIÈRE brute, trous compris : un jour sans course vaut zéro
+      // et doit exister, sinon la semaine se resserre et le graphe ment sur le
+      // rythme réel.
+      const rawDays: DayPoint[] = [];
       const cursor = new Date(rangeStart);
       while (cursor < rangeEnd) {
-        const key = cursor.toISOString().split('T')[0];
+        // cursor est déjà positionné à resetHour → sa date locale EST la clé du jour
+        const key = toLocalDateKey(cursor);
         const dayData = dailyMap.get(key);
-        const dayOfWeek = cursor.getDay();
-        const label = dayLabels[dayOfWeek];
-        chartDays.push({
-          label,
+        rawDays.push({
+          key,
+          date: new Date(cursor),
           earnings: dayData?.earnings || 0,
+          distance: dayData?.distance || 0,
+          hours: dayData?.hours || 0,
           isToday: key === todayStr,
         });
-        if (dayData && dayData.earnings > 0) {
-          const hr = dayData.hours > 0 ? dayData.earnings / dayData.hours : 0;
-          const km = dayData.distance > 0 ? dayData.earnings / dayData.distance : 0;
-          hrTrend.push({ label, value: hr });
-          kmTrendData.push({ label, value: km });
-        }
         cursor.setDate(cursor.getDate() + 1);
       }
-      setDailyEarnings(chartDays);
-      setHourlyTrend(hrTrend);
-      setKmTrend(kmTrendData);
+
+      // Puis on replie à la maille qui reste lisible sur un téléphone. Les taux
+      // se recalculent APRÈS le repli, à partir des sommes : moyenner des €/h
+      // journaliers donnerait le même poids à une vacation de dix heures et à
+      // une course isolée.
+      const gran = pickGranularity(rawDays.length);
+      const folded = foldSeries(rawDays, gran, { locale: i18n.language, dayLabels });
+
+      setGranularity(gran);
+      setDailyEarnings(folded.map(p => ({
+        label: p.label,
+        earnings: p.earnings,
+        isToday: p.isToday,
+      })));
+      setHourlyTrend(toRateSeries(folded, 'hours'));
+      // La courbe porte l'unité du marché dans sa légende : ses points
+      // doivent la porter aussi, sinon un chauffeur britannique lit des
+      // taux au kilomètre sous une étiquette « £/mi ».
+      setKmTrend(
+        toRateSeries(folded, 'distance').map(p => ({
+          ...p,
+          value: toMarketRate(p.value, market),
+        })),
+      );
 
       const totalOnlineHours = totalOnlineSeconds / 3600;
 
@@ -309,7 +386,11 @@ const AnalyticsScreen = () => {
       // carburants liquides, prix €/kWh perso pour l'électrique).
       const avgCons = profileData?.avg_cons ?? 0;
       const fuelType = profileData?.fuel_type ?? 'essence';
-      const fuelPrice = avgCons > 0 ? await fetchFuelPrice(fuelType, profileData?.elec_price) : 0;
+      const fuelPrice = avgCons > 0 ? await fetchFuelPrice(
+              fuelType,
+              { elecPrice: profileData?.elec_price, fuelPrice: profileData?.fuel_price },
+              market,
+            ) : 0;
       const fuelCost = (avgCons > 0 && fuelPrice > 0) ? (totalDistance / 100) * avgCons * fuelPrice : 0;
 
       const newStats = {
@@ -344,7 +425,7 @@ const AnalyticsScreen = () => {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user, dateRange, resetHour, i18n.language]);
+  }, [user, dateRange, resetHour, i18n.language, market]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -365,26 +446,28 @@ const AnalyticsScreen = () => {
   }, [resetHour]);
 
   const handleDayPress = (day: any) => {
-    const todayString = new Date().toISOString().split('T')[0];
-    if (!isPremium && day.dateString !== todayString) {
+    const todayString = getBusinessDayKey(new Date(), resetHour);
+    if (!isPaid && day.dateString !== todayString) {
       setModalAlert(t('analytics.alerts.premiumRequired'));
       return;
     }
     setModalAlert('');
+    hapticSelection();
     if (selectionStep === 0) {
       setTempStart(day.dateString);
       setSelectionStep(1);
     } else {
-      const start = new Date(tempStart!);
-      const end = new Date(day.dateString);
+      const start = parseLocalDateKey(tempStart!);
+      const end = parseLocalDateKey(day.dateString);
       if (end < start) { setTempStart(day.dateString); return; }
       const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000);
-      if (diffDays > 6) {
-        setModalAlert(t('analytics.alerts.limitText', 'Max 7 jours.'));
+      const maxSpan = getMaxRangeSpanDays(planTier);
+      if (maxSpan !== null && diffDays > maxSpan) {
+        setModalAlert(t('analytics.alerts.limitText', { days: maxSpan + 1 }));
         setTempStart(day.dateString);
         return;
       }
-      setDateRange({ start: new Date(tempStart!), end: new Date(day.dateString) });
+      setDateRange({ start, end });
       setSelectionStep(0);
       setModalVisible(false);
     }
@@ -399,14 +482,15 @@ const AnalyticsScreen = () => {
     if (selectionStep === 1 && tempStart) {
       marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
     } else if (dateRange.start && dateRange.end) {
-      const startStr = dateRange.start.toISOString().split('T')[0];
-      const endStr = dateRange.end.toISOString().split('T')[0];
+      const startStr = toLocalDateKey(dateRange.start);
+      const endStr = toLocalDateKey(dateRange.end);
       if (startStr === endStr) {
         marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
       } else {
-        let curr = new Date(startStr);
-        while (curr <= new Date(endStr)) {
-          const ds = curr.toISOString().split('T')[0];
+        let curr = parseLocalDateKey(startStr);
+        const last = parseLocalDateKey(endStr);
+        while (curr <= last) {
+          const ds = toLocalDateKey(curr);
           if (ds === startStr)      marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
           else if (ds === endStr)   marks[ds] = { endingDay: true,   color: edge, textColor: edgeText };
           else                      marks[ds] = { color: mid, textColor: midText };
@@ -418,13 +502,13 @@ const AnalyticsScreen = () => {
   };
 
   const changeMonth = (offset: number) => {
-    const d = new Date(currentMonth);
+    const d = parseLocalDateKey(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    setCurrentMonth(d.toISOString().split('T')[0]);
+    setCurrentMonth(toLocalDateKey(d));
   };
 
   const renderCustomHeader = (date: any) => {
-    const locale = LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'];
+    const locale = LocaleConfig.locales[calendarLocale(i18n.language)];
     const d = new Date(date.getTime());
     return (
       <View style={styles.calHeaderRow}>
@@ -433,7 +517,7 @@ const AnalyticsScreen = () => {
         </TouchableOpacity>
         <TouchableOpacity style={styles.calMonthBtn} onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}>
           <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
-          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
+          <Feather name="chevron-down" size={13} color={colors.textMuted} style={{ marginLeft: space.sm }} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="chevron-right" size={18} color={colors.textMain} />
@@ -444,12 +528,15 @@ const AnalyticsScreen = () => {
 
   const getHeaderDateText = () => {
     if (!dateRange?.start) return '…';
-    const isFr = i18n.language === 'fr';
     const s = dateRange.start;
     const e = dateRange.end;
-    const fmt = (d: Date) => d.toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+    // La langue dit le mois, le marché dit l'ordre des éléments.
+    const loc = dateLocale(i18n.language, market);
+    const fmt = (d: Date) => d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
     if (s.toDateString() === e.toDateString()) return fmt(s);
-    return isFr ? `Du ${fmt(s)} au ${fmt(e)}` : `${fmt(s)} – ${fmt(e)}`;
+    // « Du … au … » en français, un simple tiret en anglais : la tournure
+    // appartient à la langue, elle ne se déduit pas.
+    return t('common.dateRange', { start: fmt(s), end: fmt(e) });
   };
 
   const formatDuration = (minutes: number) => {
@@ -458,17 +545,28 @@ const AnalyticsScreen = () => {
     return h === 0 ? `${m}m` : `${h}h ${m}m`;
   };
 
+  // Défilement de l'écran, lu par les surfaces de verre : le champ est fixe à
+  // l'appareil, c'est donc cette valeur qui leur dit où elles sont dans la lumière.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Posé en premier, donc derrière tout le reste. */}
+      <ScreenField />
 
       {/* ── HEADER ── */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('analytics.title')}</Text>
-      </View>
+      </AnimatedEntrance>
 
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
 
@@ -476,13 +574,13 @@ const AnalyticsScreen = () => {
         <TouchableOpacity style={styles.dateBtn} accessibilityRole="button" accessibilityLabel={t('analytics.calendar.selectDate')} onPress={() => {
           setSelectionStep(0);
           setTempStart(null);
-          setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
+          setCurrentMonth(toLocalDateKey(dateRange.start));
           setShowMonthPicker(false);
           setModalVisible(true);
         }} activeOpacity={0.75}>
           <View style={styles.dateBtnLeft}>
             <View style={styles.dateBtnIcon}>
-              <Feather name="calendar" size={16} color={colors.primary} />
+              <Feather name="calendar" size={16} color={colors.textMuted} />
             </View>
             <Text style={styles.dateBtnText}>{getHeaderDateText()}</Text>
           </View>
@@ -499,19 +597,72 @@ const AnalyticsScreen = () => {
           </View>
         )}
 
+        {/* ── MEILLEURS CRÉNEAUX ── */}
+        {/* HORS des trois branches ci-dessus, et c'est le point.
+            Placée dans la branche « il y a des courses », la carte disparaissait
+            dès que la PÉRIODE AFFICHÉE était vide — typiquement le défaut, qui
+            montre la journée en cours. Un chauffeur qui n'a rien fait
+            aujourd'hui ne voyait donc jamais l'entrée d'un écran qui analyse ses
+            90 DERNIERS JOURS : exactement l'inverse de ce qu'il faut, puisque
+            c'est lui qui a le plus besoin de savoir quand travailler.
+
+            Visible pour tous, free compris : l'écran porte son propre mur
+            Premium et montre ce qu'on achète. Le cacher ne vendrait rien. */}
+        {!loading && (
+          <AnimatedEntrance step={4} slideFrom="bottom">
+            <TouchableOpacity
+              style={styles.slotsCard}
+              onPress={() => navigation.navigate('BestHours')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.slotsIcon}>
+                <Feather name="clock" size={18} color={colors.textMuted} />
+              </View>
+              <View style={styles.slotsText}>
+                <Text style={styles.slotsTitle}>{t('bestHours.cardTitle')}</Text>
+                <Text style={styles.slotsSub}>{t('bestHours.cardSub')}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.textDimmed} />
+            </TouchableOpacity>
+          </AnimatedEntrance>
+        )}
+
         {loading ? (
-          <View style={styles.loadingWrap}>
-            <BrandLoader size={12} />
-            <Text style={styles.loadingText}>{t('analytics.loading')}</Text>
+          <View style={styles.skeletonWrap}>
+            <Skeleton width="100%" height={180} radius={24} />
+            <View style={styles.skeletonTilesRow}>
+              <Skeleton width="48%" height={90} radius={18} />
+              <Skeleton width="48%" height={90} radius={18} />
+            </View>
+            <Skeleton width="100%" height={200} radius={20} />
+          </View>
+        ) : isEmpty ? (
+          <View style={styles.analyticsEmpty}>
+            <View style={styles.analyticsEmptyIcon}>
+              <MaterialCommunityIcons name="chart-line-variant" size={34} color={colors.primary} />
+            </View>
+            <Text style={styles.analyticsEmptyTitle}>{t('analytics.empty.title', 'Aucune donnée pour le moment')}</Text>
+            <Text style={styles.analyticsEmptyHint}>
+              {t('analytics.empty.hint', 'Scanne ta première course pour voir tes revenus, ton taux horaire et tes tendances ici.')}
+            </Text>
+            <TouchableOpacity
+              style={styles.analyticsEmptyCta}
+              onPress={() => navigation.navigate('Dashboard' as never)}
+              accessibilityRole="button"
+              accessibilityLabel={t('history.emptyCta', 'Lancer un scan')}
+            >
+              <MaterialCommunityIcons name="line-scan" size={16} color={colors.background} />
+              <Text style={styles.analyticsEmptyCtaText}>{t('history.emptyCta', 'Lancer un scan')}</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             {/* ── HERO PROFIT CARD ── */}
-            <AnimatedEntrance delay={0} slideFrom="bottom">
+            <AnimatedEntrance step={0} slideFrom="bottom">
             <View
               style={styles.heroCard}
               accessible
-              accessibilityLabel={`${t('analytics.netProfit')}: €${stats.totalProfit.toFixed(2)}`}
+              accessibilityLabel={`${t('analytics.netProfit')}: ${money2(stats.totalProfit)}`}
             >
               <SafeGradient
                 colors={['#0F2D1F', '#0A150E']}
@@ -528,9 +679,17 @@ const AnalyticsScreen = () => {
               <TouchableOpacity onPress={toggleProfitView} activeOpacity={hasFuelData ? 0.7 : 1}>
                 <Animated.View style={{ transform: [{ scale: flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.92, 1] }) }] }}>
                   <Text style={styles.heroAmount}>
-                    €{displayProfit.toFixed(2)}
+                    {money2(displayProfit)}
                   </Text>
                 </Animated.View>
+                {/* N'apparaît que si le total contient des courses d'une autre
+                    monnaie — donc presque jamais. Mais un total silencieusement
+                    converti serait pire qu'un total converti et annoncé. */}
+                {convertedRides > 0 && (
+                  <Text style={styles.convertedNote} numberOfLines={2}>
+                    {t('history.otherCurrency', { count: convertedRides })}
+                  </Text>
+                )}
                 {hasFuelData && (
                   <View style={styles.profitToggleRow}>
                     <View style={[styles.profitBadge, showNet && styles.profitBadgeActive]}>
@@ -544,7 +703,7 @@ const AnalyticsScreen = () => {
                       </Text>
                     </View>
                     {showNet && (
-                      <Text style={styles.fuelDetail}>-{stats.fuelCost.toFixed(2)}€ ⛽</Text>
+                      <Text style={styles.fuelDetail}>-{money2(stats.fuelCost)} ⛽</Text>
                     )}
                   </View>
                 )}
@@ -557,7 +716,9 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.heroStatDiv} />
                 <View style={styles.heroStat}>
-                  <Text style={styles.heroStatVal}>{stats.totalDistance.toFixed(1)} km</Text>
+                  <Text style={styles.heroStatVal}>
+                    {toMarketDistance(stats.totalDistance, market).toFixed(1)} {market.distanceUnit}
+                  </Text>
                   <Text style={styles.heroStatLbl}>{t('analytics.distance')}</Text>
                 </View>
                 <View style={styles.heroStatDiv} />
@@ -570,7 +731,7 @@ const AnalyticsScreen = () => {
             </AnimatedEntrance>
 
             {/* ── KPI ROW ── */}
-            <AnimatedEntrance delay={100} slideFrom="bottom">
+            <AnimatedEntrance step={1} slideFrom="bottom">
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 {Platform.OS === 'ios' ? (
@@ -592,7 +753,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.hourlyRate')}</Text>
-                  <Text style={styles.kpiValue}>€{displayHourly.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>{money2(displayHourly)}</Text>
                 </View>
               </View>
               <View style={styles.kpiCard}>
@@ -615,7 +776,7 @@ const AnalyticsScreen = () => {
                 </View>
                 <View style={styles.kpiTextBlock}>
                   <Text style={styles.kpiLabel}>{t('analytics.priceKm')}</Text>
-                  <Text style={styles.kpiValue}>€{displayPerKm.toFixed(2)}</Text>
+                  <Text style={styles.kpiValue}>{money2(displayPerKm)}</Text>
                 </View>
               </View>
             </View>
@@ -623,18 +784,20 @@ const AnalyticsScreen = () => {
 
             {/* ── QUALITÉ DES COURSES + BILAN DE LA SEMAINE (cartes insight) ── */}
             {qualityScore && (
-              <AnimatedEntrance delay={150} slideFrom="bottom">
+              <AnimatedEntrance step={2} slideFrom="bottom">
                 <QualityScoreCard score={qualityScore} />
               </AnimatedEntrance>
             )}
 
-            {isPremium && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
-              <AnimatedEntrance delay={175} slideFrom="bottom">
+            {isPaid && isCurrentWeekView && (weeklyBilan.lossWeek > 0 || weeklyBilan.avoided > 0) && (
+              <AnimatedEntrance step={3} slideFrom="bottom">
                 <View style={styles.bilanCard}>
                   <Text style={styles.bilanTitle}>{t('analytics.weeklyBilan.title', 'Bilan de la semaine')}</Text>
                   {weeklyBilan.lossWeek > 0 && (
                     <Text style={styles.bilanLoss}>
-                      {t('analytics.weeklyBilan.loss', { eur: weeklyBilan.lossWeek.toFixed(0) })}
+                      {t('analytics.weeklyBilan.loss', {
+                        amount: formatMoney(weeklyBilan.lossWeek, market),
+                      })}
                     </Text>
                   )}
                   {weeklyBilan.avoided > 0 && (
@@ -650,7 +813,7 @@ const AnalyticsScreen = () => {
             {dailyEarnings.length > 1 && (
               <EarningsChart
                 data={dailyEarnings}
-                title={t('analytics.dailyEarnings', 'Gains par jour')}
+                title={t(`analytics.earningsBy.${granularity}`)}
               />
             )}
 
@@ -659,7 +822,7 @@ const AnalyticsScreen = () => {
               <KpiTrendChart
                 data={hourlyTrend}
                 title={t('analytics.hourlyRate').toUpperCase()}
-                unit="€/h"
+                unit={hourlyUnit(market)}
                 color={colors.primary}
               />
             )}
@@ -667,7 +830,7 @@ const AnalyticsScreen = () => {
               <KpiTrendChart
                 data={kmTrend}
                 title={t('analytics.priceKm').toUpperCase()}
-                unit="€/km"
+                unit={distanceUnitLabel(market)}
                 color="#4FC3F7"
               />
             )}
@@ -718,7 +881,7 @@ const AnalyticsScreen = () => {
                           <Text style={styles.distLabel}>{p.label}</Text>
                         </View>
                         <View style={styles.distItemRight}>
-                          <Text style={styles.distEarning}>€{earned.toFixed(2)}</Text>
+                          <Text style={styles.distEarning}>{money2(earned)}</Text>
                           <View style={[styles.distPctBadge, { backgroundColor: badgeBg }]}>
                             <Text style={[styles.distPctText, { color: badgeFg }]}>{pct}%</Text>
                           </View>
@@ -739,18 +902,21 @@ const AnalyticsScreen = () => {
             </View>
 
             {/* ── PLUS UPSELL (free users) ── */}
-            {!isPremium && (
+            {!isPaid && (
               <TouchableOpacity
                 style={styles.upsellCard}
                 onPress={() => navigation.navigate('SubscriptionScreen')}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="crown" size={22} color={colors.primary} />
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.upsellLogo}
+                />
                 <View style={styles.upsellText}>
                   <Text style={styles.upsellTitle}>{t('analytics.alerts.premiumTitle')}</Text>
                   <Text style={styles.upsellSub}>{t('analytics.alerts.premiumRequired')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           </>
@@ -777,12 +943,12 @@ const AnalyticsScreen = () => {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.monthGrid}>
-                    {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m: string, idx: number) => {
+                    {LocaleConfig.locales[calendarLocale(i18n.language)].monthNamesShort.map((m: string, idx: number) => {
                       const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
                         && pickerYear === parseInt(currentMonth.split('-')[0]);
                       return (
+                        <AnimatedEntrance key={idx} step={Math.floor(idx / 3)} style={styles.monthCellSlot}>
                         <TouchableOpacity
-                          key={idx}
                           style={[styles.monthCell, active && styles.monthCellActive]}
                           onPress={() => {
                             setCurrentMonth(`${pickerYear}-${String(idx + 1).padStart(2, '0')}-01`);
@@ -791,18 +957,13 @@ const AnalyticsScreen = () => {
                         >
                           <Text style={[styles.monthCellText, active && styles.monthCellTextActive]}>{m}</Text>
                         </TouchableOpacity>
+                        </AnimatedEntrance>
                       );
                     })}
                   </View>
                 </View>
               ) : (
                 <>
-                  {modalAlert ? (
-                    <View style={styles.modalAlertRow}>
-                      <Feather name="alert-circle" size={14} color="#FFCA28" />
-                      <Text style={styles.modalAlertText}>{modalAlert}</Text>
-                    </View>
-                  ) : null}
                 <Calendar
                   key={currentMonth}
                   current={currentMonth}
@@ -815,78 +976,133 @@ const AnalyticsScreen = () => {
                   markingType="period"
                   markedDates={getMarkedDates()}
                   theme={{
-                    calendarBackground: colors.surface,
+                    calendarBackground: 'transparent',
                     textSectionTitleColor: colors.textMuted,
                     todayTextColor: colors.primary,
                     dayTextColor: colors.textMain,
                     textDisabledColor: colors.surfaceLight,
+                    selectedDayBackgroundColor: colors.primary,
+                    selectedDayTextColor: colors.onPrimary,
                     textDayFontWeight: '500',
                     textDayHeaderFontWeight: '600',
                     textDayFontSize: 15,
                     textDayHeaderFontSize: 13,
                   }}
                 />
+                  {/* Alerte conditionnelle, placee APRES le calendrier : au-dessus,
+                      son apparition poussait toute la grille vers le bas, en pleine
+                      selection et sous le doigt. Ici la grille ne bouge pas. */}
+                  {modalAlert ? (
+                    <View style={styles.modalAlertRow}>
+                      <Feather name="alert-circle" size={14} color={colors.danger} />
+                      <Text style={styles.modalAlertText}>{modalAlert}</Text>
+                    </View>
+                  ) : null}
                 </>
               )}
             </Pressable>
           </Pressable>
         </Modal>
 
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   errorCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,77,77,0.08)', borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14, marginBottom: 12,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.08)', borderRadius: radius.sm,
+    borderWidth: strokeWidth.control, borderColor: stroke.alert,
+    padding: space.md, marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
-  loadingWrap: { alignItems: 'center', paddingTop: 80, gap: 20 },
-  loadingRing: {
-    width: 72, height: 72, borderRadius: 36,
+  // Loading skeleton
+  skeletonWrap: { gap: space.md, paddingTop: space.xs },
+  skeletonTilesRow: { flexDirection: 'row', justifyContent: 'space-between' },
+
+  // Empty state (aucune course)
+  analyticsEmpty: { alignItems: 'center', paddingTop: space.xxxl, paddingHorizontal: space.xl, gap: space.md },
+  analyticsEmptyIcon: {
+    width: 72, height: 72, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
+    borderWidth: strokeWidth.control, borderColor: stroke.active,
     justifyContent: 'center', alignItems: 'center',
   },
-  loadingText: { color: colors.textDimmed, fontSize: 13, fontWeight: '500' },
+  analyticsEmptyTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800', textAlign: 'center', marginTop: space.xs },
+  analyticsEmptyHint: { color: colors.textDimmed, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  analyticsEmptyCta: {
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: colors.primary,
+    paddingHorizontal: space.xl, paddingVertical: space.md, borderRadius: radius.md, marginTop: space.sm,
+  },
+  analyticsEmptyCtaText: { color: colors.background, fontWeight: '800', fontSize: 14 },
 
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingVertical: 15 },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  header: { paddingHorizontal: space.xl, paddingVertical: space.lg },
   headerTitle: { color: colors.textMain, fontSize: 24, fontWeight: 'bold' },
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: space.xl },
   bilanCard: {
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderColor: 'rgba(0,230,118,0.25)',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    borderColor: stroke.edge,
+    borderWidth: strokeWidth.control,
+    borderRadius: radius.md,
+    padding: space.lg,
+    marginBottom: space.md,
   },
-  bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: space.sm },
+  bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: space.xs },
   bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
 
+  // Carte d'entrée vers les meilleurs créneaux. Volontairement plus sobre que
+  // bilanCard : c'est une porte, pas un insight — elle ne doit pas disputer
+  // l'attention aux chiffres de la période affichée.
+  slotsCard: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    borderRadius: radius.md,
+    padding: space.md,
+    marginBottom: space.md,
+    overflow: 'hidden',
+  },
+  slotsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,230,118,0.10)',
+  },
+  slotsText: { flex: 1 },
+  slotsTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  slotsSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
+
   // Date button
+  // Pilule et non carte : le selecteur de date est un CONTROLE, pas une surface
+  // de contenu, et `radius.full` le dit sans avoir a l'ecrire ailleurs.
   dateBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.full,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.lg,
+    overflow: 'hidden',
   },
-  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   dateBtnIcon: {
-    width: 32, height: 32, borderRadius: 9,
+    width: 32, height: 32, borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
   },
@@ -894,17 +1110,13 @@ const styles = StyleSheet.create({
 
   // Hero card — liquid glass
   heroCard: {
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 16,
+    borderRadius: radius.lg,
+    padding: space.xl,
+    marginBottom: space.lg,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,230,118,0.28)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
   heroGlassTint: {
     backgroundColor: 'rgba(0, 230, 118, 0.07)',
@@ -916,13 +1128,13 @@ const styles = StyleSheet.create({
     right: 20,
     height: 1,
     backgroundColor: 'rgba(0,230,118,0.35)',
-    borderRadius: 1,
+    borderRadius: radius.xs,
   },
   heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: space.sm,
   },
   heroLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
   heroBefore: { color: colors.textDimmed, fontSize: 11 },
@@ -931,30 +1143,35 @@ const styles = StyleSheet.create({
     fontSize: 52,
     fontWeight: '900',
     letterSpacing: -2,
-    marginBottom: 6,
+    marginBottom: space.sm,
     textAlign: 'center',
+  },
+  convertedNote: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
   },
   profitToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: space.sm,
+    marginBottom: space.md,
   },
   profitBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   profitBadgeActive: {
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderColor: 'rgba(0,230,118,0.2)',
+    borderColor: stroke.active,
   },
   profitBadgeText: {
     color: 'rgba(255,255,255,0.5)',
@@ -969,32 +1186,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 18 },
+  heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: space.lg },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center' },
   heroStat: { flex: 1, alignItems: 'center' },
-  heroStatVal: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 3 },
+  heroStatVal: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: space.tight },
   heroStatLbl: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textAlign: 'center' },
   heroStatDiv: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.08)' },
 
   // KPI row — liquid glass
-  kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  kpiRow: { flexDirection: 'row', gap: space.md, marginBottom: space.lg },
   kpiCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    borderRadius: 18,
-    padding: 16,
+    gap: space.md,
+    borderRadius: radius.md,
+    padding: space.lg,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: stroke.edgeLit,
     borderLeftWidth: 2,
     borderLeftColor: colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...elevation.resting.shadow,
   },
   kpiGlassTint: {
     backgroundColor: 'rgba(10, 22, 15, 0.45)',
@@ -1006,83 +1219,85 @@ const styles = StyleSheet.create({
     right: 12,
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 1,
+    borderRadius: radius.xs,
   },
   kpiIconWrap: {
-    width: 44, height: 44, borderRadius: 13,
+    width: 44, height: 44, borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
     justifyContent: 'center', alignItems: 'center',
   },
   kpiTextBlock: { flex: 1 },
-  kpiLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
+  kpiLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginBottom: space.xs },
   kpiValue: { color: colors.textMain, fontSize: 22, fontWeight: '900' },
 
   // Platform distribution
   distCard: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
+    padding: space.xl,
+    marginBottom: space.lg,
+    overflow: 'hidden',
   },
-  distTitle: { color: colors.textMain, fontSize: 15, fontWeight: 'bold', marginBottom: 16 },
+  distTitle: { color: colors.textMain, fontSize: 15, fontWeight: 'bold', marginBottom: space.lg },
 
   // Stacked combined bar
-  stackedBarWrap: { marginBottom: 22 },
+  stackedBarWrap: { marginBottom: space.xl },
   stackedBar: {
     flexDirection: 'row',
     height: 10,
-    borderRadius: 6,
+    borderRadius: radius.xs,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 10,
+    marginBottom: space.sm,
   },
-  stackedLegend: { flexDirection: 'row', gap: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  stackedLegend: { flexDirection: 'row', gap: space.lg },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  legendDot: { width: 8, height: 8, borderRadius: radius.full },
   legendText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
 
-  distList: { gap: 18 },
-  distItem: { gap: 10 },
+  distList: { gap: space.lg },
+  distItem: { gap: space.sm },
   distItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  distItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  distDot: { width: 10, height: 10, borderRadius: 5 },
+  distItemLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  distDot: { width: 10, height: 10, borderRadius: radius.full },
   distLabel: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
-  distItemRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  distItemRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   distEarning: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   distPctBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   distPctText: { fontSize: 12, fontWeight: '900' },
   distTrack: {
     height: 8,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 4,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
-  distFill: { height: 8, borderRadius: 4 },
+  distFill: { height: 8, borderRadius: radius.xs },
 
   // Upsell
   upsellCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderRadius: 16,
-    padding: 18,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
-    marginBottom: 8,
+    borderRadius: radius.md,
+    padding: space.lg,
+    gap: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.sm,
   },
+  upsellLogo: { width: 24, height: 24, borderRadius: radius.full },
   upsellText: { flex: 1 },
-  upsellTitle: { color: colors.textMain, fontSize: 14, fontWeight: 'bold', marginBottom: 3 },
+  upsellTitle: { color: colors.textMain, fontSize: 14, fontWeight: 'bold', marginBottom: space.tight },
   upsellSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
 
   // Calendar modal
@@ -1091,78 +1306,74 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 16,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.lg,
+    padding: space.lg,
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
+    overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   calHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 10,
-    gap: 14,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   calMonthBtn: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.18)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+    paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.sm,
   },
   calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
   yearNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center', alignItems: 'center',
   },
   yearNavText: { color: colors.textMain, fontSize: 18, fontWeight: '800', lineHeight: 20 },
   calNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center', alignItems: 'center',
   },
 
+  // Rouge `danger` de la palette, et non un orange pose a la main hors systeme.
+  // Place sous le calendrier : voir le commentaire au point de rendu.
   modalAlertRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,202,40,0.1)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,202,40,0.2)',
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.10)', borderRadius: radius.sm,
+    paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.md,
+    borderWidth: strokeWidth.control, borderColor: stroke.alert,
   },
-  modalAlertText: { color: '#FFCA28', fontSize: 12, flex: 1, lineHeight: 17 },
+  modalAlertText: { color: colors.danger, fontSize: 12, flex: 1, lineHeight: 17 },
 
   monthGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: space.sm,
   },
+  // La cellule remplit sa fente : c'est `AnimatedEntrance` qui porte desormais
+  // la largeur, sinon l'animation envelopperait une cellule sans lui donner de
+  // place et la grille s'effondrerait sur une colonne.
+  monthCellSlot: { width: '30%', marginBottom: space.sm },
   monthCell: {
-    width: '30%',
-    paddingVertical: 14,
+    width: '100%',
+    paddingVertical: space.md,
     alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 10,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   monthCellActive: {
     backgroundColor: colors.primary,

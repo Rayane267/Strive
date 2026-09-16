@@ -15,7 +15,7 @@
  */
 
 import { NativeModules, NativeEventEmitter } from 'react-native';
-import { ScannerService, ScanResult, RideDecision } from './types';
+import { ScannerService, ScanResult } from './types';
 
 const { ScanBridge } = NativeModules;
 const emitter = ScanBridge ? new NativeEventEmitter(ScanBridge) : null;
@@ -94,6 +94,13 @@ export const scannerService: ScannerService = {
     ScanBridge?.setScannerPreferences(minHr, minKm, includePickup);
   },
 
+  hideSplash: () => {
+    ScanBridge?.hideSplash?.();
+  },
+  setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) => {
+    ScanBridge?.setFuelDeduction?.(enabled, fuelCostPerKm);
+  },
+
   setThresholds: (minHourlyRate: number, minKmRate: number) => {
     lastMinHourly = minHourlyRate;
     lastMinKm = minKmRate;
@@ -102,6 +109,15 @@ export const scannerService: ScannerService = {
       minKmRate,
       lastIncludePickup ?? false,
     );
+  },
+
+  /**
+   * Le marché : le PAYS pour le géocodage — `fr` ne sépare pas la France de la
+   * Belgique ni de la Suisse, et il y a des « Victoria Street » dans plusieurs
+   * des pays couverts — et la DEVISE pour tout ce que le natif affiche.
+   */
+  setMarket: (country: string, currency: string) => {
+    ScanBridge?.setMarket?.(country, currency);
   },
 
   setTomTomApiKey: (key: string) => {
@@ -116,12 +132,58 @@ export const scannerService: ScannerService = {
     ScanBridge?.setQuotaReached(reached, isFree);
   },
 
+  getPendingRideDecisions: async () => {
+    try {
+      return (await ScanBridge?.getPendingRideDecisions?.()) ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  ackRideDecision: (rideId: string) => {
+    ScanBridge?.ackRideDecision?.(rideId);
+  },
+
+  queueRideDecision: (rideId: string, status: 'ACCEPTED' | 'DECLINED') => {
+    ScanBridge?.queueRideDecision?.(rideId, status === 'ACCEPTED');
+  },
+
+  ackScan: (rideId: string) => {
+    ScanBridge?.ackScan?.(rideId);
+  },
+
+  clearRideResult: (rideId: string) => {
+    ScanBridge?.clearLiveActivityResult?.(rideId);
+  },
+
+  getDiagnostics: async () => {
+    try {
+      return (await ScanBridge?.getDiagnostics?.()) ?? { trace: '', lastStep: '', tracing: false };
+    } catch {
+      return { trace: '', lastStep: '', tracing: false };
+    }
+  },
+
+  resetPresentationCounters: () => {
+    ScanBridge?.resetPresentationCounters?.();
+  },
+
+  setDiagnosticsTracing: (enabled: boolean) => {
+    ScanBridge?.setDiagnosticsTracing?.(enabled);
+  },
+
+  clearDiagnostics: () => {
+    ScanBridge?.clearDiagnostics?.();
+  },
+
   setScanQuota: (countToday: number, limit: number, resetHour: number) => {
     ScanBridge?.setScanQuota?.(countToday, limit, resetHour);
   },
 
   setScannerEnabled: (enabled: boolean) => {
-    ScanBridge?.setScannerEnabled(enabled);
+    // `?.` : un bundle JS peut tourner sur un binaire natif antérieur à l'export
+    // de cette méthode (canaux EAS) — sans ça l'appel jetterait un TypeError.
+    ScanBridge?.setScannerEnabled?.(enabled);
   },
 
 checkPermissions: async () => {
@@ -153,14 +215,17 @@ checkPermissions: async () => {
     return emitter.addListener('onScanResult', cb);
   },
 
+  // La vidange est faite côté natif à `startObserving` et à chaque retour au
+  // premier plan (l'AppIntent tourne dans un autre process et empile ses échecs
+  // dans l'App Group) — il suffit donc de s'abonner.
+  onScanFailure: (cb: (f: any) => void) => {
+    if (!emitter) return undefined;
+    return emitter.addListener('onScanFailure', cb);
+  },
+
   onScanFailed: (cb: () => void) => {
     if (!emitter) return undefined;
     return emitter.addListener('onScanFailed', cb);
-  },
-
-  onRideDecision: (cb: (decision: RideDecision) => void) => {
-    if (!emitter) return undefined;
-    return emitter.addListener('onRideDecision', cb);
   },
 
   onPermissionDenied: (cb: () => void) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -6,7 +6,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
@@ -17,7 +16,6 @@ import {
   Image,
   RefreshControl,
   NativeModules,
-  NativeEventEmitter,
   AppState,
   Alert,
   Linking,
@@ -27,7 +25,15 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as Sentry from '@sentry/react-native';
 import { colors } from '../theme/colors';
+import { elevation, liveGlow } from '../theme/elevation';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { FIELD_TOP } from '../theme/field';
+import { stroke, strokeWidth } from '../theme/stroke';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 import { supabase } from '../services/supabase';
+import { RIDE_NETWORK_ENABLED } from '../services/networkDemo';
 import { fetchRides, updateRideStatus, updateRideFare, createRide, effectiveFare } from '../services/ridesService';
 import { computeWeeklyTease, WeeklyTease } from '../utils/weeklyTease';
 import { fetchParserConfig } from '../services/parserConfigService';
@@ -36,19 +42,26 @@ import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 
-import { getEffectivePlanTier, getPlanLimits, getRemainingScans, FREE_THRESHOLDS } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
 import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
-import { logScanDebug } from '../services/scanDebugService';
+import { logScanDebug, hasIncoherentAddresses } from '../services/scanDebugService';
+import { logScanFailure, rememberLastFailure } from '../services/scanFailureService';
 import { APP_VERSION_LABEL } from '../utils/appVersion';
 import { hapticSuccess, hapticError, hapticMedium, hapticHeavy } from '../utils/haptics';
-import { cacheRides, queueOfflineRide, syncOfflineQueue } from '../services/offlineService';
+import { useReduceMotion } from '../hooks/useReduceMotion';
+import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
+import { useMarket } from '../hooks/useMarket';
+import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
+import { getFxRates, inCurrency, normalizeRides } from '../services/fxService';
+import { useFxRates } from '../hooks/useFxRates';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
+import OrbitRing from '../components/OrbitRing';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
 import {
@@ -57,6 +70,7 @@ import {
   resetInactivityReminder,
   scheduleQuotaResetNotification,
   notifyQuotaReached,
+  notifyRideRejected,
   notifySessionClosed,
   scheduleWeeklyRecap,
   cancelWeeklyRecap,
@@ -64,6 +78,15 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { ScanBridge } = NativeModules;
+
+/**
+ * Marque le paywall de fin de cadeau comme déjà présenté. Une seule fois dans la
+ * vie du compte : les 30 scans de bienvenue ne se rechargent jamais, donc la
+ * condition « cadeau reçu et épuisé » resterait vraie à jamais sans ce drapeau,
+ * et le chauffeur reprendrait le paywall en pleine figure à chaque retour sur
+ * l'app.
+ */
+const WELCOME_PAYWALL_SEEN_KEY = '@strive_welcome_paywall_seen';
 
 /**
  * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
@@ -77,13 +100,14 @@ function estimateDurationMin(distanceKm: number): number {
   return Math.round(distanceKm / 60 * 60);                       // péri-urbain / autoroute
 }
 
-// Somme des secondes en ligne des sessions DÉJÀ terminées aujourd'hui (minuit
-// local). Sert de base au « temps de session du jour » affiché dans la Live
-// Activity : base + session en cours. La session ouverte (end_at null) est
-// exclue — on lui ajoute son temps écoulé en direct.
-async function fetchTodayOnlineBaseSeconds(userId: string): Promise<number> {
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
+// Somme des secondes en ligne des sessions DÉJÀ terminées aujourd'hui. Sert de
+// base au « temps de session du jour », affiché dans la Live Activity ET dans le
+// compteur du Dashboard : base + session en cours. La session ouverte (end_at
+// null) est exclue — on lui ajoute son temps écoulé en direct.
+// La journée démarre à `resetHour` (préférence utilisateur : minuit ou 4 h),
+// comme le quota et les stats — pas au minuit local en dur.
+async function fetchTodayOnlineBaseSeconds(userId: string, resetHour: number): Promise<number> {
+  const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('online_sessions')
     .select('duration_seconds')
@@ -93,22 +117,89 @@ async function fetchTodayOnlineBaseSeconds(userId: string): Promise<number> {
   return (data ?? []).reduce((s: number, r: any) => s + (r.duration_seconds || 0), 0);
 }
 
-// Totaux du jour (gains + km) des courses ACCEPTÉES depuis minuit local — utilisé
-// pour réhydrater le mini-dashboard de la Live Activity à la restauration de
-// session (sinon il affiche 0 jusqu'au prochain tag).
-async function fetchTodayAcceptedTotals(userId: string): Promise<{ earnings: number; km: number }> {
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
+// Totaux du jour (gains + km) des courses ACCEPTÉES — utilisé pour réhydrater le
+// mini-dashboard de la Live Activity à la restauration de session (sinon il
+// affiche 0 jusqu'au prochain tag).
+// Même frontière que `fetchTodayOnlineBaseSeconds` : le minuit local en dur
+// donnait un €/h faux avec day_reset_hour = 4, en divisant des gains comptés
+// depuis minuit par des heures comptées depuis 4h la veille.
+async function fetchTodayAcceptedTotals(userId: string, resetHour: number, currency: string): Promise<{ earnings: number; km: number }> {
+  const dayStart = getDayStart(resetHour);
   const { data } = await supabase
     .from('rides')
-    .select('fare_estimated, fare_final, distance_km')
+    .select('fare_estimated, fare_final, distance_km, currency, fx_rate_eur')
     .eq('user_id', userId)
     .eq('status', 'ACCEPTED')
     .gte('created_at', dayStart.toISOString());
   const rows = data ?? [];
-  const earnings = rows.reduce((s: number, r: any) => s + Number(r.fare_final ?? r.fare_estimated ?? 0), 0);
+  // Converties et non écartées : ces gains partent aussi au natif, où l'écran
+  // verrouillé les affiche derrière un seul symbole. Un total amputé y serait
+  // indiscernable d'une journée creuse.
+  //
+  // Par `normalizeRides` comme partout ailleurs, et non par `convertAmount` :
+  // c'est le seul chemin qui honore `fx_rate_eur`, le taux figé au scan. La
+  // colonne n'était même pas demandée ici, donc ce total-là se recalculait au
+  // taux du jour pendant que l'Historique et les Stats tenaient le taux figé.
+  // Sans effet visible — ce sont les courses du jour, les deux taux sont le
+  // même — mais deux écrans qui répondent à la même question par deux méthodes
+  // finissent par ne plus répondre pareil, et c'est l'écran verrouillé qui
+  // aurait eu tort en silence.
+  const normalized = await normalizeRides(rows as any[], currency as Currency);
+  const earnings = normalized.reduce(
+    (s: number, r: any) => s + Number(r.fare_final ?? r.fare_estimated ?? 0),
+    0,
+  );
   const km = rows.reduce((s: number, r: any) => s + Number(r.distance_km ?? 0), 0);
   return { earnings, km };
+}
+
+// Horodatage de la dernière course enregistrée depuis `sinceIso`, ou `null`.
+// Source de vérité de l'activité du chauffeur : le compteur JS ne voit que les
+// scans traités par l'app au premier plan, alors que les scans lancés app
+// suspendue (bouton Action iOS, bulle Android) sont mis en file côté natif.
+async function fetchLastRideTs(userId: string, sinceIso: string): Promise<number | null> {
+  const { data } = await supabase
+    .from('rides')
+    .select('created_at')
+    .eq('user_id', userId)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.created_at ? new Date(data.created_at).getTime() : null;
+}
+
+type LocalDecision = { status: 'ACCEPTED' | 'DECLINED'; at: number };
+
+// Durée de vie d'une décision locale. Large : elle ne sert qu'à couvrir le vol
+// d'une lecture, mais une course hors de la fenêtre du jour ne viendrait jamais
+// la périmer, et une entrée immortelle finirait par forcer un statut sur une
+// course modifiée ailleurs (autre appareil, Historique).
+const LOCAL_DECISION_TTL_MS = 5 * 60_000;
+
+/**
+ * Recouvre une liste lue en base par les décisions DÉJÀ écrites localement.
+ *
+ * Une lecture partie AVANT l'écriture rend la course encore « En attente », et
+ * atterrit après : elle ressuscitait la course que le chauffeur venait de
+ * trancher — d'où « je valide, l'app la remet en attente, et il faut tirer pour
+ * rafraîchir ». Le cas est la norme au retour au premier plan, où `fetchData` et
+ * le drain des décisions partent ensemble.
+ *
+ * Le calque se vide tout seul : dès que la base renvoie le même statut, l'entrée
+ * n'a plus de raison d'être.
+ */
+function overlayLocalDecisions(list: Ride[], local: Map<string, LocalDecision>): Ride[] {
+  if (local.size === 0) return list;
+  const cutoff = Date.now() - LOCAL_DECISION_TTL_MS;
+  for (const [id, d] of local) if (d.at < cutoff) local.delete(id);
+  if (local.size === 0) return list;
+  return list.map(r => {
+    const d = local.get(r.id);
+    if (!d) return r;
+    if (r.status === d.status) { local.delete(r.id); return r; }
+    return { ...r, status: d.status };
+  });
 }
 
 // Sécurité « session oubliée » (cf. effet de restauration) : bornes appliquées
@@ -119,23 +210,65 @@ const SESSION_INACTIVITY_MS = 2 * 3600_000; // 2h sans course scannée
 const SESSION_MAX_MS = 14 * 3600_000;       // durée max d'une session
 
 const DashboardScreen = () => {
+  const market = useMarket();
+  // Les taux servent aux courses affichees : lignes et totaux dans une seule
+  // monnaie, celle que le chauffeur lit.
+  const fxRates = useFxRates();
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
 
   const [rides, setRides] = useState<Ride[]>([]);
+  /**
+   * Les courses du jour, ramenées à la devise lue — une seule fois, pour tout
+   * l'écran.
+   *
+   * Les cartes en sortent, et les totaux qui partent au NATIF aussi : ce sont
+   * eux qui remplissent l'écran verrouillé et la Dynamic Island, et ils
+   * sommaient des `effectiveFare` bruts. Un chauffeur qui a scanné à Paris le
+   * matin et à Londres l'après-midi voyait donc ses deux monnaies additionnées
+   * telles quelles derrière un seul symbole — un total qui ne désigne rien,
+   * affiché avec l'assurance d'un vrai.
+   */
+  const displayRides = useMemo(
+    () => rides.map(r => inCurrency(r, market.currency, fxRates)),
+    [rides, market.currency, fxRates],
+  );
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true });
+  // `scan_debug_opt_out` : opposition à la capture de diagnostic
+  // (PRIVACY_POLICY §2.6). Défaut `false` — pas opposé — pour que le
+  // comportement d'un profil sans ligne de préférences reste celui d'avant.
+  const [preferences, setPreferences] = useState({ min_hourly_rate: 25, min_km_rate: 1.2, include_pickup: true, deduct_fuel: false, scan_debug_opt_out: false });
+  // Coût carburant au km (conso × prix du jour) : pré-calculé ici car le natif
+  // n'a ni le type de carburant ni le tarif à la pompe. 0 = rien à déduire.
+  const [fuelPerKm, setFuelPerKm] = useState(0);
 
   const tier = getEffectivePlanTier(profile);
+  // Les trois paliers sont nommés tels quels sur la pastille. Un « Plus »
+  // affiché à un abonné Premium lui donnerait l'impression d'avoir été
+  // déclassé — et c'est le seul endroit de l'app où il lit son palier.
+  const planLabel =
+    tier === 'premium' ? t('tier.premiumName', 'Premium')
+    : tier === 'plus' ? t('tier.plusName', 'Plus')
+    : t('tier.freeBadge', 'Free');
   const { dailyScans } = getPlanLimits(tier);
   const extraCredits = profile?.extra_scan_credits ?? 0;
-  // Utiliser stats.scans (autoritatif depuis fetchData + incrément local au scan)
-  // plutôt que rides.length, qui décroît quand handleStatusUpdate filter une course
-  // 700 ms après decline/accept → faisait remonter artificiellement le quota.
-  const remaining = getRemainingScans(tier, stats.scans, extraCredits);
+  // Deux pools distincts en base — le cadeau de bienvenue périme, les crédits
+  // achetés non (20260830_welcome_credits.sql) — mais rigoureusement le même
+  // effet ici : des scans en plus une fois le quota du jour épuisé. L'écran les
+  // somme donc, et n'a pas à expliquer la différence au chauffeur.
+  // `getWelcomeCredits` applique la péremption : le serveur ne remet pas la
+  // colonne à zéro, afficher `welcome_credits` brut mentirait.
+  const welcomeCredits = getWelcomeCredits(profile);
+  const bonusCredits = welcomeCredits + extraCredits;
+  // `stats.scans` et jamais `rides.length` : le quota se compte sur le COMPTEUR
+  // serveur (`profiles.daily_scans_count`, seul écrivain `enforce_scan_quota`),
+  // c'est-à-dire sur les scans consommés, pas sur les courses affichées. Les
+  // deux ont divergé pour de bon le jour où une course a pu disparaître de la
+  // liste — le quota remontait alors tout seul.
+  const remaining = getRemainingScans(tier, stats.scans, extraCredits, welcomeCredits);
   const canScan = remaining === null || remaining > 0;
 
   const [isOnline, setIsOnline] = useState(false);
@@ -154,14 +287,44 @@ const DashboardScreen = () => {
   const [weeklyTease, setWeeklyTease] = useState<WeeklyTease>({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Mise en ligne : onde émise depuis la pastille d'état, jouée UNE fois à la
+  // bascule. Distincte de `pulseAnim`, qui marque l'état permanent « en ligne » —
+  // une transition et un état continu ne doivent pas parler avec le même signe.
+  const goLiveAnim = useRef(new Animated.Value(0)).current;
+  const dotPop = useRef(new Animated.Value(1)).current;
+  // Fond de la pastille : passait d'un style à l'autre sans transition.
+  const onlineTint = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => { reduceMotionRef.current = reduceMotion; }, [reduceMotion]);
 
   // ── Push notifications ─────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
-    registerPushToken(user.id);
+    // `false` : le Dashboard s'affiche à chaque ouverture de l'app. Y déclencher
+    // la fenêtre de permission la ferait apparaître au pire moment — pendant que
+    // le chauffeur regarde ses gains — et son refus serait définitif. On se
+    // contente d'enregistrer le jeton si la permission est déjà accordée.
+    registerPushToken(user.id, false);
     const cleanup = setupNotificationListeners();
     return cleanup;
-  }, [user?.id]);
+  }, [user?.id, market.thresholds.hourly, market.thresholds.distance]);
+
+  // Résolue quand l'effet de restauration ci-dessous a tranché : session reprise,
+  // clôturée, ou aucune session ouverte. Le handler de scan l'attend avant de
+  // tester `isOnlineRef` (cf. le garde dans onScanResult).
+  const sessionRestoredRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
+  if (!sessionRestoredRef.current) {
+    let resolve!: () => void;
+    const promise = new Promise<void>(r => { resolve = r; });
+    sessionRestoredRef.current = { promise, resolve };
+  }
+  // Bornée : si la BDD ne répond pas, on ne bloque pas un scan indéfiniment.
+  const awaitSessionRestored = () =>
+    Promise.race([
+      sessionRestoredRef.current!.promise,
+      new Promise<void>(r => setTimeout(r, 5000)),
+    ]);
 
   // Restaure une session existante depuis la BDD (jamais de nouvelle session auto)
   useEffect(() => {
@@ -184,18 +347,8 @@ const DashboardScreen = () => {
         // la clôture à la dernière activité réelle (ou au plafond) au lieu de la
         // rouvrir. Le temps mort n'est jamais compté.
         const startTs = new Date(data.start_at).getTime();
-        const { data: lastRide } = await supabase
-          .from('rides')
-          .select('created_at')
-          .eq('user_id', user.id)
-          .gte('created_at', data.start_at)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const lastActivityTs = Math.max(
-          startTs,
-          lastRide?.created_at ? new Date(lastRide.created_at).getTime() : startTs,
-        );
+        const lastRideTs = await fetchLastRideTs(user.id, data.start_at);
+        const lastActivityTs = Math.max(startTs, lastRideTs ?? startTs);
         const now = Date.now();
         const abandoned =
           now - lastActivityTs > SESSION_INACTIVITY_MS ||
@@ -222,12 +375,20 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(startTs);
         setIsOnline(true);
+        // Ref mise à jour SYNCHRONEMENT : son effet de sync ne tourne qu'après le
+        // re-render, et le handler de scan lit `isOnlineRef` dès la reprise de la
+        // file native — il jetait la course si le render n'avait pas eu lieu.
+        isOnlineRef.current = true;
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
+        // Hors du bloc Live Activity : le compteur du Dashboard en a besoin sur
+        // les deux plateformes, y compris quand la LA est indisponible.
+        const restoredBase = await fetchTodayOnlineBaseSeconds(user.id, dayResetHourRef.current);
+        todayOnlineBaseSecondsRef.current = restoredBase;
+        setTodayOnlineBaseSeconds(restoredBase);
         if (Platform.OS === 'ios' && ScanBridge?.startLiveActivity) {
-          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
           const currentElapsed = Math.floor((Date.now() - startTs) / 1000);
           // Réhydrate les vrais totaux du jour (sinon 0 jusqu'au prochain tag).
-          const totals = await fetchTodayAcceptedTotals(user.id);
+          const totals = await fetchTodayAcceptedTotals(user.id, dayResetHourRef.current, market.currency);
           const onlineHr = (todayOnlineBaseSecondsRef.current + currentElapsed) / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
@@ -242,20 +403,17 @@ const DashboardScreen = () => {
           });
         }
       }
-    })();
-  }, [user?.id]);
+    })()
+      // Verdict rendu (session reprise, clôturée ou absente) : les scans natifs
+      // en attente peuvent être traités.
+      .finally(() => sessionRestoredRef.current!.resolve());
+  }, [user?.id, market.currency]);
 
-  // ── Live Activity dismissed → stop session ──
-  useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const emitter = new NativeEventEmitter(ScanBridge);
-    const sub = emitter.addListener('onLiveActivityDismissed', () => {
-      if (isOnline && handleToggleOnlineRef.current) {
-        handleToggleOnlineRef.current();
-      }
-    });
-    return () => sub.remove();
-  }, [isOnline]);
+  // La disparition de la Live Activity ne ferme PLUS la session : « Tout
+  // effacer » dans le centre de notifications, la limite de durée iOS ou une fin
+  // déclenchée par le raccourci produisaient le même signal qu'un balayage
+  // volontaire, et coupaient le chauffeur en plein service. Le natif ré-arme la
+  // carte au retour au premier plan ; seul le toggle fait passer hors ligne.
 
   // Sync l'état session → natif : garantit que la bulle (Android) / Share
   // Extension (iOS) connaît l'état « en ligne » même après un redémarrage du
@@ -282,18 +440,31 @@ const DashboardScreen = () => {
         const enabled = v !== '0';
         NativeModules.ScanBridge?.setUseLiveActivity(enabled);
       });
-      NativeModules.ScanBridge?.setAppLanguage(i18n.language);
     }
-// Sync timezone du téléphone vers profile (reset quota au midnight local)
+    // Les deux plateformes : les strings natives (bulle Android, Live Activity et
+    // notifications iOS) doivent suivre la langue choisie dans l'app, pas celle
+    // du téléphone.
+    NativeModules.ScanBridge?.setAppLanguage?.(i18n.language);
+    // Et le MARCHÉ, qui est autre chose que la langue. Le pays désambiguïse une
+    // adresse au géocodage (il y a des « Victoria Street » dans plusieurs des
+    // pays couverts) et fixe la langue des résultats TomTom ; la devise, elle,
+    // décide de ce que l'écran verrouillé et la Dynamic Island affichent — un
+    // verdict en euros sous une app qui parle en livres, c'est la mauvaise
+    // monnaie au moment précis où le chauffeur décide.
+    scannerService.setMarket?.(market.country, market.currency);
+    // Sync timezone du téléphone vers profile (reset quota au midnight local).
+    // Écriture UNIQUEMENT si la valeur a changé : l'appel était inconditionnel et
+    // repartait à chaque montage du Dashboard, pour un fuseau qui ne bouge
+    // pratiquement jamais (954 updates observés pour 14 profils en base).
     if (user?.id) {
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (tz) {
+        if (tz && tz !== profile?.timezone) {
           supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
         }
       } catch {}
     }
-  }, [user?.id, i18n.language]);
+  }, [user?.id, i18n.language, profile?.timezone, market.country, market.currency]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -303,19 +474,41 @@ const DashboardScreen = () => {
 
   // ── Scanner listeners ─────────────────────────────────────────────────────
   const lastScanTsRef = useRef(0);
+  // Courses déjà traitées dans cette session JS : la file native peut en livrer
+  // plusieurs d'un coup, il faut les distinguer sans les confondre avec un
+  // doublon d'event.
+  const processedRideIdsRef = useRef<string[]>([]);
   const canScanRef = useRef(canScan);
   const scanCountRef = useRef(stats.scans);
   const isOnlineRef = useRef(isOnline);
   // Refs pour les valeurs lues dans le listener de scan (deps non listées sinon
   // → valeurs obsolètes au moment du scan après changement de tier/crédits/reset).
   const tierRef = useRef(tier);
-  const extraCreditsRef = useRef(extraCredits);
+  // Les deux pools sommés : le listener ne décide que d'un total restant, la
+  // distinction cadeau/achat ne l'intéresse pas (le serveur, lui, tranche).
+  const bonusCreditsRef = useRef(bonusCredits);
   const dayResetHourRef = useRef(dayResetHour);
+  // L'id user est lu APRÈS l'attente de restauration de session dans le listener
+  // de scan : la valeur capturée à l'abonnement peut encore être nulle alors que
+  // le natif, lui, vide sa file dès cet abonnement.
+  const userIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
+  // Rechargement coalescé : le natif livre toute sa file d'un coup (une matinée
+  // de courses déjà enregistrées côté natif = autant d'events), une seule
+  // relecture de la base suffit.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefreshRef = useRef(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => fetchDataRef.current?.(), 400);
+  });
+  useEffect(() => () => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, []);
   useEffect(() => { canScanRef.current = canScan; }, [canScan]);
   useEffect(() => { scanCountRef.current = stats.scans; }, [stats.scans]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { tierRef.current = tier; }, [tier]);
-  useEffect(() => { extraCreditsRef.current = extraCredits; }, [extraCredits]);
+  useEffect(() => { bonusCreditsRef.current = bonusCredits; }, [bonusCredits]);
   useEffect(() => { dayResetHourRef.current = dayResetHour; }, [dayResetHour]);
 
   // Carburant : conso/type du profil + prix unitaire résolu UNE fois (table
@@ -324,28 +517,71 @@ const DashboardScreen = () => {
   const fuelRef = useRef({ avgCons: 0, fuelType: 'essence', fuelPrice: 0 });
 
   // ── Réconciliation décision notif (Accepter/Refuser) ↔ course ───────────────
-  // scanTs → id de la course créée (corrélation avec la décision tapée sur la
-  // notif iOS). bufferedDecisions : décision arrivée AVANT la création de la
-  // course (drain notif avant drain scan au foreground) → appliquée à sa création.
-  const rideIdByScanTsRef = useRef<Map<number, string>>(new Map());
-  const bufferedDecisionsRef = useRef<Map<number, 'ACCEPTED' | 'DECLINED'>>(new Map());
   const ridesRef = useRef<Ride[]>([]);
-  const applyRideDecisionRef = useRef<(scanTs: number, status: 'ACCEPTED' | 'DECLINED') => void>(() => {});
+  // Décisions écrites en base mais pas encore reflétées par une lecture partie
+  // avant elles (cf. `overlayLocalDecisions`).
+  const localDecisionsRef = useRef<Map<string, LocalDecision>>(new Map());
+  // Passe-plat pour `fetchData`, qui applique les décisions en attente et est
+  // déclaré plus bas. Une ref et pas une dépendance : `applyRideDecision`
+  // dépend de `handleStatusUpdate`, lui-même de `sessionSeconds` — donc d'une
+  // identité qui change à CHAQUE seconde. En dépendance, `fetchData` changerait
+  // au même rythme et `useFocusEffect` rechargerait la liste chaque seconde.
+  const applyRideDecisionRef = useRef<(rideId: string, status: 'ACCEPTED' | 'DECLINED') => Promise<void>>(async () => {});
 
   // Cumul des secondes en ligne des sessions terminées aujourd'hui (hors session
   // en cours) → base du « temps de session du jour » poussé à la Live Activity.
+  // Doublé en state : le compteur du Dashboard l'affiche, il lui faut un rendu.
   const todayOnlineBaseSecondsRef = useRef(0);
+  const [todayOnlineBaseSeconds, setTodayOnlineBaseSeconds] = useState(0);
+
+  // Lu par le push des KPI ci-dessous. Une REF et pas la valeur : `sessionSeconds`
+  // change chaque seconde, et en dépendance il ferait pousser une mise à jour de
+  // Live Activity par seconde — qu'ActivityKit finirait de toute façon par
+  // ignorer. Le compteur de la carte tourne seul depuis `sessionStartEpoch`, il
+  // n'a pas besoin qu'on le lui rappelle.
+  const sessionSecondsRef = useRef(0);
+  useEffect(() => { sessionSecondsRef.current = sessionSeconds; }, [sessionSeconds]);
+
+  // La préférence dayResetHour arrive après coup (fetch des préférences) : une
+  // base calculée avec la borne de minuit alors que l'utilisateur est en 4 h
+  // serait sous-évaluée. On la recalcule dès que la borne est connue.
+  useEffect(() => {
+    if (!isOnline || !user?.id) return;
+    let cancelled = false;
+    fetchTodayOnlineBaseSeconds(user.id, dayResetHour)
+      .then(seconds => {
+        if (cancelled) return;
+        todayOnlineBaseSecondsRef.current = seconds;
+        setTodayOnlineBaseSeconds(seconds);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [dayResetHour, isOnline, user?.id]);
 
   useEffect(() => {
     const avgCons = profile?.avg_cons ?? 0;
     const fuelType = profile?.fuel_type ?? 'essence';
     fuelRef.current = { ...fuelRef.current, avgCons, fuelType };
     if (avgCons > 0) {
-      fetchFuelPrice(fuelType, profile?.elec_price).then(fuelPrice => {
+      fetchFuelPrice(
+        fuelType,
+        { elecPrice: profile?.elec_price, fuelPrice: profile?.fuel_price },
+        market,
+      ).then(fuelPrice => {
         fuelRef.current = { avgCons, fuelType, fuelPrice };
+        // Même formule que computeFuelCost, ramenée au km.
+        setFuelPerKm(fuelPrice > 0 ? (avgCons / 100) * fuelPrice : 0);
       });
+    } else {
+      setFuelPerKm(0);
     }
-  }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price]);
+  }, [profile?.avg_cons, profile?.fuel_type, profile?.elec_price, profile?.fuel_price, market]);
+
+  // Prix net de carburant dans la Live Activity — affichage seul, le verdict et
+  // les tarifs enregistrés restent bruts.
+  useEffect(() => {
+    try { scannerService.setFuelDeduction(preferences.deduct_fuel, fuelPerKm); } catch {}
+  }, [preferences.deduct_fuel, fuelPerKm]);
 
   // Sync l'état quota au natif : la bulle Android / Share Extension iOS
   // affichent un message dédié sans déclencher OCR/TomTom/Gemini si quota
@@ -357,9 +593,29 @@ const DashboardScreen = () => {
     try { scannerService.setQuotaReached(!canScan, tier === 'free'); } catch {}
     // Compteur autoritatif poussé au natif → il applique le quota lui-même même
     // quand le JS est suspendu (scan via Share Extension / bulle).
-    try { scannerService.setScanQuota(stats.scans, dailyScans ?? -1, dayResetHour); } catch {}
-    if (!canScan) scheduleQuotaResetNotification(0);
-  }, [canScan, tier, stats.scans, dailyScans, dayResetHour]);
+    //
+    // La limite envoyée est la limite EFFECTIVE : celle du plan PLUS les crédits
+    // achetés. Le natif ne compare que `scanCountToday >= limite` et ne connaît
+    // pas les crédits ; en lui envoyant les 3 d'un free, un chauffeur ayant
+    // acheté 5 crédits se faisait bloquer à 3 — sur un scan que le serveur
+    // aurait accepté. Le drapeau `setQuotaReached` ne pouvait pas le rattraper :
+    // il s'ajoute au calcul natif (OU), il ne le desserre jamais.
+    //
+    // Le serveur arrive au même total par un autre chemin — limite du plan, puis
+    // un crédit décompté par scan au-delà (`check_scan_quota`). Un free à 3 + 5
+    // crédits est donc bloqué à 8 des deux côtés. `-1` = illimité, et ne doit
+    // surtout pas se faire additionner.
+    const nativeLimit = dailyScans === null || dailyScans === undefined
+      ? -1
+      : dailyScans + bonusCredits;
+    try { scannerService.setScanQuota(stats.scans, nativeLimit, dayResetHour); } catch {}
+    // `dayResetHour`, jamais 0 en dur : chez un chauffeur réglé sur 4 h, la
+    // notification « quota rechargé » partait à minuit alors que le scan restait
+    // refusé quatre heures de plus. Et sa clé de dédup, calculée sur la journée
+    // de minuit, ne voyait pas celle posée par l'autre appel (listener de scan)
+    // sur la journée de 4 h — les deux pouvaient donc partir le même jour.
+    if (!canScan) scheduleQuotaResetNotification(dayResetHour);
+  }, [canScan, tier, stats.scans, dailyScans, bonusCredits, dayResetHour]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -372,41 +628,80 @@ const DashboardScreen = () => {
     (async () => {
       try {
         const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-        const weekRides = await fetchRides(user.id, since);
+        // Le tease chiffre un manque à gagner : les courses d'une autre monnaie
+        // sont converties, pas écartées.
+        const weekRides = await normalizeRides(await fetchRides(user.id, since), market.currency);
         const tease = computeWeeklyTease(weekRides, preferences.min_hourly_rate, preferences.min_km_rate);
         setWeeklyTease(tease);
         // Récap hebdo (dimanche 19h) : montant si perte significative, sinon générique.
-        scheduleWeeklyRecap(tease.state === 'loss' ? tease.lossWeek : undefined);
+        // Le marché part avec le montant : `tease.lossWeek` est deja dans la
+        // devise du chauffeur, la notification doit l'ecrire avec son symbole.
+        scheduleWeeklyRecap(tease.state === 'loss' ? tease.lossWeek : undefined, market);
       } catch {
         setWeeklyTease({ state: 'none', lossWeek: 0, lossMonth: 0, avoided: 0 });
       }
     })();
-  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans]);
+  }, [tier, user?.id, preferences.min_hourly_rate, preferences.min_km_rate, stats.scans, market]);
 
   useEffect(() => {
     const subResult = scannerService.onScanResult(async (nativeResult) => {
-      if (!user?.id) return;
-      // Quota atteint côté client → on ignore le scan natif sans tenter
-      // d'INSERT en DB (qui planterait avec daily_scan_quota_exceeded). Le
-      // paywall scanLimitCard est déjà affiché en bas du Dashboard.
-      if (!isOnlineRef.current) {
-        hapticError();
+      // Démarrage à froid : le natif vide sa file de scans (bouton Action, Share
+      // Extension) DÈS que le JS s'abonne — donc avant que la restauration de
+      // session ait répondu. Un `return` pris ici ne perd plus la course : le
+      // journal natif la garde jusqu'à `ackScan`. En revanche tout chemin qui
+      // ABANDONNE volontairement une course doit acquitter, sinon elle est
+      // rejouée à chaque relève sans jamais pouvoir aboutir.
+      await awaitSessionRestored();
+      // …et l'id user est relu APRÈS l'attente, jamais capturé à l'abonnement :
+      // il valait encore `undefined` sur un démarrage à froid, et la file
+      // entière partait à la poubelle sans laisser de trace.
+      const userId = userIdRef.current;
+      if (!userId) {
+        __DEV__ && console.warn('[Scanner] pas de session — scan non enregistré');
         return;
       }
-      if (!canScanRef.current) {
-        __DEV__ && console.warn('[Scanner] quota atteint — scan ignoré');
-        hapticError();
+      // Ni l'état « en ligne » ni le quota ne sont testés ici. Ils décrivent
+      // l'instant où l'app s'ouvre, pas celui du scan : une session close entre
+      // temps (ou un compteur déjà à la limite) faisait disparaître des courses
+      // pourtant scannées en service. Le natif applique déjà ces deux règles
+      // AVANT d'analyser — ce qui arrive jusqu'ici a donc été autorisé.
+      // Anti-doublon : sur l'identité de la course, jamais sur son heure
+      // d'arrivée. Le natif vide sa file d'un seul coup — plusieurs courses
+      // légitimes arrivent donc dans la même milliseconde, et une fenêtre
+      // temporelle les aurait toutes jetées sauf la première.
+      const scanTs = Number((nativeResult as any).scanTs) || 0;
+      const rideId = nativeResult.rideId;
+      if (rideId) {
+        if (processedRideIdsRef.current.includes(rideId)) {
+          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (même rideId)');
+          return;
+        }
+        processedRideIdsRef.current = [...processedRideIdsRef.current.slice(-19), rideId];
+      } else {
+        // Payload sans rideId (entrée de journal écrite par un build antérieur) :
+        // on retombe sur la fenêtre d'une seconde.
+        const now = Date.now();
+        if (now - lastScanTsRef.current < 1000) {
+          __DEV__ && console.warn('[Scanner] event dupliqué ignoré (<1s)');
+          return;
+        }
+        lastScanTsRef.current = now;
+      }
+
+      // Course déjà en base — cas NOMINAL depuis que `RideUploader` écrit en
+      // session de fond dès le scan. On coupe court : tout ce qui suit
+      // (rattrapage Gemini, recalcul, insert) referait sur une capture périmée
+      // un travail déjà fait, et rappellerait Gemini pour rien.
+      //
+      // La liste en mémoire suffit, sans requête ajoutée : `fetchData` tourne
+      // au focus ET à chaque retour au premier plan, donc juste avant le drain.
+      // Quand elle n'a pas encore répondu, on retombe simplement sur le chemin
+      // complet — l'insert ressort alors en conflit d'id, traité comme un succès.
+      if (rideId && ridesRef.current.some(r => r.id === rideId)) {
+        __DEV__ && console.info('[SCAN] déjà en base — acquittée sans retraitement');
+        try { scannerService.ackScan(rideId); } catch {}
         return;
       }
-      // Rate limit côté JS : ignore les events dupliqués <1s (défense en plus
-      // du `scanInProgress` natif). Évite les double-inserts DB sur event RN
-      // flaky.
-      const now = Date.now();
-      if (now - lastScanTsRef.current < 1000) {
-        __DEV__ && console.warn('[Scanner] event dupliqué ignoré (<1s)');
-        return;
-      }
-      lastScanTsRef.current = now;
 
       __DEV__ && console.info(
         '[Scanner:Start] résultat natif reçu —',
@@ -441,7 +736,11 @@ const DashboardScreen = () => {
         !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
 
       let result = nativeResult;
-      let usedGemini = false;
+      // Le natif a pu appeler Gemini AVANT de nous remettre le résultat (raccourci
+      // iOS, bulle Android) — c'est même le cas normal, le repli JS ci-dessous ne
+      // servant qu'aux scans lancés depuis le Dashboard. On part donc de ce que le
+      // natif rapporte, et le repli JS ne fait que s'y ajouter.
+      let usedGemini = nativeResult.geminiUsed === true;
       if (ocrLooksBad && nativeResult.imageBase64) {
         __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
         const gemini = await extractWithGemini(nativeResult.imageBase64);
@@ -458,6 +757,10 @@ const DashboardScreen = () => {
             ...result,
             pickupAddress: result.pickupAddress ?? gemini.pickupAddress,
             destinationAddress: result.destinationAddress ?? gemini.destinationAddress,
+            // Sans ça l'approche lue par Gemini était jetée → includePickup
+            // restait sans effet sur tout scan passé par le fallback.
+            pickupDurationMin: result.pickupDurationMin ?? gemini.pickupDurationMin,
+            pickupDistanceKm: result.pickupDistanceKm ?? gemini.pickupDistanceKm,
           };
           usedGemini = true;
         }
@@ -475,6 +778,10 @@ const DashboardScreen = () => {
       // l'erreur en LA sans rien sauvegarder. Garde silencieuse de sécurité.
       if (!result.pickupAddress?.trim() || !result.destinationAddress?.trim()) {
         __DEV__ && console.warn('[Scanner] adresses incomplètes — course ignorée (silencieux)');
+        // Abandon volontaire : rejouer donnerait le même verdict. On acquitte.
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
+        }
         return;
       }
 
@@ -506,6 +813,10 @@ const DashboardScreen = () => {
         || hourlyRate <= 0 || hourlyRate > 1000) {
         __DEV__ && console.warn('[Scanner] valeurs aberrantes rejetées', { hourlyRate, kmRate, totalDistance, totalDuration });
         hapticError();
+        // Abandon volontaire : les mêmes valeurs seraient rejetées au rejeu.
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
+        }
         return;
       }
 
@@ -526,11 +837,15 @@ const DashboardScreen = () => {
       // Incrémente immédiatement (pas d'attente re-render React)
       scanCountRef.current++;
       try { scannerService.setScanQuota(scanCountRef.current, getPlanLimits(tierRef.current).dailyScans ?? -1, dayResetHourRef.current); } catch {}
-      const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, extraCreditsRef.current);
+      const newRemaining = getRemainingScans(tierRef.current, scanCountRef.current, bonusCreditsRef.current);
       if (newRemaining !== null && newRemaining <= 0) {
         canScanRef.current = false;
         try { scannerService.setQuotaReached(true, tierRef.current === 'free'); } catch {}
-        notifyQuotaReached(dayResetHourRef.current);
+        notifyQuotaReached(
+          dayResetHourRef.current,
+          tierRef.current === 'free',
+          getPlanLimits('plus').dailyScans,
+        );
         scheduleQuotaResetNotification(dayResetHourRef.current);
       }
 
@@ -560,9 +875,29 @@ const DashboardScreen = () => {
       // stocke les blocs OCR pour reproduire le cas en fixture + amorcer un
       // dataset (native vs gemini). Données perso → table scan_debug privée,
       // RLS owner-only, rétention 30 j. Fire-and-forget.
+      //
+      // L'OPPOSITION est vérifiée ici en plus de la RPC. Le serveur reste seul
+      // juge — un bundle antérieur ne connaît pas ce drapeau, et une garde
+      // côté app se contourne — mais quand le chauffeur s'est opposé, autant
+      // ne pas envoyer ses adresses sur le réseau pour se les faire refuser.
       const nativePickupMissing = !nativeResult.pickupAddress;
       const nativeDestMissing = !nativeResult.destinationAddress;
-      if (nativeResult.debugBlocks && (nativePickupMissing || nativeDestMissing)) {
+      // Les adresses PRÉSENTES mais fausses comptent autant que les absentes, et
+      // elles sont pires : elles écrivent une donnée erronée en base au lieu de
+      // laisser un trou. Le filet ne voyait que les trous.
+      const nativeIncoherent = hasIncoherentAddresses(nativeResult);
+      // `usedGemini` est le déclencheur qui manquait. La condition ne regardait
+      // que les adresses absentes ou incohérentes, et elle ne s'est jamais
+      // vérifiée en production : le repli Gemini NATIF comble les adresses avant
+      // que ce code s'exécute. Résultat, `scan_debug` est restée vide depuis sa
+      // création, et aucun cas de terrain n'a jamais alimenté `fixtures/ocr/`.
+      // Un appel à Gemini signale exactement l'écran que le parser par règles
+      // n'a pas su lire : c'est celui-là qu'il faut pouvoir rejouer.
+      if (
+        !preferences.scan_debug_opt_out
+        && nativeResult.debugBlocks
+        && (nativePickupMissing || nativeDestMissing || nativeIncoherent || usedGemini)
+      ) {
         logScanDebug({
           platform: nativeResult.platform,
           screenHeight: nativeResult.screenHeight ?? null,
@@ -586,70 +921,102 @@ const DashboardScreen = () => {
       // pour garantir zéro scan perdu — useOfflineSync re-tente à la reconnexion.
       try {
         const newRide = await createRide({
-          userId: user.id,
+          userId,
           platform: result.platform,
           fare: result.fare,
           distanceKm: totalDistance,
           durationMin: totalDuration,
           hourlyRate,
           kmRate,
+          // Figés ici tous les deux : une course scannée à Paris reste en euros
+          // même si le chauffeur passe à la livre le mois suivant, et sa valeur
+          // pivot ne bougera plus — donc les totaux du mois passé non plus.
+          currency: market.currency,
+          fxRateEur: (await getFxRates())[market.currency],
           fuelCost,
           netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
+          // Date la course (jour d'affectation + registre de quota). Elle
+          // n'identifie plus rien : c'est `rideId` qui le fait.
+          scanTs: scanTs || null,
+          rideId,
         });
+        // `null` = une course porte déjà cet id : le filet Swift a gagné la
+        // course de vitesse (il écrit dès le scan, sans attendre le pont RN),
+        // ou c'est un rejeu du journal. On ne recrée rien, mais on recharge la
+        // liste — sinon la course existe en base sans apparaître à l'écran.
+        if (!newRide) {
+          __DEV__ && console.warn('[SCAN] déjà en base — refresh de la liste');
+          // Déjà en base = objectif atteint : on acquitte, sinon le journal
+          // rejouerait ce scan à chaque relève sans jamais pouvoir se vider.
+          if (rideId) {
+            try { scannerService.ackScan(rideId); } catch {}
+          }
+          scheduleRefreshRef.current();
+          return;
+        }
+        // La course est en base : le journal natif peut lâcher son entrée. Tout
+        // ce qui n'atteint pas cette ligne reste journalisé et sera rejoué.
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
+        }
         setRides(prev => [newRide, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
-        // Corrélation pour les actions de notif : on retient scanTs → id, et si
-        // une décision Accepter/Refuser est déjà arrivée (tapée avant l'ouverture
-        // de l'app), on l'applique immédiatement à la course fraîchement créée.
-        if (nativeResult.scanTs != null) {
-          rideIdByScanTsRef.current.set(nativeResult.scanTs, newRide.id);
-          const buffered = bufferedDecisionsRef.current.get(nativeResult.scanTs);
-          if (buffered) {
-            bufferedDecisionsRef.current.delete(nativeResult.scanTs);
-            applyRideDecisionRef.current(nativeResult.scanTs, buffered);
-          }
-        }
-        // Trigger flush queue offline : si des rides sont coincés, on profite
-        // que le réseau marche pour les vider maintenant.
-        syncOfflineQueue(async (queuedRide) => {
-          await createRide({
-            userId: user.id,
-            platform: queuedRide.platform,
-            fare: queuedRide.fare_estimated,
-            distanceKm: queuedRide.distance_km,
-            durationMin: queuedRide.duration_min,
-            hourlyRate: queuedRide.hourly_rate,
-            kmRate: queuedRide.km_rate,
-            fuelCost: queuedRide.fuel_cost,
-            netProfit: queuedRide.net_profit,
-            pickupAddress: queuedRide.pickup_address,
-            destinationAddress: queuedRide.destination_address,
-          });
-        }).catch(() => {});
+        // La course vient d'exister : c'est MAINTENANT qu'une décision déjà tapée
+        // sur la carte peut s'écrire. On redemande donc une synchro.
+        //
+        // Sans cette ligne, la décision restait en file jusqu'au prochain
+        // rafraîchissement manuel — c'est le « au premier lancement la course est
+        // en attente, et après avoir actualisé elle est bien enregistrée ».
+        // L'ordre au démarrage à froid est en effet toujours le même : `fetchData`
+        // part au montage, applique les décisions en attente, n'en trouve la
+        // course dans AUCUNE ligne (le drain du journal natif n'a pas encore
+        // inséré), puis le drain arrive — trop tard, plus personne ne repasse.
+        //
+        // `scheduleRefreshRef` coalesce à 400 ms : le natif livre toute sa file
+        // d'un coup, une seule relecture suffit pour dix courses.
+        scheduleRefreshRef.current();
       } catch (e) {
-        __DEV__ && console.warn('[SCAN] createRide KO — queue offline', e);
-        await queueOfflineRide({
-          user_id: user.id,
-          platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
-          status: 'PENDING',
-          fare_estimated: result.fare,
-          fare_final: null,
-          distance_km: totalDistance,
-          duration_min: totalDuration,
-          hourly_rate: hourlyRate,
-          km_rate: kmRate,
-          fuel_cost: fuelCost,
-          net_profit: netProfit,
-          pickup_address: result.pickupAddress ?? null,
-          destination_address: result.destinationAddress ?? null,
-          created_at: new Date().toISOString(),
-        });
-        // Affiche localement pour retour utilisateur (ID temporaire)
+        // Deux familles d'échec, deux traitements opposés :
+        //
+        //  • Refus DÉFINITIF du serveur (quota dépassé, validation). Rejouer ne
+        //    peut pas marcher. On acquitte pour ne pas rejouer à l'infini, et on
+        //    le dit au chauffeur — c'est de l'argent qu'il ne verra pas dans ses
+        //    stats. L'ancien code réessayait 5 fois puis SUPPRIMAIT la course.
+        //  • Panne passagère (réseau). On n'acquitte SURTOUT pas : l'entrée reste
+        //    dans le journal natif et sera rejouée à la prochaine relève.
+        const code = (e as { code?: string })?.code;
+        const permanent = code === 'P0001' || (!!code && /^(22|23|42)/.test(code));
+
+        if (permanent) {
+          __DEV__ && console.warn('[SCAN] refus définitif du serveur', code, e);
+          Sentry.captureException(e, {
+            tags: { flow: 'ride_insert_rejected', code: code ?? 'unknown' },
+            extra: { fare: result.fare, distanceKm: totalDistance, scanTs },
+          });
+          if (rideId) {
+            try { scannerService.ackScan(rideId); } catch {}
+          }
+          notifyRideRejected(code === 'P0001' ? 'quota' : 'other');
+          return;
+        }
+
+        __DEV__ && console.warn('[SCAN] écriture KO — course conservée au journal', e);
+        // Le scan redevient rejouable. `processedRideIdsRef` empêche de traiter
+        // deux fois la même émission ; sans cette libération il empêchait AUSSI
+        // le rejeu légitime d'un scan que le journal vient de conserver — la
+        // course serait ré-émise à chaque relève et refusée à chaque fois, sans
+        // jamais atteindre la base tant que le JS ne redémarre pas.
+        processedRideIdsRef.current = processedRideIdsRef.current.filter(id => id !== rideId);
+        // Affichage optimiste : la course est en sécurité dans le journal natif,
+        // on la montre tout de suite — SOUS SON VRAI ID. Une décision prise sur
+        // cette carte avant que le rejeu ait abouti porte donc déjà la bonne
+        // clé : le natif l'enregistre, et elle s'applique dès que la ligne
+        // existe. L'ancien id temporaire (`pending-…`) ne désignait rien.
         setRides(prev => [{
-          id: `offline-${Date.now()}`,
-          user_id: user.id,
+          id: rideId ?? `pending-${scanTs || Date.now()}`,
+          user_id: userId,
           platform: result.platform === 'UNKNOWN' ? 'UBER' : result.platform,
           status: 'PENDING',
           fare_estimated: result.fare,
@@ -662,7 +1029,10 @@ const DashboardScreen = () => {
           net_profit: netProfit,
           pickup_address: result.pickupAddress ?? null,
           destination_address: result.destinationAddress ?? null,
-          created_at: new Date().toISOString(),
+          // Heure du SCAN, pas de l'affichage : le rejeu écrira la même valeur
+          // (createRide dérive created_at de scanTs). Sans ça la ligne sautait
+          // de jour entre l'affichage optimiste et le rafraîchissement.
+          created_at: new Date((scanTs || Date.now() / 1000) * 1000).toISOString(),
         }, ...prev]);
         setStats(prev => ({ ...prev, scans: prev.scans + 1 }));
       }
@@ -673,11 +1043,32 @@ const DashboardScreen = () => {
       hapticError();
     });
 
+    // Trace de diagnostic des scans qui n'aboutissent pas. Le natif remonte ici
+    // aussi les échecs survenus pendant que le JS ne tournait pas (raccourci iOS
+    // dans un autre process, bulle Android avec l'app tuée) — sans ça, une panne
+    // pouvait toucher tout le parc sans laisser la moindre donnée.
+    const subFailure = scannerService.onScanFailure?.(f => {
+      __DEV__ && console.log('[SCAN] failure', f.reason, f.detail ?? '');
+      const failure = {
+        reason: f.reason,
+        surface: f.surface,
+        platform: f.platform ?? null,
+        detail: f.detail ?? null,
+        appVersion: APP_VERSION_LABEL,
+        occurredAt: f.occurredAt ?? null,
+      };
+      logScanFailure(failure);
+      // Mémorisé localement pour être joint au prochain ticket de support :
+      // un chauffeur qui écrit vient presque toujours de vivre cet échec.
+      rememberLastFailure(failure);
+    });
+
     return () => {
       subResult?.remove();
       subFailed?.remove();
+      subFailure?.remove();
     };
-  }, [user?.id, preferences, t]);
+  }, [user?.id, preferences, t, market.currency]);
 
   const handleToggleScanner = async () => {
     if (scannerActive) {
@@ -692,6 +1083,15 @@ const DashboardScreen = () => {
       navigation.navigate('ScannerPermission');
     }
   };
+
+  // Teinte de la pastille : 220 ms suffisent à faire lire le changement sans le
+  // faire attendre. Pilote `backgroundColor`, donc hors driver natif — une seule
+  // vue, une seule fois par bascule.
+  useEffect(() => {
+    Animated.timing(onlineTint, {
+      toValue: isOnline ? 1 : 0, duration: 220, useNativeDriver: false,
+    }).start();
+  }, [isOnline, onlineTint]);
 
   useEffect(() => {
     if (isOnline) {
@@ -711,14 +1111,32 @@ const DashboardScreen = () => {
   // une dep cyclique sur useCallback + TDZ — handleStatusUpdate reste stable.
   const fetchDataRef = useRef<() => void>(() => {});
 
-  const handleStatusUpdate = useCallback(async (id: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
+  /**
+   * @param options.resync  Relire la base si l'écriture échoue. Vrai par défaut
+   *   — c'est ce qui remet à l'écran une course que l'optimisme avait déjà
+   *   retirée. FAUX quand l'appel vient du drain : `fetchData` se termine par un
+   *   drain, qui rappellerait `fetchData`, qui redrainerait… Une décision qui
+   *   échoue durablement (course pas encore insérée) mettait ainsi l'écran en
+   *   relecture toutes les 400 ms. Le drain n'a rien à resynchroniser : il n'a
+   *   affiché aucun optimisme, et la décision reste dans la file native.
+   */
+  const handleStatusUpdate = useCallback(async (
+    id: string,
+    newStatus: 'ACCEPTED' | 'DECLINED',
+    options?: { resync?: boolean },
+  ) => {
     newStatus === 'ACCEPTED' ? hapticSuccess() : hapticMedium();
+    // La course est tranchée : son verdict n'a plus rien à faire sur le lock
+    // screen. iOS efface la carte Live Activity, Android retire la notification
+    // de résultat — qui restait affichée avec ses deux boutons sur une course
+    // déjà décidée. Sans effet si l'affichage montre déjà une course plus
+    // récente : c'est le natif qui compare, sur l'id.
+    try { scannerService.clearRideResult?.(id); } catch {}
     setRides(prev => {
       const updated = prev.map(r => (r.id === id ? { ...r, status: newStatus } : r));
       if (newStatus === 'ACCEPTED') {
         const accepted = updated.filter(r => r.status === 'ACCEPTED');
         const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
-        const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
         // €/h sur le temps en ligne CUMULÉ du jour (sessions terminées + courante).
         const onlineH = (todayOnlineBaseSecondsRef.current + sessionSeconds) / 3600 || 1/3600;
         const avgRate = totalEarnings / onlineH;
@@ -727,76 +1145,145 @@ const DashboardScreen = () => {
           earnings: totalEarnings.toFixed(0),
           avgRate: avgRate.toFixed(0),
         }));
-        // KPI poussés au natif : iOS → Live Activity, Android → notification
-        // persistante du foreground service (même tableau de bord du jour).
-        if (ScanBridge?.updateSessionKPI) {
-          ScanBridge.updateSessionKPI({
-            todayEarnings: totalEarnings,
-            todayHourlyRate: avgRate,
-            todayKm: totalKm,
-            onlineMinutes: Math.floor((todayOnlineBaseSecondsRef.current + sessionSeconds) / 60),
-          });
-        }
+        // Les KPI natifs (Live Activity iOS / notification persistante Android)
+        // NE sont plus poussés d'ici : React peut ré-invoquer cet updater, et un
+        // appel de pont n'a rien à faire dans une fonction qu'on doit pouvoir
+        // rejouer. L'effet sur `rides` (plus bas) recalcule exactement les mêmes
+        // totaux, juste après, et couvre en plus tout ce qui les fait bouger
+        // sans passer par ici — tarif corrigé, décision drainée, rechargement.
       }
       return updated;
     });
-    setTimeout(() => {
-      setRides(prev => prev.filter(r => r.id !== id));
-    }, 500);
+    // La course tranchée RESTE dans `rides`. Elle quitte la section « En attente »
+    // toute seule — `pendingRides` filtre sur `status === 'PENDING'`, et le statut
+    // vient de changer juste au-dessus.
+    //
+    // Elle en était retirée 500 ms plus tard, ce qui n'avait aucun effet visible
+    // (elle avait déjà disparu de l'écran) mais amputait la liste qui SERT À
+    // COMPTER : `acceptedCount`, et surtout le `totalEarnings` recalculé ici même.
+    // Deux courses acceptées à plus de 500 ms d'intervalle — le cas normal, un
+    // aller-retour réseau les sépare — et la seconde ne trouvait plus la première :
+    // les gains repartaient d'une seule course. Le compte ne redevenait juste
+    // qu'au rafraîchissement suivant, qui relit tout depuis la base.
+    // Posé AVANT l'écriture : une lecture déjà en vol rendra encore PENDING et
+    // atterrira après. Sans ce calque elle écrasait la décision, et le chauffeur
+    // devait tirer pour rafraîchir. Retiré si l'écriture échoue — la course est
+    // alors bel et bien restée en attente.
+    localDecisionsRef.current.set(id, { status: newStatus, at: Date.now() });
     try {
       await updateRideStatus(id, newStatus);
     } catch (e) {
+      localDecisionsRef.current.delete(id);
+      // La décision rejoint la FILE NATIVE, là où vivent déjà celles tapées sur
+      // la carte ou la notification. Sans ça, le choix fait dans l'app était le
+      // seul à se perdre : une course scannée app suspendue n'est pas encore en
+      // base quand elle s'affiche, l'update ne touche aucune ligne, et le
+      // « Prise » du chauffeur disparaissait avec le rafraîchissement qui suit.
+      // Dédoublonnée sur `rideId` côté natif, rejouée au prochain drain,
+      // acquittée au succès — rien à empiler côté JS.
+      try { scannerService.queueRideDecision?.(id, newStatus); } catch {}
       // Le serveur n'a pas pris l'update → l'UI a déjà retiré la course (optimiste).
       // On signale l'échec (haptique) et on resync depuis la DB (source de vérité)
       // pour ne pas laisser la course disparue alors qu'elle est toujours PENDING.
       Sentry.captureException(e, { tags: { flow: 'ride_status_update' } });
       hapticError();
-      fetchDataRef.current?.();
+      if (options?.resync !== false) fetchDataRef.current?.();
+      // RELAYÉE, après traitement local. `applyRideDecision` doit savoir que
+      // l'écriture a échoué : sans ça il acquitterait la décision venue du natif
+      // et celle-ci serait perdue, alors même que le but de l'acquittement est
+      // de la conserver jusqu'à succès.
+      throw e;
     }
   }, [sessionSeconds]);
 
-  // Décision Accepter/Refuser venue d'une action de notification (iOS) :
-  //  1. mapping en mémoire scanTs → id (cas app vivante),
-  //  2. sinon repli sur la course PENDING dont la création est la plus proche
-  //     du scan (≤ 3 min) — couvre le cold start où le mapping est vide,
-  //  3. sinon la course n'existe pas encore → on bufferise (appliquée à sa création).
-  const applyRideDecision = useCallback((scanTs: number, status: 'ACCEPTED' | 'DECLINED') => {
-    let rideId = rideIdByScanTsRef.current.get(scanTs);
-    if (!rideId) {
-      const cand = ridesRef.current
-        .filter(r => r.status === 'PENDING')
-        .map(r => ({ id: r.id, dt: Math.abs(new Date(r.created_at).getTime() / 1000 - scanTs) }))
-        .filter(x => x.dt < 180)
-        .sort((a, b) => a.dt - b.dt)[0];
-      rideId = cand?.id;
+  // Applique UNE décision Prise/Refusée tapée hors de l'app (bouton de la Live
+  // Activity, action de notification, Siri). Un `update … where id = rideId`,
+  // rien de plus : l'émetteur connaît la course, puisque son id a été frappé au
+  // scan et porté jusqu'au bouton.
+  //
+  // Ce qui a disparu ici : trois stratégies pour retrouver la course à partir
+  // d'un horodatage — la liste en mémoire, une requête sur `scan_ts`, puis une
+  // corrélation par proximité de `created_at` (±3 min) qui pouvait désigner la
+  // mauvaise course quand deux scans se suivaient.
+  //
+  // Appelé UNIQUEMENT depuis `fetchData`, donc à un moment où la session est
+  // ouverte. Si l'écriture échoue — la course n'est pas encore en base, le
+  // réseau est coupé — on n'acquitte pas, et la décision est retentée à la
+  // synchro suivante. La file native est le seul endroit où elle vit.
+  const applyRideDecision = useCallback(async (rideId: string, status: 'ACCEPTED' | 'DECLINED') => {
+    if (!rideId) return;
+    // Acquitter APRÈS l'écriture, jamais avant. `handleStatusUpdate` lève si
+    // aucune ligne n'a été modifiée — on n'acquitte donc que sur un vrai succès.
+    try {
+      await handleStatusUpdate(rideId, status, { resync: false });
+      scannerService.ackRideDecision?.(rideId);
+    } catch {
+      // Conservée dans la file native, retentée à la prochaine synchro.
     }
-    if (rideId) handleStatusUpdate(rideId, status);
-    else bufferedDecisionsRef.current.set(scanTs, status);
   }, [handleStatusUpdate]);
 
   useEffect(() => { applyRideDecisionRef.current = applyRideDecision; }, [applyRideDecision]);
   useEffect(() => { ridesRef.current = rides; }, [rides]);
 
+  // « La journée a-t-elle été lue au moins une fois ? » Levé par `fetchData`
+  // après `setRides`, jamais avant. Voir l'effet de poussée des KPI ci-dessous :
+  // sans lui, la liste VIDE du montage était poussée comme un vrai zéro.
+  const dayLoadedRef = useRef(false);
+
+  // Les KPI de la carte suivent la BASE, et plus seulement les décisions prises
+  // dans l'app.
+  //
+  // Ils n'étaient poussés qu'à deux endroits : au passage en ligne, et à chaque
+  // acceptation (`handleStatusUpdate`). Entre les deux, c'est le natif qui les
+  // incrémentait seul, à partir de la dernière course scannée. Tout ce qui
+  // bougeait autrement — un tarif corrigé, une course repassée en refusée, une
+  // décision appliquée au drain du journal — laissait la carte sur une valeur
+  // périmée jusqu'à l'acceptation suivante.
+  //
+  // Sur `rides` : la liste change au chargement, à l'insertion d'un scan et à
+  // chaque décision. C'est exactement quand les chiffres du jour bougent, et
+  // jamais plus souvent. Le natif, lui, préserve le verdict d'une course encore
+  // en attente (`resultShowing`) — cette mise à jour n'écrase donc pas un
+  // résultat affiché.
   useEffect(() => {
-    const sub = scannerService.onRideDecision(({ scanTs, status }) => {
-      applyRideDecisionRef.current(scanTs, status);
+    if (!ScanBridge?.updateSessionKPI) return;
+    // RIEN tant que la journée n'a pas été lue. `rides` vaut `[]` au montage —
+    // état initial, pas résultat — et cet effet poussait donc 0 € / 0 km / 0 min
+    // sur la carte à chaque fois que le Dashboard se montait, avant même que
+    // `fetchData` ait répondu. Le chauffeur voyait ses gains tomber à zéro puis
+    // revenir une seconde plus tard ; et si la lecture échouait — réseau coupé,
+    // session expirée — ils y RESTAIENT. Le zéro était même recopié dans le
+    // snapshot de session (`updateSessionKPI` le sauvegarde), donc une carte
+    // recréée par iOS repartait de zéro elle aussi.
+    //
+    // Après une lecture réussie, un vrai zéro se pousse normalement : c'est le
+    // début de journée, et il est alors exact.
+    if (!dayLoadedRef.current) return;
+    const accepted = displayRides.filter(r => r.status === 'ACCEPTED');
+    const totalEarnings = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
+    const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
+    const onlineSeconds = todayOnlineBaseSecondsRef.current + sessionSecondsRef.current;
+    ScanBridge.updateSessionKPI({
+      todayEarnings: totalEarnings,
+      todayHourlyRate: onlineSeconds > 0 ? totalEarnings / (onlineSeconds / 3600) : 0,
+      todayKm: totalKm,
+      onlineMinutes: Math.floor(onlineSeconds / 60),
     });
-    return () => sub?.remove();
-  }, []);
+  }, [displayRides]);
 
   const handleAcceptPress = useCallback((id: string) => {
     setConfirmModal(id);
   }, []);
 
   const handleDeclinePress = useCallback((id: string) => {
-    handleStatusUpdate(id, 'DECLINED');
+    handleStatusUpdate(id, 'DECLINED').catch(() => {});
   }, [handleStatusUpdate]);
 
   const handleConfirmYes = () => {
     if (!confirmModal) return;
     const id = confirmModal;
     setConfirmModal(null);
-    handleStatusUpdate(id, 'ACCEPTED');
+    handleStatusUpdate(id, 'ACCEPTED').catch(() => {});
   };
 
   const handleConfirmNo = () => {
@@ -813,9 +1300,26 @@ const DashboardScreen = () => {
     if (!cleaned || isNaN(fare) || fare <= 0 || fare > 9999) return;
     {
       try {
-        await updateRideFare(priceModal.rideId, fare);
+        // Nouveau montant → les métriques figées au scan (€/h, €/km, net) sont
+        // recalculées dessus, sinon l'Historique garderait celles de l'estimation.
+        const ride = ridesRef.current.find(r => r.id === priceModal.rideId);
+        const distanceKm = Number(ride?.distance_km ?? 0);
+        const durationMin = Number(ride?.duration_min ?? 0);
+        await updateRideFare(priceModal.rideId, fare, {
+          distanceKm,
+          durationMin,
+          fuelCost: ride?.fuel_cost ?? null,
+        });
         setRides(prev =>
-          prev.map(r => r.id === priceModal.rideId ? { ...r, fare_final: fare } : r),
+          prev.map(r => r.id === priceModal.rideId ? {
+            ...r,
+            fare_final: fare,
+            hourly_rate: durationMin > 0 ? fare / (durationMin / 60) : r.hourly_rate,
+            km_rate: distanceKm > 0 ? fare / distanceKm : r.km_rate,
+            net_profit: r.fuel_cost != null
+              ? Math.round((fare - r.fuel_cost) * 100) / 100
+              : r.net_profit,
+          } : r),
         );
       } catch (e) {
         __DEV__ && console.error('[PRICE] updateRideFare error', e);
@@ -823,7 +1327,7 @@ const DashboardScreen = () => {
     }
     const id = priceModal.rideId;
     setPriceModal(null);
-    handleStatusUpdate(id, 'ACCEPTED');
+    handleStatusUpdate(id, 'ACCEPTED').catch(() => {});
   };
 
 
@@ -844,8 +1348,20 @@ const DashboardScreen = () => {
   useEffect(() => {
     if (!isOnline) return;
     lastScanTimeRef.current = Date.now();
-    const check = setInterval(() => {
+    const check = setInterval(async () => {
       if (Date.now() - lastScanTimeRef.current > SESSION_INACTIVITY_MS) {
+        // `lastScanTimeRef` ne voit que les scans traités par le JS : ceux
+        // lancés app suspendue (bouton Action iOS, bulle Android) sont mis en
+        // file côté natif et drainés plus tard. On revalide donc sur la base
+        // avant de couper — sinon une session bien active se fermait seule.
+        if (user?.id) {
+          const since = new Date(Date.now() - SESSION_INACTIVITY_MS).toISOString();
+          const lastRideTs = await fetchLastRideTs(user.id, since);
+          if (lastRideTs) {
+            lastScanTimeRef.current = Math.max(lastScanTimeRef.current, lastRideTs);
+            return;
+          }
+        }
         notifySessionClosed();
         // Stoppe aussi la bulle/scanner natif (Android : stopScanner) — sinon
         // l'overlay reste affiché alors que la session est fermée.
@@ -855,7 +1371,7 @@ const DashboardScreen = () => {
       }
     }, 5 * 60_000);
     return () => clearInterval(check);
-  }, [isOnline]);
+  }, [isOnline, user?.id]);
 
   // Split session that already spans a past reset boundary (app restored / came back from background)
   useEffect(() => {
@@ -878,6 +1394,9 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(resetBoundary.getTime());
         setSessionSeconds(Math.floor((Date.now() - resetBoundary.getTime()) / 1000));
+        // Nouvelle journée : le cumul précédent appartient à la veille.
+        todayOnlineBaseSecondsRef.current = 0;
+        setTodayOnlineBaseSeconds(0);
       }
       fetchDataRef.current?.();
     })();
@@ -910,6 +1429,8 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(nextReset.getTime());
         setSessionSeconds(0);
+        todayOnlineBaseSecondsRef.current = 0;
+        setTodayOnlineBaseSeconds(0);
       }
       fetchDataRef.current?.();
     }, msUntilReset);
@@ -935,6 +1456,12 @@ const DashboardScreen = () => {
         setCurrentSessionId(data.id);
         setSessionStartTs(Date.now());
         setSessionSeconds(0);
+        // Le compteur repart du cumul déjà en ligne aujourd'hui, pas de zéro :
+        // une reprise après pause doit continuer le temps du jour. Hors du bloc
+        // iOS ci-dessous — Android affiche le même compteur.
+        const base = await fetchTodayOnlineBaseSeconds(user.id, dayResetHour);
+        todayOnlineBaseSecondsRef.current = base;
+        setTodayOnlineBaseSeconds(base);
         if (Platform.OS === 'ios' && ScanBridge) {
           if (ScanBridge.checkLiveActivityPermission) {
             const enabled = await ScanBridge.checkLiveActivityPermission();
@@ -949,10 +1476,9 @@ const DashboardScreen = () => {
               );
             }
           }
-          const accepted = rides.filter(r => r.status === 'ACCEPTED');
+          const accepted = displayRides.filter(r => r.status === 'ACCEPTED');
           const totalE = accepted.reduce((sum, r) => sum + effectiveFare(r), 0);
           const totalKm = accepted.reduce((sum, r) => sum + (r.distance_km || 0), 0);
-          todayOnlineBaseSecondsRef.current = await fetchTodayOnlineBaseSeconds(user.id);
           const onlineHrStart = todayOnlineBaseSecondsRef.current / 3600;
           ScanBridge.startLiveActivity({
             platform: 'IDLE',
@@ -986,6 +1512,27 @@ const DashboardScreen = () => {
       }
       await supabase.from('profiles').update({ is_online: newStatus }).eq('id', user.id);
       setIsOnline(newStatus);
+      // Après l'écriture, pas au doigt : l'onde annonce une session ouverte, elle
+      // ne doit pas partir sur une requête qui échoue. Le bouton montre son
+      // indicateur d'activité pendant ce court intervalle.
+      if (newStatus) {
+        hapticSuccess();
+        // « Réduire les animations » : l'haptique et la teinte suffisent à
+        // marquer le passage, l'onde et le rebond du point sont supprimés.
+      }
+      if (newStatus && !reduceMotionRef.current) {
+        goLiveAnim.setValue(0);
+        Animated.timing(goLiveAnim, {
+          toValue: 1, duration: 900, useNativeDriver: true,
+        }).start();
+        dotPop.setValue(1);
+        Animated.sequence([
+          Animated.timing(dotPop, { toValue: 1.35, duration: 140, useNativeDriver: true }),
+          Animated.spring(dotPop, {
+            toValue: 1, useNativeDriver: true, damping: 8, stiffness: 240, mass: 0.8,
+          }),
+        ]).start();
+      }
       refreshProfile();
     } catch (e) {
       __DEV__ && console.error(e);
@@ -997,15 +1544,22 @@ const DashboardScreen = () => {
   handleToggleOnlineRef.current = handleToggleOnline;
 
   const fetchingRef = useRef(false);
+  // Une relecture demandée pendant qu'une autre est en vol était simplement
+  // JETÉE. C'est le refresh du drain des décisions qui disparaissait ainsi : il
+  // part 400 ms après le retour au premier plan, alors que le `fetchData` lancé
+  // au même instant enchaîne encore ses quatre requêtes. Elle est maintenant
+  // reportée à la fin de celle en cours.
+  const refetchQueuedRef = useRef(false);
   const fetchData = useCallback(async () => {
-    if (!user?.id || fetchingRef.current) return;
+    if (!user?.id) return;
+    if (fetchingRef.current) { refetchQueuedRef.current = true; return; }
     fetchingRef.current = true;
     try {
       setLoading(true);
       setFetchError(false);
       const { data: prefsData } = await supabase
         .from('preferences')
-        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup')
+        .select('min_hourly_rate, min_km_rate, day_reset_hour, include_pickup, deduct_fuel, scan_debug_opt_out')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -1022,22 +1576,35 @@ const DashboardScreen = () => {
         // en aval (verdict, push natif, tease) prennent donc le seuil forcé.
         const isFreeTier = tierRef.current === 'free';
         setPreferences({
-          min_hourly_rate: isFreeTier ? FREE_THRESHOLDS.hourly : (Number.isFinite(minHourly) ? minHourly : 25),
-          min_km_rate: isFreeTier ? FREE_THRESHOLDS.km : (Number.isFinite(minKm) ? minKm : 1.2),
+          min_hourly_rate: isFreeTier
+            ? market.thresholds.hourly
+            : (Number.isFinite(minHourly) ? minHourly : market.thresholds.hourly),
+          min_km_rate: isFreeTier
+            ? market.thresholds.distance
+            : (Number.isFinite(minKm) ? minKm : market.thresholds.distance),
           // Approche incluse par défaut : seul un choix explicite `false` la désactive.
           include_pickup: prefsData.include_pickup ?? true,
+          // Même verrou que les seuils : la déduction carburant est une fonction
+          // Plus. Sans ce contrôle, un compte redevenu free gardait la valeur
+          // `true` écrite du temps de son abonnement et la déduction restait
+          // appliquée au scan, alors que Préférences affiche le toggle éteint.
+          deduct_fuel: isFreeTier ? false : (prefsData.deduct_fuel ?? false),
+          // `?? false` et pas `?? true` : la colonne peut manquer si la
+          // migration 20260826 n'est pas encore déployée sur cet
+          // environnement, et une absence ne vaut pas une opposition.
+          scan_debug_opt_out: (prefsData as { scan_debug_opt_out?: boolean }).scan_debug_opt_out ?? false,
         });
       }
 
-      // Auto-expire old PENDING rides (before today's reset)
-      await supabase
-        .from('rides')
-        .update({ status: 'DECLINED' })
-        .eq('user_id', user.id)
-        .eq('status', 'PENDING')
-        .lt('created_at', resetTime.toISOString());
-
-      const ridesData = await fetchRides(user.id, resetTime);
+      // Les courses d'hier restées sans décision GARDENT leur statut. Elles
+      // basculaient en DECLINED au premier chargement du lendemain : une donnée
+      // inventée, qui comptait comme refusée une course peut-être prise, et
+      // faussait le taux d'acceptation de l'Historique. « En attente » dit la
+      // vérité — le chauffeur n'a pas tranché.
+      const ridesData = overlayLocalDecisions(
+        await fetchRides(user.id, resetTime),
+        localDecisionsRef.current,
+      );
 
 
       const { data: sessionsData } = await supabase
@@ -1056,22 +1623,75 @@ const DashboardScreen = () => {
         return sum;
       }, 0);
 
+      // Scans consommés selon le COMPTEUR serveur, c'est-à-dire le nombre exact
+      // sur lequel le quota est appliqué (`check_scan_quota`). Compter les
+      // courses donnait un autre chiffre dès qu'une course disparaissait — d'où
+      // des « 2/3 » affichés pendant que l'insertion était refusée, ce qui est
+      // indéfendable côté chauffeur.
+      //
+      // `daily_scans_day` dit à quelle journée se rapporte le compteur : plus
+      // ancienne que la journée courante, il est périmé et vaut 0. C'est ce qui
+      // remplace une remise à zéro planifiée, des deux côtés.
+      //
+      // Repli sur `ridesData.length` si les colonnes sont absentes : la
+      // migration `20260822_scan_quota_on_profile.sql` peut ne pas être
+      // déployée sur l'environnement qui sert ce build. Mieux vaut l'ancien
+      // chiffre approximatif qu'un écran vide.
+      let usedScans = ridesData.length;
+      try {
+        const { data: quotaRow } = await supabase
+          .from('profiles')
+          .select('daily_scans_count, daily_scans_day')
+          .eq('id', user.id)
+          .maybeSingle();
+        const count = (quotaRow as { daily_scans_count?: number | null } | null)?.daily_scans_count;
+        const day = (quotaRow as { daily_scans_day?: string | null } | null)?.daily_scans_day;
+        if (typeof count === 'number') {
+          usedScans = day && new Date(day).getTime() >= resetTime.getTime() ? count : 0;
+        }
+      } catch {}
+
       const totalOnlineHours = totalOnlineSeconds / 3600;
       setStats({
         earnings: totalEarnings.toFixed(0),
         avgRate: (totalOnlineHours > 0 ? totalEarnings / totalOnlineHours : 0).toFixed(0),
-        scans: ridesData.length,
+        scans: usedScans,
       });
       setRides(ridesData);
+      // La journée est lue : les KPI poussés à partir de maintenant portent des
+      // chiffres, plus l'état initial de la liste.
+      dayLoadedRef.current = true;
       cacheRides(ridesData); // Cache pour mode hors-ligne
+
+      // ── Décisions Prise/Refusée en attente ──────────────────────────────
+      // Le seul point où elles sont appliquées, et il est ici pour une raison :
+      // à cette ligne la session est ouverte et la liste chargée, donc la course
+      // est trouvable. Le natif ne fait qu'empiler ; c'est l'app qui vient
+      // chercher, quand elle est en état d'écrire en base.
+      //
+      // Ce qui remplace : un événement natif, un tampon mémoire, un accusé de
+      // réception et deux relances — quatre pièces qui n'existaient que pour
+      // rattraper des décisions arrivées trop tôt. Une décision non appliquée
+      // reste simplement dans la file et repasse à la synchro suivante.
+      ridesRef.current = ridesData;
+      try {
+        const pending = await scannerService.getPendingRideDecisions();
+        for (const d of pending) await applyRideDecisionRef.current(d.rideId, d.status);
+      } catch {}
     } catch (e) {
       __DEV__ && console.error(e);
       setFetchError(true);
     } finally {
       setLoading(false);
       fetchingRef.current = false;
+      // Relance COALESCÉE et pas récursive : les demandes empilées pendant cette
+      // lecture ne valent qu'une seule relecture, 400 ms plus tard.
+      if (refetchQueuedRef.current) {
+        refetchQueuedRef.current = false;
+        scheduleRefreshRef.current();
+      }
     }
-  }, [user?.id]);
+  }, [user?.id, market.thresholds.hourly, market.thresholds.distance]);
 
   // Sync la ref pour handleStatusUpdate.catch (déclaré avant fetchData).
   useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
@@ -1082,15 +1702,87 @@ const DashboardScreen = () => {
     setRefreshing(false);
   }, [fetchData]);
 
-  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+  /**
+   * Applique les décisions Prise/Refusée en attente, SANS passer par `fetchData`.
+   *
+   * Elles étaient drainées uniquement à la fin de `fetchData` — derrière le
+   * chargement des préférences, des courses, des sessions et du quota, et
+   * surtout derrière la garde `fetchingRef` : un `fetchData` déjà en vol au
+   * moment où l'app revient au premier plan faisait ignorer le second appel,
+   * décisions comprises. D'où « je tape Prise sur la carte, j'ouvre l'app, et je
+   * dois tirer pour rafraîchir ».
+   *
+   * Rien ne justifiait cette dépendance : depuis que l'id est frappé au scan,
+   * appliquer une décision est un `update … where id = rideId`. La liste des
+   * courses ne sert pas, seule la session est nécessaire. Une décision dont la
+   * course n'est pas encore en base ne touche aucune ligne, n'est donc pas
+   * acquittée, et repasse au prochain drain — le comportement voulu.
+   */
+  const drainRideDecisions = useCallback(async () => {
+    try {
+      await awaitSessionRestored();
+      if (!userIdRef.current) return;
+      const pending = await scannerService.getPendingRideDecisions();
+      if (pending.length === 0) return;
+      for (const d of pending) await applyRideDecisionRef.current(d.rideId, d.status);
+      // Les totaux du jour (gains, €/h, quota) sont recalculés depuis la base :
+      // `handleStatusUpdate` n'a mis à jour que la course elle-même.
+      //
+      // Le refresh COALESCÉ, pas un appel direct : un `fetchData` est très
+      // probablement encore en vol à cet instant (les deux partent ensemble au
+      // retour au premier plan), et un appel direct se ferait avaler par
+      // `fetchingRef`. Les 400 ms lui laissent le temps de finir.
+      scheduleRefreshRef.current();
+    } catch {}
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    fetchData();
+    drainRideDecisions();
+  }, [fetchData, drainRideDecisions]));
+
+  // Fin du cadeau de bienvenue → paywall. C'est le moment de la conversion : le
+  // chauffeur vient de passer 2 ou 3 vacations avec l'app sans rationnement, il
+  // sait ce qu'elle vaut, et il retombe à 3 scans/jour.
+  //
+  // Sur le FOCUS de l'écran, et surtout pas dans le listener de scan : le scan
+  // se déclenche pendant qu'il regarde une offre Uber avec dix secondes pour
+  // décider. Lui ouvrir un paywall par-dessus lui ferait rater la course. On
+  // attend donc qu'il revienne de lui-même dans l'app — c'est le premier
+  // instant où il est disponible, et il l'est vraiment.
+  useFocusEffect(useCallback(() => {
+    // `welcome_credits_expires_at` non nul = le cadeau a été accordé un jour.
+    // `getWelcomeCredits() === 0` = il est fini, consommé ou périmé — les deux
+    // méritent le même écran, le chauffeur a perdu la même chose.
+    const granted = !!profile?.welcome_credits_expires_at;
+    if (!granted || getWelcomeCredits(profile) > 0) return;
+    if (getEffectivePlanTier(profile) !== 'free') return;
+
+    let cancelled = false;
+    AsyncStorage.getItem(WELCOME_PAYWALL_SEEN_KEY).then(seen => {
+      if (cancelled || seen === '1') return;
+      // Posé AVANT la navigation : si l'écran est fermé d'un geste ou si la nav
+      // échoue, le paywall ne doit pas revenir au focus suivant. Insister une
+      // seconde fois sur une offre déjà refusée ne convertit personne.
+      AsyncStorage.setItem(WELCOME_PAYWALL_SEEN_KEY, '1');
+      navigation.navigate('SubscriptionScreen', { reason: 'welcome_exhausted' });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [profile, navigation]));
 
   // Re-fetch stats on every foreground resume (fetchData computes the correct day boundary)
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') fetchDataRef.current?.();
+      if (state !== 'active') return;
+      fetchDataRef.current?.();
+      // En plus de `fetchData`, et non à l'intérieur : c'est tout l'intérêt, le
+      // drain ne doit pas pouvoir être avalé par la garde anti-concurrence.
+      drainRideDecisions();
     });
     return () => sub.remove();
-  }, []);
+    // `drainRideDecisions` est stable (useCallback sans dépendance) : le
+    // listener n'est pas reposé à chaque rendu.
+  }, [drainRideDecisions]);
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
 
@@ -1102,13 +1794,41 @@ const DashboardScreen = () => {
     });
   }, [acceptedCount]);
 
-  const pendingRides = rides.filter(r => r.status === 'PENDING');
+  // Ramenées à la devise lue avant d'atteindre les cartes, comme l'Historique.
+  //
+  // Une offre en attente vient presque toujours d'être scannée, donc elle est
+  // déjà dans la bonne monnaie et la conversion ne fait rien. Le cas qu'elle
+  // couvre est celui d'un chauffeur qui change de devise avec des offres encore
+  // à l'écran : sans ça, deux monnaies cohabiteraient dans la même liste sans
+  // que rien ne les distingue, et c'est sur ces cartes-là qu'il accepte ou
+  // refuse.
+  //
+  // Mémoïsé : `DashboardRideCard` est `React.memo`, un tableau reconstruit à
+  // chaque rendu lui ferait perdre tout l'intérêt.
+  const pendingRides = useMemo(
+    () => displayRides.filter(r => r.status === 'PENDING'),
+    [displayRides],
+  );
+
+  // Défilement de l'écran, partagé par toutes les surfaces de verre qu'il porte.
+  // Le champ étant fixe à l'appareil, c'est cette valeur qui dit à chaque surface
+  // où elle se trouve dans la lumière à un instant donné.
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
+      {/* Posé en premier, donc derrière tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la même couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
+      <Animated.ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1119,46 +1839,147 @@ const DashboardScreen = () => {
         }
       >
 
-        {/* ── HEADER ── */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Image
-              source={require('../assets/strive-logo.png')}
-              style={styles.appIconImg}
-            />
-            <View>
-              <Text style={styles.appTitle}>Strive</Text>
-              <Text style={styles.appSubtitle}>{t('dashboard.subtitle')}</Text>
-            </View>
-          </View>
-          {Platform.OS === 'android' && (
+        {/* En-tête en deux temps : une rangée de contrôles où le logo ne sert
+            plus d'étiquette mais de pastille de plan, puis le nom de l'écran en
+            très gros. Le logo et le sous-titre « tableau de bord en direct »
+            disaient au chauffeur où il était dans une app qu'il vient d'ouvrir
+            lui-même — le titre le dit mieux et en un mot. */}
+        <AnimatedEntrance step={0} style={styles.header}>
+          {/* Les seuils d'acceptation sont le seul réglage qu'un chauffeur
+              retouche vraiment, et il était à trois taps de profondeur. */}
+          <TouchableOpacity
+            style={[styles.headerBtn, styles.headerBtnLeft]}
+            onPress={() => navigation.navigate('Preferences')}
+            accessibilityRole="button"
+            accessibilityLabel={t('preferences.title')}
+          >
+            <MaterialCommunityIcons name="tune-vertical" size={21} color={colors.textMain} />
+          </TouchableOpacity>
+
+          <OrbitRing>
             <TouchableOpacity
-              style={[styles.settingsBtn, scannerActive && { backgroundColor: 'rgba(0,230,118,0.15)', borderColor: colors.primary }]}
+              style={styles.planPill}
+              onPress={() => navigation.navigate('SubscriptionScreen')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={planLabel}
+            >
+              <Image
+                source={require('../assets/strive-logo.png')}
+                style={styles.planPillLogo}
+              />
+              <Text style={styles.planPillText}>{planLabel}</Text>
+            </TouchableOpacity>
+          </OrbitRing>
+
+          {/* Même place, même rôle — le scan — mais l'affordance diffère : sur
+              Android on l'allume et l'éteint, sur iOS il passe par l'extension
+              de partage, donc le bouton mène au tutoriel qui en apprend le geste.
+              Sans cela le côté droit resterait vide sur iOS. */}
+          {Platform.OS === 'android' ? (
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnRight, scannerActive && styles.headerBtnActive]}
               onPress={handleToggleScanner}
               accessibilityRole="button"
               accessibilityLabel={scannerActive ? t('scanner.stop', 'Stop scanner') : t('scanner.start', 'Start scanner')}
             >
               <MaterialCommunityIcons
                 name="line-scan"
-                size={20}
-                color={scannerActive ? colors.primary : colors.textMuted}
+                size={21}
+                color={scannerActive ? colors.primary : colors.textMain}
               />
             </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnRight]}
+              onPress={() => navigation.navigate('Tutorial')}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.tutorial')}
+            >
+              <MaterialCommunityIcons name="line-scan" size={21} color={colors.textMain} />
+            </TouchableOpacity>
           )}
-        </View>
+        </AnimatedEntrance>
+
+        <AnimatedEntrance step={1}>
+          <Text style={styles.screenTitle}>{t('dashboard.home', 'Accueil')}</Text>
+        </AnimatedEntrance>
 
         {/* ── ONLINE TOGGLE ── */}
-        <View style={[styles.onlinePill, isOnline && styles.onlinePillActive]}>
+        <Animated.View
+          style={[
+            styles.onlinePill,
+            // Conserve l'ombre renforcée de l'état actif ; le fond et la bordure,
+            // eux, sont repris juste après par les valeurs animées (dernier style
+            // gagnant), avec exactement les mêmes couleurs qu'auparavant.
+            isOnline && styles.onlinePillActive,
+            {
+              backgroundColor: onlineTint.interpolate({
+                inputRange: [0, 1],
+                // Même gris que les autres conteneurs au repos, teinté de vert
+                // une fois en ligne. Les deux verts sombres précédents faisaient
+                // de cette barre la seule surface d'une nuance différente sur
+                // l'écran, sans que cet écart signifie quoi que ce soit.
+                outputRange: [colors.surface, '#153427'],
+              }),
+              borderColor: onlineTint.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['rgba(255,255,255,0.05)', 'rgba(0,230,118,0.4)'],
+              }),
+            },
+          ]}
+        >
           <View style={styles.onlineLeft}>
-            <Animated.View style={[styles.onlineDot, !isOnline && styles.onlineDotOff, isOnline && { transform: [{ scale: pulseAnim }] }]} />
-            <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}>
+            {/* Onde de mise en ligne : deux anneaux émis depuis la pastille, le
+                second à mi-course du premier — un anneau seul se lit comme un
+                artefact, deux se lisent comme une émission. Le conteneur fait la
+                taille du point : les anneaux s'en échappent par l'échelle, donc
+                toujours centrés dessus. `pointerEvents none` — ils débordent de
+                la pastille et ne doivent jamais intercepter le doigt. */}
+            <View style={styles.onlineDotWrap} pointerEvents="box-none">
+              {[0, 1].map(ring => (
+                <Animated.View
+                  key={ring}
+                  pointerEvents="none"
+                  style={[
+                    styles.onlineRing,
+                    {
+                      opacity: goLiveAnim.interpolate({
+                        inputRange: ring === 0 ? [0, 0.05, 0.7] : [0.3, 0.35, 1],
+                        outputRange: [0, 0.5, 0],
+                        extrapolate: 'clamp',
+                      }),
+                      transform: [{
+                        scale: goLiveAnim.interpolate({
+                          inputRange: ring === 0 ? [0, 0.7] : [0.3, 1],
+                          outputRange: [1, 3.2],
+                          extrapolate: 'clamp',
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              ))}
+              <Animated.View
+                style={[
+                  styles.onlineDot,
+                  !isOnline && styles.onlineDotOff,
+                  { transform: [{ scale: isOnline ? Animated.multiply(pulseAnim, dotPop) : dotPop }] },
+                ]}
+              />
+            </View>
+            <Text
+              style={[styles.onlineLabel, isOnline && styles.onlineLabelOn]}
+              numberOfLines={1}
+              minimumFontScale={0.85}
+            >
               {isOnline
-                ? `${t('dashboard.online')}  ·  ${formatDuration(sessionSeconds)}`
+                ? `${t('dashboard.online')}  ·  ${formatDuration(todayOnlineBaseSeconds + sessionSeconds)}`
                 : t('dashboard.offline')}
             </Text>
           </View>
           {isSyncing ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: space.xs }} />
           ) : (
             <TouchableOpacity
               style={[styles.toggleBtn, isOnline && styles.toggleBtnActive]}
@@ -1173,7 +1994,7 @@ const DashboardScreen = () => {
               </Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Animated.View>
 
         {/* ── TODAY'S SESSION ── */}
         <View style={styles.sessionHeader}>
@@ -1186,16 +2007,18 @@ const DashboardScreen = () => {
           )}
         </View>
 
-        <View style={styles.statRow}>
-          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${stats.earnings}€`}>
+        <AnimatedEntrance step={1} focal style={styles.statRow}>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.earnings')}: ${formatMoney(Number(stats.earnings) || 0, market)}`}>
             <Text style={styles.statLabel}>{t('dashboard.earnings')}</Text>
-            <Text style={styles.statValue}>{stats.earnings}€</Text>
-            <MaterialCommunityIcons name="cash" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <Text style={styles.statValue}>{formatMoney(Number(stats.earnings) || 0, market)}</Text>
+            <MaterialCommunityIcons name="cash" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
-          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate}€/h`}>
+          <View style={styles.statCard} accessible accessibilityLabel={`${t('dashboard.avgRate')}: ${stats.avgRate} ${hourlyUnit(market)}`}>
             <Text style={styles.statLabel}>{t('dashboard.avgRate')}</Text>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{stats.avgRate}€/h</Text>
-            <Feather name="trending-up" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            {/* En blanc comme les deux autres : le vert distinguait ce chiffre
+                sans raison, alors que les trois disent la même journée. */}
+            <Text style={styles.statValue}>{stats.avgRate} {hourlyUnit(market)}</Text>
+            <Feather name="trending-up" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
           <View
             style={styles.statCard}
@@ -1204,30 +2027,72 @@ const DashboardScreen = () => {
               (dailyScans !== null
                 ? `${t('dashboard.scans')}: ${stats.scans} / ${dailyScans}`
                 : `${t('dashboard.scans')}: ${stats.scans}`)
-              + (extraCredits > 0 ? ` (+${extraCredits})` : '')
+              + (bonusCredits > 0 ? ` (+${bonusCredits})` : '')
             }
           >
             <Text style={styles.statLabel}>{t('dashboard.scans')}</Text>
             <Text style={styles.statValue}>
               {dailyScans !== null ? `${stats.scans}/${dailyScans}` : stats.scans}
-              {extraCredits > 0 && (
-                <Text style={styles.statCreditBonus}> +{extraCredits}</Text>
+              {bonusCredits > 0 && (
+                <Text style={styles.statCreditBonus}> +{bonusCredits}</Text>
               )}
             </Text>
-            <MaterialCommunityIcons name="qrcode-scan" size={32} color="rgba(0,230,118,0.25)" style={styles.statIcon} />
+            <MaterialCommunityIcons name="qrcode-scan" size={22} color="rgba(255,255,255,0.14)" style={styles.statIcon} />
           </View>
-        </View>
+        </AnimatedEntrance>
 
 
-        {/* ── OFFLINE HINT ── */}
-        {!isOnline && (
-          <View style={styles.offlineHint}>
-            <MaterialCommunityIcons name="line-scan" size={17} color="#FFB300" />
-            <Text style={styles.offlineHintText}>
-              {t('dashboard.offlineBanner', 'Passez en ligne pour activer le scanner')}
-            </Text>
-          </View>
+        {/* ── RÉSEAU ── */}
+        {/* En suspens pour la v1 (`RIDE_NETWORK_ENABLED`) : les courses sont
+            factices et le partage n'a pas de backend. Les deux routes ne sont
+            pas enregistrées non plus, voir RootNavigator.
+
+            Les deux sens sont côte à côte, et c'est le propos : ce que l'un
+            publie, l'autre le reçoit. Une seule entrée « Réseau » aurait caché
+            la moitié du mécanisme derrière un écran de plus. */}
+        {RIDE_NETWORK_ENABLED && (
+          <AnimatedEntrance step={2}>
+            <View style={styles.networkCard}>
+              <View style={styles.networkHead}>
+                <View style={styles.networkIcon}>
+                  <Feather name="share-2" size={16} color={colors.textMuted} />
+                </View>
+                <View style={styles.networkHeadText}>
+                  <Text style={styles.networkTitle}>{t('rideNetwork.menuTitle')}</Text>
+                  <Text style={styles.networkSub} numberOfLines={1}>
+                    {t('rideNetwork.menuSub')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.networkActions}>
+                <TouchableOpacity
+                  style={styles.networkBtn}
+                  onPress={() => navigation.navigate('NetworkOffer')}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Feather name="arrow-up-right" size={15} color={colors.textMain} />
+                  <Text style={styles.networkBtnText}>{t('rideNetwork.tab.offer')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.networkBtn}
+                  onPress={() => navigation.navigate('NetworkReceive')}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Feather name="arrow-down-left" size={15} color={colors.textMain} />
+                  <Text style={styles.networkBtnText}>{t('rideNetwork.tab.receive')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </AnimatedEntrance>
         )}
+
+        {/* Le bandeau orange « Passez en ligne pour activer le scanner » a été
+            retiré : la barre juste au-dessus dit déjà qu'on est hors ligne, et
+            l'état vide plus bas le redit une troisième fois. Trois avertissements
+            pour un même fait, dont un en orange, faisaient passer un état normal
+            pour une anomalie. */}
 
         {/* ── ERROR STATE ── */}
         {fetchError && (
@@ -1266,10 +2131,14 @@ const DashboardScreen = () => {
             {weeklyTease.state === 'loss' ? (
               <>
                 <Text style={styles.teaseTitle}>
-                  {t('dashboard.weeklyTease.lossTitle', { eur: weeklyTease.lossWeek.toFixed(0) })}
+                  {t('dashboard.weeklyTease.lossTitle', {
+                    amount: formatMoney(weeklyTease.lossWeek, market),
+                  })}
                 </Text>
                 <Text style={styles.teaseSub}>
-                  {t('dashboard.weeklyTease.lossSub', { eur: weeklyTease.lossMonth.toFixed(0) })}
+                  {t('dashboard.weeklyTease.lossSub', {
+                    amount: formatMoney(weeklyTease.lossMonth, market),
+                  })}
                 </Text>
                 <Text style={styles.teaseCta}>{t('dashboard.weeklyTease.cta')}</Text>
               </>
@@ -1294,31 +2163,31 @@ const DashboardScreen = () => {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.upgradeCardGradient}
             >
-              <View style={styles.upgradeCardGlow} />
               <View style={styles.upgradeCardTop}>
-                <View style={styles.upgradeCardBadge}>
-                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
-                </View>
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.upgradeCardBadge}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
                   <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </View>
               <View style={styles.upgradeCardDivider} />
               <View style={styles.upgradeCardBottom}>
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="zap" size={12} color={colors.primary} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '15 scans/jour')}</Text>
+                  <Feather name="zap" size={12} color={colors.textMuted} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '20 scans/jour')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="trending-up" size={12} color={colors.primary} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', '€/h en direct')}</Text>
+                  <Feather name="trending-up" size={12} color={colors.textMuted} />
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk2', { defaultValue: '{{rate}} en direct', rate: hourlyUnit(market) })}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>
-                  <Feather name="clock" size={12} color={colors.primary} />
+                  <Feather name="clock" size={12} color={colors.textMuted} />
                   <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk3', 'Historique')}</Text>
                 </View>
               </View>
@@ -1328,7 +2197,7 @@ const DashboardScreen = () => {
 
         {/* ── RIDES ── */}
         {loading ? (
-          <BrandLoader style={{ marginTop: 30 }} />
+          <BrandLoader style={{ marginTop: space.xxl }} />
         ) : pendingRides.length > 0 ? (
           pendingRides.map((ride, rideIndex) => (
             <DashboardRideCard
@@ -1348,12 +2217,12 @@ const DashboardScreen = () => {
           </View>
         ) : (
           <View style={styles.waitingContainer}>
-            <MaterialCommunityIcons name="radar" size={32} color="rgba(0,230,118,0.3)" />
+            <MaterialCommunityIcons name="radar" size={32} color="rgba(255,255,255,0.18)" />
             <Text style={styles.waitingTitle}>{t('dashboard.waiting')}</Text>
           </View>
         )}
 
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ── PRICE CHECK CONFIRMATION MODAL ── */}
       <Modal
@@ -1412,7 +2281,7 @@ const DashboardScreen = () => {
               {t('dashboard.priceModal.title', 'Prix réel de la course')}
             </Text>
             <Text style={styles.modalSubtitle}>
-              {t('dashboard.priceModal.subtitle', 'Entrez le montant final affiché sur l\'application VTC')}
+              {t('dashboard.priceModal.subtitle', 'Entrez le montant final affiché')}
             </Text>
             <TextInput
               style={styles.modalInput}
@@ -1435,7 +2304,7 @@ const DashboardScreen = () => {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalBtnCancel}
-                onPress={() => { setPriceModal(null); handleStatusUpdate(priceModal!.rideId, 'ACCEPTED'); }}
+                onPress={() => { setPriceModal(null); handleStatusUpdate(priceModal!.rideId, 'ACCEPTED').catch(() => {}); }}
               >
                 <Text style={styles.modalBtnCancelText}>
                   {t('dashboard.priceModal.skip', 'Passer')}
@@ -1499,173 +2368,242 @@ const DashboardScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 6 },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scrollContent: { paddingHorizontal: space.lg, paddingTop: space.sm },
 
   // HEADER
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  appIconImg: {
-    width: 42, height: 42, borderRadius: 12,
+  // La pastille est centrée quoi qu'il arrive, et les deux boutons sont posés en
+  // absolu de part et d'autre. Une simple rangée `space-between` la décalerait
+  // selon la présence du bouton de scan — il n'existe que sur Android.
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: space.sm,
   },
-  appIconWrap: {
-    width: 46, height: 46, borderRadius: 13,
-    backgroundColor: 'rgba(0,230,118,0.15)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.35)',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+
+  // Pastille de plan : le logo n'étiquette plus l'écran, il porte le statut de
+  // l'abonnement et mène au paywall.
+  planPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.surface,
+    paddingLeft: space.sm,
+    paddingRight: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
   },
-  appTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  appSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
-  settingsBtn: {
-    width: 40, height: 40, borderRadius: 20,
+  planPillLogo: { width: 30, height: 30, borderRadius: radius.full },
+  planPillText: { color: colors.textMain, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+
+  // Le nom de l'écran en très gros : c'est lui qui situe, pas un logo.
+  screenTitle: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    marginBottom: space.xl,
+  },
+
+  headerBtn: {
+    position: 'absolute',
+    width: 44, height: 44, borderRadius: radius.full,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+  },
+  headerBtnLeft: { left: 0 },
+  headerBtnRight: { right: 0 },
+  headerBtnActive: {
+    backgroundColor: 'rgba(0,230,118,0.15)',
+    borderColor: stroke.active,
   },
 
   // ONLINE PILL
   onlinePill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#111E18',
-    borderRadius: 50, paddingVertical: 8, paddingLeft: 18, paddingRight: 8,
-    marginBottom: 22,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    gap: space.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.full, paddingVertical: space.sm, paddingLeft: space.lg, paddingRight: space.sm,
+    marginBottom: space.xl,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
+    ...elevation.resting.shadow,
   },
   onlinePillActive: {
-    borderColor: 'rgba(0,230,118,0.4)',
+    borderColor: stroke.active,
     backgroundColor: '#0D1F17',
-    shadowOpacity: 0.2,
+    ...liveGlow,
   },
-  onlineLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
+  onlineLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  // Conteneur à la taille exacte du point : sert d'origine aux anneaux, qui n'en
+  // sortent que par l'échelle et restent donc centrés dessus.
+  onlineDotWrap: { width: 9, height: 9, alignItems: 'center', justifyContent: 'center' },
+  onlineRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.xs,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.active,
+  },
+  onlineDot: { width: 9, height: 9, borderRadius: radius.full, backgroundColor: colors.primary },
   onlineDotOff: { backgroundColor: '#3a3a3a' },
-  onlineLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
+  onlineLabel: { flexShrink: 1, color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   onlineLabelOn: { color: colors.textMain },
   toggleBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
+    flexShrink: 0,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: colors.primary,
-    paddingVertical: 11, paddingHorizontal: 20, borderRadius: 50,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingVertical: space.md, paddingHorizontal: space.lg, borderRadius: radius.full,
+    ...elevation.resting.shadow,
   },
-  toggleBtnActive: { backgroundColor: 'rgba(0,230,118,0.5)', shadowOpacity: 0.2 },
+  toggleBtnActive: { backgroundColor: 'rgba(0,230,118,0.5)', ...liveGlow },
   toggleBtnText: { color: colors.background, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
 
   // SESSION
-  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
   sessionTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '700', letterSpacing: 1.8 },
   liveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: 'rgba(0,230,118,0.12)',
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    paddingHorizontal: space.md, paddingVertical: space.xs, borderRadius: radius.sm,
     borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.primary },
   liveText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
 
-  statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.xl },
+  // Le fond du bloc « Passez en ligne pour scanner », à l'identique.
+  //
+  // Le verre dérivait au GRIS : `ultraThinMaterialDark` éclaircit et désature ce
+  // qu'il traverse, et le voile vert pâle ne le rattrapait pas. À l'écran, la
+  // barre en ligne, les ronds d'en-tête, la pilule de plan et le bloc d'attente
+  // étaient tous sombres et verts — et ces trois tuiles étaient les SEULES
+  // surfaces claires et grises du Dashboard. C'est l'inverse de ce que le verre
+  // devait produire : au lieu d'appartenir au lieu, elles s'en détachaient.
+  //
+  // Elles reprennent donc le conteneur opaque de l'écran, avec son liseré. Le
+  // trait est cohérent ici : `stroke.ts` réserve le trait net à l'opaque, et
+  // c'est justement ce que ces tuiles redeviennent.
   statCard: {
     flex: 1,
-    backgroundColor: '#111E18',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: space.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10 },
+  statLabel: { color: colors.textDimmed, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: space.sm },
   statValue: { color: colors.textMain, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   statCreditBonus: { color: colors.primary, fontSize: 15, fontWeight: '800' },
-  statIcon: { position: 'absolute', top: 10, right: 10 },
+  // L icone accompagne le chiffre, elle ne le concurrence pas. A 32 px elle
+  // pesait autant que lui ; le contraste doit aller a la donnee.
+  statIcon: { position: 'absolute', top: space.md, right: space.md },
 
 
   // SECTION HEADER
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
   sectionTitle: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
+
+  // RÉSEAU — entrée vers les deux sens
+  networkCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    marginBottom: space.xl,
+  },
+  networkHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  networkIcon: {
+    width: 34, height: 34, borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  networkHeadText: { flex: 1, minWidth: 0 },
+  networkTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
+  networkSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
+  networkActions: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
+  networkBtn: {
+    flex: 1, height: 44, borderRadius: radius.full,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+  },
+  networkBtnText: { color: colors.textMain, fontSize: 14, fontWeight: '800' },
 
   // SCAN LIMIT (Plus tier — simple message)
   scanLimitCard: {
-    backgroundColor: colors.surface, borderRadius: 16, padding: 20,
-    alignItems: 'center', marginBottom: 18,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md, padding: space.xl,
+    alignItems: 'center', marginBottom: space.lg,
   },
-  scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
+  scanLimitTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800', marginBottom: space.xs, textAlign: 'center' },
   scanLimitText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20 },
-  teaseCard: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14 },
-  teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: 8 },
+  teaseCard: { borderWidth: 1, borderRadius: radius.md, padding: space.lg, marginBottom: space.md },
+  teaseTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: space.xs },
+  teaseSub: { color: colors.textMuted, fontSize: 13, marginBottom: space.sm },
   teaseCta: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // UPGRADE CARD (Free tier — premium upsell)
   upgradeCard: {
-    marginBottom: 18, borderRadius: 18, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
-      android: { elevation: 8 },
-    }),
+    marginBottom: space.lg, borderRadius: radius.md, overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   upgradeCardGradient: {
-    borderRadius: 18, padding: 18,
-    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.md, padding: space.lg,
+    borderWidth: strokeWidth.surface, borderColor: stroke.edge,
     overflow: 'hidden',
   },
-  upgradeCardGlow: {
-    position: 'absolute', top: -30, right: -30,
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: 'rgba(0,230,118,0.08)',
-  },
   upgradeCardTop: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: space.md,
   },
   upgradeCardBadge: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
-      android: { elevation: 6 },
-    }),
+    width: 36, height: 36, borderRadius: radius.sm,
+    ...elevation.resting.shadow,
   },
   upgradeCardTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
-  upgradeCardSub: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  upgradeCardSub: { color: colors.textMuted, fontSize: 11, marginTop: space.tight },
   upgradeCardDivider: {
-    height: 1, backgroundColor: 'rgba(0,230,118,0.12)',
-    marginVertical: 14,
+    height: StyleSheet.hairlineWidth, backgroundColor: stroke.edge,
+    marginVertical: space.md,
   },
   upgradeCardBottom: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6,
+    gap: space.sm,
   },
-  upgradeCardPerk: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  upgradeCardPerk: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   upgradeCardPerkText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
-  upgradeCardPerkDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
+  upgradeCardPerkDot: { width: 3, height: 3, borderRadius: radius.full, backgroundColor: 'rgba(255,255,255,0.15)' },
 
   // WAITING
-  waitingContainer: { alignItems: 'center', paddingVertical: 50, gap: 10 },
-  waitingTitle: { color: colors.textDimmed, fontSize: 14 },
-  waitingSubtitle: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', maxWidth: 260, lineHeight: 18, opacity: 0.7 },
+  // L'état vide est posé dans une carte plutôt que flotté sur le fond : sans
+  // contenant, il laissait un trou de deux tiers d'écran qui se lisait comme un
+  // écran cassé. Dans une carte, l'absence de course devient un état affiché.
+  waitingContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: space.xxl,
+    paddingHorizontal: space.xl,
+    gap: space.md,
+    // Même liseré que `scanLimitCard`, son équivalent en taille et en rôle.
+    // C'était le seul grand bloc de l'écran sans contour : posé sur le fond, il
+    // flottait sans arête pendant que tuiles et pastilles en avaient une.
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  waitingTitle: { color: colors.textMain, fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  waitingSubtitle: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 20,
+  },
 
 
 
@@ -1673,13 +2611,13 @@ const styles = StyleSheet.create({
   offlineHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(255,179,0,0.08)',
-    borderRadius: 12,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,179,0,0.2)',
-    padding: 14,
-    marginBottom: 12,
+    padding: space.md,
+    marginBottom: space.md,
   },
   offlineHintText: {
     flex: 1,
@@ -1692,13 +2630,13 @@ const styles = StyleSheet.create({
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: space.sm,
     backgroundColor: 'rgba(255,77,77,0.08)',
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14,
-    marginBottom: 12,
+    padding: space.md,
+    marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
@@ -1708,47 +2646,45 @@ const styles = StyleSheet.create({
   confirmCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    borderRadius: radius.lg,
+    paddingVertical: space.xxl,
+    paddingHorizontal: space.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.12)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    elevation: 10,
+    borderWidth: strokeWidth.surface,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
+  // L'anneau est neutre : c'est l'icône qu'il entoure qui porte l'accent, et
+  // elle seule. Deux verts concentriques ne disent pas deux fois la chose.
   confirmIconRing: {
     width: 64,
     height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0,230,118,0.1)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: space.lg,
   },
   confirmTitle: {
     color: colors.textMain,
     fontSize: 20,
     fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: space.sm,
     letterSpacing: -0.3,
   },
   confirmSubtitle: {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: space.xl,
     lineHeight: 20,
   },
   confirmActions: {
     flexDirection: 'row',
-    gap: 14,
+    gap: space.md,
     width: '100%',
   },
   confirmBtnNo: {
@@ -1756,9 +2692,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(255,77,77,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,77,77,0.2)',
@@ -1773,15 +2709,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    ...elevation.resting.shadow,
   },
   confirmBtnYesText: {
     color: colors.background,
@@ -1794,13 +2726,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: space.xl,
   },
   modalCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: radius.lg,
+    padding: space.xl,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -1808,50 +2740,50 @@ const styles = StyleSheet.create({
   modalIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,215,0,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   modalTitle: {
     color: colors.textMain,
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
   modalSubtitle: {
     color: colors.textMuted,
     fontSize: 14,
-    marginBottom: 22,
+    marginBottom: space.xl,
     lineHeight: 20,
     textAlign: 'center',
   },
   modalInput: {
     backgroundColor: colors.background,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     color: colors.textMain,
     fontSize: 22,
     fontWeight: '700',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.xl,
     textAlign: 'center',
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 14,
+    gap: space.md,
     width: '100%',
   },
   modalBtnCancel: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
@@ -1864,15 +2796,11 @@ const styles = StyleSheet.create({
   },
   modalBtnConfirm: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: colors.primary,
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    ...elevation.resting.shadow,
   },
   modalBtnConfirmText: {
     color: colors.background,
@@ -1882,50 +2810,46 @@ const styles = StyleSheet.create({
   ratingCard: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: 28,
-    padding: 32,
+    borderRadius: radius.lg,
+    padding: space.xxl,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.15)',
   },
   ratingEmoji: {
     fontSize: 48,
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   ratingStars: {
     fontSize: 28,
     letterSpacing: 4,
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   ratingTitle: {
     color: colors.textMain,
     fontSize: 20,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
   ratingMessage: {
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 21,
-    marginBottom: 24,
+    marginBottom: space.xl,
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: space.sm,
   },
   ratingBtnPrimary: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 16,
+    gap: space.sm,
+    paddingVertical: space.lg,
+    borderRadius: radius.sm,
     backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    ...elevation.resting.shadow,
   },
   ratingBtnPrimaryText: {
     color: '#000',
@@ -1933,8 +2857,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   ratingBtnSkip: {
-    marginTop: 14,
-    paddingVertical: 10,
+    marginTop: space.md,
+    paddingVertical: space.sm,
   },
   ratingBtnSkipText: {
     color: colors.textDimmed,

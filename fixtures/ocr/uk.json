@@ -1,0 +1,268 @@
+[
+  {
+    "name": "uber-uk-heathrow-coventry",
+    "description": "Capture RÉELLE d'une offre Uber britannique (UberX, Heathrow T3 → Coventry). Elle porte à elle seule tout ce qui distingue un écran UK d'un écran français : le « £ » AVANT le montant, le point décimal, des miles à deux décimales, des codes postaux sortants seuls (« TW6 »), une distance de course écrite « 98.39 mi trip », et AUCUNE durée de trajet — Uber n'annonce là-bas que le temps d'approche.",
+    "screenHeight": 864,
+    "country": "GB",
+    "blocks": [
+      {
+        "text": "16:05",
+        "x": 18,
+        "y": 14,
+        "width": 40,
+        "height": 12
+      },
+      {
+        "text": "UberX",
+        "x": 190,
+        "y": 462,
+        "width": 60,
+        "height": 16
+      },
+      {
+        "text": "£81.35",
+        "x": 152,
+        "y": 512,
+        "width": 95,
+        "height": 32
+      },
+      {
+        "text": "after 25% service fee",
+        "x": 126,
+        "y": 560,
+        "width": 148,
+        "height": 13
+      },
+      {
+        "text": "4.79",
+        "x": 176,
+        "y": 590,
+        "width": 30,
+        "height": 13
+      },
+      {
+        "text": "8 mins (1.3 mi) away",
+        "x": 56,
+        "y": 648,
+        "width": 148,
+        "height": 14
+      },
+      {
+        "text": "TW6, Hounslow",
+        "x": 56,
+        "y": 670,
+        "width": 105,
+        "height": 13
+      },
+      {
+        "text": "Terminal 3, Level 3, Row A (Short Stay Car",
+        "x": 56,
+        "y": 694,
+        "width": 290,
+        "height": 13
+      },
+      {
+        "text": "Park 3)",
+        "x": 56,
+        "y": 710,
+        "width": 50,
+        "height": 13
+      },
+      {
+        "text": "98.39 mi trip",
+        "x": 56,
+        "y": 752,
+        "width": 90,
+        "height": 14
+      },
+      {
+        "text": "CV1, Coventry",
+        "x": 56,
+        "y": 774,
+        "width": 100,
+        "height": 13
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 81.35,
+      "distanceKm": 158.3,
+      "pickupDistanceKm": 2.1,
+      "pickupDurationMin": 8,
+      "pickupAddressContains": "Hounslow",
+      "destinationAddressContains": "Coventry"
+    }
+  },
+  {
+    "name": "uber-uk-paddington-slough-dark",
+    "description": "Capture REELLE d'une offre UberXL britannique en mode sombre (Paddington -> Slough), surimprimee de texte video. Le nom de rue de la destination etait FLOUTE dans la capture d'origine ; il est ici remplace par une voie plausible de Slough, la ligne gardant sa forme reelle « Rue, Ville, CodeSortant ». Cet ecran differe du premier sur trois points qui comptent : le code postal est a la FIN de l'adresse (« ..., Slough, SL1 », « Point, W2 1HB ») et non au debut, la duree de course EST affichee mais UNIQUEMENT dans une ligne combinee (« 55 mins (26.9 mi) »), et un SECOND montant en livres traine sous le tarif (« £3.95 est. holiday entitlement included ») — plus les labels de fond de carte et deux bandeaux video qui n'ont rien a faire la.",
+    "screenHeight": 1653,
+    "country": "GB",
+    "blocks": [
+      {
+        "text": "A404",
+        "x": 218,
+        "y": 122,
+        "width": 62,
+        "height": 24
+      },
+      {
+        "text": "Rickmansworth",
+        "x": 402,
+        "y": 163,
+        "width": 232,
+        "height": 28
+      },
+      {
+        "text": "Barnet",
+        "x": 862,
+        "y": 133,
+        "width": 112,
+        "height": 28
+      },
+      {
+        "text": "M25",
+        "x": 466,
+        "y": 364,
+        "width": 52,
+        "height": 22
+      },
+      {
+        "text": "Brent",
+        "x": 736,
+        "y": 350,
+        "width": 84,
+        "height": 28
+      },
+      {
+        "text": "Windsor",
+        "x": 306,
+        "y": 506,
+        "width": 122,
+        "height": 28
+      },
+      {
+        "text": "Complete opposite direction",
+        "x": 224,
+        "y": 536,
+        "width": 700,
+        "height": 40
+      },
+      {
+        "text": "Egham",
+        "x": 396,
+        "y": 614,
+        "width": 94,
+        "height": 28
+      },
+      {
+        "text": "A3",
+        "x": 836,
+        "y": 688,
+        "width": 30,
+        "height": 22
+      },
+      {
+        "text": "Esher",
+        "x": 650,
+        "y": 746,
+        "width": 78,
+        "height": 28
+      },
+      {
+        "text": "UberXL",
+        "x": 300,
+        "y": 818,
+        "width": 118,
+        "height": 32
+      },
+      {
+        "text": "Exclusive",
+        "x": 470,
+        "y": 820,
+        "width": 132,
+        "height": 28
+      },
+      {
+        "text": "£48.91",
+        "x": 244,
+        "y": 898,
+        "width": 270,
+        "height": 60
+      },
+      {
+        "text": "★ 5.00",
+        "x": 262,
+        "y": 1006,
+        "width": 112,
+        "height": 32
+      },
+      {
+        "text": "£3.95 est. holiday entitlement included",
+        "x": 256,
+        "y": 1088,
+        "width": 600,
+        "height": 30
+      },
+      {
+        "text": "GOING BACK WEST",
+        "x": 398,
+        "y": 1122,
+        "width": 400,
+        "height": 38
+      },
+      {
+        "text": "3 min (0.4 mi)",
+        "x": 294,
+        "y": 1196,
+        "width": 210,
+        "height": 30
+      },
+      {
+        "text": "Paddington Station, Prebooked Pick-up",
+        "x": 294,
+        "y": 1238,
+        "width": 600,
+        "height": 30
+      },
+      {
+        "text": "Point, W2 1HB",
+        "x": 294,
+        "y": 1277,
+        "width": 218,
+        "height": 30
+      },
+      {
+        "text": "55 mins (26.9 mi)",
+        "x": 294,
+        "y": 1326,
+        "width": 262,
+        "height": 30
+      },
+      {
+        "text": "Buckingham Avenue, Slough, SL1",
+        "x": 420,
+        "y": 1367,
+        "width": 422,
+        "height": 30
+      },
+      {
+        "text": "Confirm",
+        "x": 534,
+        "y": 1478,
+        "width": 136,
+        "height": 34
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 48.91,
+      "distanceKm": 43.3,
+      "durationMin": 55,
+      "pickupDistanceKm": 0.6,
+      "pickupDurationMin": 3,
+      "pickupAddressContains": "Paddington",
+      "destinationAddressContains": "Slough"
+    }
+  }
+]

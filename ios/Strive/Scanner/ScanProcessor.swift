@@ -30,10 +30,32 @@ final class ScanProcessor {
       ?? "group.com.striveapp.app"
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
     let now = Date().timeIntervalSince1970
+
+    // 1. Un scan est-il déjà en cours ? Le simple délai ci-dessous ne suffisait
+    //    pas : le pipeline dure 5 à 20 s (OCR + TomTom + Gemini), donc un appui
+    //    5 s après le premier lançait un second pipeline complet en parallèle —
+    //    deux appels payants, deux courses, pour une seule offre à l'écran.
+    //    Le plafond de 30 s libère le verrou si un scan s'est interrompu
+    //    (process tué, crash) : le watchdog de l'AppIntent est à 25 s.
+    let startedAt = defaults.double(forKey: "scanInProgressSince")
+    if startedAt > 0, now - startedAt < 30 { return true }
+
+    // 2. Anti double-tap : deux appuis rapprochés sur le même bouton.
     let last = defaults.double(forKey: "lastScanAttemptAt")
     if last > 0, now - last < cooldownSec { return true }
+
     defaults.set(now, forKey: "lastScanAttemptAt")
+    defaults.set(now, forKey: "scanInProgressSince")
     return false
+  }
+
+  /// Libère le verrou posé par `shouldThrottleRapidScan`. À appeler sur TOUS les
+  /// chemins de sortie du pipeline — succès comme échec — sinon le prochain scan
+  /// attend l'expiration des 30 s.
+  static func markScanFinished() {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    UserDefaults(suiteName: appGroupId)?.removeObject(forKey: "scanInProgressSince")
   }
 
   /// Vrai si le dernier OCR justifie un appel Gemini (signaux d'offre de course
@@ -42,6 +64,18 @@ final class ScanProcessor {
   /// les callers évitent alors un appel Gemini payant inutile.
   private(set) var lastScanMayBeRide = true
 
+  /// Blocs OCR du dernier scan, sérialisés (cf. `OcrParser.dumpBlocks`) — matière
+  /// de diagnostic pour reproduire en fixture les captures où le parser rate une
+  /// adresse. Miroir du `debugBlocks` Android, jusqu'ici absent côté iOS : la
+  /// table `scan_debug` ne recevait donc jamais rien depuis un iPhone.
+  ///
+  /// Remis à nil au début de chaque scan pour ne jamais associer les blocs d'une
+  /// capture au résultat d'une autre (les 3 process partagent ce singleton).
+  private(set) var lastBlocksJson: String?
+  /// Hauteur en pixels de l'image analysée — les positions Y des blocs n'ont de
+  /// sens qu'avec elle (écrans de tailles différentes).
+  private(set) var lastScreenHeight: Int = 0
+
   struct FinalResult {
     let scan: ScanResultModel
     let hourlyRate: Double
@@ -49,6 +83,11 @@ final class ScanProcessor {
     let totalDurationMin: Int
     let totalDistanceKm: Double
     let verdictLevel: Int
+    /// Tarif À AFFICHER : net du carburant estimé si la préférence
+    /// « retirer le carburant du prix » est active, sinon égal à `scan.fare`.
+    /// Volontairement séparé — `scan.fare` reste le tarif brut, celui qui part en
+    /// base et qui sert au calcul des €/h, €/km et du verdict.
+    let displayFare: Double
   }
 
   /// Lance le pipeline complet sur l'image. Le callback `onFinal` n'est appelé
@@ -65,6 +104,12 @@ final class ScanProcessor {
       return
     }
     scanInProgress = true
+    // Remote config du parser (ancres de prix/distance + bornes de sanity).
+    Self.applyRemoteParserConfigIfNeeded()
+    // Purge : sans ça, un scan dont l'OCR ne rend rien conserverait les blocs du
+    // scan précédent et les enverrait avec le mauvais résultat.
+    lastBlocksJson = nil
+    lastScreenHeight = 0
 
     // Garde-fou anti-deadlock : `gate` garantit (1) un seul appel à onFinal,
     // (2) le reset systématique de scanInProgress, (3) un watchdog qui libère
@@ -90,6 +135,11 @@ final class ScanProcessor {
       self.lastScanMayBeRide = Self.looksLikeRideOffer(
         blocks.map { $0.text }.joined(separator: "\n")
       )
+
+      // Matière de diagnostic (cf. lastBlocksJson) — capturée AVANT le parse pour
+      // être disponible même si celui-ci échoue.
+      self.lastBlocksJson = OcrParser.dumpBlocks(blocks)
+      self.lastScreenHeight = screenH
 
       // Parsing identique à Android
       guard let result = OcrParser.shared.parse(
@@ -137,6 +187,31 @@ final class ScanProcessor {
     }
   }
 
+  /// Dernière config appliquée dans CE process (hash du JSON). Le hash de String
+  /// est re-graine à chaque lancement : il ne vaut que pour comparer deux valeurs
+  /// au sein d'une même exécution, ce qui est exactement l'usage ici.
+  private static var appliedConfigHash: Int?
+
+  /// Applique la remote config du parser poussée par le JS (`setParserConfig` →
+  /// App Group). Sans cet appel, le JSON était écrit et JAMAIS relu : ancres de
+  /// prix, ancres de distance et bornes de sanity restaient figées aux valeurs
+  /// compilées, et un parsing cassé en production ne pouvait pas être corrigé à
+  /// distance sur iPhone (Android, lui, applique la config dans son bridge).
+  ///
+  /// Appelé ici plutôt que dans le bridge : le parsing tourne dans TROIS process
+  /// (app, Share Extension, AppIntent) et le bridge n'existe que dans le premier
+  /// — qui est justement celui qui ne parse presque jamais.
+  private static func applyRemoteParserConfigIfNeeded() {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    guard let json = UserDefaults(suiteName: appGroupId)?.string(forKey: "parserConfig"),
+          !json.isEmpty else { return }
+    let hash = json.hashValue
+    guard hash != appliedConfigHash else { return }
+    appliedConfigHash = hash
+    OcrParser.shared.updateConfig(json)
+  }
+
   /// Heuristique légère exécutée sur le texte OCR brut : l'écran ressemble-t-il
   /// à une offre VTC ? Sert à court-circuiter le fallback Gemini (coût) quand
   /// l'utilisateur scanne une pub ou un écran sans rapport.
@@ -179,8 +254,14 @@ final class ScanProcessor {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     let prefs = UserDefaults(suiteName: appGroupId)
-    let minHourly = prefs?.double(forKey: "minHourlyRate") ?? 25.0
-    let minKm = prefs?.double(forKey: "minKmRate") ?? 1.2
+    // `object(forKey:) as? Double` et NON `double(forKey:) ?? …` : ce dernier
+    // renvoie 0.0 quand la clé est absente (l'optionnel ne porte que sur
+    // `prefs`), le défaut n'était donc JAMAIS appliqué. Seuils à 0 = tout est
+    // rentable → verdict vert sur n'importe quelle course tant que le JS n'a pas
+    // encore poussé les préférences (installation fraîche, scan via le Share
+    // Sheet avant la première ouverture du Dashboard).
+    let minHourly = (prefs?.object(forKey: "minHourlyRate") as? Double) ?? 25.0
+    let minKm = (prefs?.object(forKey: "minKmRate") as? Double) ?? 1.2
     let includePickup = prefs?.object(forKey: "includePickup") as? Bool ?? true
 
     let useApproach = includePickup
@@ -207,13 +288,25 @@ final class ScanProcessor {
     let kmOk = kmRate >= minKm
     let level = (hrOk && kmOk) ? 2 : ((hrOk || kmOk) ? 1 : 0)
 
+    // Affichage seul : le verdict ci-dessus est calculé sur le tarif brut, les
+    // seuils de l'utilisateur gardent donc le sens qu'ils ont toujours eu.
+    // `fuelCostPerKm` est poussé pré-calculé par le JS (conso × prix du jour) —
+    // le natif n'a ni le type de carburant ni le tarif à la pompe. 0 = pas de
+    // consommation renseignée, donc rien à déduire.
+    let deductFuel = prefs?.bool(forKey: "deductFuel") ?? false
+    let fuelCostPerKm = prefs?.double(forKey: "fuelCostPerKm") ?? 0
+    let displayFare = (deductFuel && fuelCostPerKm > 0)
+      ? max(0, scan.fare - fuelCostPerKm * totalDistance)
+      : scan.fare
+
     return FinalResult(
       scan: scan,
       hourlyRate: hourlyRate,
       kmRate: kmRate,
       totalDurationMin: Int(totalDuration.rounded()),
       totalDistanceKm: totalDistance,
-      verdictLevel: level
+      verdictLevel: level,
+      displayFare: displayFare
     )
   }
 
@@ -272,6 +365,230 @@ final class ScanProcessor {
         completion(nil, imageWidth, imageHeight)
       }
     }
+  }
+}
+
+// MARK: - Enregistrement immédiat de la course
+
+/// Délégué minimal de la session de fond.
+///
+/// Une session de fond EXIGE un délégué — les variantes à completion handler
+/// lèvent une exception. Mais on n'a rien à faire du résultat : la
+/// réconciliation passe par l'outbox (cf. `RideUploader`). On se contente de
+/// retirer le fichier de corps, que le démon système a fini de lire.
+private final class RideUploadDelegate: NSObject, URLSessionDataDelegate {
+  static let shared = RideUploadDelegate()
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    if let path = task.taskDescription {
+      try? FileManager.default.removeItem(atPath: path)
+    }
+    if let error = error {
+      NSLog("[Strive:Ride] upload de fond KO — %@", error.localizedDescription)
+    } else if let http = task.response as? HTTPURLResponse,
+              !(200...299).contains(http.statusCode), http.statusCode != 409 {
+      // 409 = même (user_id, scan_ts) déjà en base : la course EST enregistrée.
+      NSLog("[Strive:Ride] upload de fond refusé — HTTP %d", http.statusCode)
+    }
+  }
+}
+
+/// Écrit la course dans Supabase AU MOMENT DU SCAN, depuis le process qui l'a
+/// analysée (Share Extension ou raccourci).
+///
+/// Ce que cet envoi N'EST PAS : la garantie de non-perte. Celle-ci tient
+/// entièrement à l'outbox `pendingScanResults` — une entrée n'en sort que sur
+/// `ackScan`, une fois la course confirmée en base. L'envoi ci-dessous ne fait
+/// que raccourcir le délai, et son échec n'a aucune conséquence.
+///
+/// La version précédente échouait précisément dans le cas d'usage dominant.
+/// Les deux causes, et ce qui les corrige :
+///
+///  • `URLSessionConfiguration.ephemeral` + `waitsForConnectivity = false` : la
+///    requête mourait avec le process (le chauffeur referme le panneau de
+///    partage pendant l'appel réseau) et abandonnait dès la première zone
+///    blanche. On passe en session de FOND : le démon système porte le
+///    transfert, attend le réseau et réessaie — extension tuée ou non.
+///
+///  • Le JWT lu dans l'App Group est déposé par le JS au dernier passage au
+///    premier plan. Il est donc périmé dès que l'app n'a pas tourné depuis
+///    l'expiration de l'access token — c'est-à-dire presque toujours, l'usage
+///    visé étant le scan app fermée. Voir `currentCredential` : c'est le SEUL
+///    point à changer pour passer à un jeton d'appareil frappé côté serveur.
+///
+/// Aucune complétion n'est exploitée : le drain de l'outbox à l'ouverture de
+/// l'app retombera sur le doublon, qu'il traite comme un succès. Rien ne
+/// circule entre les process — c'est ce qui a permis de supprimer le drapeau
+/// `savedRemotely` et sa comptabilité.
+enum RideUploader {
+
+  private static var appGroupId: String {
+    (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+  }
+
+  /// UNE session de fond par process. Deux sessions ne peuvent pas partager un
+  /// identifiant ; l'app et l'extension ayant des bundle id distincts, la
+  /// collision entre les deux écrivains est impossible par construction.
+  private static let session: URLSession = {
+    let id = (Bundle.main.bundleIdentifier ?? "com.striveapp.app") + ".ride-upload"
+    let cfg = URLSessionConfiguration.background(withIdentifier: id)
+    // Obligatoire pour une session de fond lancée depuis une app extension :
+    // c'est le répertoire où le démon lit le corps et dépose la réponse.
+    cfg.sharedContainerIdentifier = appGroupId
+    // `true` laisserait iOS choisir « un bon moment » (charge, wifi) — ce qui
+    // peut vouloir dire des heures. La course doit partir dès que le réseau est là.
+    cfg.isDiscretionary = false
+    // Sans ça les événements de fin de transfert seraient perdus quand
+    // l'extension est morte, et le transfert lui-même peut rester suspendu.
+    cfg.sessionSendsLaunchEvents = true
+    return URLSession(configuration: cfg, delegate: RideUploadDelegate.shared, delegateQueue: nil)
+  }()
+
+  /// Point d'entrée UNIQUE du credential.
+  ///
+  /// Aujourd'hui : le JWT déposé par l'app dans l'App Group. Sa durée de vie
+  /// est celle de l'access token Supabase (réglage `JWT expiry` du projet) —
+  /// c'est elle, et non ce code, qui détermine combien de temps un chauffeur
+  /// peut scanner sans rouvrir l'app.
+  ///
+  /// Si la télémétrie montre des drains trop tardifs, la suite est un jeton
+  /// d'appareil frappé par une edge function et rangé en Keychain : seule cette
+  /// fonction change, le reste du fichier est indépendant de ce choix. La piste
+  /// du refresh token a été écartée — Supabase fait tourner les refresh tokens
+  /// à l'usage, et deux process qui rafraîchissent en même temps peuvent
+  /// invalider la session, donc déconnecter le chauffeur en pleine tournée.
+  private static func currentCredential(_ defaults: UserDefaults) -> (jwt: String, uid: String)? {
+    guard let jwt = defaults.string(forKey: "supabaseUserJwt"), !jwt.isEmpty,
+          let uid = userId(fromJwt: jwt)
+    else { return nil }
+    return (jwt, uid)
+  }
+
+  /// `sub` du JWT Supabase = id de l'utilisateur. Évite de plomber un réglage
+  /// de plus dans l'App Group pour une valeur que le jeton porte déjà.
+  private static func userId(fromJwt jwt: String) -> String? {
+    let parts = jwt.split(separator: ".")
+    guard parts.count >= 2 else { return nil }
+    var b64 = String(parts[1])
+      .replacingOccurrences(of: "-", with: "+")
+      .replacingOccurrences(of: "_", with: "/")
+    while b64.count % 4 != 0 { b64 += "=" }
+    guard let data = Data(base64Encoded: b64),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    return json["sub"] as? String
+  }
+
+  /// Répertoire des corps de requête, dans le container partagé (exigé par la
+  /// session de fond lancée depuis une extension).
+  private static func bodyDirectory() -> URL? {
+    guard let container = FileManager.default
+      .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
+    else { return nil }
+    let dir = container.appendingPathComponent("ride-uploads", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }
+
+  /// Retire les corps de plus de 24 h. Le délégué nettoie le cas nominal ;
+  /// ceux-ci sont les orphelins des transferts dont le process est mort avant
+  /// la complétion. Sans ce balayage ils s'accumuleraient indéfiniment.
+  private static func sweepStaleBodies(_ dir: URL) {
+    guard let files = try? FileManager.default.contentsOfDirectory(
+      at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+    ) else { return }
+    let cutoff = Date().addingTimeInterval(-86_400)
+    for f in files {
+      let modified = (try? f.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate
+      if let modified = modified, modified < cutoff {
+        try? FileManager.default.removeItem(at: f)
+      }
+    }
+  }
+
+  /// Programme l'écriture de la course. Retourne immédiatement : le transfert
+  /// est confié au démon système et survit à la mort de ce process.
+  static func upload(_ final: ScanProcessor.FinalResult, rideId: String, scanTs: Double) {
+    guard let defaults = UserDefaults(suiteName: appGroupId),
+          let restUrl = defaults.string(forKey: "supabaseRestUrl"), !restUrl.isEmpty,
+          let anonKey = defaults.string(forKey: "geminiSupabaseKey"), !anonKey.isEmpty,
+          let cred = currentCredential(defaults),
+          // `on_conflict=id` + `resolution=ignore-duplicates` (plus bas) : le
+          // POST est un upsert qui ne fait rien si la course existe déjà. Une
+          // session de fond peut retenter un transfert ; sans ça le rejeu
+          // repartait en 409, remontait en erreur, et brouillait le diagnostic
+          // d'un envoi qui avait en réalité abouti.
+          let url = URL(string: "\(restUrl)/rest/v1/rides?on_conflict=id"),
+          let dir = bodyDirectory()
+    else { return }
+
+    sweepStaleBodies(dir)
+
+    // Carburant figé au moment du scan, comme côté JS. `fuelCostPerKm` est
+    // poussé pré-calculé par l'app (conso × prix du jour) ; 0 = non renseigné,
+    // on laisse alors les colonnes à NULL plutôt que d'écrire un faux zéro.
+    let fuelCostPerKm = defaults.double(forKey: "fuelCostPerKm")
+    let fuelCost: Double? = fuelCostPerKm > 0
+      ? (fuelCostPerKm * final.totalDistanceKm * 100).rounded() / 100
+      : nil
+
+    var body: [String: Any] = [
+      // L'id frappé au scan, et non un uuid tiré par le serveur. C'est ce qui
+      // rend cet envoi et le drain de l'outbox interchangeables : le second
+      // réinsère la même ligne, écartée sur la clé primaire. Sans lui, les deux
+      // chemins créaient deux courses qu'il fallait ensuite reconnaître comme
+      // une seule — tout ce que 20260821_ride_id_at_scan.sql a pu retirer.
+      "id": rideId,
+      "user_id": cred.uid,
+      // Même normalisation que `createRide` côté JS : la colonne n'accepte pas
+      // UNKNOWN.
+      "platform": final.scan.platform == .UNKNOWN ? "UBER" : final.scan.platform.rawValue,
+      "status": "PENDING",
+      // Tarif BRUT (displayFare n'est qu'un affichage) — cohérent avec les €/h.
+      "fare_estimated": final.scan.fare,
+      "distance_km": final.totalDistanceKm,
+      "duration_min": final.totalDurationMin,
+      "hourly_rate": final.hourlyRate,
+      "km_rate": final.kmRate,
+      "scan_ts": scanTs,
+      // Heure du SCAN, pas de l'insertion — c'est la même règle que
+      // `createRide` côté JS, et c'est ce qui fait atterrir la course au jour
+      // où elle a été scannée quel que soit le chemin qui l'écrit.
+      "created_at": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: scanTs)),
+    ]
+    if let fuelCost = fuelCost {
+      body["fuel_cost"] = fuelCost
+      body["net_profit"] = ((final.scan.fare - fuelCost) * 100).rounded() / 100
+    }
+    if let p = final.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !p.isEmpty {
+      body["pickup_address"] = p
+    }
+    if let d = final.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
+      body["destination_address"] = d
+    }
+
+    guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return }
+
+    // Une session de fond n'accepte QUE `uploadTask(with:fromFile:)` — ni
+    // `dataTask`, ni un corps en mémoire. Le fichier doit survivre au process :
+    // il vit dans le container partagé, et le délégué le retire à la fin.
+    let file = dir.appendingPathComponent("\(rideId).json")
+    guard (try? payload.write(to: file, options: .atomic)) != nil else { return }
+
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue(anonKey, forHTTPHeaderField: "apikey")
+    req.setValue("Bearer \(cred.jwt)", forHTTPHeaderField: "Authorization")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    // Rien à relire : l'app rechargera la liste depuis la base.
+    req.setValue("return=minimal,resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
+
+    let task = session.uploadTask(with: req, fromFile: file)
+    // Sert au délégué à retrouver le corps à supprimer.
+    task.taskDescription = file.path
+    task.resume()
   }
 }
 

@@ -23,6 +23,10 @@ class ScanBridgeModule: RCTEventEmitter {
       ?? "group.com.striveapp.app"
   }()
   static let scanResultKey = "lastScanResult"
+  // File d'attente des scans non encore relevés. `lastScanResult` ne garde
+  // qu'un seul résultat : deux partages de capture app fermée écrasaient le
+  // premier. La file les empile, l'app les vide tous au premier plan.
+  static let pendingResultsKey = "pendingScanResults"
   static let scanTimestampKey = "lastScanTimestamp"
 
   /// Jour de quota courant (yyyymmdd) en tenant compte du `day_reset_hour`
@@ -58,12 +62,13 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   override func supportedEvents() -> [String]! {
-    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onLiveActivityDismissed", "onRideDecision"]
+    return ["onScanResult", "onScanFailed", "onPermissionDenied", "onScanFailure"]
   }
 
   static let rideDecisionsKey = "pendingRideDecisions"
-
-  private var laDismissObserver: Any?
+  /// Échecs empilés par l'AppIntent / la Share Extension — ces process n'ont pas
+  /// de session Supabase et ne peuvent pas écrire la trace eux-mêmes.
+  static let pendingFailuresKey = "pendingScanFailures"
 
   override func startObserving() {
     hasListeners = true
@@ -71,23 +76,11 @@ class ScanBridgeModule: RCTEventEmitter {
     // était tuée a pu rater la notification Darwin. Dès que le JS s'abonne, on
     // flush ce qui est en attente dans l'App Group (garde timestamp anti-doublon).
     handleShareExtensionResult()
-    drainAndEmitRideDecisions()
-    if #available(iOS 16.2, *) {
-      laDismissObserver = NotificationCenter.default.addObserver(
-        forName: LiveActivityManager.dismissedNotification,
-        object: nil, queue: .main
-      ) { [weak self] _ in
-        self?.sendEvent(withName: "onLiveActivityDismissed", body: nil)
-      }
-    }
+    drainAndEmitScanFailures()
   }
 
   override func stopObserving() {
     hasListeners = false
-    if let obs = laDismissObserver {
-      NotificationCenter.default.removeObserver(obs)
-      laDismissObserver = nil
-    }
   }
 
   // MARK: - Lifecycle
@@ -112,23 +105,6 @@ class ScanBridgeModule: RCTEventEmitter {
       .deliverImmediately
     )
 
-    // Décisions Accepter/Refuser tapées sur la notif de scan (AppDelegate les
-    // empile dans l'App Group puis poste cette notification Darwin).
-    CFNotificationCenterAddObserver(
-      center,
-      observer,
-      { _, observer, _, _, _ in
-        guard let observer = observer else { return }
-        let module = Unmanaged<ScanBridgeModule>.fromOpaque(observer).takeUnretainedValue()
-        DispatchQueue.main.async {
-          module.drainAndEmitRideDecisions()
-        }
-      },
-      "com.striveapp.app.rideDecision" as CFString,
-      nil,
-      .deliverImmediately
-    )
-
     // Aussi écouter quand l'app revient au premier plan (au cas où la notification Darwin est manquée)
     NotificationCenter.default.addObserver(
       self,
@@ -136,6 +112,10 @@ class ScanBridgeModule: RCTEventEmitter {
       name: UIApplication.didBecomeActiveNotification,
       object: nil
     )
+
+    // L'état premier plan est POUSSÉ vers LiveActivityManager depuis ici : ce
+    // manager est aussi compilé dans la Share Extension, où `UIApplication.shared`
+    // est interdit (l'archive échoue). Cette cible-ci est l'app, elle a le droit.
   }
 
   deinit {
@@ -145,11 +125,14 @@ class ScanBridgeModule: RCTEventEmitter {
   }
 
   @objc private func appDidBecomeActive() {
+    // Une carte supprimée par iOS n'éteint jamais la session. On la réarme ici,
+    // au premier plan, avant de traiter les résultats éventuellement en attente.
+    if #available(iOS 16.2, *) { LiveActivityManager.shared.ensureRunning() }
     // Sur iOS le scan passe toujours par la Share Extension → on traite les
     // résultats en attente à chaque retour au premier plan, que startScanner()
     // (isActive) ait été appelé ou non. hasListeners + timestamp protègent.
     handleShareExtensionResult()
-    drainAndEmitRideDecisions()
+    drainAndEmitScanFailures()
     // Si un payload est en attente et qu'une LA IDLE tourne, on l'update
     if #available(iOS 16.2, *), let payload = pendingLiveActivityPayload {
       pendingLiveActivityPayload = nil
@@ -162,7 +145,7 @@ class ScanBridgeModule: RCTEventEmitter {
           distanceKm: (payload["distanceKm"] as? NSNumber)?.doubleValue ?? 0,
           durationMin: (payload["durationMin"] as? NSNumber)?.intValue ?? 0,
           verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
-          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
+          rideId: (payload["rideId"] as? String) ?? ""
         )
       }
     }
@@ -172,28 +155,207 @@ class ScanBridgeModule: RCTEventEmitter {
 
   private var lastProcessedTimestamp: Double = 0
 
+  /// Relève du journal de scans. Rien n'est effacé ici : une entrée n'est retirée
+  /// que par `ackScan`, quand le JS a confirmé l'écriture en base. Tant qu'un scan
+  /// n'est pas acquitté, il est ré-émis à chaque retour au premier plan.
+  ///
+  /// L'ancienne version purgeait AVANT d'émettre : tout scan que le JS recevait
+  /// sans parvenir à l'écrire (réseau coupé, crash, quota) disparaissait. Le rejeu
+  /// est sans risque depuis l'index unique (user_id, scan_ts) —
+  /// 20260817_rides_scan_ts_unique.sql écarte les doublons côté base.
   private func handleShareExtensionResult() {
     guard hasListeners else { return }
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
 
-    let timestamp = defaults.double(forKey: Self.scanTimestampKey)
-    guard timestamp > lastProcessedTimestamp else { return }
-    lastProcessedTimestamp = timestamp
-
-    guard let jsonData = defaults.data(forKey: Self.scanResultKey),
-          let result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-    else {
-      sendEvent(withName: "onScanFailed", body: nil)
-      return
+    var queued: [[String: Any]] = []
+    if let data = defaults.data(forKey: Self.pendingResultsKey),
+       let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+      queued = arr
     }
 
-    // Nettoyer après lecture
-    defaults.removeObject(forKey: Self.scanResultKey)
-    defaults.removeObject(forKey: Self.scanTimestampKey)
+    // Chemin historique (clé unique, un seul résultat) : on le replie dans le
+    // journal au lieu de l'émettre à part, pour n'avoir qu'un seul mécanisme.
+    let timestamp = defaults.double(forKey: Self.scanTimestampKey)
+    if timestamp > lastProcessedTimestamp {
+      lastProcessedTimestamp = timestamp
+      if let jsonData = defaults.data(forKey: Self.scanResultKey),
+         var result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+        if result["scanTs"] == nil { result["scanTs"] = timestamp }
+        queued.append(result)
+        defaults.removeObject(forKey: Self.scanResultKey)
+        defaults.removeObject(forKey: Self.scanTimestampKey)
+      } else if queued.isEmpty {
+        // Horodatage avancé sans résultat exploitable = scan cassé.
+        defaults.removeObject(forKey: Self.scanTimestampKey)
+        sendEvent(withName: "onScanFailed", body: nil)
+        return
+      }
+    }
+
+    guard !queued.isEmpty else { return }
+
+    // `rideId` est normalement frappé AU SCAN, par le process qui a analysé
+    // l'écran — c'est ce qui en fait l'identité de la course, et pas seulement
+    // une clé de file. Le rattrapage ci-dessous ne concerne que les entrées
+    // héritées, écrites par un build antérieur et pas encore relevées : sans id
+    // elles ne pourraient jamais être acquittées, donc seraient rejouées sans
+    // fin. Un id attribué ici peut désigner une course DÉJÀ écrite en base sous
+    // un autre id (RideUploader) ; l'index unique sur `scan_ts` écarte alors
+    // l'insertion, que `createRide` traite comme un succès.
+    //
+    // On PERSISTE avant d'émettre — sans ça un ack porterait sur un id inconnu.
+    for i in queued.indices where queued[i]["rideId"] == nil {
+      queued[i]["rideId"] = UUID().uuidString
+    }
+    persistPendingResults(queued, defaults)
+
+    for (idx, result) in queued.enumerated() {
+      // Seul le dernier scan a vocation à s'afficher en Live Activity.
+      emitScanResult(result, refreshLiveActivity: idx == queued.count - 1)
+    }
+  }
+
+  private func persistPendingResults(_ results: [[String: Any]], _ defaults: UserDefaults) {
+    if results.isEmpty {
+      defaults.removeObject(forKey: Self.pendingResultsKey)
+      return
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: results) else { return }
+    defaults.set(data, forKey: Self.pendingResultsKey)
+  }
+
+  /// Accusé de réception : la course est en base (ou définitivement refusée).
+  /// Seul mécanisme qui retire une entrée du journal — il n'y a plus de
+  /// suppression au bout de N tentatives, donc plus de course perdue en silence.
+  @objc func ackScan(_ rideId: String) {
+    guard !rideId.isEmpty, let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    guard let data = defaults.data(forKey: Self.pendingResultsKey),
+          let queued = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return }
+    persistPendingResults(queued.filter { ($0["rideId"] as? String) != rideId }, defaults)
+  }
+
+  /// Les décisions Prise/Refusée en attente, telles quelles.
+  ///
+  /// LECTURE PURE : rien n'est émis, rien n'est effacé. Le JS les demande quand
+  /// il est prêt — session ouverte, liste des courses chargée — les applique,
+  /// puis retire chacune par `ackRideDecision`.
+  ///
+  /// C'est ce qui a remplacé l'émission d'événements. Un événement arrive quand
+  /// le natif le décide, c'est-à-dire souvent avant que le JS puisse s'en
+  /// servir : il fallait alors un tampon côté JS, un accusé de réception pour ne
+  /// pas le perdre, et des relances pour le rejouer. Quatre mécanismes pour
+  /// compenser un seul problème de calendrier. En laissant le JS venir chercher,
+  /// le problème n'existe plus.
+  // MARK: - Diagnostic
+
+  /// Rend la trace Live Activity telle qu'elle est stockée dans l'App Group.
+  ///
+  /// C'est le seul moyen de lire ce que fait ActivityKit sans un Mac et
+  /// Console.app. `tracing` dit à l'écran si la collecte est active — sans quoi
+  /// il afficherait un vide qu'on prendrait pour « aucune erreur ».
+  @objc func getDiagnostics(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else {
+      resolve(["trace": "", "lastStep": "", "tracing": false])
+      return
+    }
+    if #available(iOS 16.2, *) {
+      resolve([
+        "trace": d.string(forKey: LiveActivityManager.traceKey) ?? "",
+        "lastStep": d.string(forKey: LiveActivityManager.lastStepKey) ?? "",
+        "tracing": d.bool(forKey: LiveActivityManager.tracingKey),
+        // Combien de fois le système a demandé chaque présentation du Dynamic
+        // Island, sur un état de résultat. Écrit par le widget lui-même — c'est
+        // le seul endroit qui sait, aucune API ne permet de l'interroger.
+        // `since` borne la fenêtre : « déplié : 0 » ne veut rien dire si la
+        // mesure n'a duré que trente secondes.
+        "presentations": [
+          "expanded": d.integer(forKey: "laPres_expanded"),
+          "compact":  d.integer(forKey: "laPres_compact"),
+          "minimal":  d.integer(forKey: "laPres_minimal"),
+          "since":    d.double(forKey: "laPres_since"),
+        ],
+        // LE TÉMOIN — ce que l'EXTENSION a lu, écrit par elle seule (cf.
+        // `laStampLocale`). L'app et le widget sont deux processus, et aucune API
+        // ne permet de demander à une extension ce qu'elle a vu : sans cette
+        // trace, une Live Activity en français et en euros sous une app en
+        // anglais et en livres n'a aucune cause observable.
+        //
+        // `at` à zéro alors que l'îlot s'affiche est la lecture qui compte : le
+        // widget n'a rien pu écrire, donc il ne peut rien lire non plus, donc
+        // l'entitlement App Group manque à sa cible.
+        "widget": [
+          "lang":     d.string(forKey: "laSeenLang") ?? "",
+          "currency": d.string(forKey: "laSeenCur") ?? "",
+          "at":       d.double(forKey: "laSeenAt"),
+        ],
+      ])
+    } else {
+      resolve(["trace": "", "lastStep": "", "tracing": false])
+    }
+  }
+
+  /// Remet les compteurs de présentation à zéro, pour démarrer une mesure
+  /// propre avant une vacation.
+  @objc func resetPresentationCounters() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    for k in ["laPres_expanded", "laPres_compact", "laPres_minimal",
+              "laPres_expanded_at", "laPres_compact_at", "laPres_minimal_at",
+              "laPres_since"] {
+      d.removeObject(forKey: k)
+    }
+  }
+
+  @objc func setDiagnosticsTracing(_ enabled: Bool) {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    if #available(iOS 16.2, *) {
+      d.set(enabled, forKey: LiveActivityManager.tracingKey)
+      // En coupant, on efface : laisser des traces sur l'appareil après que le
+      // chauffeur a désactivé la collecte serait garder des données sans finalité.
+      if !enabled {
+        d.removeObject(forKey: LiveActivityManager.traceKey)
+        d.removeObject(forKey: LiveActivityManager.lastStepKey)
+      }
+    }
+  }
+
+  @objc func clearDiagnostics() {
+    guard let d = UserDefaults(suiteName: Self.appGroupId) else { return }
+    if #available(iOS 16.2, *) {
+      d.removeObject(forKey: LiveActivityManager.traceKey)
+      d.removeObject(forKey: LiveActivityManager.lastStepKey)
+    }
+  }
+
+  @objc func getPendingRideDecisions(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId),
+          let data = defaults.data(forKey: Self.rideDecisionsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { resolve([]); return }
+    let out = arr.compactMap { d -> [String: Any]? in
+      guard let rideId = d["rideId"] as? String, !rideId.isEmpty,
+            let status = d["status"] as? String,
+            status == "ACCEPTED" || status == "DECLINED" else { return nil }
+      return ["rideId": rideId, "status": status]
+    }
+    resolve(out)
+  }
+
+  /// Émet un résultat vers le JS et, si demandé, rafraîchit la Live Activity.
+  /// Extrait pour être appelé aussi bien sur un résultat isolé que sur chaque
+  /// élément de la file d'attente.
+  private func emitScanResult(_ result: [String: Any], refreshLiveActivity: Bool) {
+    let defaults = UserDefaults(suiteName: Self.appGroupId)
 
     // Tente de démarrer le Live Activity depuis l'app principale si la
     // Share Extension n'a pas réussi (pas d'activité en cours).
-    if #available(iOS 16.2, *) {
+    if refreshLiveActivity, #available(iOS 16.2, *) {
       let existing = Activity<StriveActivityAttributes>.activities
       let shareExtStatus = (result["_liveActivityDebug"] as? String) ?? "unknown"
       NSLog("[Strive:Bridge] ShareExt LA status=%@, existing activities=%d, appState=%d",
@@ -213,8 +375,11 @@ class ScanBridgeModule: RCTEventEmitter {
         }
         if payload["verdictLevel"] == nil {
           let prefs = UserDefaults(suiteName: Self.appGroupId)
-          let minH = prefs?.double(forKey: "minHourlyRate") ?? 25.0
-          let minK = prefs?.double(forKey: "minKmRate") ?? 1.2
+          // `object(forKey:)` : `double(forKey:)` rend 0.0 sur clé absente, donc
+          // le défaut ne s'appliquait pas et le verdict tombait à 2 (vert) pour
+          // tout. Même correctif que ScanProcessor.computeFinal.
+          let minH = (prefs?.object(forKey: "minHourlyRate") as? Double) ?? 25.0
+          let minK = (prefs?.object(forKey: "minKmRate") as? Double) ?? 1.2
           let hr = (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0
           let km = (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0
           payload["verdictLevel"] = (hr >= minH && km >= minK) ? 2 : (hr >= minH || km >= minK) ? 1 : 0
@@ -222,41 +387,90 @@ class ScanBridgeModule: RCTEventEmitter {
 
         LiveActivityManager.shared.update(
           platform: (payload["platform"] as? String) ?? "UNKNOWN",
-          fare: fare,
+          // Net de carburant si la préférence est active — la Share Extension a
+          // déjà fait le calcul. Repli sur le brut pour les payloads antérieurs.
+          fare: (payload["displayFare"] as? NSNumber)?.doubleValue ?? fare,
           hourlyRate: (payload["hourlyRate"] as? NSNumber)?.doubleValue ?? 0,
           kmRate: (payload["kmRate"] as? NSNumber)?.doubleValue ?? 0,
           distanceKm: distKm,
           durationMin: durMin,
           verdictLevel: (payload["verdictLevel"] as? NSNumber)?.intValue ?? 0,
-          scanTs: (payload["scanTs"] as? NSNumber)?.doubleValue ?? 0
+          rideId: (payload["rideId"] as? String) ?? ""
         )
       }
 
-      // Nettoyage de la trace debug Live Activity (écrite par LiveActivityManager).
-      defaults.removeObject(forKey: "laSteps")
-      defaults.removeObject(forKey: "laLastStep")
+      // Nettoyage de la trace Live Activity — SAUF si elle a été demandée.
+      // C'est exactement au moment d'un résultat qu'elle est intéressante :
+      // l'effacer ici, c'est la vider juste avant qu'on la lise.
+      if #available(iOS 16.2, *), defaults?.bool(forKey: LiveActivityManager.tracingKey) == true {
+        // on la garde
+      } else {
+        defaults?.removeObject(forKey: "laSteps")
+        defaults?.removeObject(forKey: "laLastStep")
+      }
     }
 
-    var resultWithTs = result
-    resultWithTs["scanTs"] = timestamp   // corrélation course ↔ décision notif
-    sendEvent(withName: "onScanResult", body: resultWithTs)
+    sendEvent(withName: "onScanResult", body: result)
   }
 
-  /// Vide la file des décisions Accepter/Refuser (App Group) et les émet au JS,
-  /// qui les applique à la course correspondante (par scanTs). No-op si le JS
-  /// n'écoute pas encore — startObserving() rappelle ce drain à l'abonnement.
-  func drainAndEmitRideDecisions() {
+  /// Empile une décision prise DANS l'app, quand son écriture en base n'a pas
+  /// abouti — le plus souvent parce que la course n'y est pas encore : elle a
+  /// été scannée app suspendue, et le journal natif ne l'a pas encore fait
+  /// insérer. Sans ça, ce choix-là était le seul à ne pas être conservé, alors
+  /// que ceux tapés sur la carte ou la notification vivent dans cette file
+  /// jusqu'à ce qu'ils aboutissent.
+  ///
+  /// Même helper, même format, même dédoublonnage sur `rideId` que les boutons
+  /// de la Live Activity : le prochain drain la rejoue, et l'acquitte au succès.
+  @objc func queueRideDecision(_ rideId: String, accepted: Bool) {
+    guard !rideId.isEmpty else { return }
+    appendRideDecision(rideId: rideId, accepted: accepted, appGroupId: Self.appGroupId)
+  }
+
+  /// Accusé de réception d'une décision : le statut est écrit en base, l'entrée
+  /// peut sortir de la file. Seul mécanisme qui l'en retire.
+  ///
+  /// Une décision non acquittée sera ré-émise au prochain retour au premier plan
+  /// — c'est voulu : mieux vaut la rejouer que la perdre.
+  @objc func ackRideDecision(_ rideId: String) {
+    guard !rideId.isEmpty,
+          let defaults = UserDefaults(suiteName: Self.appGroupId),
+          let data = defaults.data(forKey: Self.rideDecisionsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return }
+    // Comparaison stricte, enfin : une chaîne traverse le pont React Native sans
+    // se faire rogner, là où l'ancien `scanTs` (un `Double` à 17 chiffres)
+    // imposait une tolérance à la milliseconde.
+    let kept = arr.filter { ($0["rideId"] as? String) != rideId }
+    if kept.isEmpty {
+      defaults.removeObject(forKey: Self.rideDecisionsKey)
+    } else if let out = try? JSONSerialization.data(withJSONObject: kept) {
+      defaults.set(out, forKey: Self.rideDecisionsKey)
+    }
+  }
+
+  /// Vide la file des échecs empilés par l'AppIntent (autre process, pas de
+  /// session Supabase) et les remonte au JS, qui écrit la trace. `occurredAt`
+  /// porte l'heure réelle : la relève peut arriver longtemps après.
+  func drainAndEmitScanFailures() {
     guard hasListeners else { return }
     guard let defaults = UserDefaults(suiteName: Self.appGroupId),
-          let data = defaults.data(forKey: Self.rideDecisionsKey),
+          let data = defaults.data(forKey: Self.pendingFailuresKey),
           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
           !arr.isEmpty else { return }
-    defaults.removeObject(forKey: Self.rideDecisionsKey)
-    for d in arr {
-      guard let ts = (d["scanTs"] as? NSNumber)?.doubleValue, ts > 0,
-            let status = d["status"] as? String,
-            status == "ACCEPTED" || status == "DECLINED" else { continue }
-      sendEvent(withName: "onRideDecision", body: ["scanTs": ts, "status": status])
+    // Purge d'abord : si l'émission déclenche un crash, on ne rejoue pas la
+    // même série au prochain démarrage.
+    defaults.removeObject(forKey: Self.pendingFailuresKey)
+    for f in arr {
+      guard let reason = f["reason"] as? String, !reason.isEmpty else { continue }
+      var body: [String: Any] = [
+        "reason": reason,
+        "surface": (f["surface"] as? String) ?? "shortcut",
+      ]
+      if let detail = f["detail"] as? String { body["detail"] = detail }
+      if let platform = f["platform"] as? String { body["platform"] = platform }
+      if let ts = (f["occurredAt"] as? NSNumber)?.doubleValue, ts > 0 { body["occurredAt"] = ts }
+      sendEvent(withName: "onScanFailure", body: body)
     }
   }
 
@@ -313,6 +527,20 @@ class ScanBridgeModule: RCTEventEmitter {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(edgeUrl, forKey: "geminiEdgeUrl")
       defaults.set(supabaseAnonKey, forKey: "geminiSupabaseKey")
+      // Racine du projet Supabase, déduite de l'URL de l'edge function
+      // (`https://<ref>.supabase.co/functions/v1/gemini-proxy`) : c'est elle que
+      // `RideUploader` utilise pour écrire la course dès le scan. Déduite plutôt
+      // que poussée par un appel de plus — le JS construit déjà l'edge URL à
+      // partir de la même racine, et un build JS antérieur reste ainsi couvert.
+      if let comps = URLComponents(string: edgeUrl), let host = comps.host {
+        var root = URLComponents()
+        root.scheme = comps.scheme ?? "https"
+        root.host = host
+        root.port = comps.port
+        if let rootUrl = root.string {
+          defaults.set(rootUrl, forKey: "supabaseRestUrl")
+        }
+      }
     }
   }
 
@@ -322,6 +550,102 @@ class ScanBridgeModule: RCTEventEmitter {
     GeminiVisionService.shared.supabaseUserJwt = jwt
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(jwt, forKey: "supabaseUserJwt")
+    }
+  }
+
+  /// Haptique de SÉLECTION iOS (`UISelectionFeedbackGenerator`) — le petit tic
+  /// sec des sélecteurs système, pour le changement d'onglet.
+  ///
+  /// `Vibration.vibrate()` de React Native ne sait pas produire ça : sur iPhone
+  /// il déclenche le vibreur complet, quelle que soit la durée demandée. Sur une
+  /// barre d'onglets, c'est une secousse là où l'utilisateur attend un tic.
+  ///
+  /// `prepare()` avant `selectionChanged()` : sans lui, le Taptic Engine sort de
+  /// veille au moment du déclenchement et le retour arrive après l'animation.
+  @objc func selectionHaptic() {
+    DispatchQueue.main.async {
+      let generator = UISelectionFeedbackGenerator()
+      generator.prepare()
+      generator.selectionChanged()
+    }
+  }
+
+  // MARK: - Bord bas adouci des ScrollView (iOS 26)
+
+  /// Classe des ScrollView de React Native sous Fabric. Résolue par son nom :
+  /// son en-tête vit dans la partie C++ de RN, hors de portée de Swift.
+  private static let reactScrollViewClass: AnyClass? = NSClassFromString("RCTEnhancedScrollView")
+
+  /// Pose l'effet de bord doux d'iOS 26 sur les ScrollView de React Native.
+  ///
+  /// `.scrollEdgeEffectStyle(.soft, for: .all)` ne peut pas servir ici : c'est un
+  /// modificateur SwiftUI, il descend par l'environnement SwiftUI, et les vues de
+  /// React Native sont des vues UIKit posées hors de tout `UIHostingController`.
+  /// Aucune valeur d'environnement ne peut les atteindre.
+  ///
+  /// Mais l'effet n'est pas une fonctionnalité SwiftUI. Le modificateur ne fait
+  /// que régler `UIScrollView.bottomEdgeEffect`, et `RCTEnhancedScrollView` hérite
+  /// de `UIScrollView` : la propriété est déjà là, sur nos vues, il suffit d'y
+  /// toucher.
+  ///
+  /// Le balayage reproduit la sémantique du modificateur SwiftUI — posé une fois
+  /// à la racine, chaque écran en hérite. L'opération est idempotente, la rejouer
+  /// à chaque changement d'onglet n'accumule rien.
+  @objc func applySoftScrollEdges() {
+    // Rendre la main avant de parcourir : un écran qui vient d'être poussé n'a
+    // pas encore sa ScrollView dans la fenêtre quand JS appelle. Ce n'est pas
+    // une temporisation à l'aveugle, c'est attendre la fin de la transaction de
+    // montage de Fabric, qui se termine sur ce même tour de boucle.
+    DispatchQueue.main.async {
+      guard #available(iOS 26.0, *) else { return }
+      guard let scrollViewClass = ScanBridgeModule.reactScrollViewClass else { return }
+      for window in ScanBridgeModule.activeWindows {
+        ScanBridgeModule.applySoftBottomEdge(in: window, matching: scrollViewClass)
+      }
+    }
+  }
+
+  @available(iOS 26.0, *)
+  private static func applySoftBottomEdge(in view: UIView, matching scrollViewClass: AnyClass) {
+    if let scrollView = view as? UIScrollView, scrollView.isKind(of: scrollViewClass) {
+      scrollView.bottomEdgeEffect.style = .soft
+    }
+    for subview in view.subviews {
+      applySoftBottomEdge(in: subview, matching: scrollViewClass)
+    }
+  }
+
+  private static var activeWindows: [UIWindow] {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+  }
+
+  /// Ouvre les réglages de notification DE L'APP, et pas sa fiche générale.
+  ///
+  /// `openNotificationSettingsURLString` est publique depuis **iOS 16.0** : c'est
+  /// la SEULE cible fine des Réglages qu'Apple autorise. `App-prefs:`, qui
+  /// mènerait partout ailleurs, est un schéma privé — sans effet sur les iOS
+  /// récents et motif de rejet en revue (règle 2.5.1).
+  ///
+  /// La borne était écrite 15.4 et le build a refusé : c'est bien 16.0. La
+  /// constante C `UIApplicationOpenNotificationSettingsURLString` existe depuis
+  /// 15.4, mais son exposition Swift est annotée 16.0 — c'est celle-ci qu'on
+  /// utilise, donc c'est celle-ci qui fait foi.
+  ///
+  /// En deçà, repli sur `openSettingsURLString` : c'est exactement le
+  /// comportement d'avant, donc jamais une régression.
+  @objc func openNotificationSettings() {
+    DispatchQueue.main.async {
+      var target: URL?
+      if #available(iOS 16.0, *) {
+        target = URL(string: UIApplication.openNotificationSettingsURLString)
+      }
+      if target == nil {
+        target = URL(string: UIApplication.openSettingsURLString)
+      }
+      guard let url = target else { return }
+      UIApplication.shared.open(url)
     }
   }
 
@@ -344,6 +668,16 @@ class ScanBridgeModule: RCTEventEmitter {
   @objc func setQuotaReached(_ reached: Bool, isFree: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(reached, forKey: "scanQuotaReached")
+      // DATÉ, sinon le drapeau survit à la nuit. Le compteur, lui, est déjà
+      // borné par `scanCountDay` : au reset il repart à zéro et le chauffeur
+      // récupère ses scans. Le drapeau, non daté, restait à `true` depuis la
+      // veille — l'app affichait « 2/3 » (recalculé depuis la base) pendant que
+      // le scan par raccourci était refusé pour quota atteint.
+      //
+      // On ne peut pas se contenter du compteur : le drapeau porte une
+      // information qu'il n'a pas, les crédits achetés (`canScan` = limite −
+      // scans + crédits). D'où la date plutôt que la suppression.
+      defaults.set(Self.currentQuotaDay(defaults), forKey: "scanQuotaReachedDay")
       // Réserve le teaser verrouillé (vendre Plus) aux comptes free : un abonné
       // Plus hors quota voit "reviens demain", pas un upsell Plus.
       defaults.set(isFree, forKey: "isFreeTier")
@@ -362,21 +696,42 @@ class ScanBridgeModule: RCTEventEmitter {
     // besoin pour situer la frontière de journée (0h ou 4h).
     defaults.set(resetHour.intValue, forKey: "quotaResetHour")
 
-    // Réconciliation NON destructive : un scan fait dans la Share Extension
-    // (app fermée) n'insère pas de ride en DB tant que l'app n'est pas rouverte
-    // → `countToday` (compte DB) SOUS-ESTIME les scans réels du jour. Si on
-    // écrasait bêtement, on rabaisserait le compteur natif → quota rendu à tort.
-    // Donc : même jour → on garde le max(natif, DB) ; nouveau jour → on fait
-    // confiance au compte DB (reset).
+    // Réconciliation. Le natif compte les résultats PRÉSENTÉS, le JS compte les
+    // courses présentes en base — et entre les deux il y a le journal
+    // `pendingScanResults`, qui retient un scan tant que l'app ne l'a pas inséré
+    // puis acquitté. Les deux nombres divergent donc légitimement.
+    //
+    // C'est le JOURNAL qui dit lequel fait autorité :
+    //
+    //  • journal NON VIDE → des scans attendent leur insertion, le compte DB
+    //    sous-estime. On garde `max(natif, DB)`, sinon on rendrait des scans
+    //    indûment à un chauffeur qui a scanné app fermée.
+    //
+    //  • journal VIDE → plus rien en attente, la base sait tout, elle fait foi.
+    //    Sans cette branche le `max` était un cliquet : une fois le compteur
+    //    natif monté, aucune valeur JS ne pouvait le redescendre avant le reset
+    //    du lendemain. Le chauffeur lisait « 0/3 » sur son Dashboard pendant que
+    //    le scan était refusé pour quota atteint — c'est exactement ce bug.
     let today = Self.currentQuotaDay(defaults)
     let storedDay = defaults.integer(forKey: "scanCountDay")
-    if storedDay != today {
+    let hasPending = !Self.pendingScanResults(defaults).isEmpty
+
+    if storedDay != today || !hasPending {
       defaults.set(today, forKey: "scanCountDay")
       defaults.set(countToday.intValue, forKey: "scanCountToday")
     } else {
       let current = defaults.integer(forKey: "scanCountToday")
       defaults.set(max(current, countToday.intValue), forKey: "scanCountToday")
     }
+  }
+
+  /// Scans en attente d'insertion en base. Lecture seule : c'est `ackScan` qui
+  /// retire une entrée, et lui seul.
+  private static func pendingScanResults(_ d: UserDefaults) -> [[String: Any]] {
+    guard let data = d.data(forKey: pendingResultsKey),
+          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else { return [] }
+    return arr
   }
 
   /// Active/désactive le scanner (toggle "Trip ID actif", iOS). Lu par la Share
@@ -398,6 +753,12 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  @objc func clearLiveActivityResult(_ rideId: String) {
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.clearResult(rideId: rideId)
+    }
+  }
+
   @objc func setSessionOnline(_ online: Bool) {
     if let defaults = UserDefaults(suiteName: Self.appGroupId) {
       defaults.set(online, forKey: "sessionOnline")
@@ -416,6 +777,30 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Le marché du chauffeur, en deux valeurs que le natif n'utilise PAS pour la
+  /// même chose.
+  ///
+  /// `country` sert au calcul : il restreint le géocodage et fixe la langue des
+  /// résultats TomTom, et le parser s'en sert pour les adresses britanniques.
+  /// Distinct de `appLanguage` — `fr` ne sépare pas la France de la Belgique ni
+  /// de la Suisse, et c'est le PAYS qui désambiguïse une adresse.
+  ///
+  /// `currency` sert à l'affichage, et à lui seul : c'est ce que `StriveMarket`
+  /// lit pour l'écran verrouillé, la Dynamic Island, CarPlay et les
+  /// notifications. Le symbole s'en déduit directement, au lieu d'être retrouvé
+  /// à partir du pays — quatre pays partagent l'euro, et les lister pour
+  /// afficher un « € » était une occasion de se tromper sans retour.
+  ///
+  /// Écrits ENSEMBLE, dans un seul appel : deux setters, c'est deux moments où
+  /// l'un part sans l'autre, et un écran verrouillé qui annonce des livres avec
+  /// un plancher belge.
+  @objc func setMarket(_ country: String, currency: String) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(country, forKey: "marketCountry")
+      defaults.set(currency, forKey: "marketCurrency")
+    }
+  }
+
   /// Préférences utilisateur pour le verdict natif (seuils + include pickup).
   /// Lus par AnalyzeRideIntent au moment du calcul de rentabilité.
   @objc func setScannerPreferences(_ minHourlyRate: NSNumber,
@@ -426,6 +811,24 @@ class ScanBridgeModule: RCTEventEmitter {
       defaults.set(minKmRate.doubleValue, forKey: "minKmRate")
       defaults.set(includePickup, forKey: "includePickup")
     }
+  }
+
+  /// Affichage du prix net de carburant (Live Activity). `fuelCostPerKm` arrive
+  /// pré-calculé du JS (conso × prix du jour) : le natif n'a ni le type de
+  /// carburant ni le tarif à la pompe. Affichage seul — verdict et tarif
+  /// enregistré restent bruts (cf. ScanProcessor.computeFinal).
+  @objc func setFuelDeduction(_ enabled: Bool, fuelCostPerKm: NSNumber) {
+    if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+      defaults.set(enabled, forKey: "deductFuel")
+      defaults.set(fuelCostPerKm.doubleValue, forKey: "fuelCostPerKm")
+    }
+  }
+
+  /// Retire le splash natif. Appelé par le JS quand la navigation est montée,
+  /// c'est-à-dire quand il y a enfin quelque chose à montrer derrière.
+  /// Idempotent, et doublé d'un garde-fou de 6 s côté natif.
+  @objc func hideSplash() {
+    StriveSplashOverlay.dismiss()
   }
 
   /// Purge le cache de géocodage local (adresses = PII). Appelé par le JS au

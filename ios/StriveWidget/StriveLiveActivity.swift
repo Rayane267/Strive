@@ -8,7 +8,7 @@ struct StriveLiveActivity: Widget {
 
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: StriveActivityAttributes.self) { context in
-      LockScreenView(state: context.state)
+      LockScreenView(state: context.state, stale: context.isStale)
         // Tint opaque : en présentation bannière (iPhone sans Dynamic Island)
         // et en mode clair, un tint semi-transparent n'est pas honoré de façon
         // fiable → fond blanc + texte blanc = rectangle blanc. LockScreenView
@@ -17,15 +17,30 @@ struct StriveLiveActivity: Widget {
         .activitySystemActionForegroundColor(.white)
 
     } dynamicIsland: { context in
-      let isScanning = context.state.platform == "SCANNING"
-      let isIdle = context.state.platform == "IDLE"
-      let isError = context.state.platform == "ERROR"
+      // Les retours à l'état de base passent par des `DispatchQueue.asyncAfter`
+      // de l'app hôte : quand le chauffeur est dans Uber/Maps, Strive est
+      // suspendue et ces timers ne se déclenchent pas → la carte restait bloquée
+      // sur le verdict (croix rouge en `minimal`) indéfiniment. Le `staleDate`,
+      // lui, est arbitré par le système : passé ce délai on retombe sur l'idle.
+      let stale = context.isStale
+      let isScanning = !stale && context.state.platform == "SCANNING"
+      // Rappel post-résultat : 20 s pendant lesquelles il ne reste que le prix
+      // de la course et le €/km, le temps de les relire. Compté comme idle par
+      // toutes les branches « résultat » — la carte complète a disparu — mais
+      // traité explicitement là où il doit s'afficher.
+      let isRecap = !stale && context.state.platform == "RECAP"
+      let isIdle = stale || context.state.platform == "IDLE" || isRecap
+      let isError = !stale && context.state.platform == "ERROR"
       // Teaser quota free : on réutilise le visuel résultat mais flouté + cadenas.
-      let isLocked = context.state.platform == "LOCKED"
+      let isLocked = !stale && context.state.platform == "LOCKED"
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
       let lockGreen = Color(red: 0.0, green: 0.78, blue: 0.32)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
+          // Compté ici et pas dans les trois autres régions : elles sont
+          // évaluées ensemble, une seule suffit à dater un dépliage.
+          let _ = laCountPresentation(.expanded, platform: context.state.platform)
+          let _ = laStampLocale()
           if isError {
             Image(systemName: "xmark.circle.fill")
               .font(.system(size: 18, weight: .bold))
@@ -40,7 +55,19 @@ struct StriveLiveActivity: Widget {
               .font(.system(size: 16, weight: .bold))
               .foregroundColor(lockGreen)
               .padding(.leading, 6)
-          } else if !isIdle {
+          } else if isIdle {
+            // Logo, faute de quoi la région reste vide — et une région vide en
+            // présentation ÉTENDUE donne un grand rectangle noir. C'est ce qui se
+            // produisait pendant les deux secondes de repli après une décision,
+            // et à chaque appui long sur l'île en session au repos : les quatre
+            // régions excluaient `isIdle`, donc iOS n'avait rien à dessiner.
+            Image("StriveLogo")
+              .resizable()
+              .aspectRatio(contentMode: .fill)
+              .frame(width: 26, height: 26)
+              .clipShape(RoundedRectangle(cornerRadius: 7))
+              .padding(.leading, 6)
+          } else {
             Text(context.state.platform.capitalized)
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
@@ -48,25 +75,52 @@ struct StriveLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          if !isScanning && !isIdle && !isError && !isLocked {
+          if isIdle && !isScanning && !isError && !isLocked {
+            // Timer de session, rafraîchi par iOS sans réveiller l'app — même
+            // mécanique que sur l'écran verrouillé.
+            Group {
+              if let epoch = context.state.sessionStartEpoch {
+                Text(Date(timeIntervalSince1970: epoch), style: .timer)
+                  .monospacedDigit()
+                  .multilineTextAlignment(.trailing)
+                  .frame(maxWidth: 58, alignment: .trailing)
+              } else {
+                Text(formatOnlineTime(context.state.onlineMinutes))
+              }
+            }
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.45))
+            .padding(.trailing, 6)
+          } else if !isScanning && !isError && !isLocked {
             KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
               .padding(.trailing, 6)
           }
         }
         DynamicIslandExpandedRegion(.center) {
           if isError {
-            Text("Analyse impossible")
+            Text(StriveNativeStrings.get("analysisFailed"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isScanning {
-            Text("Analyse…")
+            Text(StriveNativeStrings.get("analyzing"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isLocked {
-            Text("Passe Plus pour voir")
+            Text(StriveNativeStrings.get("goPlus"))
               .font(.system(size: 14, weight: .bold))
               .foregroundColor(.white)
-          } else if !isIdle {
+          } else if isRecap {
+            HStack(spacing: 10) {
+              FarePill(fare: context.state.fare, level: context.state.verdictLevel)
+              KmRateText(value: context.state.kmRate, level: context.state.verdictLevel)
+            }
+          } else if isIdle {
+            // Le libellé de session porte la région centrale ; les chiffres sont
+            // en dessous, dans la région basse, où ils ont la largeur.
+            Text(StriveNativeStrings.get("sessionRunning"))
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundColor(.white.opacity(0.45))
+          } else {
             HStack(spacing: 10) {
               HourlyRate(value: context.state.hourlyRate, level: context.state.verdictLevel)
               FarePill(fare: context.state.fare, level: context.state.verdictLevel)
@@ -75,16 +129,23 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           if isError {
-            Text("Réessayez avec une autre capture")
+            Text(StriveNativeStrings.get("tryAnother"))
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
               .padding(.vertical, 4)
           } else if isLocked {
-            Text("Se rembourse en une course")
+            Text(StriveNativeStrings.get("paysForItself"))
               .font(.system(size: 12, weight: .medium))
               .foregroundColor(.white.opacity(0.5))
               .padding(.vertical, 4)
-          } else if !isScanning && !isIdle {
+          } else if isIdle && !isScanning {
+            // Gains du jour, €/h, km. Mêmes chiffres que l'écran verrouillé mais
+            // PAS la même mise en forme : ici une ligne, là-bas trois colonnes.
+            // Voir `SessionDashboard`.
+            SessionDashboard(state: context.state)
+              .padding(.horizontal, 6)
+              .padding(.top, 2)
+          } else if !isScanning {
             VStack(spacing: 4) {
               RouteRow(
                 distanceKm: context.state.distanceKm,
@@ -92,14 +153,16 @@ struct StriveLiveActivity: Widget {
                 level: context.state.verdictLevel
               )
               .padding(.horizontal, 6)
-              if #available(iOS 17.0, *), let ts = context.state.scanTs, ts > 0 {
-                DecisionButtons(scanTs: ts)
+              if #available(iOS 17.0, *), let id = context.state.rideId, !id.isEmpty {
+                DecisionButtons(rideId: id)
                   .padding(.horizontal, 6)
               }
             }
           }
         }
       } compactLeading: {
+        let _ = laCountPresentation(.compact, platform: context.state.platform)
+        let _ = laStampLocale()
         if isError {
           Image(systemName: "xmark.circle.fill")
             .foregroundColor(errorRed)
@@ -109,15 +172,28 @@ struct StriveLiveActivity: Widget {
         } else if isLocked {
           Image(systemName: "lock.fill")
             .foregroundColor(lockGreen)
+        } else if isRecap {
+          Text(striveFareText(context.state.fare))
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         } else if isIdle {
-          EmptyView()
+          Image("StriveLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 20, height: 20)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
         } else {
-          Image(systemName: "car.fill")
+          // Icône de verdict plutôt que `car.fill` : sur les ~10 s dont dispose le
+          // chauffeur, la forme se lit plus vite que la couleur (soleil, volant,
+          // daltonisme) et `car.fill` n'apprenait rien. Aligné sur `minimal`.
+          Image(systemName: verdictIcon(context.state.verdictLevel))
             .foregroundColor(verdictColor(context.state.verdictLevel))
         }
       } compactTrailing: {
         if isError {
-          Text("Erreur")
+          Text(StriveNativeStrings.get("error"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(errorRed)
         } else if isScanning {
@@ -128,31 +204,60 @@ struct StriveLiveActivity: Widget {
           Text("Plus")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(lockGreen)
+        } else if isRecap {
+          // Sans symbole — la place manque dans la région compacte — mais la
+          // valeur, l'unité et la virgule décimale suivent le marché et la
+          // langue, comme partout ailleurs.
+          Text(StriveMarket.perDistanceBare(context.state.kmRate))
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         } else if isIdle {
           EmptyView()
         } else {
-          Text("€\(Int(context.state.hourlyRate))/h")
+          Text(StriveMarket.perHour(context.state.hourlyRate))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(verdictColor(context.state.verdictLevel))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         }
       } minimal: {
+        let _ = laCountPresentation(.minimal, platform: context.state.platform)
+        let _ = laStampLocale()
+        // `minimal` est la SEULE surface visible quand autre chose occupe le
+        // Dynamic Island — un appel en cours au premier chef. Dans ce cas iOS ne
+        // déplie pas l'activité de lui-même : ce cercle de ~20 pt est tout ce
+        // que le chauffeur reçoit, et c'est là que le verdict doit atterrir.
+        //
+        // Un glyphe teinté sur fond noir n'y suffit pas : trait fin, faible
+        // surface colorée, illisible du coin de l'œil au volant ou en plein
+        // soleil — il fallait toucher l'île pour lire. Une PASTILLE PLEINE
+        // inverse le rapport : la couleur occupe tout le disque et se lit en
+        // vision périphérique, le glyphe en négatif reste là pour ceux qui ne
+        // distinguent pas rouge et vert.
         if isError {
-          Image(systemName: "xmark.circle.fill")
-            .foregroundColor(errorRed)
+          Image(systemName: "xmark")
+            .verdictPill(errorRed)
         } else if isIdle {
-          EmptyView()
+          Image("StriveLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 18, height: 18)
+            .clipShape(Circle())
         } else if isScanning {
           ProgressView()
             .tint(.white)
         } else if isLocked {
           Image(systemName: "lock.fill")
-            .foregroundColor(lockGreen)
+            .verdictPill(lockGreen)
         } else {
+          // Résultat ET récap : même rendu. Le récap reste un verdict à lire.
           Image(systemName: verdictIcon(context.state.verdictLevel))
-            .foregroundColor(verdictColor(context.state.verdictLevel))
+            .verdictPill(verdictColor(context.state.verdictLevel))
         }
       }
-      .keylineTint(isError ? errorRed : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
+      .keylineTint(isError ? errorRed : isRecap ? verdictColor(context.state.verdictLevel) : (isIdle || isScanning) ? .white : isLocked ? lockGreen : verdictColor(context.state.verdictLevel))
     }
   }
 }
@@ -162,14 +267,25 @@ struct StriveLiveActivity: Widget {
 @available(iOS 16.2, *)
 private struct LockScreenView: View {
   let state: StriveActivityAttributes.ContentState
+  /// Contenu périmé (staleDate dépassé) : l'app hôte est suspendue et n'a pas pu
+  /// repasser la carte en idle — on l'affiche comme telle plutôt que de figer un
+  /// verdict vieux de plusieurs minutes.
+  var stale: Bool = false
   var body: some View {
-    let isScanning = state.platform == "SCANNING"
-    let isError = state.platform == "ERROR"
-    let isLocked = state.platform == "LOCKED"
+    // Le lock screen se rend aussi sur les iPhone sans Dynamic Island :
+    // le temoin doit passer par ici, sinon il ne verrait jamais ces appareils.
+    let _ = laStampLocale()
+    let isScanning = !stale && state.platform == "SCANNING"
+    let isError = !stale && state.platform == "ERROR"
+    let isLocked = !stale && state.platform == "LOCKED"
     // Vraie course (UBER/BOLT/HEETCH/UNKNOWN…) — ni idle, ni scanning, ni erreur,
     // ni teaser. C'est le seul état où l'on veut la CARTE RÉSULTAT sur le lock
     // screen (crucial pour les iPhone sans Dynamic Island : voir la branche).
-    let isResult = !isScanning && !isError && !isLocked && state.platform != "IDLE"
+    // "RECAP" exclu : c'est l'état d'après-résultat (prix + €/km pendant 20 s,
+    // visible dans la Dynamic Island). Sur le lock screen la carte complète a
+    // disparu, on retombe donc sur le résumé de session comme pour l'idle.
+    let isResult = !stale && !isScanning && !isError && !isLocked
+      && state.platform != "IDLE" && state.platform != "RECAP"
 
     // Fond noir posé en .background (et NON en ZStack avec un Color.black, qui
     // est greedy → force la vue à remplir toute la hauteur proposée → bannière
@@ -182,7 +298,7 @@ private struct LockScreenView: View {
       ZStack {
         VStack(spacing: 12) {
           HStack(spacing: 8) {
-            Text("Course")
+            Text(StriveNativeStrings.get("ride"))
               .font(.system(size: 15, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
 
@@ -209,10 +325,10 @@ private struct LockScreenView: View {
           Image(systemName: "lock.fill")
             .font(.system(size: 17, weight: .bold))
             .foregroundColor(.white)
-          Text("Passe Plus pour voir")
+          Text(StriveNativeStrings.get("goPlus"))
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white)
-          Text("Se rembourse en une course")
+          Text(StriveNativeStrings.get("paysForItself"))
             .font(.system(size: 11, weight: .medium))
             .foregroundColor(.white.opacity(0.6))
         }
@@ -222,7 +338,8 @@ private struct LockScreenView: View {
       // iPhone SANS Dynamic Island (iPhone 11–14 non-Pro, SE…), qui n'ont QUE
       // cette présentation : sans cette branche, ils ne verraient jamais le
       // résultat de scan (uniquement le dashboard de session). L'auto-dismiss
-      // 15 s (LiveActivityManager) fait ensuite revenir la carte session. ──
+      // 20 s (LiveActivityManager) fait ensuite passer au récap, puis 20 s plus
+      // tard à la carte session. ──
       VStack(spacing: 10) {
         HStack(spacing: 8) {
           Text(state.platform.capitalized)
@@ -247,8 +364,8 @@ private struct LockScreenView: View {
         // Boutons Accepter/Refuser directement sur le lock screen (iOS 17+) —
         // sinon les iPhone sans Dynamic Island n'ont aucun moyen de taguer sans
         // ouvrir l'app.
-        if #available(iOS 17.0, *), let ts = state.scanTs, ts > 0 {
-          DecisionButtons(scanTs: ts)
+        if #available(iOS 17.0, *), let id = state.rideId, !id.isEmpty {
+          DecisionButtons(rideId: id)
         }
       }
       .padding(.horizontal, 16)
@@ -256,7 +373,7 @@ private struct LockScreenView: View {
     } else {
       // ── Idle / analyse en cours / erreur : résumé de session (le compteur de
       // durée tourne seul, rafraîchi par iOS sans réveiller l'app). ──
-      let accent = Color(red: 0.0, green: 0.9, blue: 0.46)
+      let accent = laAccent
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
 
       VStack(spacing: 0) {
@@ -277,12 +394,12 @@ private struct LockScreenView: View {
           if isScanning {
             HStack(spacing: 5) {
               ProgressView().tint(accent).scaleEffect(0.7)
-              Text("Analyse…")
+              Text(StriveNativeStrings.get("analyzing"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
             }
           } else if isError {
-            Text("Erreur")
+            Text(StriveNativeStrings.get("error"))
               .font(.system(size: 11, weight: .bold))
               .foregroundColor(errorRed)
           } else {
@@ -310,10 +427,12 @@ private struct LockScreenView: View {
         if !isScanning && !isError {
           HStack(spacing: 0) {
             VStack(spacing: 2) {
-              Text(String(format: "%.0f€", state.todayEarnings))
+              Text(StriveMarket.money(state.todayEarnings))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
-              Text("GAINS")
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+              Text(StriveNativeStrings.get("earningsCaps"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(.white.opacity(0.3))
@@ -325,10 +444,12 @@ private struct LockScreenView: View {
               .frame(width: 1, height: 32)
 
             VStack(spacing: 2) {
-              Text(String(format: "%.0f€", state.todayHourlyRate))
+              Text(StriveMarket.money(state.todayHourlyRate))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(accent)
-              Text("/HEURE")
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+              Text(StriveNativeStrings.get("perHourCaps"))
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(accent.opacity(0.5))
@@ -340,10 +461,13 @@ private struct LockScreenView: View {
               .frame(width: 1, height: 32)
 
             VStack(spacing: 2) {
-              Text(String(format: "%.1f", state.todayKm))
+              // La valeur seule : l'unité vit dans le Text d'en dessous, pour
+              // son propre corps de police. La virgule, elle, appartient au
+              // nombre — `distanceText` ne convient donc pas ici.
+              Text(StriveMarket.number(StriveMarket.distance(state.todayKm), decimals: 1))
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(.white)
-              Text("KM")
+              Text(StriveMarket.distanceUnit.uppercased())
                 .font(.system(size: 8, weight: .heavy))
                 .tracking(1)
                 .foregroundColor(.white.opacity(0.3))
@@ -367,6 +491,11 @@ private func formatOnlineTime(_ minutes: Int) -> String {
   let m = minutes % 60
   return h > 0 ? String(format: "%dh%02d", h, m) : "\(m)min"
 }
+
+/// Vert d'accent du widget. Remonté au niveau du fichier : il était déclaré en
+/// local dans `LockScreenView` et une seconde copie allait apparaître dans le
+/// tableau de bord de l'îlot — deux valeurs à maintenir en phase pour rien.
+let laAccent = Color(red: 0.0, green: 0.9, blue: 0.46)
 
 // MARK: - KPI Composants
 
@@ -399,6 +528,52 @@ private struct KpiDivider: View {
   }
 }
 
+/// Tableau de bord de session pour la présentation ÉTENDUE en état IDLE.
+///
+/// Sans lui, les quatre régions de l'étendue étaient vides dès que l'activité
+/// repassait au repos, et iOS dessinait un grand rectangle noir — visible deux
+/// secondes après chaque décision, et en permanence sur un appui long.
+///
+/// EN UNE LIGNE, et non en colonnes comme sur l'écran verrouillé. Les deux
+/// surfaces n'ont pas la même forme : le lock screen est haut, il peut empiler
+/// un grand nombre au-dessus d'un libellé ; la région basse de l'îlot est une
+/// bande large et plate. Y plaquer trois colonnes écrase les chiffres pour loger
+/// des libellés qui, de toute façon, ne se lisent plus à cette taille.
+///
+/// D'où l'unité COLLÉE au nombre (`24€/h`, `86.4km`) plutôt qu'en légende : elle
+/// occupe la largeur, qui est disponible, au lieu de la hauteur, qui ne l'est
+/// pas. Un seul niveau de lecture, de gauche à droite.
+@available(iOS 16.2, *)
+private struct SessionDashboard: View {
+  let state: StriveActivityAttributes.ContentState
+
+  private var dot: some View {
+    Text("·")
+      .font(.system(size: 15, weight: .bold))
+      .foregroundColor(.white.opacity(0.25))
+  }
+
+  var body: some View {
+    HStack(spacing: 8) {
+      // Les gains portent la ligne : c'est le seul chiffre que le chauffeur
+      // vient chercher, les deux autres le qualifient.
+      Text(StriveMarket.money(state.todayEarnings))
+        .font(.system(size: 17, weight: .heavy))
+        .foregroundColor(.white)
+      dot
+      Text(StriveMarket.perHour(state.todayHourlyRate))
+        .font(.system(size: 15, weight: .bold))
+        .foregroundColor(laAccent)
+      dot
+      Text(String(format: "%.0f%@", StriveMarket.distance(state.todayKm), StriveMarket.distanceUnit))
+        .font(.system(size: 15, weight: .bold))
+        .foregroundColor(.white.opacity(0.55))
+    }
+    .lineLimit(1)
+    .minimumScaleFactor(0.7)
+  }
+}
+
 // MARK: - Composants
 
 @available(iOS 16.2, *)
@@ -407,9 +582,11 @@ private struct HourlyRate: View {
   let level: Int
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
-      Text("€\(Int(value))")
+      Text(StriveMarket.money(value))
         .font(.system(size: 19, weight: .heavy))
         .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
       Text("/h")
         .font(.system(size: 12, weight: .semibold))
         .foregroundColor(.white.opacity(0.55))
@@ -422,9 +599,11 @@ private struct FarePill: View {
   let fare: Double
   let level: Int
   var body: some View {
-    Text(String(format: "€%.0f", fare))
+    Text(StriveMarket.money(fare))
       .font(.system(size: 14, weight: .bold))
       .foregroundColor(.white)
+      .lineLimit(1)
+      .minimumScaleFactor(0.6)
       .padding(.horizontal, 12)
       .padding(.vertical, 5)
       .background(
@@ -445,9 +624,11 @@ private struct KmRateText: View {
       Image(systemName: "arrow.up.right")
         .font(.system(size: 12, weight: .heavy))
         .foregroundColor(verdictColor(level))
-      Text(String(format: "€%.2f/km", value))
+      Text(StriveMarket.perDistance(value))
         .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
     }
   }
 }
@@ -487,7 +668,7 @@ private struct RouteRow: View {
         Text("\(durationMin)min")
           .font(.system(size: 14, weight: .bold))
           .foregroundColor(.white)
-        Text(String(format: "%.1fkm", distanceKm))
+        Text(StriveMarket.distanceText(distanceKm))
           .font(.system(size: 11, weight: .semibold))
           .foregroundColor(.white.opacity(0.55))
       }
@@ -508,35 +689,147 @@ private struct RouteRow: View {
 
 /// Deux boutons interactifs qui taguent la course sans ouvrir l'app. Chaque tap
 /// exécute RideDecisionIntent → écrit la décision dans l'App Group → réconcilié
-/// côté JS (updateRideStatus). N'apparaît que si scanTs est connu.
+/// côté JS (updateRideStatus). N'apparaît que si la course a un id — c'est-à-dire
+/// dès qu'un résultat de scan est affiché, l'id étant frappé au scan.
+///
+/// `minHeight: 28` : compromis assumé. La cible d'origine (~21 pt) rate assez
+/// souvent pour donner « des fois je clique et rien ne se passe » ; les 44 pt
+/// d'Apple, eux, mangent la carte et donnent deux pavés. 28 gagne les quelques
+/// points qui comptent sans déséquilibrer l'île. `contentShape` fige la capsule
+/// entière comme cible, marges comprises.
 @available(iOS 17.0, *)
 private struct DecisionButtons: View {
-  let scanTs: Double
+  let rideId: String
   var body: some View {
     HStack(spacing: 8) {
-      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: false)) {
-        Label("Refusée", systemImage: "xmark")
+      Button(intent: RideDecisionIntent(rideId: rideId, accepted: false)) {
+        Label(StriveNativeStrings.get("declined"), systemImage: "xmark")
           .font(.system(size: 13, weight: .bold))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 4)
+          .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.94, green: 0.27, blue: 0.27))
           .foregroundColor(.white)
           .clipShape(Capsule())
+          .contentShape(Capsule())
       }
       .buttonStyle(.plain)
 
-      Button(intent: RideDecisionIntent(scanTs: scanTs, accepted: true)) {
-        Label("Prise", systemImage: "checkmark")
+      Button(intent: RideDecisionIntent(rideId: rideId, accepted: true)) {
+        Label(StriveNativeStrings.get("taken"), systemImage: "checkmark")
           .font(.system(size: 13, weight: .bold))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 4)
+          .frame(maxWidth: .infinity, minHeight: 28)
           .background(Color(red: 0.0, green: 0.78, blue: 0.32))
           .foregroundColor(.white)
           .clipShape(Capsule())
+          .contentShape(Capsule())
       }
       .buttonStyle(.plain)
     }
   }
+}
+
+// MARK: - Localisation
+
+/// Résout la langue UI (fr/en) depuis l'App Group — même contrat que
+/// `localizedString` dans LiveActivityManager, ShareViewController et
+/// AnalyzeRideIntent. Le widget est une cible séparée, sans accès à ces helpers :
+/// ses textes étaient donc figés en français, quelle que soit la langue de l'app.
+///
+/// ⚠️ Une Live Activity déjà affichée ne se re-rend pas sur changement de langue :
+/// elle garde la sienne jusqu'au prochain `update()` (donc au prochain scan).
+// MARK: - Compteur de présentations (mesure, pas décoration)
+
+/// Les quatre présentations du Dynamic Island que le système peut demander.
+/// `compactTrailing` n'est pas comptée : elle est rendue en même temps que
+/// `compactLeading`, la compter doublerait le total.
+enum LAPresentation: String {
+  case expanded, compact, minimal
+}
+
+/// Estampille la présentation que le système vient de demander.
+///
+/// POURQUOI ÇA EXISTE. Aucune API ActivityKit ne dit quelle présentation est à
+/// l'écran. Mais chacune des quatre closures de `DynamicIsland` n'est évaluée
+/// que si le système a besoin de CETTE présentation : leur exécution est donc le
+/// seul signal disponible. On le compte, l'écran Diagnostic le lit.
+///
+/// ⚠️ CE QUE LA MESURE VAUT. SwiftUI peut évaluer un corps sans l'afficher, donc
+/// un compteur à 28 ne prouve pas 28 affichages — c'est un majorant. En revanche
+/// un compteur à ZÉRO prouve l'absence : si `expanded` n'est jamais évalué sur
+/// une vacation entière, l'îlot ne s'est jamais déplié. C'est cette asymétrie
+/// qui rend la mesure concluante pour la question posée.
+///
+/// Opt-in derrière `laTracing`, comme la trace : on n'écrit rien chez un
+/// chauffeur qui n'a rien demandé.
+/// LE TÉMOIN : ce que l'extension a RÉELLEMENT lu, écrit par elle-même.
+///
+/// Le widget et l'app sont deux processus, et iOS n'offre aucune API pour
+/// demander à une extension ce qu'elle a vu. Le seul canal entre les deux est le
+/// conteneur partagé — précisément celui dont on soupçonne qu'il ne marche pas.
+/// La seule preuve possible est donc une trace que le widget laisse lui-même.
+///
+/// Trois lectures dans l'écran Diagnostic :
+///   • `en · GBP`, horodaté à l'instant → tout va bien
+///   • `fr · EUR`, horodaté à l'instant → le groupe est lisible mais mal rempli,
+///     donc JS n'a pas poussé
+///   • RIEN, alors que l'îlot s'affiche → l'extension ne peut pas écrire dans le
+///     conteneur, donc l'entitlement App Group manque à la cible
+///
+/// C'est la troisième qui vaut le détour : elle nomme en une ligne le défaut qui
+/// a demandé une capture d'écran et une demi-douzaine d'hypothèses.
+///
+/// PAS d'opt-in derrière `laTracing`, contrairement aux compteurs de
+/// présentation : on n'écrit pas une mesure de comportement, on écrit l'état
+/// courant — deux chaînes courtes, de même nature que ce que l'app y met déjà.
+///
+/// POSÉ DANS CE FICHIER, jamais dans `StriveActivityAttributes.swift` : ce
+/// dernier est compilé dans les DEUX cibles, et l'app y écrirait sa propre
+/// lecture par-dessus celle du widget. Un témoin ne vaut que s'il ne peut venir
+/// que de l'extension.
+@discardableResult
+private func laStampLocale() -> Bool {
+  let gid = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+    ?? "group.com.striveapp.app"
+  guard let d = UserDefaults(suiteName: gid) else { return false }
+  let lang = StriveNativeStrings.language
+  let cur = StriveMarket.currency
+  let now = Date().timeIntervalSince1970
+  // L'IDLE se re-rend en boucle — le timer de session tourne — et on écrirait
+  // trois clés des milliers de fois pour une valeur qui ne bouge pas. Une minute
+  // suffit : le témoin sert à dater une divergence, pas à mesurer une fréquence.
+  if d.string(forKey: "laSeenLang") == lang,
+     d.string(forKey: "laSeenCur") == cur,
+     now - d.double(forKey: "laSeenAt") < 60 {
+    return false
+  }
+  d.set(lang, forKey: "laSeenLang")
+  d.set(cur, forKey: "laSeenCur")
+  d.set(now, forKey: "laSeenAt")
+  return true
+}
+
+@discardableResult
+private func laCountPresentation(_ p: LAPresentation, platform: String) -> Bool {
+  // Seuls les états de RÉSULTAT sont comptés. L'IDLE se re-rend en boucle (le
+  // timer de session tourne) et noierait la mesure sous des milliers de passages
+  // qui n'ont rien à voir avec l'affichage d'un verdict.
+  switch platform {
+  case "IDLE", "SCANNING", "RECAP", "ERROR", "LOCKED": return false
+  default: break
+  }
+  let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String
+    ?? "group.com.striveapp.app"
+  guard let d = UserDefaults(suiteName: groupId), d.bool(forKey: "laTracing") else {
+    return false
+  }
+  let key = "laPres_\(p.rawValue)"
+  d.set(d.integer(forKey: key) + 1, forKey: key)
+  d.set(Date().timeIntervalSince1970, forKey: "laPres_\(p.rawValue)_at")
+  // Début de la fenêtre de mesure : sans lui, « déplié : 0 » ne dit pas si la
+  // mesure a duré une soirée ou trente secondes.
+  if d.object(forKey: "laPres_since") == nil {
+    d.set(Date().timeIntervalSince1970, forKey: "laPres_since")
+  }
+  return true
 }
 
 // MARK: - Helpers couleurs
@@ -547,6 +840,23 @@ private func verdictColor(_ level: Int) -> Color {
   case 2: return Color(red: 0.0, green: 0.78, blue: 0.32)
   case 1: return Color(red: 1.0, green: 0.60, blue: 0.0)
   default: return Color(red: 0.94, green: 0.27, blue: 0.27)
+  }
+}
+
+/// Pastille pleine pour la présentation `minimal` du Dynamic Island.
+///
+/// La couleur porte l'information, pas le trait : c'est le seul rendu qui reste
+/// lisible en vision périphérique dans un disque de ~20 pt. Le glyphe est
+/// conservé en négatif — un chauffeur daltonien ne doit pas dépendre de la
+/// teinte pour distinguer un refus d'une acceptation.
+@available(iOS 16.2, *)
+private extension Image {
+  func verdictPill(_ color: Color) -> some View {
+    self
+      .font(.system(size: 11, weight: .black))
+      .foregroundColor(.black)
+      .frame(width: 20, height: 20)
+      .background(Circle().fill(color))
   }
 }
 

@@ -22,7 +22,7 @@ final class OcrParser {
 
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
-  private var fareMin: Double = 5.0
+  private var fareMin: Double = 8.0
   private var fareMax: Double = 200.0
   private var distMin: Double = 0.3
   private var distMax: Double = 500.0
@@ -62,6 +62,30 @@ final class OcrParser {
     .UBER: ["uber"], .BOLT: ["bolt"], .HEETCH: ["heetch"],
   ]
 
+  /// Types de voie anglais qui sont AUSSI des mots français.
+  /// 
+  /// « court » (trajet court), « park », « close », « green » : quatre mots que
+  /// l'app rencontre en France, et qui y feraient passer un bloc quelconque pour
+  /// une adresse — au risque d'évincer la vraie. Consultés au UK seulement.
+  private let ukOnlyStreetKeywords = ["close", "court", "park", "green"]
+
+  /// Code postal SORTANT seul, suivi d'une ville : « TW6, Hounslow ».
+  ///
+  /// C'est la forme qu'Uber affiche au Royaume-Uni — jamais le code complet.
+  /// La virgule est obligatoire : la carte derrière l'offre est couverte de
+  /// numéros de route (« E05 », « A421 », « M1 ») qui ont exactement la forme
+  /// d'un code sortant. Exiger « code, ville » les écarte tous.
+  private let ukOutwardPattern = #"\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]"#
+
+  /// Pays d'activité du chauffeur, écrit en App Group par
+  /// `ScanBridge.setMarket`. Il n'entre en jeu QUE pour ce qui serait
+  /// faux en France : les miles et les quatre mots ci-dessus.
+  private var marketCountry: String {
+    let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
+      ?? "group.com.striveapp.app"
+    return UserDefaults(suiteName: appGroupId)?.string(forKey: "marketCountry") ?? "FR"
+  }
+
   private let addressStreetKeywords: [String] = [
     "rue", "avenue", "av.", "boulevard", "blvd", "bd", "bd.",
     "place", "pl.", "impasse", "imp.", "allée", "allee", "all.",
@@ -69,10 +93,16 @@ final class OcrParser {
     "quai", "villa", "cité", "cite", "esplanade", "cours",
     "faubourg", "fg.", "voie", "sq.", "square",
     "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
-    "calle", "avenida", "plaza", "paseo", "carretera", "camino", "ronda",
+    // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
+    // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
+    "crescent", "terrace", "gardens", "mews", "row",
+    "walk", "grove", "hill", "rise", "wharf", "embankment",
+    // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
+    // adresses espagnoles ne portent aucun mot de voie reconnaissable.
+    "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
     "via", "viale", "corso", "piazza", "strada", "vicolo", "largo",
     "straat", "laan", "plein", "gracht",
-    "travessa", "rua",
+    "travessa", "rua", "praça", "praca", "estrada", "alameda",
     "gare", "aéroport", "aeroport", "airport", "terminal",
     "porte", "hôpital", "hopital", "hospital", "station",
     "bahnhof", "hauptbahnhof", "flughafen", "krankenhaus",
@@ -85,33 +115,61 @@ final class OcrParser {
     "damm", "ufer", "ring",
   ]
 
+  /// Mots qui ne sont JAMAIS une adresse — libellés de bouton, en-têtes.
+  /// Les cinq marchés non francophones ont les leurs : sans eux, un « Aceptar »
+  /// ou un « Annehmen » seul sur sa ligne pouvait passer pour une adresse.
   private let nonAddressWords: Set<String> = [
     "uber", "bolt", "heetch", "total", "fare", "gain", "tarif",
     "accepted", "accepté", "min", "km", "estimated", "estimé",
+    "aceptar", "aceptado", "estimado", "tarifa", "ganancia",
+    "aceitar", "aceite", "ganho",
+    "accetta", "accettata", "stimato", "tariffa", "guadagno",
+    "aanvaarden", "aanvaard", "geschat", "tarief", "inkomsten",
+    "annehmen", "angenommen", "geschätzt", "geschaetzt", "einnahmen",
   ]
 
   // MARK: - Regex (mêmes patterns que Android)
 
   private static let priceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)"#)
-  // Min 2 chiffres : un "5€" sec n'est jamais un tarif (pourboire, pack, note).
-  // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS.
+  // Deux chiffres ou plus, OU un chiffre seul de 6 à 9 : une course à 9 € existe
+  // (tarif minimum VTC), alors qu'un "5€" sec est presque toujours un pourboire
+  // suggéré, un pack ou une note. La regex reste volontairement plus large que le
+  // plancher `fareMin` (8 €), qui écarte ensuite 6 et 7 : sans ça, un changement
+  // de plancher obligerait à modifier deux endroits pour rester cohérent.
+  // Contrat fixtures/ocr/fare-ocr.json#single-digit-whole-euro-rejected — aligné TS/Kotlin.
   private static let priceWholeRegex = try! NSRegularExpression(
-    pattern: #"(\d{2,6})\s*€"#)
+    pattern: #"(\d{2,6}|[6-9])\s*(?:€|£|CHF)"#, options: [.caseInsensitive])
   // Retire la note de l'app ("★ 5,00", "* 5,00") avant de chercher un tarif.
   private static let ratingRegex = try! NSRegularExpression(
     pattern: #"[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}"#)
   private static let distanceRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#, options: .caseInsensitive)
+  // Contexte véhicule électrique. Uber affiche sur certaines offres une info de
+  // recharge ou d'autonomie ("35 min", "250 km") étrangère à la course : sans ce
+  // filtre elle devient la durée ou la distance, et le €/h comme le €/km sont
+  // faux en silence. Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration.
+  // ⚠️ « charge » seul est PROSCRIT : « prise en charge » désigne le pickup.
+  private static let evContextRegex = try! NSRegularExpression(
+    pattern: #"(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)"#, options: .caseInsensitive)
   private static let durationRegex = try! NSRegularExpression(
     pattern: #"(\d{1,3})\s*min"#, options: .caseInsensitive)
   private static let durationHourRegex = try! NSRegularExpression(
     pattern: #"(\d{1,2})\s*h\s*(\d{1,2})?\s*(?:min)?"#, options: .caseInsensitive)
+  // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min".
+  //
+  // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
+  // écartait le format réellement affiché par l'app Uber FR : "11 min (à 2,6 km)".
+  // Le « à » suffisait à faire échouer le match — l'approche n'était donc JAMAIS
+  // reconnue sur une offre Uber française, et ses km/min ne rentraient pas dans
+  // le total. Voir fixtures/ocr/core.json#uber-approach-longer-than-ride.
+  // La borne à 8 caractères garde le pont court : elle couvre " (à ", " · ",
+  // " away (" — pas " Course de ", qui relierait deux lignes distinctes.
   private static let pickupComboMinFirst = try! NSRegularExpression(
-    pattern: #"(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#,
+    pattern: #"(\d{1,3})\s*min[^0-9]{0,8}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km"#,
     options: .caseInsensitive)
   private static let pickupComboKmFirst = try! NSRegularExpression(
-    pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min"#,
+    pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9]{0,8}(\d{1,3})\s*min"#,
     options: .caseInsensitive)
 
   private func cleanNum(_ raw: String) -> String {
@@ -165,10 +223,60 @@ final class OcrParser {
     return result
   }
 
+  /// MILES → KILOMÈTRES, avant toute autre lecture.
+  ///
+  /// Les plateformes affichent des miles au Royaume-Uni, et toutes les
+  /// expressions de ce parser sont ancrées sur « km » : un écran londonien ne
+  /// rendait AUCUNE distance, donc aucun verdict, alors que le prix avait été lu.
+  ///
+  /// On réécrit le texte plutôt que d'ajouter une unité à chaque expression :
+  /// celles-ci sont réglées au cas par cas sur des captures réelles, avec leurs
+  /// indices de groupe et leurs gardes. Tout l'aval — bornes de plausibilité,
+  /// colonne `rides.distance_km` — raisonne en kilomètres : la conversion se fait
+  /// à l'entrée, le mile ne revient qu'à l'affichage.
+  ///
+  /// Mirror exact du JS (`ocrParser.ts`) et du Kotlin. « min » n'est pas touché :
+  /// le `(?![a-z])` empêche « mi » de mordre dessus.
+  private func milesToKm(_ s: String) -> String {
+    guard s.range(of: "mi", options: .caseInsensitive) != nil else { return s }
+    return replaceAll(
+      s,
+      pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])"#,
+      options: [.caseInsensitive]
+    ) { match in
+      let raw = match.replacingOccurrences(
+        of: #"[^0-9.,]"#, with: "", options: .regularExpression
+      ).replacingOccurrences(of: ",", with: ".")
+      guard let value = Double(raw) else { return match }
+      return String(format: "%.1f km", value * 1.609344)
+    }
+  }
+
+  /// Un symbole monétaire, quel qu'il soit. Était « € » en dur : sur une offre
+  /// londonienne (« £16.40 ») ou genevoise (« CHF 24.50 »), les replis qui s'en
+  /// servent ne mordaient jamais. Mirror du JS et du Kotlin.
+  static func hasCurrency(_ text: String) -> Bool {
+    let t = text.lowercased()
+    return t.contains("€") || t.contains("£") || t.contains("chf")
+  }
+
   // MARK: - Entry point
 
   func parse(blocks: [OcrTextBlock], screenWidth: Int, screenHeight: Int, image: UIImage? = nil) -> ScanResultModel? {
     if blocks.isEmpty { return nil }
+
+    // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
+    //
+    // ⚠️ UNIQUEMENT AU ROYAUME-UNI. L'OCR découpe parfois « 11 min » en deux
+    // blocs, et « 11 mi » seul serait alors lu comme 17,7 km : une distance
+    // 1,6× trop grande, donc un €/km faux, et rien pour le signaler. Le seul
+    // marché qui affiche des miles est le seul où l'on prend ce risque.
+    let country = marketCountry
+    let blocks = country == "GB"
+      ? blocks.map {
+          OcrTextBlock(text: milesToKm($0.text), box: $0.box, confidence: $0.confidence)
+        }
+      : blocks
 
     let fullText = blocks.map { $0.text }.joined(separator: " ").lowercased()
     // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -189,19 +297,48 @@ final class OcrParser {
 
     guard let distance = extractDistance(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
     else { return nil }
-    let duration = extractDuration(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock, courseDistanceKm: distance)
-
     if !isSane(fare: fare, distanceKm: distance) { return nil }
 
-    let pickup = extractPickupInfo(blocks: blocks, courseDistanceKm: distance)
+    // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
+    // écarter le combo qui la porte, sinon les minutes d'approche deviennent
+    // celles de la course (cf. son repli n°2).
+    let pickup = extractPickupInfo(blocks: blocks, courseDistanceKm: distance, screenHeight: screenHeight)
+    let duration = extractDuration(
+      blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock,
+      courseDistanceKm: distance, pickup: pickup
+    )
+
+    let pickupText = pickupAddrBlock.map {
+      mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight)
+    }
+    let destCandidate = destAddrBlock.map {
+      mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight)
+    }
+
+    // UNE ADRESSE DE PRISE EN CHARGE N'EST JAMAIS UNE ADRESSE D'ARRIVÉE.
+    //
+    // `dedupOverlappingAddresses` écarte déjà les candidats en doublon, mais il
+    // travaille sur les blocs AVANT recollage des continuations : deux ancres
+    // découpées différemment par l'OCR peuvent aboutir au même libellé final.
+    // Cette vérification-ci porte sur le résultat, elle ne peut donc pas être
+    // contournée par une variation de découpage.
+    //
+    // On préfère un champ VIDE à un champ faux. Une destination absente est
+    // visible, elle déclenche la capture diagnostique et n'induit personne en
+    // erreur ; une destination fausse est silencieuse, elle s'écrit en base et
+    // fausse le calcul économique sur lequel le chauffeur décide.
+    var destText = destCandidate
+    if let d = destCandidate, let p = pickupText, isSameAddress(d, p) {
+      destText = nil
+    }
 
     return ScanResultModel(
       platform: platform,
       fare: fare,
       distanceKm: distance,
       durationMin: duration,
-      pickupAddress: pickupAddrBlock.map { mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight) },
-      destinationAddress: destAddrBlock.map { mergeAddressContinuation(addrBlock: $0, allBlocks: blocks, screenHeight: screenHeight) },
+      pickupAddress: pickupText,
+      destinationAddress: destText,
       pickupDurationMin: pickup?.0,
       pickupDistanceKm: pickup?.1
     )
@@ -343,7 +480,8 @@ final class OcrParser {
       score += Float(block.box.height) * 1.5
       let centerY = Float((block.box.top + block.box.bottom) / 2)
       if centerY < Float(screenHeight) * 0.55 { score += 30 }
-      if blockLower.contains("€") || blockLower.contains("eur") { score += 20 }
+      if blockLower.contains("€") || blockLower.contains("£") || blockLower.contains("chf")
+         || blockLower.contains("eur") { score += 20 }
       if isWhole { score -= 10 }
       if matches(blockLower, pattern: #"course\s+de"#) { score -= 30 }
 
@@ -375,16 +513,24 @@ final class OcrParser {
     // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
     // matcher un code postal ou une heure qui contiendrait la même suite.
     let glued = String(format: "%d%02d", euros, cents)
-    return blocks.first(where: { $0.text.contains(glued) && $0.text.contains("€") })?.box.centerY
+    return blocks.first(where: { $0.text.contains(glued) && Self.hasCurrency($0.text) })?.box.centerY
   }
 
   // MARK: - Distance extraction
+
+  /// Vrai si le bloc parle de véhicule électrique (recharge / autonomie).
+  private static func matchesEvContext(_ text: String) -> Bool {
+    let ns = text as NSString
+    return evContextRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) != nil
+  }
 
   private func extractDistance(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?) -> Double? {
     struct Cand { let value: Double; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
     for block in blocks {
+      // Autonomie annoncée en km → ce n'est pas la distance de la course.
+      if Self.matchesEvContext(block.text) { continue }
       let normalized = normalizeOcrDigits(block.text)
       let nsNorm = normalized as NSString
       guard let m = Self.distanceRegex.firstMatch(
@@ -494,11 +640,16 @@ final class OcrParser {
 
   // MARK: - Duration extraction
 
-  private func extractDuration(blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?, courseDistanceKm: Double) -> Int? {
+  private func extractDuration(
+    blocks: [OcrTextBlock], pickupAddr: OcrTextBlock?, destAddr: OcrTextBlock?,
+    courseDistanceKm: Double, pickup: (Int, Double)?
+  ) -> Int? {
     struct Cand { let value: Int; let km: Double?; let y: Int; let isPickupCombo: Bool }
     var candidates: [Cand] = []
 
     for block in blocks {
+      // Bloc d'info véhicule électrique → ces minutes ne sont pas la course.
+      if Self.matchesEvContext(block.text) { continue }
       let lower = block.text.lowercased()
       let hasKm = matches(lower, pattern: "km", caseInsensitive: false)
       let hasMin = matches(lower, pattern: "min", caseInsensitive: false)
@@ -548,9 +699,19 @@ final class OcrParser {
     //    distance de course (pas l'approche, dont le km est petit). Évite
     //    d'afficher le temps d'approche comme temps de course quand la course
     //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+    //    ⚠️ La tolérance est LARGE (plancher de 2 km) : sur une course courte,
+    //    le combo d'APPROCHE tombe dedans presque à coup sûr — 2,6 km d'approche
+    //    pour 2,3 km de course, c'est 0,3 d'écart. Ses minutes devenaient alors
+    //    la durée de course : 9 € pour « 11 min · 2,3 km » → 49 €/h affichés au
+    //    lieu de ~32, verdict vert sur une course qui ne l'était pas. Le combo
+    //    déjà identifié comme l'approche est donc écarté d'emblée.
     let tol = max(2.0, courseDistanceKm * 0.2)
     let courseCombo = candidates
       .filter { $0.km != nil && abs($0.km! - courseDistanceKm) <= tol }
+      .filter { c in
+        guard let p = pickup else { return true }
+        return !(c.value == p.0 && abs((c.km ?? 0) - p.1) < 0.01)
+      }
       .max(by: { ($0.km ?? 0) < ($1.km ?? 0) })
     if let c = courseCombo { return c.value }
     // 3. Aucune durée fiable (seules des approches/bandeaux) → nil : estimation
@@ -560,7 +721,7 @@ final class OcrParser {
 
   // MARK: - Pickup combo extraction
 
-  private func extractPickupInfo(blocks: [OcrTextBlock], courseDistanceKm: Double) -> (Int, Double)? {
+  private func extractPickupInfo(blocks: [OcrTextBlock], courseDistanceKm: Double, screenHeight: Int) -> (Int, Double)? {
     struct PickupMatch { let durationMin: Int; let distanceKm: Double; let y: Int }
     var matchesArr: [PickupMatch] = []
 
@@ -589,9 +750,18 @@ final class OcrParser {
       if mv < 1 || mv > 60 { continue }
       if kv < 0.1 || kv > 30.0 { continue }
       if abs(kv - courseDistanceKm) < 0.1 { continue }
-      // L'approche est toujours plus courte que la course → un combo dont le km
-      // ≥ distance de course est le bandeau nav (haut de l'écran), pas l'approche.
-      if kv >= courseDistanceKm { continue }
+      // L'APPROCHE N'EST PAS TOUJOURS PLUS COURTE QUE LA COURSE.
+      //
+      // Un `kv >= courseDistanceKm` écartait ici tout combo plus long que la
+      // course, au motif qu'il s'agissait du bandeau de navigation. C'est faux
+      // en ville : 2,6 km d'approche pour une course de 2,3 km est banal, et
+      // l'approche disparaissait alors du total — le chauffeur lisait « 11 min »
+      // sur une course annoncée « à 12 min » de lui.
+      // Le bandeau nav se distingue par sa POSITION, pas par ses kilomètres : il
+      // vit dans le quart haut de l'écran, la même bande que `findAddressBlocks`
+      // écarte déjà. Le combo de la course, lui, reste écarté par le test de
+      // distance juste au-dessus.
+      if block.box.centerY < Int(Double(screenHeight) * 0.25) { continue }
       matchesArr.append(PickupMatch(durationMin: mv, distanceKm: kv, y: block.box.centerY))
     }
 
@@ -643,9 +813,9 @@ final class OcrParser {
     if matches(text, pattern: #"course\s+de"#) { return false }
     if matches(text, pattern: #"\d[.,\s]*\d*\s*km\b"#) { return false }
     if matches(text, pattern: #"\d\s*min\b"#) { return false }
-    if matches(text, pattern: #"^\s*\d{1,3}[.,]\d{1,2}\s*€?\s*$"#) { return false }
+    if matches(text, pattern: #"^\s*\d{1,3}[.,]\d{1,2}\s*(?:€|£|CHF)?\s*$"#) { return false }
     // Toute ligne tarifaire ("19,38 € (net, TTC)") → jamais une adresse.
-    if text.contains("€") { return false }
+    if Self.hasCurrency(text) { return false }
     if text.contains("★") || text.contains("⭐") || matches(text, pattern: #"\brating\b"#) { return false }
     // Ligne "note passager" ("Shirley 5.0 ★" / "Jean 4,9 *") : une note 0-5 avec
     // décimale n'apparaît jamais dans une adresse → évite de prendre le nom du
@@ -661,7 +831,10 @@ final class OcrParser {
 
     // ── Signaux positifs ──
     // 1. Mots de voie en mot entier
-    for kw in addressStreetKeywords {
+    let keywords = marketCountry == "GB"
+      ? addressStreetKeywords + ukOnlyStreetKeywords
+      : addressStreetKeywords
+    for kw in keywords {
       let escaped = NSRegularExpression.escapedPattern(for: kw)
       if matches(text, pattern: "(?<![a-zà-üß])\(escaped)(?![a-zà-üß])", caseInsensitive: true) {
         return true
@@ -678,8 +851,11 @@ final class OcrParser {
     if matches(text, pattern: #"^\d{1,4}\s+[a-zà-ü]{3,}"#) { return true }
     // 4. Voie + numéro (DE/ES/IT)
     if matches(text, pattern: #"[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$"#) { return true }
-    // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris".
-    if matches(text, pattern: #"\b\d{4,5}\b"#) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
+    // 5. Code postal + lettres : "94430 Chennevières", "75011 Paris".
+    //    Numérique (75011, 1000 Bruxelles, 1200-001 Lisbonne) OU
+    // alphanumérique britannique (« SW1A 1AA », « M1 1AE »). Sans le second, les
+    // adresses londoniennes perdaient leur signal le plus fiable. Mirror du JS.
+    if matches(text, pattern: #"\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b"#, caseInsensitive: true) && matches(text, pattern: #"[a-zà-üß]{3,}"#) { return true }
     // 6. Segment avec virgule SUIVIE d'une lettre + ≥6 lettres : "Châtelet, Paris".
     //    On exige ", lettre" (pas une virgule décimale type "4,79") sinon une
     //    ligne note/tarif passe pour une adresse.
@@ -711,7 +887,9 @@ final class OcrParser {
         candidates = candidates.filter { b in
           // Adresse avec code postal (4-5 chiffres) = signal fort, jamais évincée
           // même loin d'un bloc km/min (cas Heetch : adresses sans métrique proche).
-          if matches(b.text, pattern: #"\b\d{4,5}\b"#) { return true }
+          // `b.text` est BRUT ici, pas minusculé : sans `caseInsensitive`, un
+          // « SW1A 1AA » ne matcherait jamais le motif britannique.
+          if matches(b.text, pattern: #"\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b"#, caseInsensitive: true) { return true }
           return metricYs.contains(where: { abs($0 - b.box.centerY) <= radius })
         }
       }
@@ -725,7 +903,53 @@ final class OcrParser {
           && isContinuationLine(head: head, tail: b)
       })
     }
+
+    // Symétrique, pour le Royaume-Uni : retire l'EN-TÊTE « TW6, Hounslow »
+    // quand la ligne de détail la suit immédiatement.
+    //
+    // Uber écrit le lieu de prise en charge sur deux lignes là-bas, et les
+    // deux passent pour des adresses. Deux candidats pour UN lieu décalent
+    // tout : la ligne de détail prenait le slot de la destination, et la vraie
+    // destination tombait hors des deux premiers — donc aucun itinéraire.
+    //
+    // Écartée ici, recollée à l'affichage par `mergeAddressContinuation`.
+    if marketCountry == "GB" {
+      candidates = candidates.filter { b in
+        guard matches(b.text, pattern: ukOutwardPattern, caseInsensitive: true),
+              b.text.trimmingCharacters(in: .whitespacesAndNewlines).count <= 40
+        else { return true }
+        return !candidates.contains(where: { tail in
+          !(tail.box.left == b.box.left && tail.box.top == b.box.top)
+            && isUkOutwardHead(head: b, tail: tail)
+        })
+      }
+    }
+
     return dedupOverlappingAddresses(candidates)
+  }
+
+  /// Réduit un libellé d'adresse à ce qui permet de le comparer à un autre :
+  /// minuscules, et tout ce qui n'est ni lettre ni chiffre devient une coupure de
+  /// mot. Deux occurrences d'une même adresse ne sont pas ponctuées ni coupées de
+  /// la même façon par l'OCR — une comparaison brute échouerait toujours.
+  private func comparableAddress(_ s: String) -> String {
+    let kept = s.lowercased().map { ch -> Character in
+      (ch.isLetter || ch.isNumber) ? ch : " "
+    }
+    return String(kept).split(separator: " ").joined(separator: " ")
+  }
+
+  /// Deux libellés qui désignent le même lieu, à la mise en forme près.
+  ///
+  /// Le test est le PRÉFIXE et non l'égalité : l'une des deux occurrences
+  /// s'arrête souvent avant le code postal ou le pays. Un préfixe plutôt qu'une
+  /// inclusion, parce qu'un nom de voie court peut apparaître au milieu d'une
+  /// adresse sans rapport.
+  private func isSameAddress(_ a: String, _ b: String) -> Bool {
+    let x = comparableAddress(a)
+    let y = comparableAddress(b)
+    guard !x.isEmpty, !y.isEmpty else { return false }
+    return x.hasPrefix(y) || y.hasPrefix(x)
   }
 
   private func dedupOverlappingAddresses(_ candidates: [OcrTextBlock]) -> [OcrTextBlock] {
@@ -734,10 +958,27 @@ final class OcrParser {
     let texts = candidates.map { cleanAddressText($0.text).trimmingCharacters(in: .whitespacesAndNewlines) }
     return candidates.enumerated().compactMap { (i, b) in
       let mine = texts[i]
+      // Évincé par un candidat PLUS LONG qui commence par lui : la ligne courte
+      // est la version tronquée de la longue (cas Heetch).
       let hasLonger = candidates.indices.contains { j in
         j != i && texts[j].count > mine.count && texts[j].hasPrefix(mine)
       }
-      return hasLonger ? nil : b
+      // Évincé par un candidat IDENTIQUE placé avant lui.
+      //
+      // Le test de longueur ci-dessus ne peut rien voir sur deux textes égaux,
+      // et c'est ce trou qui laissait passer les DEUX occurrences. Plusieurs
+      // écrans Uber affichent l'adresse de départ deux fois : le second slot
+      // adresse était donc pris par la répétition du départ, et la destination
+      // réelle, qui vient après le « Course de X km », n'était jamais lue.
+      //
+      // Constaté sur six courses consécutives dont le prix, la distance et la
+      // durée variaient tous, alors que la destination enregistrée restait
+      // identique au caractère près — parce qu'elle décrivait la position du
+      // chauffeur et non celle du client.
+      let isLaterDuplicate = candidates.indices.contains { j in
+        j < i && texts[j] == mine
+      }
+      return (hasLonger || isLaterDuplicate) ? nil : b
     }
   }
 
@@ -755,11 +996,43 @@ final class OcrParser {
     if t.isEmpty || t.count > 60 { return false }
     if matches(t, pattern: #"\d\s*(?:km|min)\b"#, caseInsensitive: true) { return false }
     if matches(t, pattern: #"^\d{1,4}\s+[A-Za-zà-üÀ-Ü]"#) { return false }
-    for kw in addressStreetKeywords {
+    let keywords = marketCountry == "GB"
+      ? addressStreetKeywords + ukOnlyStreetKeywords
+      : addressStreetKeywords
+    for kw in keywords {
       let escaped = NSRegularExpression.escapedPattern(for: kw)
       if matches(t, pattern: "(?<![a-zà-üß])\(escaped)(?![a-zà-üß])", caseInsensitive: true) { return false }
     }
     return true
+  }
+
+  /// La ligne `tail` suit-elle immédiatement l'en-tête `head` (même colonne,
+  /// collée dessous) ? Sert à reconnaître la paire « code postal / détail ».
+  private func isUkOutwardHead(head: OcrTextBlock, tail: OcrTextBlock) -> Bool {
+    guard tail.box.top >= head.box.bottom else { return false }
+    guard Double(tail.box.top - head.box.bottom) <= Double(head.box.height) * 1.5 else { return false }
+    let overlap = min(head.box.right, tail.box.right) - max(head.box.left, tail.box.left)
+    guard Double(overlap) >= Double(min(head.box.width, tail.box.width)) * 0.5 else { return false }
+    // Deux codes sortants qui se suivent, c'est un départ et une arrivée.
+    return !matches(tail.text, pattern: ukOutwardPattern, caseInsensitive: true)
+  }
+
+  /// Recolle devant l'adresse le « TW6, Hounslow » écarté des candidats.
+  ///
+  /// Choisir l'une des deux lignes aurait coûté quelque chose dans les deux
+  /// sens : c'est l'en-tête qui GÉOCODE — « Terminal 3, Level 3, Row A » ne
+  /// désigne aucun point sur Terre sans sa ville — mais c'est le détail que le
+  /// chauffeur lit pour trouver son client dans un parking d'aéroport.
+  private func withUkOutwardPrefix(_ merged: String, addrBlock: OcrTextBlock, allBlocks: [OcrTextBlock]) -> String {
+    guard marketCountry == "GB" else { return merged }
+    guard !matches(merged, pattern: ukOutwardPattern, caseInsensitive: true) else { return merged }
+    guard let above = allBlocks.first(where: { other in
+      !(other.box.left == addrBlock.box.left && other.box.top == addrBlock.box.top)
+        && matches(other.text, pattern: ukOutwardPattern, caseInsensitive: true)
+        && other.text.trimmingCharacters(in: .whitespacesAndNewlines).count <= 40
+        && isUkOutwardHead(head: other, tail: addrBlock)
+    }) else { return merged }
+    return "\(above.text.trimmingCharacters(in: .whitespacesAndNewlines)), \(merged)"
   }
 
   private func mergeAddressContinuation(addrBlock: OcrTextBlock, allBlocks: [OcrTextBlock], screenHeight: Int) -> String {
@@ -779,7 +1052,7 @@ final class OcrParser {
       usedBoxes.append([cont.box.left, cont.box.top])
       current = cont
     }
-    return result
+    return withUkOutwardPrefix(result, addrBlock: addrBlock, allBlocks: allBlocks)
   }
 
   // MARK: - Sanity
@@ -790,6 +1063,31 @@ final class OcrParser {
     let rate = fare / distanceKm
     if rate < rateMin || rate > rateMax { return false }
     return true
+  }
+
+  // MARK: - Diagnostic
+
+  /// Sérialise les blocs OCR (texte + bounding box) en JSON — miroir EXACT de
+  /// `OcrParser.dumpBlocks(visionText)` côté Kotlin, même schéma de clés
+  /// (`text`, `x`, `y`, `w`, `h`) pour que les captures Android et iOS
+  /// alimentent les mêmes fixtures et soient comparables entre plateformes.
+  ///
+  /// Consommé côté JS via `debugBlocks` dans `onScanResult`, puis `logScanDebug`.
+  /// Renvoie nil si la sérialisation échoue — le diagnostic ne doit JAMAIS
+  /// interrompre un scan.
+  static func dumpBlocks(_ blocks: [OcrTextBlock]) -> String? {
+    let arr: [[String: Any]] = blocks.map { block in
+      [
+        "text": block.text,
+        "x": block.box.left,
+        "y": block.box.top,
+        "w": block.box.width,
+        "h": block.box.height,
+      ]
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: arr),
+          let json = String(data: data, encoding: .utf8) else { return nil }
+    return json
   }
 
   // MARK: - Helpers

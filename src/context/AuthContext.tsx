@@ -1,10 +1,10 @@
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react';
-import { AppState } from 'react-native';
+import { AppState, NativeModules, Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../services/supabase';
-import { fetchProfile } from '../services/profileService';
-import { fetchPlanLimits } from '../services/subscriptionService';
-import { initPurchases, logoutPurchases } from '../services/iapService';
+import { fetchProfileResult } from '../services/profileService';
+import { fetchPlanLimits, getEffectivePlanTier } from '../services/subscriptionService';
+import { initPurchases, logoutPurchases, getStoreEntitlement, syncPurchasesWithStore } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import { scannerService } from '../services/scanner';
 import { clearOfflineCache } from '../services/offlineService';
@@ -33,6 +33,45 @@ const AuthContext = createContext<AuthContextType>({
   markSubscribed: () => {},
 });
 
+// Déblocage optimiste : on pousse une expiration future : sans ça, un ancien
+// subscription_expires_at dans le passé (ré-abonné) ferait redémoter
+// getEffectivePlanTier() en 'free' aussitôt → déblocage annulé. La
+// réconciliation (refreshProfile, foreground + poll post-achat) écrasera avec la
+// vraie date. Fenêtre de 24h : si le webhook RC tarde ou échoue, l'utilisateur
+// qui a payé garde l'accès au lieu de retomber free en 1h.
+const optimisticTier = (tier: 'plus' | 'premium') => (prev: Profile | null): Profile | null =>
+  prev ? {
+    ...prev,
+    subscription_tier: tier,
+    subscription_status: 'active',
+    subscription_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  } : prev;
+
+// Filet de sécurité abonnement : la DB ne connaît que ce que le webhook RC lui a
+// dit. Un RENEWAL perdu = abonné qui paie mais retombe 'free' à la date
+// d'expiration initiale — pile un mois après l'achat. RevenueCat, lui, a l'état
+// réel du reçu Apple : s'il annonce un entitlement actif alors que le profil est
+// expiré, on rouvre l'accès localement (fenêtre 24h, comme après un achat) et on
+// renvoie le reçu à RC pour qu'il rejoue l'event manquant côté serveur.
+const reconcileWithStore = (
+  dbProfile: Profile,
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>,
+) => {
+  if (getEffectivePlanTier(dbProfile) !== 'free') return;
+  getStoreEntitlement().then(store => {
+    if (!store) return;
+    const stillValid = !store.expiresAt || new Date(store.expiresAt).getTime() > Date.now();
+    if (!stillValid) return;
+    Sentry.captureMessage('Subscription desync: store active, DB expired', {
+      level: 'warning',
+      tags: { flow: 'iap_reconcile', tier: store.tier },
+      extra: { dbExpiry: dbProfile.subscription_expires_at, storeExpiry: store.expiresAt },
+    });
+    setProfile(optimisticTier(store.tier));
+    syncPurchasesWithStore();
+  }).catch(() => {});
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -43,12 +82,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loadProfile = async (userId: string) => {
     setProfileError(false);
-    const data = await fetchProfile(userId);
-    if (data) {
-      setProfile(data);
-    } else {
-      setProfileError(true);
+    const res = await fetchProfileResult(userId);
+
+    if ('profile' in res) {
+      setProfile(res.profile);
+      reconcileWithStore(res.profile, setProfile);
+      return;
     }
+
+    if ('error' in res) {
+      // Vrai échec (réseau, RLS, colonne absente) : l'écran d'erreur et son
+      // bouton Réessayer ont un sens.
+      setProfileError(true);
+      return;
+    }
+
+    // Aucune ligne de profil. Deux causes, et il faut demander au serveur
+    // laquelle : soit le compte existe et sa ligne manque (anomalie rare, le
+    // trigger `handle_new_user` la crée dans la même transaction), soit le
+    // compte a été SUPPRIMÉ pendant que cette session vivait encore.
+    //
+    // Ce second cas était un piège sans issue : la session est stockée dans le
+    // Keychain, qui survit à la désinstallation de l'app. Le chauffeur restait
+    // donc enfermé sur « Impossible de charger votre profil » à vie, sans
+    // qu'aucun redémarrage ni réinstallation n'y change quoi que ce soit.
+    // `getUser()` interroge le serveur, contrairement à `getSession()` qui se
+    // contente de relire le cache : c'est lui qui sait si le compte existe.
+    const { error: userErr } = await supabase.auth.getUser();
+    if (userErr) {
+      Sentry.addBreadcrumb({
+        category: 'auth',
+        message: `profil absent + user invalide → signOut (${userErr.message})`,
+        level: 'warning',
+      });
+      // `scope: 'local'` : le compte n'existe plus côté serveur, l'appel de
+      // déconnexion échouerait et pourrait laisser la session en place. On vide
+      // le stockage, c'est tout ce qui compte ici.
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      return;
+    }
+
+    // Le compte existe bel et bien : on laisse `profile` à null. RootNavigator
+    // route alors sur ProfileSetup, qui est exactement l'écran attendu pour un
+    // profil incomplet — et non sur l'écran d'erreur.
+    setProfile(null);
   };
 
   useEffect(() => {
@@ -78,7 +155,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           fetchPlanLimits().catch(() => {});
           initPurchases(initialSession.user.id);
           await loadProfile(initialSession.user.id);
-          registerPushToken(initialSession.user.id).catch((e) =>
+          // `false` : silencieux au démarrage, comme sur SIGNED_IN. Aucune
+          // fenêtre de permission ne doit partir d'un chemin automatique.
+          registerPushToken(initialSession.user.id, false).catch((e) =>
             Sentry.captureException(e, { tags: { flow: 'push_token_init' } }),
           );
           notifCleanupRef.current = setupNotificationListeners();
@@ -116,7 +195,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           loadProfile(currentSession.user.id).catch((e) =>
             Sentry.captureException(e, { tags: { flow: 'profile_reload' } }),
           );
-          registerPushToken(currentSession.user.id).catch((e) =>
+          // `false` : on n'affiche PAS la fenêtre de permission ici. À la
+          // connexion, le chauffeur n'a encore rien vu de l'app — il n'a aucune
+          // raison de dire oui, et son refus serait définitif. On se contente
+          // d'enregistrer le jeton s'il a déjà accordé la permission ; la
+          // demande, elle, part de l'interrupteur du Profil.
+          registerPushToken(currentSession.user.id, false).catch((e) =>
             Sentry.captureException(e, { tags: { flow: 'push_token_refresh' } }),
           );
           if (!notifCleanupRef.current) {
@@ -128,6 +212,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         Sentry.addBreadcrumb({ category: 'auth', message: 'User signed out', level: 'info' });
         // Purge le JWT côté natif au logout.
         try { scannerService.setSupabaseUserJwt(''); } catch {}
+        // Et coupe ce qui survit au JS : le drapeau `sessionOnline` de l'App
+        // Group commande le scan par raccourci, et la Live Activity reste à
+        // l'écran tant que personne ne la termine — jusqu'à afficher les gains
+        // de l'ancien chauffeur si un autre compte se connecte sur le même
+        // appareil.
+        //
+        // ProfileScreen le fait déjà pour le bouton « Se déconnecter ». Ici on
+        // couvre TOUS les autres chemins vers l'état déconnecté, qui passent
+        // forcément par cet événement : session expirée, refresh token
+        // invalidé, suppression de compte, déconnexion déclenchée ailleurs.
+        // Idempotent — une carte déjà terminée ignore l'appel.
+        try {
+          const { ScanBridge } = NativeModules;
+          ScanBridge?.setSessionOnline?.(false);
+          if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+        } catch {}
         // RGPD : vide les caches locaux porteurs d'adresses (géocodage + courses
         // hors-ligne) pour qu'un user suivant sur le même appareil n'en hérite
         // pas. Couvre aussi la suppression de compte (qui se termine par signOut).
@@ -167,19 +267,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Déblocage optimiste post-achat : RevenueCat a confirmé l'entitlement, on
   // débloque l'UI tout de suite (le webhook → DB suit en quelques secondes).
   const markSubscribed = useCallback((tier: 'plus' | 'premium') => {
-    // On pousse aussi une expiration future : sans ça, un ancien
-    // subscription_expires_at dans le passé (ré-abonné) ferait redémoter
-    // getEffectivePlanTier() en 'free' aussitôt → déblocage optimiste annulé.
-    // La réconciliation (refreshProfile, foreground + poll post-achat) écrasera
-    // avec la vraie date. Fenêtre de 24h : si le webhook RC tarde ou échoue,
-    // l'utilisateur qui a payé garde l'accès au lieu de retomber free en 1h.
-    const optimisticExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    setProfile(prev => prev ? {
-      ...prev,
-      subscription_tier: tier,
-      subscription_status: 'active',
-      subscription_expires_at: optimisticExpiry,
-    } : prev);
+    setProfile(optimisticTier(tier));
   }, []);
 
   // Mémoïsé : sans ça l'objet value est recréé à chaque render du provider →

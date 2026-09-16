@@ -3,20 +3,23 @@ const mockSingle: jest.Mock = jest.fn();
 const mockOrder: jest.Mock = jest.fn(() => ({ data: [], error: null }));
 const mockGte: jest.Mock = jest.fn(() => ({ order: mockOrder }));
 const mockEq: jest.Mock = jest.fn(() => ({ gte: mockGte, data: null, error: null }));
-const mockSelect: jest.Mock = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
-const mockInsert: jest.Mock = jest.fn(() => ({ select: mockSelect }));
+// `maybeSingle` : createRide ne peut pas utiliser `single`, un conflit d'id
+// renvoyant zéro ligne (`on conflict do nothing`, cf. ridesService).
+const mockSelect: jest.Mock = jest.fn(() => ({ eq: mockEq, single: mockSingle, maybeSingle: mockSingle }));
+const mockUpsert: jest.Mock = jest.fn(() => ({ select: mockSelect }));
 const mockUpdate: jest.Mock = jest.fn(() => ({ eq: mockEq }));
 
 jest.mock('../supabase', () => ({
   supabase: {
     from: jest.fn(() => ({
       select: mockSelect,
-      insert: mockInsert,
+      upsert: mockUpsert,
       update: mockUpdate,
       eq: mockEq,
       gte: mockGte,
       order: mockOrder,
       single: mockSingle,
+      maybeSingle: mockSingle,
     })),
   },
 }));
@@ -95,10 +98,13 @@ describe('createRide', () => {
       durationMin: 10,
       hourlyRate: 60,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(
+    expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ platform: 'UBER' }),
+      { onConflict: 'id', ignoreDuplicates: true },
     );
   });
 
@@ -113,11 +119,13 @@ describe('createRide', () => {
       durationMin: 8,
       hourlyRate: 60,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
       pickupAddress: '1 rue A',
       destinationAddress: '2 rue B',
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(
+    expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         platform: 'BOLT',
         status: 'PENDING',
@@ -125,6 +133,7 @@ describe('createRide', () => {
         pickup_address: '1 rue A',
         destination_address: '2 rue B',
       }),
+      { onConflict: 'id', ignoreDuplicates: true },
     );
   });
 
@@ -139,10 +148,13 @@ describe('createRide', () => {
       durationMin: 6,
       hourlyRate: 50,
       kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(
+    expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ pickup_address: null, destination_address: null }),
+      { onConflict: 'id', ignoreDuplicates: true },
     );
   });
 
@@ -157,6 +169,8 @@ describe('createRide', () => {
         durationMin: 10,
         hourlyRate: 60,
         kmRate: 2,
+      currency: 'EUR' as const,
+      fxRateEur: 1,
       }),
     ).rejects.toBeDefined();
   });
@@ -164,15 +178,29 @@ describe('createRide', () => {
 
 describe('updateRideStatus', () => {
   it('updates the status filtered by id', async () => {
-    mockEq.mockReturnValueOnce({ error: null } as any);
+    mockEq.mockReturnValueOnce({
+      select: jest.fn().mockResolvedValue({ data: [{ id: 'ride-1' }], error: null }),
+    } as any);
     await updateRideStatus('ride-1', 'ACCEPTED');
     expect(mockUpdate).toHaveBeenCalledWith({ status: 'ACCEPTED' });
     expect(mockEq).toHaveBeenCalledWith('id', 'ride-1');
   });
 
   it('throws on supabase error', async () => {
-    mockEq.mockReturnValueOnce({ error: { message: 'fail' } } as any);
+    mockEq.mockReturnValueOnce({
+      select: jest.fn().mockResolvedValue({ data: null, error: { message: 'fail' } }),
+    } as any);
     await expect(updateRideStatus('ride-1', 'DECLINED')).rejects.toBeDefined();
+  });
+
+  // Le cas qui a motivé le `.select()` : la RLS écarte la ligne, la session a
+  // expiré, ou l'id ne correspond à rien. Supabase ne rend AUCUNE erreur — juste
+  // zéro ligne. Sans ce test, la régression reviendrait sans être vue.
+  it('throws when no row was updated', async () => {
+    mockEq.mockReturnValueOnce({
+      select: jest.fn().mockResolvedValue({ data: [], error: null }),
+    } as any);
+    await expect(updateRideStatus('ride-1', 'ACCEPTED')).rejects.toBeDefined();
   });
 });
 

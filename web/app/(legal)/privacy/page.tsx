@@ -1,4 +1,11 @@
-export const metadata = { title: 'Politique de Confidentialité — Strive' };
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Politique de Confidentialité — Strive',
+  description:
+    "Données collectées par l'application Strive, base légale RGPD, sous-traitants, durées de conservation et droits des chauffeurs VTC utilisateurs.",
+  alternates: { canonical: '/privacy' },
+};
 
 export default function PrivacyPage() {
   return (

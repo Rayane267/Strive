@@ -20,7 +20,8 @@
         "resourceClass": "m-medium",
         "image": "latest"
       },
-      "channel": "preview"
+      "channel": "preview",
+      "environment": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -28,7 +29,11 @@
         "resourceClass": "m-medium",
         "image": "latest"
       },
-      "channel": "production"
+      "channel": "production",
+      "environment": "production",
+      "env": {
+        "SENTRY_ALLOW_FAILURE": "true"
+      }
     }
   },
   "submit": {

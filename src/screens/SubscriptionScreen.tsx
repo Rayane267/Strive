@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,20 +15,21 @@ import {
   Easing,
   Linking,
   Dimensions,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { Toast, useToast } from '../components/Toast';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import {
-  buyPlus,
+  buySubscription,
   restorePurchases,
-  getPlusPackages,
+  getSubscriptionPackages,
   checkTrialEligibility,
   isIAPAvailable,
   IAP_PRODUCTS,
@@ -37,6 +38,12 @@ import {
 import { waitForProfileUpdate } from '../services/profileService';
 import { hapticSuccess, hapticError, hapticLight } from '../utils/haptics';
 import { getEffectivePlanTier } from '../services/subscriptionService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import { useMarket } from '../hooks/useMarket';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -46,13 +53,85 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 type Cycle = 'monthly' | 'yearly';
 
-const FEATURES = [
-  { icon: 'zap',         colorKey: 'subscription.feat.scan',      textKey: 'subscription.feat.scanText' },
-  { icon: 'trending-up', colorKey: 'subscription.feat.hourly',    textKey: 'subscription.feat.hourlyText' },
-  { icon: 'navigation',  colorKey: 'subscription.feat.traffic',   textKey: 'subscription.feat.trafficText' },
-  { icon: 'x-octagon',   colorKey: 'subscription.feat.filter',    textKey: 'subscription.feat.filterText' },
-  { icon: 'target',      colorKey: 'subscription.feat.threshold', textKey: 'subscription.feat.thresholdText' },
-] as const;
+/// Le palier qu'on VEND sur cet écran, distinct de celui que le chauffeur porte
+/// déjà (`tier`). Deux notions qui se confondaient tant qu'il n'y avait qu'un
+/// palier payant.
+type SellTier = 'plus' | 'premium';
+
+const TRIAL_DAYS = 7;
+
+/// Montants de repli, en clair, quand le store ne répond pas.
+///
+/// Ils ont remplacé des chaînes déjà formatées (« 9,99 € ») logées dans les sept
+/// fichiers de traduction : une devise écrite en dur, que le chauffeur londonien
+/// lisait en euros, et un doublon dont la moitié numérique manquait — le prix
+/// hebdomadaire et l'ancrage annuel, les deux chiffres qui font choisir,
+/// disparaissaient dès que RevenueCat était injoignable.
+///
+/// Le store reste la source de vérité ; ces montants ne servent QUE quand il ne
+/// répond pas, et `money()` les habille alors de la devise du marché.
+const FALLBACK_AMOUNT: Record<SellTier, Record<Cycle, number>> = {
+  plus:    { monthly: 9.99,  yearly: 89.99 },
+  premium: { monthly: 19.99, yearly: 179.99 },
+};
+
+/// Le SKU derrière chaque combinaison palier × cycle. Une table plutôt que deux
+/// ternaires imbriqués : c'est la seule chose qui relie l'écran au store, et
+/// elle doit se relire d'un coup d'œil.
+const PRODUCT_ID: Record<SellTier, Record<Cycle, string>> = {
+  plus: {
+    monthly: IAP_PRODUCTS.PLUS_MONTHLY,
+    yearly:  IAP_PRODUCTS.PLUS_YEARLY,
+  },
+  premium: {
+    monthly: IAP_PRODUCTS.PREMIUM_MONTHLY,
+    yearly:  IAP_PRODUCTS.PREMIUM_YEARLY,
+  },
+};
+
+/// Ce que Plus AJOUTE — et rien d'autre.
+///
+/// Les cinq lignes précédentes vendaient le scan, le €/h en direct, le trafic
+/// TomTom et le filtre de rentabilité : quatre choses qu'un compte gratuit a
+/// déjà. Un paywall qui énumère ce que le chauffeur possède déjà ne lui donne
+/// aucune raison de payer, et lui apprend surtout qu'il n'a rien à gagner.
+///
+/// Chaque ligne ci-dessous correspond à une restriction réelle du gratuit :
+///   • 3 scans/jour contre 20        (plan_limits, subscriptionService.ts)
+///   • seuils verrouillés aux défauts (4e04a19)
+///   • carburant forcé à off          (PreferencesScreen)
+///   • réglages véhicule verrouillés  (plusLocked sur CarSettings)
+///   • analytics sur 1 jour contre 7  (analyticsRangeDays)
+///
+/// EXCEPTION ASSUMÉE — la ligne « trafic réel » : le calcul TomTom n'est PAS
+/// réservé à Plus (`setTomTomApiKey` est poussé sans test de palier, et
+/// `include_pickup` est ON par défaut pour tous). Elle est là parce que c'est
+/// l'argument produit le plus parlant, et elle est formulée sans affirmer
+/// d'exclusivité. Si le taux de remboursement monte, c'est la première à
+/// remettre en cause — le gratuit dispose déjà de ce qu'elle décrit.
+///
+/// Les libellés sont volontairement COURTS — une ligne, lisible d'un coup d'œil.
+/// Les phrases explicatives de `feat.*` restent en base pour d'autres surfaces ;
+/// ici elles cassaient le rythme et repoussaient les formules hors de l'écran.
+///
+/// Premium ne RÉÉNUMÈRE PAS Plus : il le résume en une ligne (`allPlus`), puis
+/// liste ce qui lui est propre. Les sept lignes précédentes formaient un mur où
+/// les quatre qui justifient l'écart de prix se noyaient dans les trois que le
+/// chauffeur aurait de toute façon ; la ligne de résumé dit la même chose en un
+/// cinquième de la hauteur et laisse les quatre arguments seuls à l'écran.
+///
+/// Les deux listes gardent la MÊME LONGUEUR — cinq lignes chacune — donc la
+/// bascule de la pastille ne fait sauter ni les cartes de prix ni le CTA.
+const BENEFITS: Record<SellTier, readonly string[]> = {
+  plus:    ['scans', 'thresholds', 'traffic', 'fuel', 'history'],
+  premium: ['allPlus', 'scans', 'history', 'slots', 'support'],
+};
+
+/// Ce que Premium AJOUTE à Plus — la seule liste qui intéresse un abonné qui
+/// monte. Lui réafficher les sept lignes complètes l'obligerait à relire quatre
+/// avantages qu'il paie déjà pour trouver les trois nouveaux.
+const UPGRADE_BENEFITS = ['scans', 'history', 'slots', 'support'] as const;
+
 
 const FAQ_ITEMS = [1, 2, 3, 4] as const;
 
@@ -69,20 +148,81 @@ const ORBS = [
 
 const SubscriptionScreen = () => {
   const navigation = useNavigation<any>();
-  const { t } = useTranslation();
+  const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
+  const { t, i18n } = useMarketT();
+  const market = useMarket();
+
+  /// L'écran est le même quel qu'en soit le chemin, mais pas le moment. Arriver
+  /// ici parce qu'on vient d'épuiser ses 30 scans offerts, ce n'est pas y venir
+  /// depuis le Profil : le chauffeur a passé deux ou trois vacations avec l'app
+  /// sans rationnement, il sait exactement ce qu'il perd. L'argumentaire général
+  /// serait à côté — on lui nomme ce qui vient de finir.
+  const fromWelcomeEnd = route.params?.reason === 'welcome_exhausted';
   const { user, profile, refreshProfile, markSubscribed } = useAuth();
   const { toast, showToast, dismissToast } = useToast();
 
   const tier = getEffectivePlanTier(profile);
   const isPlus = tier !== 'free';
 
+  /// Le MENSUEL par defaut — choix produit assume.
+  ///
+  /// Le bandeau vert et la coche suivent la selection : le defaut decide donc
+  /// de la carte que l'ecran met en avant. On garde le mensuel, dont le ticket
+  /// d'entree est bien plus facile a accepter pour un chauffeur — 9,99 EUR
+  /// contre 89,99 EUR d'un coup. La carte annuelle garde son economie affichee
+  /// pour ceux qui la cherchent, sans que l'ecran pousse dessus.
   const [cycle, setCycle] = useState<Cycle>('monthly');
+  const [sellTier, setSellTier] = useState<SellTier>('plus');
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [monthly, setMonthly] = useState<PlusPackage | null>(null);
-  const [yearly, setYearly] = useState<PlusPackage | null>(null);
+  const [packages, setPackages] = useState<
+    Record<SellTier, { monthly: PlusPackage | null; yearly: PlusPackage | null }>
+  >({ plus: { monthly: null, yearly: null }, premium: { monthly: null, yearly: null } });
+
   const [trialByProduct, setTrialByProduct] = useState<Record<string, boolean>>({});
   const [openedFaq, setOpenedFaq] = useState<number | null>(null);
+
+  /// Un abonné Plus a un palier au-dessus du sien.
+  /// C'est le seul cas où l'écran montre À LA FOIS la carte d'abonnement actif
+  /// et des formules — les deux répondent à des questions différentes :
+  /// « qu'est-ce que j'ai » et « qu'est-ce que je peux avoir en plus ».
+  const canUpgrade = tier === 'plus';
+
+  /// Un abonné qui monte n'a qu'une chose à acheter : le palier du dessus. La
+  /// pastille reste masquée — elle n'offrirait aucun choix — mais les prix, les
+  /// cartes et le SKU doivent déjà parler Premium.
+  useEffect(() => {
+    if (canUpgrade) setSellTier('premium');
+  }, [canUpgrade]);
+
+  /// Position et largeur MESURÉES de chaque segment de la pastille.
+  ///
+  /// « Plus » et « Premium » n'ont pas la même largeur : un curseur de taille
+  /// fixe aurait débordé du premier ou flotté dans le second. On lit donc la
+  /// géométrie réelle au premier rendu, ce qui laisse aussi les traductions
+  /// libres de changer de longueur.
+  const [tierLayout, setTierLayout] = useState<
+    Record<SellTier, { x: number; width: number }>
+  >({ plus: { x: 0, width: 0 }, premium: { x: 0, width: 0 } });
+
+  const tierMeasured = tierLayout.plus.width > 0 && tierLayout.premium.width > 0;
+
+  /// 0 = Plus, 1 = Premium. Le curseur GLISSE d'un segment à l'autre : c'est ce
+  /// qui fait comprendre qu'on bascule entre deux états d'une même chose, là où
+  /// un fond qui apparaît et disparaît donne deux boutons sans rapport.
+  const thumbAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(thumbAnim, {
+      toValue: sellTier === 'premium' ? 1 : 0,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      // `width` n'est pas animable par le driver natif, et mélanger les deux
+      // pilotes sur la même vue produit des sauts d'une frame. Tout passe donc
+      // par le driver JS — la vue est minuscule, ça reste fluide.
+      useNativeDriver: false,
+    }).start();
+  }, [sellTier, thumbAnim]);
 
   // Hero orb float animation
   const orbAnim = useRef(new Animated.Value(0)).current;
@@ -100,7 +240,7 @@ const SubscriptionScreen = () => {
   // CTA pulse
   const ctaScale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (purchasing || isPlus) return;
+    if (purchasing || (isPlus && !canUpgrade)) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(ctaScale, { toValue: 1.035, duration: 1000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
@@ -109,7 +249,7 @@ const SubscriptionScreen = () => {
     );
     loop.start();
     return () => loop.stop();
-  }, [ctaScale, purchasing, isPlus]);
+  }, [ctaScale, purchasing, isPlus, canUpgrade]);
 
   // Crown glow pulse
   const glowAnim = useRef(new Animated.Value(0.6)).current;
@@ -127,35 +267,69 @@ const SubscriptionScreen = () => {
     let cancelled = false;
     (async () => {
       const [pkgs, elig] = await Promise.all([
-        getPlusPackages(),
-        checkTrialEligibility([IAP_PRODUCTS.PLUS_MONTHLY, IAP_PRODUCTS.PLUS_YEARLY]),
+        getSubscriptionPackages(),
+        checkTrialEligibility([
+          IAP_PRODUCTS.PLUS_MONTHLY,
+          IAP_PRODUCTS.PLUS_YEARLY,
+          IAP_PRODUCTS.PREMIUM_MONTHLY,
+          IAP_PRODUCTS.PREMIUM_YEARLY,
+        ]),
       ]);
       if (cancelled) return;
-      setMonthly(pkgs.monthly);
-      setYearly(pkgs.yearly);
+      setPackages(pkgs);
       setTrialByProduct(elig);
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const savingsPct = useMemo(() => {
-    if (!monthly?.rawPrice || !yearly?.rawPrice) return 33;
-    const fullYear = monthly.rawPrice * 12;
-    if (fullYear <= 0) return 33;
-    return Math.max(1, Math.round((1 - yearly.rawPrice / fullYear) * 100));
-  }, [monthly, yearly]);
+  const pkgOf = (ti: SellTier, cy: Cycle) =>
+    cy === 'yearly' ? packages[ti].yearly : packages[ti].monthly;
 
-  const activeProductId = cycle === 'yearly' ? IAP_PRODUCTS.PLUS_YEARLY : IAP_PRODUCTS.PLUS_MONTHLY;
-  const activePkg = cycle === 'yearly' ? yearly : monthly;
+  const rawOf = (cy: Cycle) =>
+    pkgOf(sellTier, cy)?.rawPrice || FALLBACK_AMOUNT[sellTier][cy];
+  const currencyOf = (cy: Cycle) =>
+    pkgOf(sellTier, cy)?.currencyCode || market.currency;
+
+  const money = (amount: number, currency: string): string => {
+    try {
+      // La locale de l'APP, pas celle de l'appareil : un téléphone en anglais
+      // affichait « €239.88 » juste à côté du « 179,99 € » venu des traductions,
+      // deux formats de la même monnaie dans la même carte.
+      return new Intl.NumberFormat(i18n.language, {
+        style: 'currency', currency, maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${amount.toFixed(2)} ${currency}`;
+    }
+  };
+
+  // Douze mensualités : ce que l'annuel fait éviter. C'est le prix barré de la
+  // carte annuelle, et la base de l'économie affichée en euros.
+  const yearAnchor = rawOf('monthly') * 12;
+  const savedAmount = Math.max(0, yearAnchor - rawOf('yearly'));
+
+  /// Ramène un prix à la semaine.
+  ///
+  /// C'est le plus petit dénominateur crédible d'un abonnement, et il rend
+  /// l'annuel lisible : « 89,99 € » se compare mal à « 9,99 € », « 1,73 € par
+  /// semaine » se compare tout seul. Calculé depuis `rawPrice` et formaté dans
+  /// la devise du store — donc juste hors zone euro aussi.
+  const weeklyText = (cy: Cycle): string => {
+    const raw = rawOf(cy);
+    return money(cy === 'yearly' ? raw / 52 : (raw * 12) / 52, currencyOf(cy));
+  };
+
+  const activeProductId = PRODUCT_ID[sellTier][cycle];
 
   // Éligibilité essai : par produit. Le CTA reflète le cycle sélectionné ;
-  // le bandeau de la carte mensuelle reflète l'éligibilité du produit mensuel.
+  // le bandeau de chaque carte reflète l'éligibilité de SON produit.
   const trialEligible = !!trialByProduct[activeProductId];
-  const monthlyTrial = !!trialByProduct[IAP_PRODUCTS.PLUS_MONTHLY];
+  const isTrial = (cy: Cycle) => !!trialByProduct[PRODUCT_ID[sellTier][cy]];
 
-  const mainPriceText =
-    activePkg?.priceString ??
-    (cycle === 'yearly' ? t('subscription.yearlyFallbackPrice') : t('subscription.monthlyFallbackPrice'));
+  const priceOf = (cy: Cycle) =>
+    pkgOf(sellTier, cy)?.priceString ?? money(rawOf(cy), currencyOf(cy));
+
+  const mainPriceText = priceOf(cycle);
 
   const handleFaqToggle = (idx: number) => {
     hapticLight();
@@ -167,22 +341,50 @@ const SubscriptionScreen = () => {
     if (!user || purchasing) return;
     setPurchasing(true);
     try {
-      const { entitlement } = await buyPlus(user.id, activeProductId);
+      const { entitlement } = await buySubscription(activeProductId);
       hapticSuccess();
       // Déblocage IMMÉDIAT : RevenueCat a confirmé l'achat → on débloque l'UI sans
       // attendre le webhook (lent en sandbox). La DB est réconciliée en arrière-plan.
       // Si RC ne remonte pas d'entitlement (mapping RC incomplet) mais que l'achat
-      // a réussi, on débloque quand même 'plus' — le produit acheté est un plan Plus.
-      markSubscribed(entitlement === 'premium' ? 'premium' : 'plus');
+      // Repli sur le palier VENDU, et non sur 'plus' en dur : quand RevenueCat
+      // ne remonte pas d'entitlement (mapping incomplet) après un achat Premium,
+      // débloquer 'plus' dégraderait le chauffeur au palier qu'il n'a pas pris.
+      const soldTier =
+        entitlement === 'premium' ? 'premium'
+        : entitlement === 'plus' ? 'plus'
+        : sellTier;
+      markSubscribed(soldTier);
       navigation.goBack();
-      waitForProfileUpdate(user.id, p => p.subscription_tier !== 'free', { maxWaitMs: 30000 })
+
+      // La condition d'attente dépend d'OÙ l'on partait. « different de free »
+      // est déjà vrai pour un abonné Plus qui monte : la promesse se résolvait
+      // instantanément, sur l'ancien palier, et le rafraîchissement tombait
+      // avant que le webhook n'ait écrit 'premium'. On attend donc le palier
+      // exact qu'on vient de vendre.
+      const reached = soldTier === 'premium'
+        ? (p: { subscription_tier: string }) => p.subscription_tier === 'premium'
+        : (p: { subscription_tier: string }) => p.subscription_tier !== 'free';
+
+      waitForProfileUpdate(user.id, reached, { maxWaitMs: 30000 })
         .then(p => { if (p) refreshProfile(); })
         .catch(() => {});
       return;
     } catch (e: any) {
       if (e?.message === 'CANCELLED') return;
+      // Cas « ré-abonnement » : le store refuse un nouvel achat parce que l'accès
+      // existe déjà côté Apple. Message actionnable (Restaurer) plutôt qu'un
+      // « impossible de finaliser » qui laisse le user bloqué.
+      if (e?.message === 'PENDING') {
+        showToast({ type: 'info', title: t('subscription.pendingTitle'), message: t('subscription.pendingMsg') });
+        return;
+      }
       hapticError();
-      showToast({ type: 'error', title: t('subscription.errorTitle'), message: t('subscription.errorMsg') });
+      const message =
+        e?.message === 'ALREADY_OWNED' ? t('subscription.alreadyOwnedMsg')
+        : e?.message === 'RECEIPT_IN_USE' ? t('subscription.receiptInUseMsg')
+        : e?.message === 'STORE_PROBLEM' ? t('subscription.storeProblemMsg')
+        : t('subscription.errorMsg');
+      showToast({ type: 'error', title: t('subscription.errorTitle'), message });
     } finally {
       setPurchasing(false);
     }
@@ -228,37 +430,156 @@ const SubscriptionScreen = () => {
 
   const storeLabel = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
 
-  const ctaLabel = trialEligible ? t('subscription.ctaTrial') : t('subscription.ctaSubscribe');
-  const ctaHint = trialEligible
-    ? t('subscription.ctaHintTrial', { price: mainPriceText, cycle: cycle === 'yearly' ? t('subscription.cycleYearly') : t('subscription.cycleMonthly') })
-    : t('subscription.ctaHintNoTrial', { cycle: cycle === 'yearly' ? t('subscription.cycleYearly') : t('subscription.cycleMonthly') });
+  // « S'abonner » à quelqu'un qui est déjà abonné ne veut rien dire, et un
+  // abonné n'est de toute façon plus éligible à l'essai — un groupe
+  // d'abonnement Apple n'en accorde qu'un seul, quel que soit le palier.
+  const ctaLabel =
+    canUpgrade ? t('subscription.ctaUpgrade')
+    : trialEligible ? t('subscription.ctaTrial')
+    : t('subscription.ctaSubscribe');
+
+  const showBuyBar = !isPlus || canUpgrade;
+
+  /// Phrase sous le titre du hero. Vide sur le chemin d'achat — seuls l'abonné
+  /// actif et le chauffeur qui vient d'épuiser ses scans offerts en gardent une,
+  /// parce qu'elles nomment une situation et non un argument de vente.
+  const heroSubText =
+    isPlus ? t('subscription.heroSubActive')
+    : fromWelcomeEnd ? t('subscription.heroSubWelcomeEnd')
+    : '';
+
+  /// Quelle liste d'avantages, et écrite dans le vocabulaire de quel palier.
+  /// Un abonné voit ce qu'il A ; un visiteur, ce que la pastille désigne.
+  const benefitTier: SellTier =
+    isPlus ? (tier === 'premium' ? 'premium' : 'plus') : sellTier;
+  const benefitKeys = BENEFITS[benefitTier];
+
+  /// Toutes les lignes au meme poids. Une premiere version atenuait celles que
+  /// Premium partage avec Plus ; depuis qu'elles sont resumees en une seule
+  /// ligne (`allPlus`), il n'y a plus rien a distinguer — et griser cette ligne
+  /// de resume la faisait lire comme une restriction alors qu'elle annonce un
+  /// acquis.
+  const renderBenefits = (keys: readonly string[], copyTier: SellTier) => (
+    <View style={styles.benefits}>
+      {keys.map(k => (
+        <View key={k} style={styles.benefitRow}>
+          <View style={styles.check}>
+            <Feather name="check" size={13} color="#062318" />
+          </View>
+          <Text style={styles.benefitText}>
+            {t(`subscription.benefit.${copyTier}.${k}`)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+  const periodWord = cycle === 'yearly' ? t('subscription.periodYear') : t('subscription.periodMonth');
+  const finePrint = trialEligible
+    ? t('subscription.finePrintTrial', { days: TRIAL_DAYS, price: mainPriceText, period: periodWord })
+    : t('subscription.finePrintNoTrial', { price: mainPriceText, period: periodWord });
+
+  // ── Carte de formule ───────────────────────────────────────────────────────
+  // Reprend la structure qui convertit : un bandeau au-dessus du prix, qui porte
+  // l'essai à gauche et l'économie à droite, et se remplit quand la formule est
+  // choisie. Le prix reste le seul gros chiffre de la carte ; l'équivalent
+  // hebdomadaire, juste dessous, sert de comparateur entre les deux.
+  const renderPlan = (cy: Cycle) => {
+    const selected = cycle === cy;
+    const trial = isTrial(cy);
+
+    return (
+      <Pressable
+        key={cy}
+        onPress={() => { hapticLight(); setCycle(cy); }}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        style={[styles.plan, selected && styles.planSelected]}
+      >
+        <View style={[styles.stripe, selected && styles.stripeOn]}>
+          <Text style={[styles.stripeText, selected && styles.stripeTextOn]}>
+            {trial
+              ? t('subscription.trialStrip', { days: TRIAL_DAYS })
+              : cy === 'monthly'
+                ? t('subscription.trust.commitment')
+                // Le bandeau annuel etait vide a gauche, avec l'economie collee
+                // a droite. Le libelle comble ce vide et donne son argument a la
+                // carte annuelle — en gris, puisque le vert reste au mensuel.
+                // Claim factuel, verifiable au prix hebdomadaire juste en
+                // dessous : pas une preuve sociale inventee.
+                : t('subscription.bestValueStrip')}
+          </Text>
+          {cy === 'yearly' && savedAmount > 0 && (
+            <Text style={[styles.stripeBadge, selected && styles.stripeBadgeOn]}>
+              {t('subscription.saveAmount', { amount: money(savedAmount, currencyOf('yearly')) })}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.planBody}>
+          <View style={selected ? styles.radioOn : styles.radioOff}>
+            {selected && <Feather name="check" size={13} color="#062318" />}
+          </View>
+          <Text style={[styles.planName, selected && styles.planNameOn]}>
+            {t(cy === 'yearly' ? 'subscription.yearlyTab' : 'subscription.monthlyTab')}
+          </Text>
+          <View style={styles.planPriceCol}>
+            <Text style={styles.planPrice}>
+              {/* Douze mensualités barrées : sans ce repère, « 89,99 € » se lit
+                  comme neuf fois plus cher que « 9,99 € ». */}
+              {cy === 'yearly' && savedAmount > 0 && (
+                <Text style={styles.planAnchor}>{money(yearAnchor, currencyOf('yearly'))}  </Text>
+              )}
+              {priceOf(cy)}
+              <Text style={styles.planPer}>
+                {t(cy === 'yearly' ? 'subscription.perYearShort' : 'subscription.perMonthShort')}
+              </Text>
+            </Text>
+            <Text style={styles.planWeek}>
+              {t('subscription.perWeekEquiv', { price: weeklyText(cy) })}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
       <StatusBar barStyle="light-content" />
 
       <TouchableOpacity
         onPress={() => navigation.canGoBack() && navigation.goBack()}
-        style={styles.closeBtn}
+        style={[styles.closeBtn, { top: insets.top + space.sm }]}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Feather name="x" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* L'encart de zone sûre est porté par le HERO, pas par la ScrollView.
+          Posé ici, il décalait la boîte du hero vers le bas — et comme celle-ci
+          est en `overflow: 'hidden'`, son halo vert se trouvait rogné au-dessus
+          de ce bord : une bande noire restait collée sous la barre de statut, et
+          l'écran se lisait en deux morceaux. Le hero repart donc de tout en haut
+          et pousse son propre CONTENU, ce qui laisse le vert monter jusqu'à
+          l'encoche. */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* ── HERO ── */}
-        <View style={styles.hero}>
-          {/* Radial glow */}
+        <View style={[styles.hero, { paddingTop: insets.top + space.xl }]}>
           <SafeGradient
             colors={['rgba(0,230,118,0.22)', 'rgba(0,230,118,0.06)', 'transparent']}
             style={styles.heroGlow}
             pointerEvents="none"
           />
-          {/* Secondary warm glow */}
           <View style={styles.heroWarmGlow} pointerEvents="none" />
 
-          {/* Floating orbs */}
           <Animated.View style={[styles.orbContainer, { transform: [{ translateY: orbTranslateY }] }]} pointerEvents="none">
             {ORBS.map((o, i) => (
               <View
@@ -272,48 +593,105 @@ const SubscriptionScreen = () => {
             ))}
           </Animated.View>
 
-          {/* Crown icon with animated glow ring */}
           <View style={styles.crownRow}>
             <View style={styles.crownOuter}>
               <Animated.View style={[styles.crownGlowRing, { opacity: glowAnim }]} />
-              <SafeGradient colors={['#00FF8C', '#00E676', '#00B85A']} style={styles.crownBadge}>
-                <MaterialCommunityIcons name="crown" size={26} color="#000" />
-              </SafeGradient>
+              <Image source={require('../assets/strive-logo.png')} style={styles.crownBadge} />
             </View>
           </View>
 
-          <Text style={styles.labelText}>STRIVE PLUS</Text>
+          {/* La marque seule : le palier est porté par la pastille, deux lignes
+              plus bas. Laisser « STRIVE PLUS » ici donnerait deux étiquettes de
+              palier qui se contredisent dès qu'on touche la pastille. */}
+          <Text style={styles.labelText}>{t('subscription.label')}</Text>
           <Text style={styles.heroTitle}>
-            {isPlus ? t('subscription.heroTitleActive') : t('subscription.heroTitle')}
+            {isPlus ? t('subscription.heroTitleActive')
+              : fromWelcomeEnd ? t('subscription.heroTitleWelcomeEnd')
+              : t('subscription.heroTitle')}
           </Text>
-          <Text style={styles.heroSub}>
-            {isPlus ? t('subscription.heroSubActive') : t('subscription.heroSub')}
-          </Text>
-        </View>
+          {/* Plus de phrase d'accroche sur le chemin d'achat : le titre porte
+              déjà le message, et la pastille juste en dessous a besoin d'air
+              pour se voir. Les DEUX paliers en sont privés ensemble — n'en
+              garder qu'un faisait sauter la mise en page à chaque tap.
+              `heroSub` et `heroSubPremium` restent en base, prêts à revenir. */}
+          {heroSubText ? (
+            <Text style={styles.heroSub}>{heroSubText}</Text>
+          ) : null}
 
-        {/* ── FEATURES ── */}
-        <View style={styles.featureList}>
-          {FEATURES.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <SafeGradient
-                colors={['rgba(0,230,118,0.2)', 'rgba(0,230,118,0.08)']}
-                style={styles.featureIconWrap}
-              >
-                <Feather name={f.icon as any} size={16} color={colors.primary} />
-              </SafeGradient>
-              <Text style={styles.featureText}>
-                <Text style={styles.featureHighlight}>{t(f.colorKey)}</Text>
-                {'  '}{t(f.textKey)}
-              </Text>
+          {/* ── PASTILLE DE PALIER ──
+              Sous la phrase, et au-dessus des avantages : tout ce qu'elle
+              change se trouve EN DESSOUS d'elle, donc la cause précède l'effet.
+              Placée plus bas, entre les avantages et les cartes, elle se lirait
+              comme un simple sélecteur de prix.
+
+              Elle ne s'affiche pas pour un abonné : il ne choisit plus. */}
+          {!isPlus && (
+            <View style={styles.tierPill}>
+              {/* Le curseur, sous les libellés. Rendu seulement une fois les deux
+                  segments mesurés : autrement il apparaîtrait à zéro puis
+                  sauterait à sa place au premier layout. */}
+              {tierMeasured && (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.tierThumb,
+                    {
+                      transform: [
+                        {
+                          translateX: thumbAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [tierLayout.plus.x, tierLayout.premium.x],
+                          }),
+                        },
+                      ],
+                      width: thumbAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [tierLayout.plus.width, tierLayout.premium.width],
+                      }),
+                    },
+                  ]}
+                />
+              )}
+
+              {(['plus', 'premium'] as SellTier[]).map(ti => {
+                const on = sellTier === ti;
+                return (
+                  <TouchableOpacity
+                    key={ti}
+                    style={styles.tierBtn}
+                    onLayout={e => {
+                      const { x, width } = e.nativeEvent.layout;
+                      setTierLayout(prev =>
+                        prev[ti].x === x && prev[ti].width === width
+                          ? prev
+                          : { ...prev, [ti]: { x, width } },
+                      );
+                    }}
+                    onPress={() => { hapticLight(); setSellTier(ti); }}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.tierTxt, on && styles.tierTxtOn]}>
+                      {t(`subscription.tier.${ti}`)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          ))}
+          )}
         </View>
 
-        {/* ── Divider ── */}
-        <View style={styles.divider} />
+        {/* ── CE QUE ÇA APPORTE ──
+            Chez un abonné qui peut monter, la liste descend sous la carte
+            d'abonnement : il doit d'abord voir ce qu'il a, ensuite ce qui
+            s'ajoute. Ici elle serait lue comme l'inventaire de son propre
+            abonnement. */}
+        {!canUpgrade && renderBenefits(benefitKeys, benefitTier)}
 
         {isPlus ? (
-          /* ── ACTIVE SUBSCRIBER ── */
+          /* ── ABONNÉ ACTIF ── */
+          <>
           <View style={styles.activeCard}>
             <SafeGradient
               colors={['rgba(0,230,118,0.12)', 'rgba(0,230,118,0.03)']}
@@ -325,7 +703,7 @@ const SubscriptionScreen = () => {
               </View>
               <Text style={styles.activeCardTitle}>{t('subscription.activeTitle')}</Text>
             </View>
-            <Text style={styles.activeCardSub}>{t('subscription.activeSub')}</Text>
+            <Text style={styles.activeCardSub}>{t('subscription.heroSubActive')}</Text>
 
             <TouchableOpacity style={styles.manageBtn} onPress={handleManage} activeOpacity={0.8}>
               <Feather name="external-link" size={15} color={colors.textMain} />
@@ -334,132 +712,62 @@ const SubscriptionScreen = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.cancelHint}
-              onPress={handleManage}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.cancelHint} onPress={handleManage} activeOpacity={0.7}>
               <Feather name="info" size={13} color={colors.textDimmed} />
               <Text style={styles.cancelHintText}>
                 {t('subscription.cancelHint', { store: storeLabel })}
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* ── MONTER EN PREMIUM ── */}
+          {canUpgrade && (
+            <>
+              <View style={styles.upgradeHead}>
+                <Text style={styles.upgradeTitle}>{t('subscription.upgradeTitle')}</Text>
+                <Text style={styles.upgradeSub}>{t('subscription.upgradeSub')}</Text>
+              </View>
+
+              {renderBenefits(UPGRADE_BENEFITS, 'premium')}
+
+              <View style={styles.plans}>
+                {renderPlan('yearly')}
+                {renderPlan('monthly')}
+              </View>
+
+              {/* Le frein d'un abonné qui monte n'est pas « vais-je être
+                  facturé aujourd'hui » mais « vais-je payer deux fois ». Les
+                  quatre SKU vivant dans le même groupe d'abonnement, le store
+                  convertit et déduit le temps déjà payé : c'est ça qu'il faut
+                  lui dire, pas la phrase d'essai gratuit. */}
+              <View style={styles.reassure}>
+                <Feather name="shield" size={14} color={colors.primary} />
+                <Text style={styles.reassureText}>
+                  {t('subscription.upgradeProrata', { store: storeLabel })}
+                </Text>
+              </View>
+            </>
+          )}
+          </>
         ) : (
           <>
-            {/* ── PLAN CARDS ── */}
+            {/* ── FORMULES ── */}
+            <View style={styles.plans}>
+              {renderPlan('yearly')}
+              {renderPlan('monthly')}
+            </View>
 
-            {/* Monthly — hero card */}
-            <Pressable
-              onPress={() => { hapticLight(); setCycle('monthly'); }}
-              style={[styles.planCard, styles.planCardMonthly, cycle === 'monthly' && styles.planCardMonthlySelected]}
-            >
-              <SafeGradient
-                colors={cycle === 'monthly'
-                  ? ['rgba(0,230,118,0.14)', 'rgba(0,230,118,0.04)']
-                  : ['rgba(0,230,118,0.06)', 'rgba(0,230,118,0.01)']}
-                style={StyleSheet.absoluteFillObject}
-              />
-              {/* Ribbon badge */}
-              <View style={styles.popularBadge}>
-                <SafeGradient colors={['#A4FF6B', '#00FF8C', colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.popularBadgeInner}>
-                  <MaterialCommunityIcons name={monthlyTrial ? 'gift-outline' : 'star-four-points'} size={10} color="#062318" />
-                  <Text style={styles.popularBadgeText}>
-                    {monthlyTrial ? t('subscription.trialRibbon', '7 JOURS GRATUITS') : t('subscription.popular')}
-                  </Text>
-                </SafeGradient>
-              </View>
-              <View style={styles.planCardLeft}>
-                <View style={cycle === 'monthly' ? styles.radioSelected : styles.radio}>
-                  {cycle === 'monthly' && <View style={styles.radioInner} />}
-                </View>
-              </View>
-              <View style={styles.planCardContent}>
-                <Text style={[styles.planCardTitle, styles.planCardTitleMonthly]}>
-                  {t('subscription.monthlyAccess')}
-                </Text>
-                {monthlyTrial ? (
-                  <>
-                    <Text style={styles.trialFreeLabel}>{t('subscription.trialFreeLabel', '0,00 € pendant 7 jours')}</Text>
-                    <Text style={styles.trialThenPrice}>
-                      {t('subscription.trialThenPrice', 'puis {{price}}/mois', { price: monthly?.priceString ?? t('subscription.monthlyFallbackPrice') })}
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={[styles.planCardPrice, styles.planCardPriceMonthly]}>
-                      {monthly?.priceString ?? t('subscription.monthlyFallbackPrice')}
-                      <Text style={styles.planCardPriceSuffix}> {t('subscription.perMonthShort')}</Text>
-                    </Text>
-                  </>
-                )}
-                <Text style={styles.monthlySubHint}>
-                  {monthlyTrial
-                    ? t('subscription.trialHint', 'Annulable à tout moment pendant l\'essai')
-                    : t('subscription.monthlyHint')}
-                </Text>
-              </View>
-            </Pressable>
-
-            {/* Yearly — secondary */}
-            <Pressable
-              onPress={() => { hapticLight(); setCycle('yearly'); }}
-              style={[styles.planCard, cycle === 'yearly' && styles.planCardSelected]}
-            >
-              {cycle === 'yearly' && (
-                <SafeGradient
-                  colors={['rgba(0,230,118,0.08)', 'rgba(0,230,118,0.02)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-              )}
-              <View style={styles.planCardLeft}>
-                <View style={cycle === 'yearly' ? styles.radioSelected : styles.radio}>
-                  {cycle === 'yearly' && <View style={styles.radioInner} />}
-                </View>
-              </View>
-              <View style={styles.planCardContent}>
-                <View style={styles.planCardTitleRow}>
-                  <Text style={[styles.planCardTitle, cycle === 'yearly' && styles.planCardTitleActive]}>
-                    {t('subscription.yearlyAccess')}
-                  </Text>
-                  <View style={styles.bestBadge}>
-                    <Text style={styles.bestBadgeText}>-{savingsPct}%</Text>
-                  </View>
-                </View>
-                <Text style={styles.planCardPrice}>
-                  {yearly?.priceString ?? t('subscription.yearlyFallbackPrice')}
-                  <Text style={styles.planCardPriceSuffix}> {t('subscription.perYearShort')}</Text>
-                </Text>
-                {yearly?.pricePerMonthString && (
-                  <Text style={styles.planCardEquiv}>
-                    {t('subscription.perMonthEquiv', { price: yearly.pricePerMonthString })}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
-
-            {/* ── TRUST ── */}
-            <View style={styles.trustRow}>
-              <View style={styles.trustPill}>
-                <Feather name="refresh-cw" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>{t('subscription.trust.cancel')}</Text>
-              </View>
-              <View style={styles.trustPill}>
-                <Feather name="shield" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>
-                  {Platform.OS === 'ios' ? t('subscription.trust.secure') : t('subscription.trust.secureAndroid', 'Google Play')}
-                </Text>
-              </View>
-              <View style={styles.trustPill}>
-                <Feather name="unlock" size={12} color={colors.primary} />
-                <Text style={styles.trustText}>{t('subscription.trust.commitment')}</Text>
-              </View>
+            {/* ── LA PHRASE QUI LÈVE LE FREIN ── */}
+            <View style={styles.reassure}>
+              <Feather name="shield" size={14} color={colors.primary} />
+              <Text style={styles.reassureText}>
+                {trialEligible ? t('subscription.noPaymentToday') : t('subscription.trust.cancel')}
+              </Text>
             </View>
           </>
         )}
 
         {/* ── FAQ ── */}
-        <View style={styles.divider} />
         <Text style={styles.faqTitle}>{t('subscription.faq.title')}</Text>
         <View style={styles.faqList}>
           {FAQ_ITEMS.map((n, i) => {
@@ -472,19 +780,17 @@ const SubscriptionScreen = () => {
                     <Feather name={opened ? 'minus' : 'plus'} size={14} color={opened ? '#000' : colors.textMuted} />
                   </View>
                 </Pressable>
-                {opened && (
-                  <Text style={styles.faqA}>{t(`subscription.faq.a${n}`)}</Text>
-                )}
+                {opened && <Text style={styles.faqA}>{t(`subscription.faq.a${n}`)}</Text>}
               </View>
             );
           })}
         </View>
 
-        <View style={{ height: isPlus ? 40 : 190 }} />
+        <View style={showBuyBar ? styles.spacerBuy : styles.spacerActive} />
       </ScrollView>
 
-      {/* ── STICKY BOTTOM ── */}
-      {!isPlus && (
+      {/* ── BARRE D'ACHAT ── */}
+      {showBuyBar && (
         <SafeGradient
           colors={[`${colors.background}00`, colors.background, colors.background]}
           style={styles.stickyBottom}
@@ -515,8 +821,6 @@ const SubscriptionScreen = () => {
             </TouchableOpacity>
           </Animated.View>
 
-          <Text style={styles.ctaHint}>{ctaHint}</Text>
-
           <View style={styles.footer}>
             <TouchableOpacity onPress={handleRestore} disabled={restoring}>
               {restoring
@@ -533,6 +837,8 @@ const SubscriptionScreen = () => {
               <Text style={styles.footerLink}>{t('subscription.privacy')}</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.finePrint}>{finePrint}</Text>
         </SafeGradient>
       )}
 
@@ -542,26 +848,28 @@ const SubscriptionScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scroll: { paddingBottom: space.xl },
 
   closeBtn: {
-    position: 'absolute', top: 54, right: 20, zIndex: 20,
-    width: 34, height: 34, borderRadius: 17,
+    // `top` est posé au rendu, à partir de la zone sûre.
+    position: 'absolute', right: 20, zIndex: 20,
+    width: 34, height: 34, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.07)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-
-  scroll: { paddingBottom: 20 },
 
   // ── Hero ──
   hero: {
-    paddingHorizontal: 24, paddingTop: 60, paddingBottom: 32,
+    // `paddingTop` est posé au rendu : zone sûre + `xl`. La boîte, elle, commence
+    // à y=0 pour que son halo couvre la barre de statut.
+    paddingHorizontal: space.xl, paddingBottom: space.xxl,
     overflow: 'hidden', alignItems: 'center',
   },
   heroGlow: {
     position: 'absolute', top: -60, left: -40, right: -40, height: 420,
-    borderRadius: 200,
+    borderRadius: radius.full,
   },
   heroWarmGlow: {
     position: 'absolute', top: -20, left: SCREEN_W * 0.15,
@@ -572,16 +880,16 @@ const styles = StyleSheet.create({
   orbContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: 140 },
   orb: { position: 'absolute', backgroundColor: colors.primary },
 
-  crownRow: { marginBottom: 18 },
+  crownRow: { marginBottom: space.lg },
   crownOuter: { alignItems: 'center', justifyContent: 'center' },
   crownGlowRing: {
     position: 'absolute',
-    width: 80, height: 80, borderRadius: 40,
+    width: 80, height: 80, borderRadius: radius.full,
     backgroundColor: 'transparent',
-    borderWidth: 2, borderColor: 'rgba(0,255,140,0.3)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
   },
   crownBadge: {
-    width: 60, height: 60, borderRadius: 20,
+    width: 60, height: 60, borderRadius: radius.lg,
     justifyContent: 'center', alignItems: 'center',
     shadowColor: '#00FF8C',
     shadowOffset: { width: 0, height: 8 },
@@ -590,183 +898,215 @@ const styles = StyleSheet.create({
   },
 
   labelText: {
-    color: colors.primary, fontSize: 11, fontWeight: '900',
-    letterSpacing: 3, marginBottom: 10,
+    // Blanc et non vert : le vert est devenu la couleur du palier sélectionné
+    // dans la pastille, deux lignes plus bas. Le garder ici mettait deux verts
+    // dans le même bloc, dont un qui ne désigne rien.
+    color: colors.textMain, fontSize: 11, fontWeight: '900',
+    letterSpacing: 3, marginBottom: space.sm,
   },
   heroTitle: {
     color: colors.textMain, fontSize: 30, fontWeight: '900',
-    lineHeight: 36, letterSpacing: -0.8, marginBottom: 10, textAlign: 'center',
+    lineHeight: 36, letterSpacing: -0.8, marginBottom: space.sm, textAlign: 'center',
   },
   heroSub: {
     color: 'rgba(255,255,255,0.55)', fontSize: 15,
     lineHeight: 22, textAlign: 'center', maxWidth: 300,
   },
 
-  // ── Features ──
-  featureList: { marginHorizontal: 20, marginBottom: 24, gap: 16 },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  featureIconWrap: {
-    width: 36, height: 36, borderRadius: 12,
-    justifyContent: 'center', alignItems: 'center',
+  // ── Montée en Premium ──
+  upgradeHead: { marginHorizontal: space.xl, marginTop: space.xxl, marginBottom: space.lg },
+  upgradeTitle: {
+    color: colors.textMain,
+    fontSize: 19,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
-  featureText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '500', flex: 1, lineHeight: 20 },
-  featureHighlight: { color: colors.primary, fontWeight: '800' },
+  upgradeSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: space.xs,
+  },
 
-  divider: {
-    height: 1, marginHorizontal: 32, marginBottom: 22,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  // ── Pastille de palier ──
+  // Un rail sombre et deux segments : le même geste que le sélecteur de cycle
+  // plus bas, en plus petit, pour qu'on comprenne sans explication que c'est
+  // un choix et non un bouton d'action.
+  tierPill: {
+    flexDirection: 'row',
+    marginTop: space.lg,
+    padding: space.xs,
+    // Entièrement arrondi : la pastille se lit comme un interrupteur, pas comme
+    // deux onglets. Un rayon intermédiaire la faisait ressembler aux cartes de
+    // formules plus bas, qui elles ne se choisissent pas du même geste.
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
+  tierBtn: {
+    paddingHorizontal: space.xxl,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
+  },
+  // Le curseur qui glisse. En absolu DANS le rail, décalé de son padding : les
+  // `x` mesurés partent du bord du rail, pas de sa zone de contenu.
+  tierThumb: {
+    position: 'absolute',
+    left: 0,
+    top: 4,
+    bottom: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,230,118,0.20)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+  },
+  tierTxt: {
+    // Ecart creuse entre actif et inactif : le libelle actif passe en BLANC
+    // pur, l'inactif descend a 0,42. Le vert reste au curseur, aux coches et
+    // au CTA — un libelle vert sur un curseur vert donnait le composant le
+    // moins affirme de l'ecran pour le choix le plus structurant.
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 14.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  tierTxtOn: { color: colors.textMain },
 
-  // ── Plan cards ──
-  planCard: {
-    marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.06)',
-    flexDirection: 'row', alignItems: 'center',
-    overflow: 'hidden',
-  },
-  planCardMonthly: {
-    borderWidth: 2, borderColor: 'rgba(0,230,118,0.25)',
-    paddingTop: 28,
-  },
-  planCardMonthlySelected: {
-    borderColor: colors.primary,
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16 },
-      android: { elevation: 10 },
-    }),
-  },
-  planCardSelected: {
-    borderColor: colors.primary,
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
-      android: { elevation: 6 },
-    }),
-  },
-  planCardLeft: { marginRight: 14 },
-  planCardContent: { flex: 1 },
-  planCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  planCardTitle: { color: colors.textDimmed, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  planCardTitleMonthly: { color: colors.primary },
-  planCardTitleActive: { color: colors.textMuted },
-  planCardPrice: { color: colors.textMain, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  planCardPriceMonthly: { fontSize: 30 },
-  planCardPriceSuffix: { color: colors.textDimmed, fontSize: 13, fontWeight: '600' },
-  planCardEquiv: { color: colors.textDimmed, fontSize: 12, marginTop: 2, fontWeight: '500' },
-  monthlySubHint: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: '500' },
-  trialFreeLabel: { color: colors.primary, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
-  trialThenPrice: { color: colors.textDimmed, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  popularBadge: { position: 'absolute', top: -1, right: 16, zIndex: 1 },
-  popularBadgeInner: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
-  },
-  popularBadgeText: { color: '#062318', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
-
-  radio: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)',
-  },
-  radioSelected: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  radioInner: {
-    width: 12, height: 12, borderRadius: 6,
+  // ── Bénéfices ──
+  benefits: { marginHorizontal: space.xl, gap: space.md, marginBottom: space.xl },
+  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  check: {
+    width: 24, height: 24, borderRadius: radius.full,
     backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: space.tight,
   },
+  benefitText: { color: colors.textMain, fontSize: 15, fontWeight: '600', flex: 1, lineHeight: 21 },
+  benefitStrong: { color: colors.primary, fontWeight: '800' },
 
-  bestBadge: {
-    backgroundColor: '#A4FF6B', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 6,
+  // ── Formules ──
+  plans: { marginHorizontal: space.lg, gap: space.md, marginBottom: space.lg },
+  plan: {
+    borderRadius: radius.md, overflow: 'hidden',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
+    backgroundColor: colors.surface,
   },
-  bestBadgeText: { color: '#0A2010', fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
-  trialPill: {
-    backgroundColor: 'rgba(0,230,118,0.15)', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)',
+  planSelected: {
+    borderColor: colors.primary,
+    ...Platform.select({
+      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 16 },
+      android: { elevation: 8 },
+    }),
   },
-  trialPillText: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  stripe: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: space.lg, paddingVertical: space.sm,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  stripeOn: { backgroundColor: colors.primary },
+  stripeText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
+  stripeTextOn: { color: '#062318' },
+  stripeBadge: { color: colors.textDimmed, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.5 },
+  stripeBadgeOn: { color: '#062318' },
 
-  // ── Active subscriber ──
+  planBody: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: space.lg, paddingVertical: space.lg, gap: space.md,
+  },
+  radioOff: {
+    width: 26, height: 26, borderRadius: radius.full,
+    borderWidth: strokeWidth.control, borderColor: stroke.edgeLit,
+  },
+  radioOn: {
+    width: 26, height: 26, borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  planName: { color: colors.textMuted, fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  planNameOn: { color: colors.textMain },
+  planPriceCol: { flex: 1, alignItems: 'flex-end' },
+  planPrice: { color: colors.textMain, fontSize: 21, fontWeight: '900', letterSpacing: -0.5 },
+  planAnchor: {
+    color: colors.textDimmed, fontSize: 13, fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  planPer: { color: colors.textDimmed, fontSize: 13, fontWeight: '700' },
+  planWeek: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight, fontWeight: '500' },
+
+  // ── Réassurance ──
+  reassure: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: space.sm, marginBottom: space.xxl,
+  },
+  reassureText: { color: colors.textMuted, fontSize: 13.5, fontWeight: '600' },
+
+  // ── Abonné actif ──
   activeCard: {
-    marginHorizontal: 16, marginBottom: 22,
-    borderRadius: 20, padding: 22,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)',
+    marginHorizontal: space.lg, marginBottom: space.xl,
+    borderRadius: radius.lg, padding: space.xl,
+    borderWidth: strokeWidth.control, borderColor: stroke.active,
     overflow: 'hidden',
   },
-  activeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  activeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm },
   activeCheckWrap: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 28, height: 28, borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
   activeCardTitle: { color: colors.textMain, fontSize: 17, fontWeight: '800' },
-  activeCardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 18 },
+  activeCardSub: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: space.lg },
   manageBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
     backgroundColor: colors.surface,
-    paddingHorizontal: 18, paddingVertical: 14,
-    borderRadius: 14, alignSelf: 'stretch',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: space.lg, paddingVertical: space.md,
+    borderRadius: radius.md, alignSelf: 'stretch',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     justifyContent: 'center',
   },
   manageBtnText: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
   cancelHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 14, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    marginTop: space.md, alignSelf: 'center',
   },
   cancelHintText: { color: colors.textDimmed, fontSize: 12 },
-
-  // ── Trust ──
-  trustRow: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    justifyContent: 'center', gap: 8,
-    paddingHorizontal: 16, marginTop: 8, marginBottom: 28,
-  },
-  trustPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(0,230,118,0.08)',
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
-  },
-  trustText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
 
   // ── FAQ ──
   faqTitle: {
     color: colors.textMain, fontSize: 18, fontWeight: '900',
-    marginHorizontal: 20, marginBottom: 14, letterSpacing: -0.3,
+    marginHorizontal: space.xl, marginBottom: space.md, letterSpacing: -0.3,
   },
-  faqList: { marginHorizontal: 16, gap: 8 },
+  faqList: { marginHorizontal: space.lg, gap: space.sm },
   faqItem: {
-    backgroundColor: colors.surface, borderRadius: 14,
-    paddingHorizontal: 18, paddingVertical: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    paddingHorizontal: space.lg, paddingVertical: space.lg,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-  faqItemOpened: { borderColor: 'rgba(0,230,118,0.15)' },
-  faqQRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  faqItemOpened: { borderColor: stroke.edge },
+  faqQRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
   faqQ: { color: colors.textMain, fontSize: 14, fontWeight: '700', flex: 1, lineHeight: 20 },
   faqToggle: {
-    width: 26, height: 26, borderRadius: 13,
+    width: 26, height: 26, borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center', alignItems: 'center',
   },
   faqToggleOpen: { backgroundColor: colors.primary },
   faqA: {
     color: colors.textMuted, fontSize: 13, lineHeight: 20,
-    marginTop: 12, paddingTop: 12,
+    marginTop: space.md, paddingTop: space.md,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
   },
 
-  // ── Sticky bottom ──
+  spacerActive: { height: 40 },
+  spacerBuy: { height: 210 },
+
+  // ── Barre d'achat ──
   stickyBottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingBottom: 28, paddingTop: 24,
+    paddingHorizontal: space.xl, paddingBottom: space.xl, paddingTop: space.xl,
   },
   ctaTouch: {
-    borderRadius: 18, overflow: 'hidden', marginBottom: 10,
+    borderRadius: radius.full, overflow: 'hidden', marginBottom: space.md,
     ...Platform.select({
       ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22 },
       android: { elevation: 14 },
@@ -774,15 +1114,21 @@ const styles = StyleSheet.create({
   },
   ctaGradient: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 10, paddingVertical: 20,
+    gap: space.sm, paddingVertical: space.xl,
   },
-  ctaText: { color: '#062318', fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
-  ctaHint: { color: colors.textDimmed, fontSize: 11, textAlign: 'center', marginBottom: 12, lineHeight: 16 },
+  ctaText: { color: colors.onPrimary, fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
 
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  footerLink: { color: 'rgba(255,255,255,0.25)', fontSize: 11 },
-  footerLinkUnderline: { color: 'rgba(255,255,255,0.35)', fontSize: 11, textDecorationLine: 'underline' },
-  footerSep: { color: 'rgba(255,255,255,0.15)', fontSize: 11 },
+  footer: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: space.sm, marginBottom: space.sm,
+  },
+  footerSep: { color: 'rgba(255,255,255,0.15)', fontSize: 12 },
+  footerLink: { color: colors.textDimmed, fontSize: 12 },
+  footerLinkUnderline: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
+  finePrint: {
+    color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 15,
+    textAlign: 'center', paddingHorizontal: space.sm,
+  },
 });
 
 export default SubscriptionScreen;

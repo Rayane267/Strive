@@ -239,6 +239,35 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.minKmRate = minKmRate
     }
 
+    /** Affichage du prix net de carburant dans la bulle. `fuelCostPerKm` arrive
+     *  pré-calculé du JS (conso × prix du jour) : le natif n'a ni le type de
+     *  carburant ni le tarif à la pompe. Affichage seul — verdict, €/h, €/km et
+     *  tarif enregistré restent bruts (cf. computeMetrics). Mirror iOS. */
+    @ReactMethod
+    fun setFuelDeduction(enabled: Boolean, fuelCostPerKm: Double) {
+        FloatingBubbleService.deductFuel = enabled
+        FloatingBubbleService.fuelCostPerKm = fuelCostPerKm
+    }
+
+    /** Langue de l'app (fr/en) pour les strings natives : la bulle et les
+     *  notifications doivent suivre le choix fait DANS Strive et pas la locale du
+     *  téléphone. Mirror iOS (clé `appLanguage` de l'App Group). */
+    @ReactMethod
+    fun setAppLanguage(lang: String) {
+        FloatingBubbleService.setAppLanguage(reactContext, lang)
+    }
+
+    /** Le marché : le PAYS pour le géocodage et le parser, la DEVISE pour tout
+     *  ce que le natif affiche. Mirror iOS (clés `marketCountry` et
+     *  `marketCurrency` de l'App Group). */
+    @ReactMethod
+    fun setMarket(country: String, currency: String) {
+        // `MarketFormat` persiste les deux ET propage le pays au parser comme au
+        // géocodeur : la bulle survit à l'app, et sans préférence elle repartait
+        // en euros après un redémarrage système.
+        MarketFormat.setMarket(reactContext, country, currency)
+    }
+
     /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
     @ReactMethod
     fun setTomTomApiKey(key: String) {
@@ -266,23 +295,151 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         )
     }
 
-    /** Vidange du buffer de décisions Accepter/Refuser vers le JS — appelée à
-     *  l'abonnement onRideDecision (couvre le cas où la décision a été tapée alors
-     *  que le process RN était mort). Idempotent : si déjà émise en direct,
-     *  applyRideDecision côté JS retague la même course sans effet de bord. */
+    /** Les décisions Prise/Refusée en attente. Lecture pure : rien n'est émis,
+     *  rien n'est effacé. Le JS vient les chercher quand il peut les écrire en
+     *  base, puis retire chacune par `ackRideDecision`. Parité iOS. */
     @ReactMethod
-    fun drainRideDecisions() {
+    fun getPendingRideDecisions(promise: Promise) {
         val prefs = reactContext.applicationContext
             .getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
         val arr = try { JSONArray(prefs.getString(DECISIONS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        val out = Arguments.createArray()
         for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            emit("onRideDecision", Arguments.createMap().apply {
-                putDouble("scanTs", o.getDouble("scanTs"))
-                putString("status", o.getString("status"))
+            val o = arr.optJSONObject(i) ?: continue
+            val rideId = o.optString("rideId", "")
+            val status = o.optString("status", "")
+            if (rideId.isEmpty() || (status != "ACCEPTED" && status != "DECLINED")) continue
+            out.pushMap(Arguments.createMap().apply {
+                putString("rideId", rideId)
+                putString("status", status)
             })
         }
-        prefs.edit().remove(DECISIONS_KEY).apply()
+        promise.resolve(out)
+    }
+
+    /** Retire une décision de la file : son statut est en base. Seul mécanisme
+     *  qui l'en sort — non acquittée, elle est retentée à la synchro suivante. */
+    @ReactMethod
+    fun ackRideDecision(rideId: String) {
+        if (rideId.isEmpty()) return
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(DECISIONS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        val kept = JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            // Égalité stricte : une chaîne traverse le pont React Native sans se
+            // faire rogner, là où l'ancien `scanTs` (un Double) imposait une
+            // tolérance à la milliseconde.
+            if (o.optString("rideId", "") == rideId) continue
+            kept.put(o)
+        }
+        prefs.edit().putString(DECISIONS_KEY, kept.toString()).apply()
+    }
+
+    /** Empile une décision prise DANS l'app, quand son écriture en base n'a pas
+     *  abouti — le plus souvent parce que la course n'y est pas encore : elle a
+     *  été scannée app fermée, et le journal des scans ne l'a pas encore fait
+     *  insérer. Sans ça, ce choix-là était le seul à ne pas être conservé, alors
+     *  que ceux tapés sur la notification vivent dans cette file jusqu'à ce
+     *  qu'ils aboutissent.
+     *
+     *  Même helper, même dédoublonnage sur `rideId` que les boutons de la
+     *  notification : le prochain drain la rejoue, et l'acquitte au succès.
+     *  Parité iOS (`queueRideDecision`). */
+    @ReactMethod
+    fun queueRideDecision(rideId: String, accepted: Boolean) {
+        if (rideId.isEmpty()) return
+        emitRideDecision(
+            reactContext.applicationContext,
+            rideId,
+            if (accepted) "ACCEPTED" else "DECLINED",
+        )
+    }
+
+    /** Retire la notification de résultat quand la décision a été prise DANS
+     *  l'app : elle restait sinon affichée avec ses deux boutons sur une course
+     *  déjà tranchée. Pendant de `clearLiveActivityResult` côté iOS, et même
+     *  garde — sans effet si la notification affichée porte sur une AUTRE
+     *  course, c'est-à-dire un scan plus récent. */
+    @ReactMethod
+    fun clearRideResult(rideId: String) {
+        if (rideId.isEmpty()) return
+        val ctx = reactContext.applicationContext
+        val prefs = ctx.getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(LAST_NOTIF_RIDE_KEY, null) != rideId) return
+        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+            .cancel(FloatingBubbleService.RESULT_NOTIF_ID)
+        prefs.edit().remove(LAST_NOTIF_RIDE_KEY).apply()
+    }
+
+    /** Vidange du buffer de scans vers le JS — appelée à l'abonnement
+     *  onScanResult. Couvre le scan réalisé par la bulle pendant que le process
+     *  RN était mort : sans ça la course était perdue, sans trace. Mirror iOS
+     *  (ScanBridgeModule.checkPendingScanResult / pendingScanResults). */
+    @ReactMethod
+    fun drainPendingScans() {
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        // AUCUNE purge ici : on n'efface qu'entrée par entrée, sur `ackScan`, une
+        // fois la course confirmée en base. Purger avant émission perdait tout scan
+        // que le JS recevait sans parvenir à l'écrire (réseau coupé, crash).
+        // Le rejeu est sans risque : l'index unique (user_id, scan_ts) écarte les
+        // doublons côté base.
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            emit("onScanResult", Arguments.createMap().apply {
+                putString("rideId", o.optString("rideId"))
+                putString("platform", o.optString("platform", "UNKNOWN"))
+                putDouble("fare", o.optDouble("fare", 0.0))
+                putDouble("distanceKm", o.optDouble("distanceKm", 0.0))
+                if (o.isNull("durationMin")) putNull("durationMin") else putInt("durationMin", o.optInt("durationMin"))
+                if (o.isNull("pickupAddress")) putNull("pickupAddress") else putString("pickupAddress", o.optString("pickupAddress"))
+                if (o.isNull("destinationAddress")) putNull("destinationAddress") else putString("destinationAddress", o.optString("destinationAddress"))
+                if (o.isNull("pickupDurationMin")) putNull("pickupDurationMin") else putInt("pickupDurationMin", o.optInt("pickupDurationMin"))
+                if (o.isNull("pickupDistanceKm")) putNull("pickupDistanceKm") else putDouble("pickupDistanceKm", o.optDouble("pickupDistanceKm"))
+                // Absents du buffer par conception (PII + poids) — cf. bufferScanResult.
+                putNull("imageBase64")
+                putNull("debugBlocks")
+                putInt("screenHeight", o.optInt("screenHeight", 0))
+                if (o.isNull("scanTs")) putNull("scanTs") else putDouble("scanTs", o.optDouble("scanTs"))
+                // Conservé dans le journal (cf. bufferScanResult) : c'est le seul
+                // moyen de mesurer le repli LLM sur les scans relevés après coup.
+                putBoolean("geminiUsed", o.optBoolean("geminiUsed", false))
+            })
+        }
+    }
+
+    /** Accusé de réception d'un scan : la course est en base (ou définitivement
+     *  refusée). Seul mécanisme qui retire une entrée du journal — il n'y a plus
+     *  de suppression au bout de N tentatives, donc plus de course détruite en
+     *  silence. Tant que le JS n'acquitte pas, l'entrée est rejouée. */
+    @ReactMethod
+    fun ackScan(rideId: String) {
+        if (rideId.isEmpty()) return
+        removeBufferedScan(reactContext.applicationContext, rideId)
+    }
+
+    /** Vidange du buffer d'échecs vers le JS — appelée à l'abonnement
+     *  onScanFailure. Couvre les scans cassés pendant que le process RN était
+     *  mort, qui ne laissaient sinon aucune trace. */
+    @ReactMethod
+    fun drainScanFailures() {
+        val prefs = reactContext.applicationContext
+            .getSharedPreferences(FAILS_PREFS, Context.MODE_PRIVATE)
+        val arr = try { JSONArray(prefs.getString(FAILS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+        prefs.edit().remove(FAILS_KEY).apply()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            emit("onScanFailure", Arguments.createMap().apply {
+                putString("reason", o.optString("reason", "other"))
+                putString("surface", o.optString("surface", "bubble"))
+                if (o.isNull("platform")) putNull("platform") else putString("platform", o.optString("platform"))
+                if (o.isNull("detail")) putNull("detail") else putString("detail", o.optString("detail"))
+                putDouble("occurredAt", o.optDouble("occurredAt", 0.0))
+            })
+        }
     }
 
     /** Quota journalier atteint — si true, la bulle affiche "Quota atteint"
@@ -308,12 +465,34 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     fun setScanQuota(countToday: Int, limit: Int, resetHour: Int) {
         FloatingBubbleService.scanQuotaLimit = limit
         FloatingBubbleService.quotaResetHour = resetHour
-        // Réconciliation NON destructive : le compte DB peut sous-estimer les
-        // scans réels (scan effectué hors process JS pas encore inséré). Même
-        // jour → max(natif, DB) pour ne pas rendre du quota à tort ; nouveau
-        // jour → on fait confiance au compte DB (reset).
+        // Réconciliation. Le natif compte les résultats PRÉSENTÉS, le serveur
+        // compte les courses réellement enregistrées — et entre les deux il y a
+        // le journal des scans, qui retient une course tant que l'app ne l'a pas
+        // insérée puis acquittée. Les deux nombres divergent donc légitimement.
+        //
+        // C'est le JOURNAL qui dit lequel fait autorité :
+        //
+        //  • journal NON VIDE → des scans attendent leur insertion, le compte
+        //    serveur sous-estime. On garde `max(natif, serveur)`, sinon on
+        //    rendrait du quota à tort à un chauffeur qui a scanné app fermée.
+        //
+        //  • journal VIDE → plus rien en attente, le serveur sait tout, il fait
+        //    foi. Sans cette branche le `max` était un cliquet : un scan que la
+        //    bulle a présenté mais que l'app a écarté (adresses incomplètes,
+        //    valeurs aberrantes) restait décompté sur l'appareil jusqu'au reset
+        //    du lendemain, alors que le serveur ne l'a jamais compté.
+        //
+        // Parité iOS (ScanBridgeModule.setScanQuota).
         val today = FloatingBubbleService.todayKey()
-        if (FloatingBubbleService.scanCountDay != today) {
+        val pending = try {
+            JSONArray(
+                reactContext.applicationContext
+                    .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+                    .getString(SCANS_KEY, "[]")
+            ).length()
+        } catch (e: Exception) { 0 }
+
+        if (FloatingBubbleService.scanCountDay != today || pending == 0) {
             FloatingBubbleService.scanCountDay = today
             FloatingBubbleService.scanCountToday = countToday
         } else {
@@ -332,28 +511,54 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         const val DECISIONS_PREFS = "strive_ride_decisions"
         const val DECISIONS_KEY = "pending"
 
-        /** Relaie une décision course (Accepter/Refuser) tapée sur la notification
-         *  de résultat. Bufferise (SharedPreferences) pour survivre à un process
-         *  RN mort, ET émet en direct quand l'app tourne encore (cas fréquent :
-         *  foreground service vivant). Le JS draine le buffer à l'abonnement.
-         *  Équivalent de l'AppDelegate iOS (appendRideDecision + Darwin notif). */
-        fun emitRideDecision(ctx: Context, scanTs: Double, status: String) {
+        /** Enregistre une décision course (Accepter/Refuser) tapée sur la
+         *  notification de résultat. Elle attend là que le Dashboard vienne la
+         *  chercher : plus d'émission en direct, donc plus de décision perdue
+         *  parce qu'aucun écran n'écoutait à cet instant précis.
+         *  Équivalent de l'AppDelegate iOS (appendRideDecision). */
+        fun emitRideDecision(ctx: Context, rideId: String, status: String) {
+            if (rideId.isEmpty()) return
             val prefs = ctx.getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
             val arr = try { JSONArray(prefs.getString(DECISIONS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
-            arr.put(JSONObject().put("scanTs", scanTs).put("status", status))
-            prefs.edit().putString(DECISIONS_KEY, arr.toString()).apply()
-            emit("onRideDecision", Arguments.createMap().apply {
-                putDouble("scanTs", scanTs)
-                putString("status", status)
-            })
+            // Une seule décision par course, la dernière : deux taps successifs
+            // ne doivent pas laisser deux entrées à appliquer dans l'ordre où
+            // elles sortent de la file. Parité iOS (appendRideDecision).
+            val kept = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("rideId", "") == rideId) continue
+                kept.put(o)
+            }
+            kept.put(JSONObject().put("rideId", rideId).put("status", status))
+            prefs.edit().putString(DECISIONS_KEY, kept.toString()).apply()
         }
 
+        /** Course visée par la notification de résultat actuellement affichée.
+         *  Sert à ne l'annuler que si la décision porte bien sur elle. */
+        const val LAST_NOTIF_RIDE_KEY = "lastNotifRideId"
+
+        /** Journal durable des scans. Contient TOUT scan produit, remis au JS ou
+         *  non, et n'est purgé qu'entrée par entrée via `ackScan` — une fois la
+         *  course confirmée en base. C'est la seule file de l'app : la file
+         *  hors-ligne AsyncStorage (`@strive_offline_queue`) a été supprimée avec
+         *  elle. Survit à un process RN mort, à un crash pendant l'émission et à
+         *  une panne Supabase. */
+        const val SCANS_PREFS = "strive_pending_scans"
+        const val SCANS_KEY = "pending"
+        /** Plafond de sécurité : au-delà, l'app n'a pas tourné depuis très
+         *  longtemps. On garde les plus récents. Large, parce qu'une entrée n'est
+         *  retirée que sur accusé de réception — pas au bout de N tentatives. */
+        private const val SCANS_MAX = 200
+
         fun emitScanResult(
+            ctx: Context,
             result: OcrParser.ScanResult,
             imageBase64: String? = null,
             debugBlocks: String? = null,
             screenHeight: Int = 0,
             scanTs: Double = 0.0,
+            rideId: String,
+            geminiUsed: Boolean = false,
         ) {
             val map = Arguments.createMap().apply {
                 putString("platform", result.platform.name)
@@ -378,21 +583,160 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 else putNull("debugBlocks")
                 // Hauteur image OCR (px) — pour rejouer un cas en fixture.
                 putInt("screenHeight", screenHeight)
-                // Horodatage du scan (secondes epoch) — corrélation course ↔ décision
-                // Accepter/Refuser (DashboardScreen mappe scanTs → ride id). Mirror iOS.
+                // Horodatage du scan (secondes epoch) : il DATE la course — jour
+                // d'affectation et registre de quota. Il ne l'identifie plus.
                 if (scanTs > 0) putDouble("scanTs", scanTs) else putNull("scanTs")
+                // Son identité, elle, est ici. Frappée au scan par la bulle,
+                // portée jusqu'à `rides.id`. Mirror iOS.
+                putString("rideId", rideId)
+                // Le parsing local a-t-il dû passer la main à Gemini ?
+                //
+                // Sans ce booléen, le JS ne pouvait pas le savoir : il ne voyait
+                // que SON propre fallback (celui de DashboardScreen), qui ne sert
+                // jamais quand le scan vient de la bulle. `scan_events` enregistrait
+                // donc `gemini_fallback = false` sur 100 % des scans — une
+                // constante, pas une mesure, et le coût unitaire de l'appel LLM
+                // restait invisible. Les ÉCHECS Gemini remontaient déjà
+                // (`emitScanFailure("gemini_ko")`) ; il manquait les réussites,
+                // qui sont précisément celles qui coûtent un appel facturé.
+                putBoolean("geminiUsed", geminiUsed)
             }
+            // On journalise TOUJOURS avant d'émettre, puis on n'efface que sur
+            // accusé de réception (`ackScan`) une fois la course en base.
+            //
+            // L'ancien code ne bufferisait que si l'émission échouait, au motif que
+            // « rejouer un scan n'est pas idempotent ». Ce n'est plus vrai : le
+            // rejeu réinsère la MÊME course, sous le même `id`, écartée sur la
+            // clé primaire et traitée comme un succès sans doublon. Émettre sans
+            // journaliser perdait la course dès que le JS recevait l'événement
+            // puis échouait à l'écrire (réseau, crash).
+            bufferScanResult(ctx, result, screenHeight, scanTs, rideId, geminiUsed)
             emit("onScanResult", map)
+        }
+
+        /** Journalise un scan sous son `rideId` — l'identité frappée au scan, que
+         *  le JS renverra dans `ackScan` une fois la course confirmée en base, et
+         *  qui est aussi sa clé primaire en base. Une seule valeur pour les deux :
+         *  c'est ce qui rend le rejeu inoffensif.
+         *
+         *  `imageBase64` et `debugBlocks` sont volontairement omis : le screenshot
+         *  est de la PII et pèse des Mo, hors de propos dans SharedPreferences. À
+         *  la relève le résultat est déjà final (OCR + TomTom faits), le fallback
+         *  Gemini côté JS est inutile. */
+        private fun bufferScanResult(
+            ctx: Context,
+            result: OcrParser.ScanResult,
+            screenHeight: Int,
+            scanTs: Double,
+            rideId: String,
+            geminiUsed: Boolean = false,
+        ) {
+            val prefs = ctx.applicationContext
+                .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+            val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+            arr.put(JSONObject().apply {
+                put("rideId", rideId)
+                put("platform", result.platform.name)
+                put("fare", result.fare)
+                put("distanceKm", result.distanceKm)
+                put("durationMin", result.durationMin ?: JSONObject.NULL)
+                put("pickupAddress", result.pickupAddress ?: JSONObject.NULL)
+                put("destinationAddress", result.destinationAddress ?: JSONObject.NULL)
+                put("pickupDurationMin", result.pickupDurationMin ?: JSONObject.NULL)
+                put("pickupDistanceKm", result.pickupDistanceKm ?: JSONObject.NULL)
+                put("screenHeight", screenHeight)
+                put("scanTs", if (scanTs > 0) scanTs else JSONObject.NULL)
+                // Un booléen : ni PII ni poids, contrairement au screenshot et aux
+                // blocs OCR. La raison qui les exclut du journal ne vaut pas ici,
+                // et sans lui un scan relevé après coup — le cas NORMAL quand la
+                // bulle tourne app fermée — perdrait l'information.
+                put("geminiUsed", geminiUsed)
+            })
+            val trimmed = if (arr.length() > SCANS_MAX) {
+                JSONArray().also { out ->
+                    for (i in arr.length() - SCANS_MAX until arr.length()) out.put(arr.get(i))
+                }
+            } else arr
+            prefs.edit().putString(SCANS_KEY, trimmed.toString()).apply()
+        }
+
+        /** Retire une entrée du journal — appelé par le JS via `ackScan` une fois
+         *  la course écrite en base (ou refusée définitivement). Tant qu'aucun
+         *  accusé n'arrive, l'entrée est rejouée à chaque relève : c'est ce qui
+         *  garantit qu'un scan ne peut plus se perdre. */
+        private fun removeBufferedScan(ctx: Context, rideId: String) {
+            val prefs = ctx.applicationContext
+                .getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
+            val arr = try { JSONArray(prefs.getString(SCANS_KEY, "[]")) } catch (e: Exception) { return }
+            val out = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("rideId") != rideId) out.put(o)
+            }
+            prefs.edit().putString(SCANS_KEY, out.toString()).apply()
+        }
+
+        // ─── Trace des échecs ────────────────────────────────────────────────
+        // `onScanFailed` ne fait qu'informer l'UI ; il ne laisse aucune trace
+        // exploitable. `onScanFailure` porte le MOTIF, et survit à un process RN
+        // mort — sinon un scan qui casse quand l'app est fermée est invisible.
+        const val FAILS_PREFS = "strive_pending_failures"
+        const val FAILS_KEY = "pending"
+        private const val FAILS_MAX = 50
+
+        fun emitScanFailure(
+            ctx: Context,
+            reason: String,
+            detail: String? = null,
+            platform: String? = null,
+            surface: String = "bubble",
+        ) {
+            val occurredAt = System.currentTimeMillis() / 1000.0
+            val map = Arguments.createMap().apply {
+                putString("reason", reason)
+                putString("surface", surface)
+                if (platform != null) putString("platform", platform) else putNull("platform")
+                if (detail != null) putString("detail", detail) else putNull("detail")
+                putDouble("occurredAt", occurredAt)
+            }
+            // Même règle que les résultats : on ne bufferise QUE si le JS n'a pas
+            // pu recevoir l'événement, sinon la vidange le rejouerait en double.
+            if (!emit("onScanFailure", map)) {
+                val prefs = ctx.applicationContext
+                    .getSharedPreferences(FAILS_PREFS, Context.MODE_PRIVATE)
+                val arr = try { JSONArray(prefs.getString(FAILS_KEY, "[]")) } catch (e: Exception) { JSONArray() }
+                arr.put(JSONObject().apply {
+                    put("reason", reason)
+                    put("surface", surface)
+                    put("platform", platform ?: JSONObject.NULL)
+                    put("detail", detail ?: JSONObject.NULL)
+                    put("occurredAt", occurredAt)
+                })
+                val trimmed = if (arr.length() > FAILS_MAX) {
+                    JSONArray().also { out ->
+                        for (i in arr.length() - FAILS_MAX until arr.length()) out.put(arr.get(i))
+                    }
+                } else arr
+                prefs.edit().putString(FAILS_KEY, trimmed.toString()).apply()
+            }
         }
 
         fun emitScanFailed() = emit("onScanFailed", null)
         fun emitPermissionDenied() = emit("onPermissionDenied", null)
 
-        private fun emit(event: String, params: WritableMap?) {
-            moduleInstance?.reactContext
+        /** @return true si l'événement a bien été remis au JS. False = pas de
+         *  contexte RN vivant (app tuée, bulle toujours active) → à l'appelant de
+         *  bufferiser s'il ne veut pas perdre l'information. */
+        private fun emit(event: String, params: WritableMap?): Boolean = runCatching {
+            val js = moduleInstance?.reactContext
+                // Vrai check en pont comme en bridgeless (RN 0.84) : côté
+                // bridgeless c'est reactHost.isInstanceInitialized.
+                ?.takeIf { it.hasActiveReactInstance() }
                 ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                ?.emit(event, params)
-        }
+                ?: return@runCatching false
+            js.emit(event, params)
+            true
+        }.getOrDefault(false)
     }
 
     init {

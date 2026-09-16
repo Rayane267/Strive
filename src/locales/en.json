@@ -14,7 +14,16 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "open": "Open",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "offlineTitle": "Offline",
+    "offlineSave": "No connection. You'll need to save your changes again once back online.",
+    "unsavedTitle": "Unsaved changes",
+    "unsavedMessage": "Do you want to leave without saving your changes?",
+    "stay": "Stay",
+    "leave": "Leave",
+    "back": "Back",
+    "close": "Close",
+    "dateRange": "{{start}} – {{end}}"
   },
   "errors": {
     "profileLoadFailed": "Unable to load your profile.",
@@ -45,14 +54,29 @@
       "appleTitle": "Apple Error",
       "facebookTitle": "Facebook Error",
       "rateLimit": "Too many attempts. Try again in a few minutes.",
-      "deviceSignupLimit": "Too many accounts created with this phone. Please try again later."
-    }
+      "deviceSignupLimit": "Too many accounts created with this phone. Please try again later.",
+      "accountExistsOtherProvider": "A Strive account already exists with this email address. Sign back in with the method you used the first time — Google or Apple.",
+      "signupFailed": "Couldn't create the account. Please try again in a moment.",
+      "passwordMismatch": "Passwords do not match",
+      "resetTitle": "Reset",
+      "weakPassword": "Password too weak (8 characters minimum)"
+    },
+    "backToLogin": "Back to sign in",
+    "confirmPasswordPlaceholder": "Confirm password",
+    "passwordPlaceholder": "Password",
+    "resetCtaConfirm": "Update",
+    "resetExpired": "This reset link is invalid or has expired. Request a new one.",
+    "resetExpiredTitle": "Link expired",
+    "resetSubtitle": "Choose a new password (8 characters minimum).",
+    "resetSuccess": "You can now sign in with your new password",
+    "resetSuccessTitle": "Password updated",
+    "resetTitle": "Reset password"
   },
   "profile": {
     "title": "My Profile",
     "subtitle": "Settings & Preferences",
     "general": "GENERAL",
-    "account": "Account Information",
+    "account": "Edit profile",
     "accountSub": "Email, Phone, License",
     "car": "Car Settings",
     "carSub": "Vehicle details, Fuel type",
@@ -66,10 +90,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
-    "subscriptionSub": "15 scans/day, live €/h...",
+    "subscriptionSub": "20 scans/day, live {{cur}}/h...",
     "subscriptionSubActive": "Cancel, change plan...",
     "upgradeCardTitle": "Upgrade to Strive Plus",
-    "upgradeCardSub": "15 scans/day · Live €/h · No commitment",
+    "upgradeCardSub": "20 scans/day · Live {{cur}}/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -92,8 +116,8 @@
       "errorMessage": "Type \"DELETE\" to confirm.",
       "errorGeneric": "Unable to delete. Please retry or contact support."
     },
-    "privacy": "Privacy",
-    "terms": "Terms",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use",
     "setup": {
       "title": "Create your profile",
       "subtitle": "This information is used to personalise your Strive experience.",
@@ -116,7 +140,7 @@
         "lastNameRequired": "Last name is required",
         "phoneRequired": "Phone number is required",
         "phoneInvalid": "Phone number must contain only digits",
-        "phoneLength": "Wrong number of digits for this country code",
+        "phoneLength": "{{code}} expects {{expected}} digits",
         "dobRequired": "Date of birth is required",
         "dobInvalid": "Invalid date",
         "dobMonthInvalid": "Invalid month (01–12)",
@@ -126,7 +150,14 @@
         "dobMinAge": "You must be at least 18 years old",
         "saveFailed": "Error while saving"
       }
-    }
+    },
+    "deleteAccountSub": "This cannot be undone",
+    "weekEarnings": "This week's earnings",
+    "settings": "Settings",
+    "subscription": "Subscription",
+    "supportSection": "Support",
+    "legal": "Legal",
+    "session": "Session"
   },
   "scanner": {
     "title": "Set up scanner",
@@ -168,14 +199,13 @@
   "dashboard": {
     "title": "Driver Profit",
     "subtitle": "Live Dashboard",
-    "kmRate": "€/KM",
     "greeting": "Hello, {{name}} 👋",
     "greetingDefault": "Driver",
     "banner": {
       "exhaustedTitle": "Daily limit reached",
       "exhaustedSub": "Buy credits or upgrade to Plus",
       "remaining": "{{count}} scan(s) left today",
-      "upgradeSub": "Go Plus for 50 scans/day"
+      "upgradeSub": "Go Plus for 20 scans/day"
     },
     "offline": "You are Offline",
     "goOffline": "Go Offline",
@@ -204,7 +234,8 @@
     "timeLabels": {
       "justNow": "Just now",
       "minutesAgo": "{{count}}m ago",
-      "hoursAgo": "{{count}}h ago"
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
     },
     "priceCheck": {
       "title": "Ride price",
@@ -214,7 +245,7 @@
     },
     "priceModal": {
       "title": "Actual ride price",
-      "subtitle": "Enter the final amount shown on the VTC app",
+      "subtitle": "Enter the final amount shown",
       "placeholder": "e.g. 14.50",
       "skip": "Skip",
       "confirm": "Confirm"
@@ -228,13 +259,13 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 15 scans/day so you stop driving at a loss.",
+      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 20 scans/day so you stop driving at a loss.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
     "weeklyTease": {
-      "lossTitle": "≈ €{{eur}} below your target this week",
-      "lossSub": "≈ €{{eur}}/mo at this rate",
+      "lossTitle": "≈ {{amount}} below your target this week",
+      "lossSub": "≈ {{amount}}/month at this rate",
       "cta": "Catch every underpaid ride → Strive Plus",
       "prideTitle_one": "💪 {{count}} unprofitable ride dodged this week",
       "prideTitle_other": "💪 {{count}} unprofitable rides dodged this week",
@@ -243,10 +274,15 @@
     "upgradeCard": {
       "title": "Stop driving at a loss",
       "sub": "Plus pays for itself in a single ride avoided",
-      "perk1": "15 scans/day",
-      "perk2": "Live €/h",
+      "perk1": "20 scans/day",
+      "perk2": "Live {{rate}}",
       "perk3": "History"
-    }
+    },
+    "liveActivityPermission": {
+      "title": "Live Activities",
+      "message": "To see scan results in real time, turn on Live Activities in Settings → Strive."
+    },
+    "home": "Home"
   },
   "shop": {
     "title": "Shop",
@@ -260,8 +296,8 @@
     "info1": "Credits are used automatically once your daily quota is reached.",
     "info2": "Credits never expire.",
     "info3": "Upgrade to Plus or Premium for a higher daily quota.",
-    "upgradeTitle": "Go Plus — 50 scans/day",
-    "upgradeSubtitle": "Monthly plan from €4.99",
+    "upgradeTitle": "Go Plus — 20 scans/day",
+    "upgradeSubtitle": "Monthly plan from {{price}}",
     "purchaseSuccess": "Purchase confirmed!",
     "creditsAdded": "{{count}} scan(s) added to your account.",
     "purchaseError": "Error",
@@ -273,7 +309,7 @@
     "title": "My Analytics",
     "weeklyBilan": {
       "title": "This week's recap",
-      "loss": "≈ €{{eur}} below your target this week",
+      "loss": "≈ {{amount}} below your target this week",
       "avoided_one": "💪 {{count}} unprofitable ride dodged",
       "avoided_other": "💪 {{count}} unprofitable rides dodged"
     },
@@ -286,8 +322,12 @@
     "activeHours": "Active Hours",
     "appDist": "App Distribution",
     "hourlyRate": "Hourly Rate",
-    "priceKm": "Price / km",
+    "priceKm": "Price / {{unit}}",
     "loading": "Loading data…",
+    "empty": {
+      "title": "No data yet",
+      "hint": "Scan your first ride to see your earnings, hourly rate and trends here."
+    },
     "calendar": {
       "selectDate": "Select a date",
       "oneDay": "1 Day",
@@ -310,7 +350,12 @@
     "alerts": {
       "premiumTitle": "Plus Access",
       "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
-      "limitText": "Max 7 days."
+      "limitText": "{{days}} days maximum — unlimited history is a Premium feature"
+    },
+    "earningsBy": {
+      "day": "Earnings per day",
+      "week": "Earnings per week",
+      "month": "Earnings per month"
     }
   },
   "history": {
@@ -324,18 +369,19 @@
     "empty": "No rides scanned today.",
     "emptyHint": "Your scans will appear here.",
     "emptyCta": "Start a scan",
-    "perHour": "/hr",
-    "perKm": "/km",
     "min": "min",
-    "km": "km",
     "acceptRate": "Accept. rate",
     "filterAll": "All · {{count}}",
     "selectDates": "Select date range",
-    "upgradeForHistory": "Upgrade to Plus to see your full history",
+    "upgradeForHistory": "Upgrade to Plus to explore your past days",
     "status": {
       "ACCEPTED": "ACCEPTED",
-      "DECLINED": "DECLINED"
-    }
+      "DECLINED": "DECLINED",
+      "PENDING": "PENDING"
+    },
+    "changeMonth": "Change month",
+    "otherCurrency_one": "includes {{count}} ride converted to your currency",
+    "otherCurrency_other": "includes {{count}} rides converted to your currency"
   },
   "settings": {
     "title": "Car Settings",
@@ -348,9 +394,7 @@
     "regNum": "Registration Number",
     "consumption": "CONSUMPTION",
     "avgCons": "Average Consumption",
-    "manualInput": "Manual input (L/100km)",
     "fuelCost": "Fuel Cost",
-    "priceLiter": "Price per Liter (€)",
     "proFeatures": "PRO FEATURES",
     "upgradeReq": "Upgrade required",
     "feat1Title": "Precise Fuel Consumption",
@@ -367,31 +411,48 @@
     }
   },
   "preferences": {
-    "title": "Trip Preferences",
+    "title": "Preferences",
     "subtitle": "Trip acceptance settings.",
     "save": "Save",
     "tripId": "Trip Identifier",
     "active": "Active",
     "enableTripId": "Enable Trip Identifier",
-    "enableTripIdSub": "Analyze offers via Back Tap or Shortcut",
-    "minimums": "YOUR MINIMUMS",
-    "minHr": "Minimum $/hr",
-    "minKm": "Minimum $/km",
-    "thresholdLock": "Customize your thresholds with Strive Plus",
+    "enableTripIdSub": "Analyze offers via the AssistiveTouch shortcut",
+    "minimums": "Your minimums",
+    "minHr": "Minimum {{cur}}/hr",
+    "minKm": "Minimum {{cur}}/{{unit}}",
     "dayReset": "Day reset time",
     "dayResetSub": "Time at which your daily stats reset",
     "dayReset4am": "Reset at 4 AM",
     "dayReset4amSub": "For night drivers: your day starts at 4 AM local instead of midnight",
     "includePickup": "Include pickup in calculations",
     "includePickupSub": "Counts pickup time & distance in rates for a more accurate real earnings estimate.",
+    "deductFuel": "Deduct fuel from the price",
+    "deductFuelSub": "The displayed price becomes net of estimated fuel",
+    "deductFuelMissing": "Enter your vehicle's fuel consumption for this option to have any effect.",
     "resultMode": "Dynamic Island",
     "resultModeSub": "Show scan result in the Dynamic Island. Off = classic notification.",
     "advanced": "Advanced Settings",
     "setup": "Run Setup Again",
-    "identification": "IDENTIFICATION",
-    "options": "OPTIONS",
+    "identification": "Identification",
+    "options": "Options",
     "saveSuccess": "Preferences saved successfully.",
-    "saveError": "Failed to save. Please try again."
+    "saveError": "Failed to save. Please try again.",
+    "language": "Language",
+    "push": "Push notifications",
+    "pushSub": "Scan alerts, reminders and recaps",
+    "languageSub": "Choose the app language",
+    "languageDevice": "Device language",
+    "pushDeniedTitle": "Notifications denied",
+    "pushDeniedBody": "You declined notifications for Strive. iOS won't ask again — turn them on in your device Settings.",
+    "openSettings": "Open Settings",
+    "thresholdLockCta": "Set your own with Plus",
+    "pushBlocked": "Blocked in your phone settings — tap to re-enable",
+    "country": "Country and currency",
+    "countrySub": "It sets your currency, your contributions and your profitability threshold.",
+    "countryChange": "Not my country?",
+    "currency": "Your currency",
+    "currencySub": "The one you'll read on every ride."
   },
   "upgrade": {
     "title": "Upgrade to Pro",
@@ -399,7 +460,7 @@
     "unlockSub": "Maximize your earnings with precise data and unlimited scanning capabilities.",
     "starter": "Starter",
     "free": "FREE",
-    "feat1": "5 Scans per day",
+    "feat1": "3 scans per day",
     "feat2": "Basic Estimates",
     "feat3": "Global Car Settings",
     "popular": "MOST POPULAR",
@@ -428,8 +489,6 @@
     "regPlaceholder": "AB-123-CD",
     "consumption": "CONSUMPTION",
     "avgCons": "Average consumption",
-    "unitFuel": "L/100km",
-    "unitElectric": "kWh/100km",
     "elecPrice": "Charging price",
     "proFeatures": "PRO FEATURES",
     "upgradeReq": "Subscription required",
@@ -440,36 +499,39 @@
     "feat3Title": "Live API Data",
     "feat3Sub": "Sync with Waze/Google traffic",
     "save": "Save",
-    "otherManual": "Other (Enter manually)",
+    "useTyped": "Use “{{value}}”",
     "noResult": "No results",
     "errors": {
       "required": "Please fill in all required fields.",
       "saveFailed": "Unable to save data. Please try again.",
-      "consInvalid": "Invalid consumption (between 0.1 and 99.9).",
-      "priceInvalid": "Invalid price (between 0.01 and 3 €/kWh)."
+      "consInvalid": "Invalid consumption (between {{min}} and {{max}} {{consUnit}}).",
+      "priceInvalid": "Invalid price (between 0.01 and 3 {{rate}}).",
+      "fuelPriceInvalid": "Invalid price (between 0.01 and 10 {{rate}})."
     },
     "success": {
       "saved": "Profile updated successfully."
-    }
+    },
+    "fuelPrice": "Fuel price",
+    "fuelPriceAuto": "auto if left empty"
   },
   "tutorial": {
     "skip": "Skip",
     "next": "Next",
-    "start": "Let's go",
+    "start": "Start my first scan",
     "step": "STEP",
     "openShortcuts": "Open Shortcuts",
     "openAccessibility": "Open Accessibility",
     "step1": {
       "title": "Welcome to Strive",
-      "desc": "Maximize your earnings as a VTC driver. Strive analyzes every offer so you never accept an unprofitable ride."
+      "desc": "Never accept a ride blind again. We show you what it actually pays — real {{cur}}/h and {{cur}}/{{unit}}, traffic included."
     },
     "step2": {
       "title": "Set up the scanner",
-      "desc": "Grant the accessibility and overlay permissions. A floating bubble will appear on top of your VTC app, ready to analyze offers."
+      "desc": "Allow notifications below. Accessibility and display-over-other-apps will be requested the first time you start the scanner."
     },
     "step2_ios": {
-      "title": "Install the shortcut",
-      "desc": "One tap to add the \"Analyze a ride\" shortcut to your Shortcuts app. Pre-configured and ready to use."
+      "title": "Three settings, once and for all",
+      "desc": ""
     },
     "iosPreview": {
       "title": "See It In Action",
@@ -477,66 +539,58 @@
       "verdictTake": "TAKE",
       "verdictThreshold": "Both metrics exceed your minimums ✓",
       "glance": "What you see at a glance:",
-      "metricHr": "€/hr",
       "metricHrSub": "Hourly rate (with pickup)",
-      "metricKm": "€/km",
-      "metricKmSub": "Rate per km driven",
       "metricTotal": "Total",
       "metricTotalSub": "Total trip earnings",
       "customizeCta": "Customize my thresholds",
       "verdictMaybe": "MAYBE",
       "verdictSkip": "SKIP",
       "hintGood": "Both metrics exceed your minimums ✓",
-      "hintAverage": "Good $/mi but short trip — your call",
-      "hintBad": "$/hr too low, long distance — skip this one"
-    },
-    "minimums": {
-      "title": "Set Your Minimums",
-      "desc": "Rides below these rates will be marked SKIP.",
-      "casual": "Casual",
-      "standard": "Standard",
-      "premium": "Premium",
-      "presetHint": "Tap a preset or customize below",
-      "hourly": "Minimum €/hr",
-      "hourlyHint": "Net hourly earnings. Most VTC drivers aim for €20-30/hr.",
-      "kmRate": "Minimum €/km",
-      "kmRateHint": "Covers gas + wear. Tax rate is ~€0.60/km, aim for €0.80-1.50/km.",
-      "includePickup": "Include pickup in calculations"
+      "hintAverage": "Good {{cur}}/{{unit}} but the {{cur}}/h doesn't follow — your call",
+      "hintBad": "{{cur}}/h too low, long distance — skip this one"
     },
     "quickRef": {
-      "subtitle": "HOW IT WORKS",
       "ios": {
-        "step1": "Screenshot",
-        "step1Sub": "Capture the offer",
-        "step2": "AssistiveTouch",
-        "step2Sub": "Tap the button",
-        "step3": "Verdict",
-        "step3Sub": "Instant result"
+        "step1": "Capture the offer",
+        "step1Sub": "On Uber, Bolt or Heetch",
+        "step2": "Press AssistiveTouch",
+        "step2Sub": "Without leaving the app",
+        "step3": "Read the verdict",
+        "step3Sub": "Real {{cur}}/h and {{cur}}/{{unit}}, traffic included",
+        "step4": "Mark the ride",
+        "step4Sub": "Taken or declined — that's what fills your stats"
       },
       "android": {
-        "step1": "Scanner",
-        "step1Sub": "Enable the scanner",
-        "step2": "Tap",
-        "step2Sub": "Tap the bubble",
-        "step3": "Verdict",
-        "step3Sub": "Instant result"
+        "step1": "Turn on the scanner",
+        "step1Sub": "From the Strive dashboard",
+        "step2": "Tap the bubble",
+        "step2Sub": "When the offer appears",
+        "step3": "Read the verdict",
+        "step3Sub": "Real {{cur}}/h and {{cur}}/{{unit}}, traffic included",
+        "step4": "Mark the ride",
+        "step4Sub": "Taken or declined — that's what fills your stats"
       }
     },
     "iosInstall": {
-      "step1t": "Tap \"Get Shortcut\" below",
-      "step2t": "Tap \"Add Shortcut\" in the Shortcuts app",
-      "step3t": "Come back here and tap Continue",
       "cta": "Get Shortcut",
-      "warning": "You need to install the shortcut first.",
-      "ctaDone": "Shortcut installed — reopen"
+      "ctaDone": "Open again",
+      "notifT": "Notifications",
+      "notifS": "Without them, a scan can succeed and you'd never see it.",
+      "notifCta": "Enable notifications",
+      "notifDone": "Notifications enabled",
+      "notifErrorBody": "Couldn't finish turning them on. Check your connection and try again.",
+      "shortcutT": "The shortcut",
+      "shortcutS": "It does everything: the screenshot, the analysis, the verdict. Already set up — just add it.",
+      "notifS_android": "That's how the verdict reaches you, with the Taken and Declined buttons. Without it, a successful scan may show you nothing.",
+      "confirmCta": "I added it",
+      "confirmed": "You confirmed you added it",
+      "urgentT": "Time-sensitive alerts",
+      "urgentS": "Driving Focus hides everything except what's marked urgent. Your verdict needs to be.",
+      "urgentCta": "Open notification settings"
     },
     "step3": {
       "title": "Accept or decline instantly",
-      "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and km rates in real time. Green = go, Red = decline."
-    },
-    "step3_ios": {
-      "title": "Choose your trigger",
-      "desc": "How do you want to launch the shortcut from Uber / Bolt / Heetch?"
+      "desc": "Tap the bubble when an offer appears. Strive shows the estimated hourly and {{unit}} rates in real time. Green = go, Red = decline."
     },
     "iosTrigger": {
       "recommended": "★ Recommended — Fastest option",
@@ -573,27 +627,20 @@
         "step3s": "\"Add to Home Screen\""
       },
       "cta": "Open Accessibility settings",
+      "ctaSettings": "Open Settings",
       "doneCta": "I've set it up"
-    },
-    "laTip": {
-      "title": "Don't dismiss the notification",
-      "desc": "The scan result appears in the Dynamic Island at the top of your screen. If you dismiss the notification on the Lock Screen, the result disappears too."
-    },
-    "tagRides": {
-      "title": "Mark your rides",
-      "desc": "For accurate earnings and €/h, tell Strive whether you took or declined each ride — otherwise your stats stay empty.\n\n• Dynamic Island: tap ✅ Taken or ❌ Declined on the card\n• Hands-free: say \"Hey Siri, Strive ride taken\" (or \"ride declined\")\n• No Dynamic Island: pull the notification down to reveal the buttons"
     },
     "step4": {
       "title": "Track your performance",
       "desc": "The History and Analytics tabs show your daily earnings, acceptance rate, and your most profitable platforms."
     },
     "step5": {
-      "title": "You're all set!",
-      "desc": "Configure your minimum rates in Preferences, then start the scanner from the Dashboard. Happy driving!"
+      "title": "Your first scan",
+      "desc": "Three gestures to know if a ride is worth it. A fourth so your stats know it too."
     },
     "step5_ios": {
-      "title": "You're all set!",
-      "desc": "Configure your minimum rates in Preferences. Nothing to start manually — your shortcut is ready. Happy driving!"
+      "title": "Your first scan",
+      "desc": "Three gestures to know if a ride is worth it. A fourth so your stats know it too."
     },
     "tips": {
       "step1": "Strive works with Uber, Bolt and Heetch. More platforms are coming soon.",
@@ -601,14 +648,46 @@
       "step2_ios": "You can also assign the shortcut to the Action Button (iPhone 15 Pro+) or to AssistiveTouch.",
       "step3": "Pro tip: tap the bubble when an offer appears on your VTC app. No need to switch apps.",
       "step3_ios": "Pro tip: Back Tap works through a thin case. No need to switch apps.",
-      "laTip": "The result stays visible for 10 seconds then disappears automatically.",
-      "tagRides": "The Siri voice command is the safest while driving — no need to touch your phone.",
       "step4": "The Analytics tab shows daily earnings, platform breakdown and your real-time hourly rate.",
-      "step5": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results.",
-      "step5_ios": "Tip: start with a €20/hr minimum threshold, then adjust based on your actual results."
+      "step5": "Tip: start with a {{floor}}/hr minimum threshold, then adjust based on your actual results.",
+      "step5_ios": "Tip: start with a {{floor}}/hr minimum threshold, then adjust based on your actual results."
     },
     "restartVideo": "Replay video",
-    "doneReady": "You're all set — safe travels!"
+    "recap": {
+      "title": "Your setup",
+      "desc": "Tap a row to jump to that setting.",
+      "notifT": "Notifications",
+      "notifS": "That's how the verdict reaches you when the card couldn't show it.",
+      "bubbleT": "AssistiveTouch bubble",
+      "bubbleS": "It is what you tap to analyse an offer.",
+      "urgentT": "Time-sensitive alerts",
+      "urgentS": "Driving Focus hides the verdict without them.",
+      "state_ok": "Ready",
+      "state_todo": "To enable",
+      "state_unknown": "To check",
+      "state_declared": "Confirmed",
+      "notifPath": "Settings › Notifications › Strive",
+      "bubblePath": "Settings › Accessibility › Touch › AssistiveTouch",
+      "urgentPath": "Settings › Notifications › Strive › Time Sensitive",
+      "shortcutT": "The shortcut",
+      "shortcutS": "Tap to open Shortcuts and check it's there.",
+      "shortcutPath": "Shortcuts › My Shortcuts › Analyse a ride"
+    },
+    "notifStep": {
+      "title": "Allow notifications",
+      "desc": "That's how the verdict reaches you when the card couldn't show it. Without this, a successful scan can show you nothing."
+    },
+    "tag": {
+      "title": "Mark your rides",
+      "desc": "Taken or declined: without that answer, Strive cannot compute your real earnings — your stats stay empty.",
+      "diT": "On the verdict card",
+      "diS": "Tap Taken or Declined right in the Dynamic Island.",
+      "notifT": "From the notification",
+      "notifS_ios": "No Dynamic Island? Pull the notification down and both buttons appear.",
+      "notifS_android": "The Taken and Declined buttons sit right on the result notification.",
+      "historyT": "Or later, in History",
+      "historyS": "Unanswered rides stay flagged \"Pending\" there until you decide."
+    }
   },
   "help": {
     "title": "Help & Support",
@@ -627,19 +706,19 @@
       "q3": "Why doesn't the bubble appear?",
       "a3": "Make sure both permissions are granted in the scanner setup screen: \"Display over other apps\" and \"Accessibility service\" must both be enabled.",
       "q4": "How do I change my minimum rates?",
-      "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-km rate. Changes apply immediately.",
+      "a4": "Go to Profile → Trip Preferences. Adjust the sliders for hourly rate and per-{{unit}} rate. Changes apply immediately.",
       "q5": "How do I cancel my Plus subscription?",
       "a5": "On Android: Google Play → Subscriptions. On iOS: Settings → Your name → Subscriptions. Find Strive and tap Cancel.",
       "q6": "Is my data safe?",
       "a6": "Yes. Scanning happens on your device and no screenshots are stored. Your trips are stored securely, never sold or shared, and Strive has no connection with the VTC platforms. You can wipe everything anytime from Profile → Account.",
-      "q7": "How is my hourly rate (€/h) calculated?",
-      "a7": "Strive starts from the ride fare, adds the pickup time to reach the rider, and computes the real drive time using live traffic. You get your true €/h, not a straight-line guess.",
+      "q7": "How is my hourly rate ({{cur}}/h) calculated?",
+      "a7": "Strive starts from the ride fare, adds the pickup time to reach the rider, and computes the real drive time using live traffic. You get your true {{cur}}/h, not a straight-line guess.",
       "q8": "How do fuel cost and net profit work?",
-      "a8": "From your vehicle's consumption (L/100km, or kWh/100km for electric) and the fuel price, Strive deducts each ride's cost to show your net profit. For electric, you can set your own €/kWh price in Profile → Vehicle.",
+      "a8": "From your vehicle's consumption ({{cons}}, or {{consElec}} for electric) and the fuel price, Strive deducts each ride's cost to show your net profit. For electric, you can set your own {{cur}}/kWh price in Profile → Vehicle.",
       "q9": "What is the ride quality score?",
-      "a9": "A score out of 100 given to each ride by comparing its €/h and €/km to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
+      "a9": "A score out of 100 given to each ride by comparing its {{cur}}/h and {{cur}}/{{unit}} to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
       "q10": "How many scans per day?",
-      "a10": "3 scans per day on the free plan, 15 per day with Strive Plus.",
+      "a10": "3 scans per day on the free plan, 20 per day with Strive Plus.",
       "q11": "How do I contact support?",
       "a11": "From Profile → My tickets: open a ticket and we reply right inside the app (you get a notification for every reply)."
     }
@@ -647,6 +726,7 @@
   "support": {
     "title": "My tickets",
     "subtitle": "Strive support",
+    "priorityBadge": "Priority",
     "menuSub": "Contact support, track your requests",
     "empty": "No tickets yet",
     "emptyHint": "A question or an issue? Open a ticket, we reply fast.",
@@ -662,6 +742,49 @@
       "open": "Pending",
       "answered": "Answered",
       "closed": "Closed"
+    },
+    "categoryLabel": "Category",
+    "subcategoryLabel": "Be more specific",
+    "errorLabel": "Is a recent error involved?",
+    "filterAll": "All",
+    "cat": {
+      "scan": "Scanning",
+      "subscription": "Subscription",
+      "account": "Account",
+      "data": "History",
+      "suggestion": "Suggestion",
+      "other": "Other"
+    },
+    "sub": {
+      "scan.no_detect": "No ride detected",
+      "scan.wrong_values": "Wrong numbers",
+      "scan.addresses": "Addresses misread",
+      "scan.trigger": "The shortcut won't run",
+      "scan.display": "The result doesn't show",
+      "subscription.purchase": "Purchase fails",
+      "subscription.restore": "Restore my subscription",
+      "subscription.billing": "Billing",
+      "subscription.cancel": "Cancellation",
+      "account.login": "Cannot sign in",
+      "account.profile": "Edit my details",
+      "account.delete": "Delete my account",
+      "data.missing_ride": "Missing ride",
+      "data.wrong_stats": "Wrong statistics",
+      "data.export": "Get my data"
+    },
+    "reason": {
+      "scanner_off": "Scanner turned off",
+      "session_off": "Session not started",
+      "quota_reached": "Daily quota reached",
+      "invalid_image": "Unreadable image",
+      "throttled": "Analysis already running",
+      "ocr_empty": "No text read on screen",
+      "no_addresses": "Addresses unreadable",
+      "not_a_ride": "No ride offer detected",
+      "gemini_ko": "AI analysis failed",
+      "la_start_failed": "Could not display",
+      "expired": "Analysis interrupted",
+      "timeout": "Analysis timed out"
     }
   },
   "iap": {
@@ -691,10 +814,11 @@
     "errors": {
       "emailInvalid": "Invalid email",
       "phoneInvalid": "Invalid phone number"
-    }
+    },
+    "title": "Profile"
   },
   "subscription": {
-    "label": "STRIVE PLUS",
+    "label": "STRIVE",
     "heroTitle": "Know.\nDecide. Earn.",
     "heroSub": "Not all rides are equal. With Strive Plus, know before you accept.",
     "values": {
@@ -703,7 +827,7 @@
         "sub": "Snap the offer → instant verdict on your screen."
       },
       "hourly": {
-        "title": "Live €/h",
+        "title": "Live {{cur}}/h",
         "sub": "See your real hourly rate on every ride."
       },
       "filter": {
@@ -712,33 +836,32 @@
       },
       "threshold": {
         "title": "Your threshold, your rules",
-        "sub": "Set your min €/h, Strive filters the rest."
+        "sub": "Set your min {{cur}}/h, Strive filters the rest."
       }
     },
     "feat": {
-      "scan": "Instant scan",
-      "scanText": "analysis per ride in 2 seconds",
-      "hourly": "Hourly rate €/h",
-      "hourlyText": "live on every offer",
-      "traffic": "Real-time traffic",
-      "trafficText": "drive time based on live congestion, not straight-line guesses",
-      "filter": "Smart filter",
-      "filterText": "spots unprofitable rides",
-      "threshold": "Custom thresholds",
-      "thresholdText": "your min €/h, Strive does the sorting"
+      "scan": "20 scans a day",
+      "scanText": "instead of 3 — enough to cover a full day's shift.",
+      "threshold": "Your floor, not ours",
+      "thresholdText": "you set the {{cur}}/h at which a ride is worth taking.",
+      "fuel": "Net, not gross",
+      "fuelText": "your model's real fuel consumption deducted on every ride, not an average.",
+      "history": "Your whole week",
+      "historyText": "7 days of history to spot your genuinely profitable days, not just today.",
+      "traffic": "Based on live traffic, not straight-line —",
+      "trafficText": "stop accepting rides that end up stuck in traffic."
     },
     "yearlyAccess": "YEARLY ACCESS",
     "monthlyAccess": "MONTHLY ACCESS",
     "heroTitleActive": "Strive Plus active",
-    "heroSubActive": "You're enjoying all the benefits. Manage your subscription below.",
+    "heroSubActive": "Your subscription is active. Manage it below.",
     "activeTitle": "Active subscription",
-    "activeSub": "You have 15 scans/day, live hourly rate and all Plus features.",
+    "activeSub": "{{plan}} plan",
     "manage": "Manage my subscription",
     "manageVia": "Manage via {{store}}",
     "cancelHint": "To cancel, go to your {{store}} settings.",
     "popular": "POPULAR",
     "trialRibbon": "7 DAYS FREE",
-    "trialFreeLabel": "€0.00 for 7 days",
     "trialThenPrice": "then {{price}}/mo",
     "trialHint": "Cancel anytime during the trial",
     "monthlyHint": "No commitment, cancel in 1 tap",
@@ -763,8 +886,6 @@
     "plusHeader": "Plus",
     "monthlyTab": "Monthly",
     "yearlyTab": "Yearly",
-    "monthlyFallbackPrice": "€9.99",
-    "yearlyFallbackPrice": "€89.99",
     "perMonthShort": "/mo",
     "perYearShort": "/yr",
     "perMonthEquiv": "just {{price}}/mo",
@@ -781,11 +902,16 @@
     "privacy": "Privacy",
     "errorTitle": "Error",
     "errorMsg": "Unable to complete subscription. Please try again.",
+    "alreadyOwnedMsg": "This subscription is still active on your Apple account. Tap “Restore purchases” to get your access back.",
+    "receiptInUseMsg": "This Apple purchase is already linked to another Strive account. Sign in with that account, or tap “Restore purchases”.",
+    "storeProblemMsg": "The App Store didn't respond. Check your connection and try again.",
+    "pendingTitle": "Purchase pending",
+    "pendingMsg": "The App Store still has to confirm the payment. Your access opens as soon as it does.",
     "rows": {
       "scans": {
         "label": "Daily scans",
-        "free": "1 / day",
-        "plus": "Unlimited"
+        "free": "3 / day",
+        "plus": "20 / day"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -803,17 +929,61 @@
       "history": {
         "label": "Ride history",
         "free": "Today only",
-        "plus": "Unlimited"
+        "plus": "7 days"
       },
       "hourly": {
-        "label": "Hourly rate €/h",
+        "label": "Hourly rate {{cur}}/h",
         "plus": "Live"
       },
       "support": {
         "label": "Support",
         "plus": "Priority"
       }
-    }
+    },
+    "noneFound": "No subscription found",
+    "noneFoundSub": "We can check your previous purchases",
+    "restorePrevious": "Restore previous purchases",
+    "restoreSuccessSub": "Your subscription is active again.",
+    "restoreFailSub": "Check your connection and try again.",
+    "manageStore": "Manage on the App Store",
+    "planName": "Strive Plus",
+    "periodMonth": "month",
+    "periodYear": "year",
+    "perWeekEquiv": "that's {{price}} a week",
+    "trialStrip": "{{days}}-day free trial",
+    "noPaymentToday": "No payment today",
+    "cancelAnytime": "Cancel anytime",
+    "finePrintTrial": "{{days}} days free, then {{price}} per {{period}}. Renews automatically.",
+    "finePrintNoTrial": "{{price}} per {{period}}. Renews automatically, cancel anytime.",
+    "benefit": {
+      "plus": {
+        "scans": "20 scans a day instead of 3",
+        "thresholds": "Your own {{cur}}/h and {{cur}}/{{unit}} thresholds",
+        "traffic": "{{cur}}/h based on real traffic, not straight-line",
+        "fuel": "Your model's fuel cost deducted",
+        "history": "Your stats over 7 days at a time"
+      },
+      "premium": {
+        "allPlus": "Everything in Plus",
+        "scans": "Unlimited scans",
+        "history": "Unlimited history and stats",
+        "slots": "Your best time slots, hour by hour",
+        "support": "Priority support"
+      }
+    },
+    "saveAmount": "SAVE {{amount}}",
+    "heroTitleWelcomeEnd": "Your 30 free\nscans are gone.",
+    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 20 a day — every day.",
+    "tier": {
+      "plus": "Plus",
+      "premium": "Premium"
+    },
+    "heroSubPremium": "No limits left, and the app tells you when to drive — not just which ride to take.",
+    "upgradeTitle": "What Premium adds",
+    "upgradeSub": "You keep everything Plus already gives you.",
+    "upgradeProrata": "The change is immediate. {{store}} credits the time you already paid on Plus.",
+    "ctaUpgrade": "Upgrade to Premium",
+    "bestValueStrip": "Best value"
   },
   "network": {
     "offline": "No internet connection"
@@ -835,11 +1005,17 @@
     },
     "quotaReached": {
       "title": "Quota reached",
-      "body": "You've used all your scans today. Resets in {{time}}."
+      "body": "You've used all your scans today. Resets in {{time}}.",
+      "bodyFree": "You've used today's scans. Go Plus for {{scans}} scans a day — resets in {{time}}."
+    },
+    "rideRejected": {
+      "title": "Ride not saved",
+      "bodyQuota": "Daily quota exceeded: this ride could not be added to your stats.",
+      "bodyOther": "This ride was rejected on save. Contact support if it happens again."
     },
     "sessionClosed": {
       "title": "Session closed",
-      "body": "Your session was closed after 1 hour of inactivity."
+      "body": "Your session was closed after 2 hours without a scan."
     },
     "syncDropped": {
       "title": "Sync incomplete",
@@ -848,15 +1024,18 @@
     "weeklyRecap": {
       "title": "📊 Your week in review",
       "body": "See how much more you could earn with Strive.",
-      "bodyLoss": "≈ €{{eur}} below your target this week. See how to fix it."
+      "bodyLoss": "≈ {{amount}} below your target this week. See how to avoid it."
     }
   },
   "tier": {
     "free": "Free",
-    "freeBadge": "FREE",
+    "freeBadge": "Free",
     "plus": "★ Plus",
     "plusBadge": "PLUS",
-    "premiumBadge": "PREMIUM"
+    "premiumBadge": "PREMIUM",
+    "plusOnly": "Strive Plus only",
+    "plusName": "Plus",
+    "premiumName": "Premium"
   },
   "countries": {
     "fr": "France",
@@ -879,5 +1058,271 @@
     "ro": "Romania",
     "pl": "Poland",
     "us": "United States / Canada"
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Continue",
+    "start": "Get started",
+    "other": "Other",
+    "counter": "Step {{current}} of {{total}}",
+    "demo": {
+      "title": "One ride, one verdict",
+      "desc": "Strive reads the offer and works out what it actually pays. Tap the card to see other rides."
+    },
+    "platforms": {
+      "title": "Which apps do you drive for?",
+      "desc": "Strive will learn to read their screens. You can pick more than one."
+    },
+    "hours": {
+      "title": "How many hours per week?",
+      "desc": "Time actually behind the wheel, not time online."
+    },
+    "goal": {
+      "title": "What you want to keep",
+      "desc": "Per month, after costs. This is your target, not your revenue."
+    },
+    "costs": {
+      "title": "Your fixed monthly costs",
+      "desc": "Vehicle lease or loan, insurance, subscriptions. What goes out every month no matter what.",
+      "none": "None",
+      "subOwned": "Vehicle paid off",
+      "subCredit": "Vehicle loan",
+      "subLease": "Lease + insurance",
+      "subWeekly": "Weekly rental",
+      "subRental": "All-in rental"
+    },
+    "status": {
+      "title": "Your status",
+      "desc": "It sets the share of your revenue that goes to social contributions.",
+      "auto": "Sole trader",
+      "company": "Company",
+      "employee": "Employee",
+      "autoSub": "≈21% of turnover, nothing deductible",
+      "companySub": "≈45% of pay, expenses deducted first",
+      "employeeSub": "No contributions on your side",
+      "independent": "Self-employed",
+      "independentSub": "By country: 20.5% of net income (BE), 10.6% (CH), 15% of turnover (PT)",
+      "autonomo": "Autónomo",
+      "autonomoSub": "Flat monthly contribution (RETA cuota) — count it in your fixed costs",
+      "sole_trader": "Sole trader",
+      "sole_traderSub": "≈6% of profit (National Insurance Class 4), expenses deducted first"
+    },
+    "result": {
+      "title": "Your driving rule",
+      "desc": "",
+      "fromGoal": "Computed from your target, your hours and your costs. Strive will mark any ride below it as SKIP.",
+      "floored": "Your target is reachable below this — we keep this rate, because a ride paying less costs you money once wear and contributions are counted.",
+      "yoursCaption": "Your break-even rate",
+      "answersLine": "{{goal}} net · {{hours}} h a month · {{revenue}} revenue",
+      "freeApplies": "Free applies",
+      "yoursLabel": "Your threshold",
+      "decisionKicker": "Your rule, from now on",
+      "lockedPrompt": "Below your rate, a ride is not worth your time.",
+      "readyPrompt": "Your rate is ready. Below it, you decline.",
+      "plusOnly": "With Plus",
+      "unlockCta": "Apply my rate with Plus",
+      "unlockReassurance": "Your personal rate will be applied to every ride.",
+      "later": "Continue without",
+      "lockedBody": "Strive worked it out from your answers. Unlock it with Plus so it applies to your rides.",
+      "lockedTag": "LOCKED"
+    },
+    "computing": {
+      "title": "Working out your rate",
+      "desc": "",
+      "gross": "Grossing up your net target",
+      "costs": "Adding your fixed costs",
+      "hours": "Spreading it over your monthly hours",
+      "km": "Setting your per-kilometre floor"
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "menuSub": "Technical traces and failed scans",
+    "tracingTitle": "Collect traces",
+    "tracingSub": "Records what the Dynamic Island does during a scan. When off, nothing is written to the device.",
+    "androidNote": "Android has no Live Activity: only the failed-scan list is filled in here.",
+    "traceTitle": "Live Activity trace",
+    "traceEmpty": "No trace yet. Turn collection on, reproduce the problem, then come back.",
+    "traceWaiting": "Collecting. Run a scan, then come back here.",
+    "clear": "Clear trace",
+    "failuresTitle": "Failed scans",
+    "failuresEmpty": "No failures recorded in the last 30 days.",
+    "reload": "Reload",
+    "countersTitle": "Anti-abuse counters",
+    "countersHint": "Clears the Keychain signup counter and regenerates the device identifier. Use it to replay a create → delete → recreate account cycle.",
+    "countersReset": "Reset this device",
+    "countersResetting": "Resetting…",
+    "countersDone": "Counters cleared. The device now looks brand new: signup quota free and welcome gift replayable.",
+    "presTitle": "Dynamic Island — presentations",
+    "widgetNeverSeen": "never seen — it isn’t writing to the App Group",
+    "presNeedsTracing": "Turn collection on above, then drive as usual. Counters fill up on every scan result.",
+    "presWaiting": "No result measured since the reset. Run a scan.",
+    "presExpanded": "Expanded island",
+    "presCompact": "Compact",
+    "presMinimal": "Minimal pill",
+    "presSince": "Measuring since {{date}}",
+    "presReset": "Restart measurement",
+    "replayTitle": "Replay first launch",
+    "replayHint": "Opens the gift screen without touching the database, as many times as needed. The second button re-arms onboarding and the tutorial — restart the app afterwards.",
+    "replayGift": "Show the free-scans screen",
+    "replayOnboarding": "Re-arm onboarding",
+    "replayDone": "Done. Fully close the app and relaunch it to see the flow again."
+  },
+  "welcomeGift": {
+    "body": "Use them within {{days}} days, on top of your daily scans.",
+    "cta": "Claim them",
+    "hello": "Welcome.",
+    "helloNamed": "Welcome, {{name}}.",
+    "unit": "free scans",
+    "a11y": "{{n}} free scans"
+  },
+  "bestHours": {
+    "title": "Best time slots",
+    "menuTitle": "Best time slots",
+    "cardTitle": "Your best time slots",
+    "cardSub": "When it rings, and when it pays",
+    "lockTitle": "Premium only",
+    "lockSub": "A grid of your last 90 days, hour by hour: when your phone rings most, and when your rides actually pay. It needs months of history to mean anything.",
+    "lockCta": "See Premium",
+    "metric": {
+      "offers": "It rings",
+      "hourlyRate": "It pays"
+    },
+    "hint": {
+      "offers": "The hours your phone rang most. Declined rides count: they show the work was there.",
+      "hourlyRate": "What your accepted rides really earned, fuel deducted, over the time actually spent driving."
+    },
+    "slot": "{{day}} {{hour}}:00–{{nextHour}}:00",
+    "detailOffers_one": "{{count}} ride",
+    "detailOffers_other": "{{count}} rides",
+    "perHour": "/h",
+    "noAccepted": "no accepted ride",
+    "tapHint": "Tap a cell to see that slot in detail.",
+    "top": {
+      "offers": "Your busiest slots",
+      "hourlyRate": "Your best paying slots"
+    },
+    "notEnoughSlots": "No slot reaches {{min}} rides yet — below that, a ranking rests on nothing.",
+    "empty": "Not enough data yet",
+    "emptyHint": "The grid needs around {{min}} scanned rides to mean anything. You are at {{current}}.",
+    "footnote": "Over the last {{days}} days · {{rides}} scanned rides. Declines count towards volume, never towards the hourly rate."
+  },
+  "rideNetwork": {
+    "title": "Network",
+    "menuTitle": "Network",
+    "menuSub": "Pass a ride on, take one in",
+    "tab": {
+      "offer": "Offer",
+      "receive": "Receive"
+    },
+    "share": {
+      "driver": "Driver taking it",
+      "platform": "Strive"
+    },
+    "offer": {
+      "intro": "A client on the phone while you are already driving? Pass it to the network: a driver near you takes it, you keep 10% of the agreed price.",
+      "tripSection": "THE TRIP",
+      "pickupPlaceholder": "Pickup",
+      "dropoffPlaceholder": "Drop-off",
+      "fareSection": "AGREED PRICE",
+      "fareHint": "The price you just quoted the client. That is what gets split — nothing is added on top.",
+      "splitSection": "THE SPLIT",
+      "splitHint": "What that price becomes, before you publish.",
+      "shareYou": "You, for the referral",
+      "compareTitle": "FOR COMPARISON",
+      "compareBody": "On a classic platform the commission sits around {{rate}}%: {{amount}} taken out of this ride. Strive takes {{ours}}.",
+      "publish": "Publish to the network",
+      "missing": "Fill in the trip and the agreed price.",
+      "publishedTitle": "Ride published",
+      "publishedBody": "Visible to the {{drivers}} network drivers around the pickup.",
+      "publishedShare": "Your share if someone takes it: {{amount}}",
+      "publishAnother": "Offer another ride"
+    },
+    "receive": {
+      "howTitle": "How it works",
+      "how1": "A driver in the network passes you a ride they cannot take — they are already driving.",
+      "how2": "You see what you get before accepting: the agreed price, minus 10% for whoever brought it and 2% for Strive.",
+      "how3": "When you are the one passing a ride on, it works the other way: you get the 10% without leaving yours.",
+      "howGot": "Got it",
+      "nearby": "Rides nearby",
+      "nearbyCount_one": "{{count}} available",
+      "nearbyCount_other": "{{count}} available",
+      "toPickup": "{{km}} {{unit}} · {{min}} min away",
+      "posted": "{{min}} min ago",
+      "net": "NET FOR YOU",
+      "grossNote": "Out of {{gross}} agreed · {{referrer}} to the driver who brought it · {{platform}} to Strive",
+      "verified": "Verified",
+      "broughtBy": "Passed you this ride",
+      "ridesShared_one": "{{count}} shared to the network",
+      "ridesShared_other": "{{count}} shared to the network",
+      "accept": "Accept · {{amount}}",
+      "acceptedNote": "Accepted. The client has been told, you get their number.",
+      "weekTitle": "THIS WEEK IN THE NETWORK",
+      "weekTaken": "Rides taken",
+      "weekReferral": "Referral commissions",
+      "weekMeta": "{{taken}} rides taken from the network · {{referred}} rides passed to other drivers."
+    }
+  },
+  "native": {
+    "analysisFailed": "Analysis failed",
+    "analyzing": "Analyzing…",
+    "goPlus": "Go Plus to see",
+    "sessionRunning": "Session running",
+    "tryAnother": "Try another screenshot",
+    "paysForItself": "Pays for itself in one ride",
+    "error": "Error",
+    "ride": "Ride",
+    "earningsCaps": "EARNINGS",
+    "perHourCaps": "/HOUR",
+    "declined": "Declined",
+    "taken": "Taken",
+    "noSession": "No session",
+    "startSession": "Start your session in Strive.",
+    "perHour": "Per hour",
+    "earnings": "Earnings",
+    "online": "Online",
+    "distance": "Distance",
+    "signIn": "Sign in to Strive to analyse your rides.",
+    "scannerOff": "Scanner disabled — enable it in Strive › Preferences.",
+    "sessionRequired": "Session required",
+    "sessionRequiredBody": "Please start your session in Strive to begin scanning.",
+    "quotaPlus": "Daily quota reached — go Plus to keep scanning today.",
+    "quotaTomorrow": "Daily quota reached — come back tomorrow.",
+    "invalidImage": "Invalid image — try again with a screenshot.",
+    "alreadyRunning": "Analysis already running — hold on a second.",
+    "cardHidden": "Card hidden — session still active. Open Strive to bring it back.",
+    "noOfferRetry": "No ride offer detected — try again with another screenshot.",
+    "interrupted": "Analysis interrupted — run the scan again.",
+    "inactiveSession": "Inactive session",
+    "inactiveSessionBody": "You haven't scanned in 1 hour. Consider ending your session.",
+    "analysisFailedRetry": "Analysis failed — please try again.",
+    "analyzingLong": "Analyzing…",
+    "openInStrive": "Open in Strive",
+    "timeout": "Analysis timed out — check your connection",
+    "useTheApp": "📱  Use the app\nScanning runs from Strive, via the Action button or the shortcut.",
+    "openStrive": "Open Strive",
+    "noImage": "No image received",
+    "errorPrefix": "Error: ",
+    "unsupportedFormat": "Unsupported image format",
+    "noImageInShare": "No image found in the share",
+    "noOffer": "No ride offer detected",
+    "aiAnalysis": "AI analysis in progress…",
+    "cannotAnalyze": "Could not analyze this image",
+    "addressesUnreadable": "Scan failed — addresses unreadable, try again",
+    "routing": "Calculating the route…",
+    "alreadyRunningShare": "⏳  Analysis already running\nOpen Strive to see the result",
+    "scannerOffShare": "⏸  Scanner disabled\nEnable it in Strive › Preferences",
+    "quotaShare": "🔒  Daily quota reached\nCome back tomorrow or buy credits",
+    "appName": "Strive",
+    "accessibilityDescription": "Strive is a professional tool for ride-hailing drivers. This accessibility service is used exclusively to capture the screen of Uber, Bolt, and Heetch apps when the user taps the scan button, to automatically extract ride information (fare, distance, addresses) via on-device OCR. No personal data is read or collected. Analysis runs locally on the device and is only triggered by an explicit user action.",
+    "bubbleGoOnline": "Go online to scan",
+    "bubbleSessionBody": "Start your session in Strive to scan rides.",
+    "bubbleNotifTitle": "Strive Scanner active",
+    "bubbleNotifBody": "Tap the pill to scan",
+    "bubbleOnline": "online",
+    "bubbleRideTaken": "✅ Ride taken",
+    "bubbleRideDeclined": "❌ Declined",
+    "bubbleQuota": "Quota reached",
+    "bubbleQuotaFree": "Quota reached · Go Plus"
   }
 }

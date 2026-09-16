@@ -9,5 +9,12 @@
 	</dict>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<!-- App Group partagé avec l'app. Sans cette clé, StriveMarket et
+	     StriveNativeStrings retombaient sur la constante écrite en dur dans
+	     StriveActivityAttributes.swift : juste aujourd'hui, et muette le jour où
+	     le groupe change — l'app suivrait, l'extension non. Les trois cibles
+	     portent maintenant la même clé. -->
+	<key>StriveAppGroupId</key>
+	<string>group.com.striveapp.app</string>
 </dict>
 </plist>

@@ -3,6 +3,15 @@
 
 @interface RCT_EXTERN_MODULE(ScanBridge, RCTEventEmitter)
 
+RCT_EXTERN_METHOD(getDiagnostics:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(resetPresentationCounters)
+
+RCT_EXTERN_METHOD(setDiagnosticsTracing:(BOOL)enabled)
+
+RCT_EXTERN_METHOD(clearDiagnostics)
+
 RCT_EXTERN_METHOD(startScanner:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
@@ -36,17 +45,47 @@ RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
                   limit:(nonnull NSNumber *)limit
                   resetHour:(nonnull NSNumber *)resetHour)
 
+// Accusé de réception d'un scan : retire l'entrée du journal une fois la course
+// écrite en base. Sans lui, l'entrée est rejouée à chaque relève. `rideId` est
+// l'identité frappée au scan — la même clé partout, jusqu'à `rides.id`.
+RCT_EXTERN_METHOD(ackScan:(NSString *)rideId)
+
+RCT_EXTERN_METHOD(getPendingRideDecisions:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(ackRideDecision:(NSString *)rideId)
+
+// Décision prise dans l'app dont l'écriture a échoué : elle rejoint la file, au
+// même titre que celles tapées sur la carte ou la notification.
+RCT_EXTERN_METHOD(queueRideDecision:(NSString *)rideId
+                  accepted:(BOOL)accepted)
+
 RCT_EXTERN_METHOD(setSessionOnline:(BOOL)online)
 
 RCT_EXTERN_METHOD(updateSessionKPI:(NSDictionary *)payload)
+
+RCT_EXTERN_METHOD(clearLiveActivityResult:(NSString *)rideId)
 
 RCT_EXTERN_METHOD(setUseLiveActivity:(BOOL)enabled)
 
 RCT_EXTERN_METHOD(setAppLanguage:(NSString *)lang)
 
+RCT_EXTERN_METHOD(setMarket:(NSString *)country
+                  currency:(NSString *)currency)
+
 RCT_EXTERN_METHOD(setScannerPreferences:(nonnull NSNumber *)minHourlyRate
                   minKmRate:(nonnull NSNumber *)minKmRate
                   includePickup:(BOOL)includePickup)
+
+RCT_EXTERN_METHOD(hideSplash)
+
+RCT_EXTERN_METHOD(setFuelDeduction:(BOOL)enabled
+                  fuelCostPerKm:(nonnull NSNumber *)fuelCostPerKm)
+
+// Sans cet export, l'implémentation Swift n'est pas visible du JS : la clé
+// `scannerEnabled` de l'App Group n'était jamais écrite, donc le toggle
+// « scanner actif » restait sans effet sur la Share Extension et l'AppIntent.
+RCT_EXTERN_METHOD(setScannerEnabled:(BOOL)enabled)
 
 RCT_EXTERN_METHOD(openOverlayPermissionSettings)
 
@@ -79,5 +118,13 @@ RCT_EXTERN_METHOD(scheduleLocalNotification:(NSString *)identifier
                   delaySeconds:(double)delaySeconds)
 
 RCT_EXTERN_METHOD(cancelLocalNotification:(NSString *)identifier)
+
+RCT_EXTERN_METHOD(selectionHaptic)
+
+// Bord bas adouci des ScrollView, iOS 26. Sans cet export l'implémentation Swift
+// reste invisible du JS et l'effet ne se pose jamais.
+RCT_EXTERN_METHOD(applySoftScrollEdges)
+
+RCT_EXTERN_METHOD(openNotificationSettings)
 
 @end

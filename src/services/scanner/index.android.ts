@@ -40,10 +40,40 @@ export const scannerService: ScannerService = {
   setPreferences: (includePickup: boolean) => ScanBridge.setPreferences(includePickup),
   setThresholds: (minHourlyRate: number, minKmRate: number) =>
     ScanBridge.setThresholds(minHourlyRate, minKmRate),
+  // Pas de splash natif animé sur Android : le bootsplash suffit.
+  hideSplash: () => {},
+  setFuelDeduction: (enabled: boolean, fuelCostPerKm: number) =>
+    ScanBridge.setFuelDeduction?.(enabled, fuelCostPerKm),
+  setMarket: (country: string, currency: string) =>
+    ScanBridge.setMarket?.(country, currency),
   setTomTomApiKey: (key: string) => ScanBridge.setTomTomApiKey(key),
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
+  ackScan: (rideId: string) => ScanBridge.ackScan?.(rideId),
+
+  getPendingRideDecisions: async () => {
+    try {
+      return (await ScanBridge.getPendingRideDecisions?.()) ?? [];
+    } catch {
+      return [];
+    }
+  },
+  ackRideDecision: (rideId: string) => ScanBridge.ackRideDecision?.(rideId),
+  queueRideDecision: (rideId: string, status: 'ACCEPTED' | 'DECLINED') =>
+    ScanBridge.queueRideDecision?.(rideId, status === 'ACCEPTED'),
+  // Retire la notification de résultat quand la décision a été prise dans
+  // l'app : elle restait sinon affichée avec ses boutons, sur une course déjà
+  // tranchée. Pendant de `clearLiveActivityResult` côté iOS.
+  clearRideResult: (rideId: string) => ScanBridge.clearRideResult?.(rideId),
+
+  // Android n'a pas de Live Activity : rien à tracer de ce côté. L'écran
+  // Diagnostic n'y affichera que les échecs de scan, qui viennent de Supabase.
+  getDiagnostics: async () => ({ trace: '', lastStep: '', tracing: false }),
+  // Pas de Dynamic Island sur Android : rien à compter.
+  resetPresentationCounters: () => {},
+  setDiagnosticsTracing: () => {},
+  clearDiagnostics: () => {},
   // Android : la bulle est pilotée par start()/stop() (toggle iOS-only).
   setScannerEnabled: () => {},
 
@@ -55,8 +85,22 @@ export const scannerService: ScannerService = {
 
   requestMediaProjectionPermission: () => ScanBridge.requestMediaProjectionPermission(),
 
-  onScanResult: (cb: (result: ScanResult) => void) =>
-    emitter.addListener('onScanResult', cb),
+  // On s'abonne PUIS on draine le buffer natif
+  // (scans effectués par la bulle pendant que le process RN était mort) → ils
+  // atteignent le listener fraîchement posé au lieu d'être perdus.
+  onScanResult: (cb: (result: ScanResult) => void) => {
+    const sub = emitter.addListener('onScanResult', cb);
+    ScanBridge.drainPendingScans?.();
+    return sub;
+  },
+
+  // On s'abonne PUIS on draine : les échecs survenus process RN mort sont
+  // bufferisés côté natif et n'atteindraient sinon jamais la trace.
+  onScanFailure: (cb: (f: any) => void) => {
+    const sub = emitter.addListener('onScanFailure', cb);
+    ScanBridge.drainScanFailures?.();
+    return sub;
+  },
 
   onScanFailed: (cb: () => void) =>
     emitter.addListener('onScanFailed', cb),
@@ -64,11 +108,6 @@ export const scannerService: ScannerService = {
   // Décisions Accepter/Refuser tapées sur la notification de résultat. On
   // s'abonne PUIS on draine le buffer natif (décisions prises pendant que le JS
   // n'écoutait pas / process mort) → elles atteignent le listener fraîchement posé.
-  onRideDecision: (cb: (decision: { scanTs: number; status: 'ACCEPTED' | 'DECLINED' }) => void) => {
-    const sub = emitter.addListener('onRideDecision', cb);
-    ScanBridge.drainRideDecisions?.();
-    return sub;
-  },
 
   onPermissionDenied: (cb: () => void) =>
     emitter.addListener('onPermissionDenied', cb),

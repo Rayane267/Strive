@@ -10,5 +10,17 @@
 	<array>
 		<string>group.com.striveapp.app</string>
 	</array>
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+	<!-- Capacité Push Notifications. Sans cette clé, `registerForRemoteNotifications()`
+	     échoue en silence côté app : iOS n'appelle jamais
+	     `didRegisterForRemoteNotificationsWithDeviceToken`, `Messaging.apnsToken`
+	     reste nul, et `getToken()` lève « No APNS token specified before fetching
+	     FCM Token ». `registerPushToken` renvoyait alors 'error' à chaque essai —
+	     d'où l'alerte réseau juste après avoir accordé l'autorisation.
+	     `development` est la valeur normale du fichier : Xcode la remplace par
+	     `production` à la signature avec un profil de distribution. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

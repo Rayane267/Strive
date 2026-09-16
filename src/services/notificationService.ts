@@ -11,9 +11,62 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { navigateFromNotification } from '../navigation/navigationRef';
+import { toLocalDateKey } from '../utils/dateUtils';
 
 const FCM_TOKEN_KEY = '@strive_fcm_token';
 const LAST_REMINDER_KEY = '@strive_last_reminder';
+
+/**
+ * Le choix du chauffeur, tel qu'il l'a exprimé, et non tel qu'on arrive à le
+ * relire.
+ *
+ * POURQUOI IL FAUT L'ÉCRIRE. `getNotificationStatus()` interroge Firebase, et
+ * Firebase n'est pas toujours joignable au démarrage à froid : `getApp()` lève
+ * avant son initialisation, la réponse est alors `unknown`. Les deux écrans qui
+ * s'en servaient exigeaient `=== 'granted'`, donc `unknown` valait NON —
+ * l'interrupteur du Profil et l'étape du tutoriel repassaient à « désactivé » à
+ * chaque lancement, alors que le système, lui, n'avait rien oublié.
+ *
+ * Ce drapeau est la mémoire de l'app. Il ne remplace jamais une réponse claire
+ * du système (`granted`/`denied` font foi) : il ne sert qu'à combler `unknown`.
+ */
+const PUSH_CHOICE_KEY = '@strive_push_choice';
+
+export type PushChoice = 'granted' | 'denied' | null;
+
+export async function getPushChoice(): Promise<PushChoice> {
+  try {
+    const v = await AsyncStorage.getItem(PUSH_CHOICE_KEY);
+    return v === 'granted' || v === 'denied' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+async function rememberPushChoice(choice: Exclude<PushChoice, null>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PUSH_CHOICE_KEY, choice);
+  } catch {}
+}
+
+/**
+ * Ce que l'app doit croire, en croisant le système et sa propre mémoire.
+ *
+ * `unknown` seul ne veut rien dire : il faut alors retomber sur le dernier choix
+ * connu plutôt que d'inventer un refus.
+ */
+export async function isPushEffectivelyOn(): Promise<boolean> {
+  const [status, choice, token] = await Promise.all([
+    getNotificationStatus(),
+    getPushChoice(),
+    AsyncStorage.getItem(FCM_TOKEN_KEY),
+  ]);
+  if (status === 'denied') return false;
+  if (status === 'granted') return !!token;
+  // `unknown` : le système ne répond pas. La mémoire tranche, et le jeton
+  // prouve qu'un enregistrement a réussi au moins une fois.
+  return choice === 'granted' && !!token;
+}
 
 interface NotificationPayload {
   title: string;
@@ -22,28 +75,62 @@ interface NotificationPayload {
 }
 
 /**
+ * Verdict de l'enregistrement, pour que l'appelant puisse RÉAGIR.
+ *
+ * La fonction sortait en `void` quelle que soit l'issue. Conséquence sur iOS :
+ * un chauffeur qui avait refusé les notifications une première fois voyait
+ * l'interrupteur revenir en arrière sans un mot — le système ne repropose
+ * JAMAIS sa fenêtre après un refus, il faut passer par les Réglages, et rien
+ * ne le lui disait. `denied` existe pour qu'on puisse l'y emmener.
+ */
+export type PushRegisterResult = 'granted' | 'denied' | 'unavailable' | 'error';
+
+/**
  * Enregistre le token FCM sur le profil Supabase de l'utilisateur.
  * Appelé au démarrage de l'app si l'utilisateur est connecté.
  */
-export async function registerPushToken(userId: string): Promise<void> {
+export async function registerPushToken(
+  userId: string,
+  /**
+   * `false` = on n'AFFICHE PAS la fenêtre système ; on enregistre le jeton
+   * seulement si la permission est déjà accordée.
+   *
+   * C'est le mode du démarrage. Demander la permission au moment de la connexion
+   * était le pire instant possible : le chauffeur vient de créer son compte, il
+   * n'a encore rien vu de l'app, il n'a aucune raison de dire oui — et un refus
+   * est définitif, le système ne repropose jamais sa fenêtre. Le seul bon moment
+   * est celui où il coche l'interrupteur : là il l'a demandé.
+   */
+  prompt = true,
+): Promise<PushRegisterResult> {
   try {
     const fcm = await getMessagingApi();
-    if (!fcm) return;
+    if (!fcm) return 'unavailable';
 
     const messagingInstance = fcm.getMessaging(fcm.getApp());
 
-    const authStatus = await fcm.requestPermission(messagingInstance);
+    // C'est CET appel qui affiche la fenêtre « Strive souhaite vous envoyer des
+    // notifications ». Il ne la montre qu'une fois par installation : ensuite le
+    // système répond de mémoire, sans rien afficher.
+    const authStatus = prompt
+      ? await fcm.requestPermission(messagingInstance)
+      : await fcm.hasPermission(messagingInstance);
     const enabled =
       authStatus === fcm.AuthorizationStatus.AUTHORIZED ||
       authStatus === fcm.AuthorizationStatus.PROVISIONAL;
 
-    if (!enabled) return;
+    if (!enabled) {
+      await rememberPushChoice('denied');
+      return 'denied';
+    }
 
     const token = await fcm.getToken(messagingInstance);
-    if (!token) return;
+    if (!token) return 'error';
+
+    await rememberPushChoice('granted');
 
     const cached = await AsyncStorage.getItem(FCM_TOKEN_KEY);
-    if (cached === token) return;
+    if (cached === token) return 'granted';
 
     let appLang = 'fr';
     try {
@@ -61,8 +148,10 @@ export async function registerPushToken(userId: string): Promise<void> {
       .eq('id', userId);
 
     await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+    return 'granted';
   } catch (e) {
     __DEV__ && console.warn('[NOTIF] registerPushToken error:', e);
+    return 'error';
   }
 }
 
@@ -70,6 +159,33 @@ export async function registerPushToken(userId: string): Promise<void> {
  * Configure les listeners de notifications (foreground + background).
  * Retourne une fonction de cleanup.
  */
+/**
+ * État de la permission notifications, SANS jamais afficher la fenêtre système.
+ *
+ * Existe pour le récapitulatif du tutoriel : il doit pouvoir dire « Prêt » ou
+ * « À activer » sans déclencher de demande — la fenêtre ne s'affiche qu'une fois
+ * par installation, et la brûler en affichant un état serait la pire façon de la
+ * perdre.
+ *
+ * `unknown` n'est pas un détail : sur un appareil sans Firebase configuré ou un
+ * simulateur, on ne SAIT pas. Le récapitulatif doit alors le dire plutôt que
+ * d'afficher un faux « Prêt » vert, qui ferait croire au chauffeur que son
+ * installation fonctionne.
+ */
+export async function getNotificationStatus(): Promise<'granted' | 'denied' | 'unknown'> {
+  try {
+    const fcm = await getMessagingApi();
+    if (!fcm) return 'unknown';
+    const authStatus = await fcm.hasPermission(fcm.getMessaging(fcm.getApp()));
+    return authStatus === fcm.AuthorizationStatus.AUTHORIZED ||
+           authStatus === fcm.AuthorizationStatus.PROVISIONAL
+      ? 'granted'
+      : 'denied';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function setupNotificationListeners(
   onNotification?: (payload: NotificationPayload) => void,
 ): () => void {
@@ -135,7 +251,7 @@ export function setupNotificationListeners(
 export async function scheduleSessionReminder(): Promise<void> {
   try {
     const lastReminder = await AsyncStorage.getItem(LAST_REMINDER_KEY);
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateKey(new Date());
 
     if (lastReminder === today) return; // Already reminded today
 
@@ -166,6 +282,7 @@ async function getMessagingApi(): Promise<{
   getApp: () => any;
   getMessaging: (app: any) => any;
   requestPermission: (m: any) => Promise<number>;
+  hasPermission: (m: any) => Promise<number>;
   getToken: (m: any) => Promise<string>;
   onMessage: (m: any, cb: (msg: any) => void) => () => void;
   onTokenRefresh: (m: any, cb: (token: string) => void) => () => void;
@@ -180,6 +297,7 @@ async function getMessagingApi(): Promise<{
       getApp,
       getMessaging: messagingMod.getMessaging,
       requestPermission: messagingMod.requestPermission,
+      hasPermission: messagingMod.hasPermission,
       getToken: messagingMod.getToken,
       onMessage: messagingMod.onMessage,
       onTokenRefresh: messagingMod.onTokenRefresh,
@@ -190,5 +308,31 @@ async function getMessagingApi(): Promise<{
   } catch {
     __DEV__ && console.warn('[NOTIF] @react-native-firebase/messaging not installed');
     return null;
+  }
+}
+
+/**
+ * Coupe les notifications push pour ce compte.
+ *
+ * Le jeton est effacé côté serveur ET dans le cache local. Effacer seulement le
+ * cache laisserait le serveur continuer d'émettre vers un appareil qui n'en veut
+ * plus ; n'effacer que la base ferait croire au prochain démarrage que le jeton
+ * est déjà enregistré — `registerPushToken` sort tôt quand le cache correspond.
+ *
+ * La permission système n'est pas révoquée : seul le réglage iOS/Android le peut.
+ * On cesse simplement d'être joignable.
+ */
+export async function unregisterPushToken(userId: string): Promise<void> {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ fcm_token: null })
+      .eq('id', userId);
+    await AsyncStorage.removeItem(FCM_TOKEN_KEY);
+    // Couper l'interrupteur est une décision : sans ça, la mémoire dirait
+    // encore « accordé » et un démarrage sans Firebase rallumerait l'affichage.
+    await AsyncStorage.setItem(PUSH_CHOICE_KEY, 'denied');
+  } catch (e) {
+    __DEV__ && console.warn('[NOTIF] unregisterPushToken error:', e);
   }
 }

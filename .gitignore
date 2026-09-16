@@ -41,6 +41,8 @@ local.properties
 .env.production
 .env.production.example
 .env.*.local
+# Chaîne de connexion du rôle de diagnostic en lecture seule (jamais commitée).
+.env.diag
 
 # Firebase / Google services credentials
 # Note : ces fichiers (GoogleService-Info.plist iOS et google-services.json Android)
@@ -95,3 +97,13 @@ yarn-error.log
 
 # Artefacts locaux de la CLI Supabase (ref projet, version)
 supabase/.temp/
+
+# Harnais local de capture d écran (non versionné)
+preview.tsx
+
+# Captures d ecran locales
+screenshots/
+
+.vercel
+
+.codex/

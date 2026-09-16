@@ -41,6 +41,9 @@ class FloatingBubbleService : Service() {
     private var kmRateView: TextView? = null
     private var distancePulse: ObjectAnimator? = null
 
+    /** Contexte résolu dans la langue de l'app — invalidé quand elle change. */
+    private var localizedCtx: android.content.Context? = null
+
     companion object {
         private const val CHANNEL_ID = "strive_scanner_channel"
         private const val NOTIF_ID = 42
@@ -49,15 +52,38 @@ class FloatingBubbleService : Service() {
          *  du foreground service. */
         private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
         private const val SESSION_NOTIF_ID = 43
-        /** Notification de résultat de scan avec boutons Accepter / Refuser. */
-        private const val RESULT_NOTIF_ID = 44
+        /** Notification de résultat de scan avec boutons Accepter / Refuser.
+         *  Non privé : `ScanBridgeModule.clearRideResult` l'annule quand la
+         *  décision a été prise dans l'app. */
+        const val RESULT_NOTIF_ID = 44
         private const val COUNTDOWN_MS = 15_000L
         var instance: FloatingBubbleService? = null
+
+        /** Langue choisie DANS Strive (fr/en). Persistée : le service survit à la
+         *  mort du process RN, il ne peut pas la redemander au JS. Absente =
+         *  locale système. Mirror iOS (clé `appLanguage` de l'App Group). */
+        const val LANG_PREFS = "strive_scanner_lang"
+        const val LANG_KEY = "appLanguage"
+
+        fun setAppLanguage(ctx: android.content.Context, lang: String) {
+            ctx.applicationContext
+                .getSharedPreferences(LANG_PREFS, android.content.Context.MODE_PRIVATE)
+                .edit().putString(LANG_KEY, lang).apply()
+            instance?.localizedCtx = null
+        }
         /** Préférence utilisateur — si true, les métriques initiales incluent le trajet d'approche */
         var includePickup: Boolean = true
         /** Seuils utilisateur pour le verdict natif (synchronisés depuis JS). */
         var minHourlyRate: Double = 25.0
         var minKmRate: Double = 1.2
+
+        /** Préférence « retirer le carburant du prix » — AFFICHAGE SEUL. Le tarif
+         *  brut reste celui qui part en base et qui sert aux €/h, €/km et verdict. */
+        var deductFuel: Boolean = false
+        /** Coût carburant au km, pré-calculé côté JS (conso × prix du jour) : le
+         *  natif n'a ni le type de carburant ni le tarif à la pompe. 0 = conso non
+         *  renseignée, donc rien à déduire. */
+        var fuelCostPerKm: Double = 0.0
         /** Quota journalier dépassé (synchronisé depuis JS via setQuotaReached).
          *  Si true, triggerScan affiche un état "limite atteinte" sans lancer
          *  l'OCR ni TomTom → 0 coût Gemini/TomTom pour les users hors quota. */
@@ -124,6 +150,10 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Le service peut redémarrer sans que JS ait tourné : le parser et le
+        // géocodeur repartiraient alors sur leurs valeurs par défaut. On leur
+        // rend le pays écrit en préférences avant le premier scan.
+        MarketFormat.hydrate(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -251,11 +281,17 @@ class FloatingBubbleService : Service() {
     // ─── Scan flow ───────────────────────────────────────────────────────────────
 
     fun triggerScan() {
-        if (scanInProgress) return
+        if (scanInProgress) {
+            // Trace : un tap avalé pendant un scan en cours n'est pas anodin — c'est
+            // le symptôme que rapportent les testeurs (« j'appuie, rien ne se passe »).
+            ScanBridgeModule.emitScanFailure(this, "throttled")
+            return
+        }
         // Session non démarrée → on bloque le scan AVANT toute capture, et on
         // notifie l'utilisateur de passer en ligne. Mirror iOS
         // (AnalyzeRideIntent : refuse + notification si !sessionOnline).
         if (!sessionOnline) {
+            ScanBridgeModule.emitScanFailure(this, "session_off")
             notifySessionRequired()
             showSessionRequiredState()
             mainHandler.postDelayed({ showIdleState() }, 2500)
@@ -265,8 +301,18 @@ class FloatingBubbleService : Service() {
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
         // on n'attend pas que le JS (suspendu pendant un scan) mette le flag à jour.
-        val quotaByCount = isFreeTier && scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
+        // Le compteur vaut pour TOUS les tiers : plan_limits donne free = 3 ET
+        // plus = 15. L'ancien `isFreeTier &&` exemptait les abonnés Plus, qui
+        // franchissaient donc leur limite app fermée — le serveur refusait ensuite
+        // l'insertion et la course était perdue. `isFreeTier` ne sert plus qu'à
+        // choisir l'écran affiché (teaser Plus vs « revenez demain »).
+        //
+        // `scanQuotaLimit` est la limite EFFECTIVE poussée par le JS : celle du
+        // plan PLUS les crédits achetés. Ce calcul ne connaît pas les crédits,
+        // et sans eux il bloquait un chauffeur qui venait d'en acheter.
+        val quotaByCount = scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
+            ScanBridgeModule.emitScanFailure(this, "quota_reached")
             showQuotaReachedState()
             mainHandler.postDelayed({ showIdleState() }, 2500)
             return
@@ -278,12 +324,14 @@ class FloatingBubbleService : Service() {
             val svc = StriveAccessibilityService.instance
             if (svc == null) {
                 onScanError(); scanInProgress = false
+                ScanBridgeModule.emitScanFailure(this, "invalid_image", "no_accessibility_service")
                 ScanBridgeModule.emitScanFailed(); return@postDelayed
             }
             svc.captureScreen { bitmap ->
                 if (bitmap == null) {
                     mainHandler.post { onScanError() }
                     scanInProgress = false
+                    ScanBridgeModule.emitScanFailure(this, "invalid_image", "null_bitmap")
                     ScanBridgeModule.emitScanFailed(); return@captureScreen
                 }
                 runOcr(bitmap, getScreenWidth(), getScreenHeight())
@@ -321,13 +369,16 @@ class FloatingBubbleService : Service() {
                     resolveTomTomAndEmit(result, base64, debugBlocks, h)
                     scanInProgress = false
                 } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
-                    fallbackGemini(fullBitmap)
+                    // Les blocs partent avec : c'est un écran d'offre que le parser
+                    // local n'a pas su lire, donc exactement la fixture qui manque.
+                    fallbackGemini(fullBitmap, debugBlocks, h)
                 } else {
                     // Pré-filtre anti-pub : du texte a été lu mais aucun signal VTC
                     // (prix €, km/min, plateforme) → inutile de payer un appel Gemini.
                     // Mirror iOS (ScanProcessor.lastScanMayBeRide).
                     fullBitmap.recycle()
                     onNotARide()
+                    ScanBridgeModule.emitScanFailure(this, "not_a_ride")
                     ScanBridgeModule.emitScanFailed()
                     scanInProgress = false
                 }
@@ -338,7 +389,16 @@ class FloatingBubbleService : Service() {
             }
     }
 
-    private fun fallbackGemini(bitmap: Bitmap) {
+    /** `debugBlocks` / `screenHeight` : les blocs OCR du scan qui vient d'échouer,
+     *  quand il y en a. C'est le cas le PLUS intéressant à rejouer en fixture —
+     *  le parsing par règles n'a pas su lire un écran que Gemini, lui, a su lire.
+     *  Ils sont nuls quand l'OCR lui-même a échoué (`addOnFailureListener`) : il
+     *  n'y a alors aucun bloc à conserver. */
+    private fun fallbackGemini(
+        bitmap: Bitmap,
+        debugBlocks: String? = null,
+        screenHeight: Int = 0,
+    ) {
         if (GeminiVisionService.isReady) {
             showLoadingState()
             // On encode d'abord : si Gemini natif réussit on transmettra aussi
@@ -350,10 +410,11 @@ class FloatingBubbleService : Service() {
                     // B : on route le résultat Gemini par la MÊME résolution TomTom
                     // que l'OCR (adresses → vraie distance). Gemini peut désormais
                     // renvoyer pickup/destination → TomTom s'applique aussi ici.
-                    resolveTomTomAndEmit(result, base64, null)
+                    resolveTomTomAndEmit(result, base64, debugBlocks, screenHeight, geminiUsed = true)
                 } else {
                     mainHandler.post {
                         onScanError()
+                        ScanBridgeModule.emitScanFailure(this, "gemini_ko", "null_result")
                         ScanBridgeModule.emitScanFailed()
                     }
                 }
@@ -362,6 +423,7 @@ class FloatingBubbleService : Service() {
         } else {
             bitmap.recycle()
             onScanError()
+            ScanBridgeModule.emitScanFailure(this, "gemini_ko", "not_configured")
             ScanBridgeModule.emitScanFailed()
             scanInProgress = false
         }
@@ -429,6 +491,7 @@ class FloatingBubbleService : Service() {
         base64: String,
         debugBlocks: String?,
         screenHeight: Int = 0,
+        geminiUsed: Boolean = false,
     ) {
         // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
         // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
@@ -436,9 +499,15 @@ class FloatingBubbleService : Service() {
         val today = todayKey()
         scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
         scanCountDay = today
-        // Horodatage du scan (secondes epoch) — corrèle la course émise au JS avec
-        // la décision Accepter/Refuser tapée sur la notification. Mirror iOS.
+        // Horodatage du scan (secondes epoch) : il DATE la course — jour
+        // d'affectation et registre de quota. Il ne l'identifie plus.
         val scanTs = System.currentTimeMillis() / 1000.0
+        // Son identité, frappée ICI, avant tout affichage et toute écriture. Elle
+        // part avec la notification (boutons Prise/Refusée), avec l'événement JS,
+        // dans le journal des scans, et jusqu'à `rides.id`. Une seule valeur pour
+        // tout le trajet : un tap sur la notification désigne donc la course, sans
+        // que rien n'ait à la retrouver. Mirror iOS.
+        val rideId = java.util.UUID.randomUUID().toString()
         val pickup = ocr.pickupAddress?.replace("\\s*\\n\\s*".toRegex(), " ")
             ?.replace("^(\\d+)([A-Za-zÀ-ÿ])".toRegex(), "$1 $2")
             ?.trim() ?: ""
@@ -451,8 +520,8 @@ class FloatingBubbleService : Service() {
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
             // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
-            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, scanTs) }
-            ScanBridgeModule.emitScanResult(ocr, base64, debugBlocks, screenHeight, scanTs)
+            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, rideId) }
+            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
             return
         }
 
@@ -474,8 +543,8 @@ class FloatingBubbleService : Service() {
             } else {
                 ocr
             }
-            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, scanTs) }
-            ScanBridgeModule.emitScanResult(finalResult, base64, debugBlocks, screenHeight, scanTs)
+            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
+            ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
         }
     }
 
@@ -491,13 +560,22 @@ class FloatingBubbleService : Service() {
         val totalDurationMin: Int,
         val totalDistanceKm: Double,
         val level: Int,
+        /** Tarif À AFFICHER : net du carburant estimé si la préférence est active,
+         *  sinon égal à `result.fare`. Volontairement séparé — le brut reste la
+         *  base des €/h, €/km, du verdict et de l'enregistrement. Mirror iOS
+         *  (ScanProcessor.FinalResult.displayFare). */
+        val displayFare: Double,
     )
+
+    /** Vrai si le trajet d'approche est ajouté aux totaux : préférence active ET
+     *  les deux valeurs présentes (une seule fausserait le total). */
+    private fun usesApproach(result: OcrParser.ScanResult) = includePickup
+        && result.pickupDurationMin != null
+        && result.pickupDistanceKm != null
 
     /** Calcule les métriques + verdict (mirror iOS computeFinal) sans effet de bord. */
     private fun computeMetrics(result: OcrParser.ScanResult): RideMetrics {
-        val useApproach = includePickup
-            && result.pickupDurationMin != null
-            && result.pickupDistanceKm != null
+        val useApproach = usesApproach(result)
 
         val courseDuration = result.durationMin?.toDouble() ?: estimateDurationMin(result.distanceKm)
         val totalDuration = if (useApproach)
@@ -513,7 +591,16 @@ class FloatingBubbleService : Service() {
         val hrOk = hourlyRate >= minHourlyRate
         val kmOk = kmRate >= minKmRate
         val level = if (hrOk && kmOk) 2 else if (hrOk || kmOk) 1 else 0
-        return RideMetrics(hourlyRate, kmRate, totalDuration.toInt(), totalDistance, level)
+
+        // Affichage seul : le verdict ci-dessus est calculé sur le tarif brut, les
+        // seuils de l'utilisateur gardent donc le sens qu'ils ont toujours eu.
+        val displayFare = if (deductFuel && fuelCostPerKm > 0)
+            (result.fare - fuelCostPerKm * totalDistance).coerceAtLeast(0.0)
+        else result.fare
+
+        return RideMetrics(
+            hourlyRate, kmRate, totalDuration.toInt(), totalDistance, level, displayFare
+        )
     }
 
     private fun applyVerdict(result: OcrParser.ScanResult) {
@@ -563,10 +650,10 @@ class FloatingBubbleService : Service() {
      */
     fun updateMetrics(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double) {
         mainHandler.post {
-            hourlyRateView?.text = "€%.0f".format(hourlyRate)
-            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
+            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
-            distanceView?.text = "%.1f km".format(distanceKm)
+            distanceView?.text = MarketFormat.distanceText(this, distanceKm)
         }
     }
 
@@ -581,10 +668,10 @@ class FloatingBubbleService : Service() {
         verdictLevel: Int,
     ) {
         mainHandler.post {
-            hourlyRateView?.text = "€%.0f".format(hourlyRate)
-            kmRateView?.text = "↑€%.2f/km".format(kmRate)
+            hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
+            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
-            distanceView?.text = "%.1f km".format(distanceKm)
+            distanceView?.text = MarketFormat.distanceText(this, distanceKm)
             updateVerdict(verdictLevel)
         }
     }
@@ -592,6 +679,25 @@ class FloatingBubbleService : Service() {
     // ─── UI States ────────────────────────────────────────────────────────────────
 
     private fun dpToPx(dp: Int) = (dp * resources.displayMetrics.density).toInt()
+
+    /** Strings natives dans la langue choisie DANS Strive, pas celle du système :
+     *  l'utilisateur peut mettre l'app en français sur un téléphone en anglais.
+     *  Sans ça la bulle et les notifications suivaient la locale du téléphone,
+     *  alors qu'iOS respecte déjà le réglage in-app. */
+    private fun str(resId: Int): String {
+        val ctx = localizedCtx ?: run {
+            val lang = getSharedPreferences(LANG_PREFS, android.content.Context.MODE_PRIVATE)
+                .getString(LANG_KEY, null)
+            val resolved = if (lang.isNullOrBlank()) this else {
+                val cfg = android.content.res.Configuration(resources.configuration)
+                cfg.setLocale(java.util.Locale.forLanguageTag(lang))
+                createConfigurationContext(cfg)
+            }
+            localizedCtx = resolved
+            resolved
+        }
+        return ctx.getString(resId)
+    }
 
     /**
      * Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
@@ -684,27 +790,12 @@ class FloatingBubbleService : Service() {
         val cardW = (screenWidth * 0.76f).toInt().coerceAtMost(dpToPx(320))
 
         // Métriques provisoires affichées *tant que TomTom n'a pas répondu*.
-        // Respecte la préférence include_pickup_location : si ON et les champs pickup
-        // sont présents, on ajoute le trajet d'approche au total.
-        val useApproach = includePickup
-            && result.pickupDurationMin != null
-            && result.pickupDistanceKm != null
-
-        // Heuristique vitesse moyenne selon la distance — l'ancienne estimation
-        // unique à 25 km/h surestimait massivement les durées de courses
-        // péri-urbaines (24 km Chennevières→Paris : 25 km/h ≈ 59 min vs réalité
-        // ~38 min). Calibration prudente pour éviter de gonfler le €/h estimé.
-        val courseDuration = result.durationMin?.toDouble() ?: estimateDurationMin(result.distanceKm)
-        val totalDuration = if (useApproach)
-            courseDuration + (result.pickupDurationMin?.toDouble() ?: 0.0)
-        else courseDuration
-
-        val totalDistance = if (useApproach)
-            result.distanceKm + (result.pickupDistanceKm ?: 0.0)
-        else result.distanceKm
-
-        val hourlyRate = if (totalDuration > 0) result.fare / (totalDuration / 60.0) else 0.0
-        val kmRate = if (totalDistance > 0) result.fare / totalDistance else 0.0
+        // Source unique : computeMetrics — il porte déjà la préférence
+        // include_pickup_location, l'heuristique de durée et la déduction
+        // carburant. Les recalculer ici avait fini par diverger.
+        val m = computeMetrics(result)
+        val hourlyRate = m.hourlyRate
+        val kmRate = m.kmRate
 
         // ── Card ──
         val card = LinearLayout(this).apply {
@@ -742,7 +833,7 @@ class FloatingBubbleService : Service() {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { marginEnd = dpToPx(6) })
         val hourlyRateTv = TextView(this).apply {
-            text = "€%.0f".format(hourlyRate)
+            text = MarketFormat.money(this@FloatingBubbleService, hourlyRate, 0)
             textSize = 21f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
@@ -762,7 +853,8 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.CENTER
         }
         val fareBadge = TextView(this).apply {
-            text = "€%.0f".format(result.fare)
+            // Net de carburant si la préférence est active (affichage seul).
+            text = MarketFormat.money(this@FloatingBubbleService, m.displayFare, 0)
             textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4))
@@ -782,7 +874,7 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
         }
         val kmRateTv = TextView(this).apply {
-            text = "↑€%.2f/km".format(kmRate)
+            text = "↑" + MarketFormat.perDistance(this@FloatingBubbleService, kmRate)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
@@ -854,8 +946,10 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.END
         }
         val durationTv = TextView(this).apply {
-            text = if (result.durationMin != null || useApproach)
-                "${totalDuration.toInt()}min"
+            // "—min" quand la durée affichée ne repose que sur l'estimation
+            // vitesse : ni durée de course lue, ni approche ajoutée au total.
+            text = if (result.durationMin != null || usesApproach(result))
+                "${m.totalDurationMin}min"
             else "—min"
             textSize = 14f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
@@ -863,7 +957,8 @@ class FloatingBubbleService : Service() {
         durationView = durationTv
         rightCol.addView(durationTv)
         val distanceTv = TextView(this).apply {
-            text = "%.1f km".format(totalDistance)
+            text = MarketFormat.distanceText(
+                this@FloatingBubbleService, m.totalDistanceKm)
             textSize = 12f; setTextColor(Color.parseColor("#888888"))
             includeFontPadding = false
         }
@@ -933,7 +1028,19 @@ class FloatingBubbleService : Service() {
             setPadding(0, 0, dpToPx(6), 0)
         })
         pill.addView(TextView(this).apply {
-            text = "Quota atteint"; textSize = 13f; setTextColor(Color.WHITE)
+            // Un free bloqué voit la sortie sur la pastille elle-même : c'est le
+            // seul moment où la proposition est vraie ET utile — il vient de
+            // buter sur sa limite, sur une course qu'il ne pourra pas évaluer.
+            // Le tap ouvre déjà l'app, la pastille devient donc le point d'entrée.
+            //
+            // `str(...)` et plus un littéral : ce texte suivait la locale du
+            // téléphone alors que tout le reste suit la langue choisie DANS
+            // Strive.
+            text = str(
+                if (isFreeTier) com.strive.R.string.scanner_quota_reached_free
+                else com.strive.R.string.scanner_quota_reached
+            )
+            textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
 
@@ -992,7 +1099,7 @@ class FloatingBubbleService : Service() {
         })
         pill.addView(TextView(this).apply {
             // Localisé via strings.xml (fr) / values-en (en) — suit la locale appareil.
-            text = getString(com.strive.R.string.scanner_not_a_ride)
+            text = str(com.strive.R.string.scanner_not_a_ride)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
@@ -1025,7 +1132,7 @@ class FloatingBubbleService : Service() {
             setPadding(0, 0, dpToPx(6), 0)
         })
         pill.addView(TextView(this).apply {
-            text = getString(com.strive.R.string.scanner_session_required_bubble)
+            text = str(com.strive.R.string.scanner_session_required_bubble)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
@@ -1045,8 +1152,8 @@ class FloatingBubbleService : Service() {
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
         val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setContentTitle(getString(com.strive.R.string.scanner_session_required_title))
-            .setContentText(getString(com.strive.R.string.scanner_session_required_body))
+            .setContentTitle(str(com.strive.R.string.scanner_session_required_title))
+            .setContentText(str(com.strive.R.string.scanner_session_required_body))
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -1084,16 +1191,17 @@ class FloatingBubbleService : Service() {
         // équivalent du dashboard de la Live Activity iOS. Avant le 1ᵉ push : texte d'invite.
         if (hasSessionKpi) {
             builder.setContentTitle(
-                "%.0f € · %.0f €/h".format(todayEarnings, todayHourlyRate)
+                MarketFormat.money(this, todayEarnings, 0) + " · " +
+                    MarketFormat.perHour(this, todayHourlyRate)
             ).setContentText(
                 "%.1f km · %dh%02d %s".format(
                     todayKm, onlineMinutes / 60, onlineMinutes % 60,
-                    getString(com.strive.R.string.scanner_notif_online)
+                    str(com.strive.R.string.scanner_notif_online)
                 )
             )
         } else {
-            builder.setContentTitle(getString(com.strive.R.string.scanner_notif_active_title))
-                .setContentText(getString(com.strive.R.string.scanner_notif_active_body))
+            builder.setContentTitle(str(com.strive.R.string.scanner_notif_active_title))
+                .setContentText(str(com.strive.R.string.scanner_notif_active_body))
         }
         return builder.build()
     }
@@ -1109,21 +1217,28 @@ class FloatingBubbleService : Service() {
     /**
      * Notification de résultat avec boutons Accepter / Refuser — permet de taguer
      * la course sans ouvrir l'app (mains libres). Au tap, RideDecisionReceiver
-     * relaie la décision au JS (onRideDecision) via scanTs. Mirror iOS
-     * (AnalyzeRideIntent.sendLocalNotification + catégorie STRIVE_SCAN_RESULT).
+     * enregistre la décision sous `rideId`, que le Dashboard écrit directement en
+     * base. Mirror iOS (AnalyzeRideIntent.sendLocalNotification + catégorie
+     * STRIVE_SCAN_RESULT).
      */
-    private fun postRideDecisionNotification(result: OcrParser.ScanResult, scanTs: Double) {
+    private fun postRideDecisionNotification(result: OcrParser.ScanResult, rideId: String) {
         val m = computeMetrics(result)
         val verdict = when (m.level) { 2 -> "✅"; 1 -> "⚠️"; else -> "❌" }
-        val title = "%s · %.0f€ · %s".format(result.platform.name, result.fare, verdict)
-        val body = "%.0f€/h · %.2f€/km · %dmin · %.1fkm".format(
-            m.hourlyRate, m.kmRate, m.totalDurationMin, m.totalDistanceKm
+        // displayFare = net de carburant si l'option est active, sinon brut.
+        val title = "%s · %s · %s".format(
+            result.platform.name, MarketFormat.money(this, m.displayFare, 0), verdict)
+        // Quatre unites dans une seule ligne, et trois dependaient du marche.
+        val body = "%s · %s · %dmin · %s".format(
+            MarketFormat.perHour(this, m.hourlyRate),
+            MarketFormat.perDistance(this, m.kmRate),
+            m.totalDurationMin,
+            MarketFormat.distanceText(this, m.totalDistanceKm),
         )
 
         fun decisionPi(status: String, requestCode: Int): android.app.PendingIntent {
             val intent = Intent(this, RideDecisionReceiver::class.java).apply {
                 action = RideDecisionReceiver.ACTION
-                putExtra(RideDecisionReceiver.EXTRA_SCAN_TS, scanTs)
+                putExtra(RideDecisionReceiver.EXTRA_RIDE_ID, rideId)
                 putExtra(RideDecisionReceiver.EXTRA_STATUS, status)
                 putExtra(RideDecisionReceiver.EXTRA_NOTIF_ID, RESULT_NOTIF_ID)
             }
@@ -1133,16 +1248,26 @@ class FloatingBubbleService : Service() {
             )
         }
 
-        // requestCodes distincts (base sur scanTs) pour ne pas écraser un PI par l'autre.
-        val base = (scanTs % 100000).toInt() * 2
+        // Course visée par la notification affichée : `clearRideResult` s'y
+        // réfère pour ne l'annuler que si la décision porte bien sur elle — et
+        // pas sur un scan plus ancien, dont la carte a déjà été remplacée.
+        applicationContext
+            .getSharedPreferences(ScanBridgeModule.SCANS_PREFS, MODE_PRIVATE)
+            .edit().putString(ScanBridgeModule.LAST_NOTIF_RIDE_KEY, rideId).apply()
+
+        // requestCodes distincts pour ne pas écraser un PendingIntent par l'autre.
+        // Deux notifications successives doivent aussi porter des codes distincts,
+        // sinon FLAG_UPDATE_CURRENT réécrit les extras de la précédente — d'où le
+        // hash de l'id plutôt qu'un compteur.
+        val base = (rideId.hashCode() and 0x3FFFFFFF) * 2
         val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .addAction(0, getString(com.strive.R.string.scanner_ride_accept), decisionPi("ACCEPTED", base))
-            .addAction(0, getString(com.strive.R.string.scanner_ride_decline), decisionPi("DECLINED", base + 1))
+            .addAction(0, str(com.strive.R.string.scanner_ride_accept), decisionPi("ACCEPTED", base))
+            .addAction(0, str(com.strive.R.string.scanner_ride_decline), decisionPi("DECLINED", base + 1))
             .build()
         runCatching {
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)

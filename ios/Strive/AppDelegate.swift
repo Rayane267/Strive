@@ -13,6 +13,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
+  /// Le pont React Native n'est démarré qu'une fois, éventuellement en différé.
+  private var reactNativeStarted = false
+  /// Conservées quand le démarrage est différé, pour les passer au vrai départ.
+  private var pendingLaunchOptions: [UIApplication.LaunchOptionsKey: Any]?
+
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -20,7 +25,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     FirebaseApp.configure()
 
     // Push notifications
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+    //
+    // ⚠️ ON NE DEMANDE PAS L'AUTORISATION ICI. iOS n'affiche sa fenêtre qu'UNE
+    // FOIS par installation : la déclencher au lancement la brûlait sur l'écran
+    // de connexion, avant que le chauffeur ait la moindre raison de dire oui.
+    // Quoi qu'il réponde là, c'est définitif — et l'étape « Activez les
+    // notifications » du tutoriel n'affichait alors plus rien du tout, puisque
+    // `requestPermission` répond de mémoire. Le bouton paraissait mort.
+    //
+    // La demande appartient à `enableNotifications` (TutorialScreen), juste
+    // après l'explication de ce que la notification apporte. C'est ce que son
+    // commentaire annonce déjà — il fallait que ce soit vrai.
+    //
+    // `registerForRemoteNotifications` RESTE : il n'affiche aucune fenêtre, il
+    // ne fait qu'obtenir le jeton APNs, dont Firebase a besoin pour produire un
+    // jeton FCM quand l'autorisation arrivera.
     application.registerForRemoteNotifications()
     Messaging.messaging().delegate = self
 
@@ -38,6 +57,66 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             Activity<StriveActivityAttributes>.activities.count)
     }
 
+    window = UIWindow(frame: UIScreen.main.bounds)
+
+    // ── Lancement en ARRIÈRE-PLAN : on ne démarre pas React Native ───────────
+    //
+    // AssistiveTouch → raccourci → AnalyzeRideIntent lance l'app en arrière-plan.
+    // Or `AnalyzeRideIntent` est compilé dans CE target (pas dans une extension),
+    // donc iOS démarrait l'application ENTIÈRE — pont React Native compris — pour
+    // un pipeline de scan qui est 100 % Swift (ScanProcessor, OcrParser,
+    // TomTomService, GeminiVisionService) et n'utilise pas une ligne de JS.
+    // Mesuré : ~2 s à froid, immédiat à chaud. En usage réel le chauffeur n'ouvre
+    // jamais l'app, elle est donc évincée en permanence : le coût était payé à
+    // presque chaque scan. Ce lancement se fait de surcroît sous un budget serré,
+    // où le process se fait déjà tuer par iOS (« Strive a quitté inopinément »
+    // remonté par Raccourcis) : y rajouter le pont ne ferait qu'aggraver.
+    //
+    // Ce qui avait motivé un retour en arrière ici — la course enregistrée dès
+    // le scan, et non à l'ouverture de l'app — est assuré sans le pont :
+    // `RideUploader` confie l'écriture à une session URLSession de FOND, que le
+    // démon système mène à terme même ce process mort.
+    //
+    // Et si elle échoue, rien n'est perdu : la course reste dans
+    // `pendingScanResults` (App Group), drainée à la prochaine ouverture. Une
+    // entrée ne quitte la file que sur `ackScan`, et elle porte l'`id` frappé au
+    // scan — le rejeu réinsère donc la MÊME course, écartée sur la clé primaire,
+    // et son `scanTs` la fait atterrir au jour du scan, pas au jour du drain.
+    //
+    // Les autres lancements en arrière-plan sont dans le même cas : les actions
+    // « Accepter / Refuser » d'une notification écrivent dans l'App Group en Swift,
+    // et `ScanBridge.getPendingRideDecisions()` relève la file à la prochaine
+    // synchro du Dashboard. Aucun `setBackgroundMessageHandler` n'existe côté
+    // JS, donc aucune notification silencieuse n'a besoin du pont.
+    //
+    // Le pont démarre au premier passage au premier plan.
+    if application.applicationState == .background {
+      pendingLaunchOptions = launchOptions
+      NSLog("[Strive] lancement en arrière-plan — démarrage de React Native différé")
+      return true
+    }
+
+    startReactNativeIfNeeded(launchOptions: launchOptions)
+    return true
+  }
+
+  /// Démarre le pont React Native. Idempotent : les appels suivants ne font rien.
+  ///
+  /// Quand le démarrage a été différé, la fenêtre n'a encore aucun contenu — iOS
+  /// afficherait un écran noir pendant le boot, puisqu'il restaure la capture de
+  /// la dernière UI et qu'il n'y en a jamais eu. On y pose donc d'abord le
+  /// `LaunchScreen`, exactement ce que l'utilisateur voit sur un lancement à
+  /// froid normal ; `startReactNative` le remplace en montant sa rootView.
+  private func startReactNativeIfNeeded(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+    guard !reactNativeStarted, let window = window else { return }
+    reactNativeStarted = true
+
+    if window.rootViewController == nil {
+      window.rootViewController = UIStoryboard(name: "LaunchScreen", bundle: nil)
+        .instantiateInitialViewController()
+      window.makeKeyAndVisible()
+    }
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -45,15 +124,37 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    window = UIWindow(frame: UIScreen.main.bounds)
-
     factory.startReactNative(
       withModuleName: "Strive",
       in: window,
       launchOptions: launchOptions
     )
 
-    return true
+    // Le splash animé, posé PAR-DESSUS la rootView que React Native vient de
+    // monter. Il reprend l'image du LaunchScreen — fond, tuile vide — et trace
+    // le logo pendant le boot du pont.
+    //
+    // Jamais sur un lancement en arrière-plan : ce chemin (raccourci de scan)
+    // sort plus haut sans jamais arriver ici, et il n'a pas d'écran.
+    //
+    // Le retrait vient du JS (`ScanBridge.hideSplash`, appelé quand la
+    // navigation est prête), avec un garde-fou de 6 s côté natif.
+    StriveSplashOverlay.install(over: window)
+  }
+
+  func applicationWillEnterForeground(_ application: UIApplication) {
+    // Cas nominal du démarrage différé : l'app passe au premier plan après avoir
+    // été lancée en arrière-plan pour un scan.
+    startReactNativeIfNeeded(launchOptions: pendingLaunchOptions)
+    pendingLaunchOptions = nil
+  }
+
+  func applicationDidBecomeActive(_ application: UIApplication) {
+    // Filet : certaines transitions (retour depuis un raccourci, reprise après
+    // interruption) n'émettent pas `willEnterForeground`. `startReactNativeIfNeeded`
+    // étant idempotent, ce second appel est sans effet dans le cas nominal.
+    startReactNativeIfNeeded(launchOptions: pendingLaunchOptions)
+    pendingLaunchOptions = nil
   }
 
   // MARK: - URL Scheme (strive://)
@@ -81,6 +182,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) {
     Messaging.messaging().apnsToken = deviceToken
   }
+
+  // MARK: - Session de fond (écriture immédiate des courses)
+
+  /// iOS relance l'app en arrière-plan quand une session de fond a fini ses
+  /// transferts alors que le process qui les avait lancés (Share Extension,
+  /// raccourci) était mort.
+  ///
+  /// On n'a rien à faire de ces événements : `RideUploader` n'exploite aucune
+  /// complétion, la réconciliation passe par le drain de l'outbox. Mais le
+  /// handler doit exister et son completion doit être appelé — sans quoi iOS
+  /// considère l'app en faute et peut la tuer, voire suspendre la session.
+  func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    NSLog("[Strive] session de fond terminée — %@", identifier)
+    completionHandler()
+  }
 }
 
 // MARK: - Firebase Messaging
@@ -101,19 +221,23 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   private static let scanCategoryId = "STRIVE_SCAN_RESULT"
   private static let acceptActionId = "STRIVE_ACCEPT"
   private static let declineActionId = "STRIVE_DECLINE"
-  private static let decisionsKey = "pendingRideDecisions"
 
   private func registerScanResultCategory() {
-    let fr = (UserDefaults(suiteName: Self.appGroupId)?.string(forKey: "appLanguage")
-      ?? Locale.current.languageCode ?? "en").hasPrefix("fr")
+    // Les deux boutons du verdict, dans la langue choisie DANS Strive — la
+    // locale système ne fait pas foi. Ils étaient les derniers à ne connaître
+    // que deux langues : un chauffeur espagnol voyait « Course prise » sous un
+    // résultat par ailleurs entièrement en espagnol.
+    //
+    // Les libellés sont ceux de la bulle Android, au mot près : c'est le même
+    // geste sur les deux plateformes, il n'a pas à se dire deux fois.
     let accept = UNNotificationAction(
       identifier: Self.acceptActionId,
-      title: fr ? "✅ Course prise" : "✅ Ride taken",
+      title: StriveNativeStrings.get("bubbleRideTaken"),
       options: []
     )
     let decline = UNNotificationAction(
       identifier: Self.declineActionId,
-      title: fr ? "❌ Refusée" : "❌ Declined",
+      title: StriveNativeStrings.get("bubbleRideDeclined"),
       options: [.destructive]
     )
     let category = UNNotificationCategory(
@@ -142,32 +266,40 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   ) {
     let action = response.actionIdentifier
     if action == Self.acceptActionId || action == Self.declineActionId,
-       let ts = (response.notification.request.content.userInfo["scanTs"] as? NSNumber)?.doubleValue,
-       ts > 0 {
-      appendRideDecision(scanTs: ts, status: action == Self.acceptActionId ? "ACCEPTED" : "DECLINED")
+       let rideId = response.notification.request.content.userInfo["rideId"] as? String,
+       !rideId.isEmpty {
+      // Le helper partagé avec les boutons de la Live Activity et les commandes
+      // vocales (StriveActivityAttributes.swift) : une seule écriture, un seul
+      // format. L'app viendra chercher la décision (`getPendingRideDecisions`)
+      // quand elle sera en état de l'appliquer.
+      let accepted = action == Self.acceptActionId
+      appendRideDecision(
+        rideId: rideId,
+        accepted: accepted,
+        appGroupId: Self.appGroupId
+      )
+
+      // ET les KPI de la carte, comme le fait le bouton de la Live Activity.
+      // Sans ça, une décision prise sur la NOTIFICATION laissait les gains du
+      // lock screen inchangés jusqu'à la prochaine ouverture de l'app — alors
+      // que la notification est justement le chemin emprunté quand la carte n'a
+      // PAS pu montrer le verdict. Les deux surfaces répondaient donc
+      // différemment au même geste.
+      //
+      // `completionHandler` est appelé APRÈS l'attente : le signaler avant
+      // autorise iOS à suspendre le process en plein `activity.update`.
+      if #available(iOS 16.2, *) {
+        let add = accepted
+          ? lastScannedFareKm(appGroupId: Self.appGroupId)
+          : (fare: 0.0, km: 0.0)
+        Task {
+          await revertLiveActivityToIdle(rideId: rideId, addFare: add.fare, addKm: add.km)
+          completionHandler()
+        }
+        return
+      }
     }
     completionHandler()
-  }
-
-  /// Empile la décision dans l'App Group (survit au cold start) puis notifie
-  /// l'app via Darwin → ScanBridge la draine et l'émet au JS.
-  private func appendRideDecision(scanTs: Double, status: String) {
-    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
-    var arr: [[String: Any]] = []
-    if let data = defaults.data(forKey: Self.decisionsKey),
-       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-      arr = existing
-    }
-    arr.append(["scanTs": scanTs, "status": status])
-    if let data = try? JSONSerialization.data(withJSONObject: arr) {
-      defaults.set(data, forKey: Self.decisionsKey)
-    }
-    let center = CFNotificationCenterGetDarwinNotifyCenter()
-    CFNotificationCenterPostNotification(
-      center,
-      CFNotificationName("com.striveapp.app.rideDecision" as CFString),
-      nil, nil, true
-    )
   }
 }
 

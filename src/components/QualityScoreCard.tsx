@@ -4,6 +4,9 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { QualityScore } from '../utils/qualityScore';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 
 const scoreColor = (v: number): string =>
   v >= 75 ? colors.primary : v >= 50 ? '#FF9800' : colors.danger;
@@ -80,29 +83,29 @@ const QualityScoreCard = React.memo(({ score }: Props) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    padding: space.xl,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   title: { color: colors.textMain, fontSize: 15, fontWeight: 'bold' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  badge: { paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: radius.sm },
   badgeText: { fontSize: 12, fontWeight: '800' },
-  scoreRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: 10 },
+  scoreRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.xs, marginBottom: space.sm },
   scoreValue: { fontSize: 40, fontWeight: '900', letterSpacing: -1.5 },
-  scoreMax: { color: colors.textMuted, fontSize: 16, fontWeight: '700', marginBottom: 7 },
+  scoreMax: { color: colors.textMuted, fontSize: 16, fontWeight: '700', marginBottom: space.sm },
   track: {
     height: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 5,
+    borderRadius: radius.xs,
     overflow: 'hidden',
   },
-  fill: { height: 10, borderRadius: 5 },
-  caption: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 8 },
-  disciplineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  fill: { height: 10, borderRadius: radius.xs },
+  caption: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: space.sm },
+  disciplineRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
   disciplineText: { color: colors.textMuted, fontSize: 12, fontWeight: '600', flex: 1 },
 });
 

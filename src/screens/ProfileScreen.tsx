@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Modal,
   TextInput,
   Linking,
   Alert,
   Platform,
+  Image,
+  Animated,
+  NativeModules,
+  Easing,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
@@ -18,45 +22,329 @@ import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import PlusBadge from '../components/PlusBadge';
+import PlanBadge from '../components/PlanBadge';
+import Toggle from '../components/Toggle';
+import LanguageSheet from '../components/LanguageSheet';
+import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
+import { useMarket } from '../hooks/useMarket';
+import { LANGUAGE_NAMES, dateLocale, decimalSeparator } from '../utils/market';
+import { normalizeRides } from '../services/fxService';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 import { supabase } from '../services/supabase';
+import { registerPushToken, unregisterPushToken, getNotificationStatus, isPushEffectivelyOn } from '../services/notificationService';
+import { openSettingsFor } from '../utils/appSettings';
 import { useAuth } from '../context/AuthContext';
-import { useTranslation } from 'react-i18next';
+import { useMarketT } from '../hooks/useMarketT';
 import AvatarView from '../components/AvatarView';
+import { hapticLight } from '../utils/haptics';
+import { fetchRides, effectiveFare } from '../services/ridesService';
+import { getWeekStart } from '../utils/dateUtils';
+import { getEffectivePlanTier } from '../services/subscriptionService';
+import { revokeAppleAccess } from '../services/appleRevoke';
+import * as Sentry from '@sentry/react-native';
+
+/// Taille des icônes de menu. 22 et non 20 : posées à nu, sans tuile pour les
+/// soutenir, deux pixels de plus suffisent à leur redonner du poids face à un
+/// intitulé blanc en gras. Sur un glyphe en trait fin, c'est beaucoup.
+const ICON_SIZE = 22;
+
+/// Largeur de la bande lumineuse qui traverse la carte d'identité.
+///
+/// 90 : essayé à 160, la nappe couvrait un tiers de la carte et se lisait comme
+/// deux reflets au lieu d'un. Assez large pour que le dégradé ait la place de
+/// monter puis redescendre, assez étroite pour rester une seule bande.
+const SHINE_WIDTH = 90;
+
+/// Inclinaison de la bande, en degrés. ROTATION et non cisaillement.
+///
+/// Le cisaillement (`skewX`) a été essayé à −20, −30 puis −70° : le reflet
+/// restait visuellement vertical. Un cisaillement ne fait pas pivoter la bande,
+/// il décale chaque ligne horizontalement — plus l'angle monte, plus le dégradé
+/// s'étire et se dilue, jusqu'à ne laisser qu'un lavis flou. La rotation, elle,
+/// fait vraiment tourner la bande : l'inclinaison se voit, et l'épaisseur du
+/// reflet reste constante quel que soit l'angle.
+///
+/// Positif = penché en `/` : la rotation est horaire, le haut part à droite.
+/// 12° seulement : sur une nappe large, une forte inclinaison écrase les lobes
+/// contre les bords de la carte et on ne voit plus qu'un coin éclairé.
+const SHINE_ROTATE_DEG = 12;
+
+/// Une bande tournée dépasse du cadre. Elle est donc dessinée bien plus haute
+/// que la carte, et ce débord vertical se traduit en débord HORIZONTAL une fois
+/// tournée : `sin(θ) × hauteur`. Sans l'intégrer à la course, le reflet
+/// apparaîtrait ou disparaîtrait en plein milieu de la carte.
+const shineOverhang = (height: number) =>
+  Math.abs(Math.sin((SHINE_ROTATE_DEG * Math.PI) / 180)) * height;
 
 type MenuItem = {
   icon: string;
   iconLib?: 'feather' | 'mc';
   title: string;
   sub?: string;
-  onPress: () => void;
+  /** Une ligne porte soit une navigation, soit un interrupteur, jamais les deux. */
+  onPress?: () => void;
   badge?: string;
   accent?: boolean;
+  /** Réservé à Strive Plus : affiche la pastille avant l'entrée dans l'écran. */
+  plusLocked?: boolean;
+  /** Valeur courante affichée à droite, avant le chevron. */
+  value?: string;
+  /** Interrupteur à droite : la ligne cesse alors d'être navigable. */
+  toggle?: { value: boolean; onChange: (v: boolean) => void };
 };
 
 const ProfileScreen = () => {
+  const market = useMarket();
   const navigation = useNavigation<any>();
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useMarketT();
   const tabBarHeight = useBottomTabBarHeight();
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const tier = profile?.subscription_tier?.toLowerCase();
-  const isPlus = tier === 'plus' || tier === 'pro' || tier === 'premium';
+  // Palier EFFECTIF, comme les onze autres écrans. Le profil lisait
+  // `subscription_tier` brut, donc sans contrôle d'expiration ni de période de
+  // grâce : un abonnement expiré affichait encore la pastille Plus et masquait
+  // la carte d'upsell, pendant que le Dashboard appliquait déjà le quota free.
+  // L'écran qui parle de l'abonnement était le seul à en ignorer la validité.
+  //
+  // Ça retire aussi la règle `'pro' → premium` dupliquée ici : elle vit dans
+  // `getPlanTier`, et c'est cette duplication qui avait laissé la dérive
+  // s'installer.
+  const tier = getEffectivePlanTier(profile);
+  const isPlus = tier !== 'free';
 
-  const changeLanguage = (lang: string) => {
-    i18n.changeLanguage(lang);
-    if (Platform.OS === 'ios') {
-      const { NativeModules } = require('react-native');
-      NativeModules.ScanBridge?.setAppLanguage(lang);
+  // Gains des 7 derniers jours : seules les courses acceptées comptent, une
+  // course refusée n'a rapporté rien. `null` tant que la requête n'a pas
+  // répondu — la carte se tait plutôt que d'annoncer 0 € à un chauffeur qui
+  // vient d'en faire dix.
+  const [weekEarnings, setWeekEarnings] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // La semaine EN COURS, et non une fenetre glissante de 7 jours : la
+        // carte annonce « Gains de la semaine », donc le total doit repartir de
+        // zero le lundi. Avec la fenetre glissante, un lundi matin affichait
+        // encore les gains du dimanche precedent, et le chiffre ne collait avec
+        // aucune semaine que le chauffeur puisse recouper.
+        //
+        // `resetHour` laisse a 0 volontairement : cet ecran ne lit pas les
+        // preferences, et aller chercher `day_reset_hour` pour un ecart de
+        // quelques heures une fois par semaine couterait un aller-retour.
+        const since = getWeekStart();
+        // Un total : les courses d'une autre monnaie sont converties, pas
+        // écartées.
+        const rides = await normalizeRides(await fetchRides(user.id, since), market.currency);
+        const total = rides
+          .filter(r => r.status === 'ACCEPTED')
+          .reduce((sum, r) => sum + effectiveFare(r), 0);
+        if (!cancelled) setWeekEarnings(total);
+      } catch {
+        // Écran de profil : un échec réseau ne doit pas le vider. La carte
+        // reste simplement absente.
+        if (!cancelled) setWeekEarnings(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, market.currency]);
+
+  // Notifications : l'état affiché croise DEUX conditions, le jeton enregistré
+  // ET la permission système.
+  //
+  // Le jeton seul ne suffit pas, et c'était le bug : quand le chauffeur révoque
+  // les notifications depuis les Réglages iOS, le jeton reste stocké côté app.
+  // L'interrupteur affichait donc « activé » alors que plus rien n'arrivait —
+  // et le récapitulatif du tutoriel, qui lit la permission, disait l'inverse.
+  // Deux écrans de la même app se contredisaient.
+  //
+  // Les deux comptent, pour deux raisons distinctes : la permission décide si le
+  // système affiche la notification, le jeton décide si le serveur peut
+  // l'envoyer. Il en manque une, rien n'arrive.
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  /// Permission REFUSÉE au niveau système, ce qui n'est pas la même chose que
+  /// « désactivé dans l'app ». Distinguer les deux est tout l'objet de cet état.
+  const [pushBlocked, setPushBlocked] = useState(false);
+
+  const refreshPushState = useCallback(async () => {
+    // `isPushEffectivelyOn` et non `status === 'granted'` : au démarrage à
+    // froid, Firebase n'est pas toujours prêt et répond `unknown`. L'ancien test
+    // lisait ça comme un refus, donc l'interrupteur retombait sur « désactivé » à
+    // chaque lancement alors que le chauffeur n'avait rien changé. Le choix
+    // mémorisé comble ce trou ; un `denied` explicite du système reste maître.
+    const [on, status] = await Promise.all([
+      isPushEffectivelyOn(),
+      getNotificationStatus(),
+    ]);
+    setPushEnabled(on);
+    // 'unknown' (Firebase indisponible) n'est PAS un refus : on ne bloque que
+    // sur un 'denied' explicite, sinon un simulateur sans Google Play Services
+    // afficherait un écran de blocage à tort.
+    setPushBlocked(status === 'denied');
+  }, []);
+
+  useEffect(() => {
+    refreshPushState();
+    // La permission peut changer HORS de l'app, dans les Réglages iOS. Sans
+    // cette relecture au retour au premier plan, l'interrupteur resterait sur
+    // l'état lu au montage — exactement le mensonge qu'on vient de corriger.
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active') refreshPushState();
+    });
+    return () => sub.remove();
+  }, [refreshPushState]);
+
+  const togglePush = async (next: boolean) => {
+    setPushEnabled(next);
+    hapticLight();
+    if (!user?.id) return;
+    try {
+      if (next) {
+        const result = await registerPushToken(user.id);
+        // Refus système : la fenêtre « Strive souhaite vous envoyer des
+        // notifications » ne se réaffiche jamais après un premier refus, ni sur
+        // iOS ni sur Android 13+. L'interrupteur revenait donc en arrière sans
+        // un mot, et le chauffeur n'avait aucun moyen de savoir qu'il fallait
+        // passer par les Réglages. On l'y emmène.
+        if (result === 'denied') {
+          Alert.alert(
+            t('preferences.pushDeniedTitle'),
+            t('preferences.pushDeniedBody'),
+            [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('preferences.openSettings'), onPress: () => openSettingsFor('notifications') },
+            ],
+          );
+        }
+      } else {
+        await unregisterPushToken(user.id);
+      }
+      // On relit l'état complet plutôt que de croire l'interrupteur : ni le
+      // jeton ni la permission ne se déduisent du geste du chauffeur.
+      await refreshPushState();
+    } catch {
+      setPushEnabled(!next);
     }
   };
 
+  const [langSheetVisible, setLangSheetVisible] = useState(false);
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
+
+  // ── Balayage lumineux de la carte d'identité ──────────────────────────────
+  //
+  // Largeur MESURÉE plutôt que déduite de `Dimensions` : la carte vit dans un
+  // ScrollView avec ses propres marges, et une largeur devinée décalerait le
+  // reflet — visible dès qu'il termine sa course avant ou après le bord.
+  const [cardWidth, setCardWidth] = useState(0);
+  const [cardHeight, setCardHeight] = useState(0);
+  const shine = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (cardWidth === 0) return;
+    // Une pause entre deux passages : en boucle continue, le reflet devient un
+    // clignotement qu'on remarque au lieu d'un éclat qu'on aperçoit.
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shine, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(3800),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [cardWidth, shine]);
+
+  // Hauteur de la bande : le double de la carte. Une bande tournée dont la
+  // hauteur égale celle de la carte laisserait deux coins vides aux extrémités
+  // de sa course.
+  const shineHeight = cardHeight * 2;
+  // La course intègre le débord de l'inclinaison : le reflet entre et sort par
+  // les bords, jamais au milieu de la carte.
+  const overhang = shineOverhang(shineHeight);
+  const shineTranslate = shine.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-(SHINE_WIDTH + overhang), cardWidth + SHINE_WIDTH + overhang],
+  });
+
+  // La restauration est passée dans ManageSubscriptionSheet, qui en affiche le
+  // résultat dans la feuille elle-même. Une alerte système chassait la feuille
+  // au lieu de s'y inscrire, et imposait son style et ses boutons.
+
+  // Le changement de langue est passé dans LanguageSheet, qui porte aussi le
+  // choix « suivre l'appareil » — lequel efface la clé stockée plutôt que d'en
+  // écrire une.
+
   const confirmLogout = async () => {
     setIsLogoutModalVisible(false);
+
+    // Fermer la session de travail AVANT de déconnecter. La déconnexion ne
+    // faisait que couper l'authentification, laissant derrière elle une session
+    // ouverte et `is_online` à `true`.
+    //
+    // Ce n'est pas cosmétique : `online_sessions` sans `end_at` est compté comme
+    // « en cours » et sa durée se calcule en `maintenant − start_at`
+    // (DashboardScreen et AnalyticsScreen). Une session laissée ouverte gonfle
+    // donc indéfiniment, et comme le taux horaire vaut gains ÷ heures, il
+    // s'effondre vers zéro. Le chauffeur retrouve à la reconnexion un €/h faux
+    // et une durée de service absurde.
+    //
+    // ORDRE OBLIGATOIRE : les deux écritures Supabase passent par la RLS, donc
+    // exigent le jeton. Après `signOut()` elles seraient refusées en silence.
+    if (user?.id) {
+      try {
+        const nowIso = new Date().toISOString();
+        const { data: open } = await supabase
+          .from('online_sessions')
+          .select('id, start_at')
+          .eq('user_id', user.id)
+          .is('end_at', null);
+
+        for (const s of open ?? []) {
+          const elapsed = Math.max(
+            0,
+            Math.floor((Date.now() - new Date(s.start_at).getTime()) / 1000),
+          );
+          await supabase
+            .from('online_sessions')
+            .update({ end_at: nowIso, duration_seconds: elapsed })
+            .eq('id', s.id);
+        }
+
+        await supabase.from('profiles').update({ is_online: false }).eq('id', user.id);
+      } catch (e) {
+        // Un échec ici ne doit pas retenir le chauffeur qui veut se déconnecter.
+        // La session restera ouverte, ce qui est le comportement d'avant.
+        __DEV__ && console.log('close session on logout failed:', e);
+      }
+    }
+
+    // Le natif garde ses propres traces : le drapeau `sessionOnline` de l'App
+    // Group commande le scan par raccourci, et la Live Activity survivrait à la
+    // déconnexion — jusqu'à afficher les KPI de l'ancien chauffeur si un autre
+    // compte se connecte sur le même appareil.
+    try {
+      const { ScanBridge } = NativeModules;
+      ScanBridge?.setSessionOnline?.(false);
+      if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+    } catch {}
+
     try {
       await GoogleSignin.signOut();
     } catch (e) {
@@ -77,6 +365,24 @@ const ProfileScreen = () => {
     }
     setDeleting(true);
     try {
+      // Apple d'abord, tant que la session vit encore : la révocation exige un
+      // code d'autorisation frais obtenu depuis l'appareil, et l'edge function
+      // exige le JWT du titulaire. Après `delete_account`, ni l'un ni l'autre
+      // n'existe plus.
+      //
+      // Best-effort assumé : si le chauffeur refuse la ré-authentification ou
+      // qu'Apple est injoignable, on supprime quand même. Le retenir dans un
+      // compte qu'il veut voir disparaître serait pire que le jeton résiduel.
+      // Mais l'échec part dans Sentry — une révocation qu'on croit faite et qui
+      // ne l'est pas se paie en rejet App Store, des semaines plus tard.
+      const appleOutcome = await revokeAppleAccess(user as any);
+      if (appleOutcome === 'failed' || appleOutcome === 'cancelled') {
+        Sentry.captureMessage('apple_revoke_not_completed', {
+          level: 'warning',
+          tags: { flow: 'delete_account', outcome: appleOutcome },
+        });
+      }
+
       // RGPD : purge l'avatar du Storage AVANT delete_account (après, plus de
       // session pour le faire ; un DELETE SQL sur storage.objects laisserait
       // le fichier orphelin côté S3). Best-effort : un échec ne bloque pas la
@@ -107,6 +413,11 @@ const ProfileScreen = () => {
     }
   };
 
+  // Validation progressive : le bouton Supprimer ne s'active que si le mot exact
+  // (SUPPRIMER ou DELETE) est saisi. L'input passe au vert quand c'est bon.
+  const deleteWord = deleteConfirmation.trim().toUpperCase();
+  const isDeleteConfirmValid = deleteWord === 'SUPPRIMER' || deleteWord === 'DELETE';
+
   const accountItems: MenuItem[] = [
     {
       icon: 'account-outline',
@@ -121,6 +432,10 @@ const ProfileScreen = () => {
       title: t('profile.car'),
       sub: t('profile.carSub'),
       onPress: () => navigation.navigate('CarSettings'),
+      // CarSettingsScreen couvre tout l'écran d'un calque qui renvoie au paywall
+      // pour un compte free : sans cette pastille, le tap se solde par un
+      // renvoi brutal, sans que rien n'ait annoncé la restriction.
+      plusLocked: !isPlus,
     },
     {
       icon: 'tune-vertical',
@@ -129,13 +444,8 @@ const ProfileScreen = () => {
       sub: t('preferences.subtitle'),
       onPress: () => navigation.navigate('Preferences'),
     },
-    ...(isPlus ? [{
-      icon: 'crown-outline',
-      iconLib: 'mc' as const,
-      title: t('subscription.manage', 'Gérer mon abonnement'),
-      sub: t('profile.subscriptionSubActive', 'Annuler, changer de formule...'),
-      onPress: () => navigation.navigate('SubscriptionScreen'),
-    }] : []),
+    // « Gérer mon abonnement » a rejoint la section Abonnement, où il figurait
+    // en double.
   ];
 
   const resourceItems: MenuItem[] = [
@@ -149,8 +459,8 @@ const ProfileScreen = () => {
       accent: true,
     },
     {
-      icon: 'help-circle',
-      iconLib: 'feather',
+      icon: 'help-circle-outline',
+      iconLib: 'mc',
       title: t('profile.help'),
       sub: t('profile.helpSub'),
       onPress: () => navigation.navigate('Help'),
@@ -162,14 +472,40 @@ const ProfileScreen = () => {
       sub: t('support.menuSub', 'Contacter le support, suivre tes demandes'),
       onPress: () => navigation.navigate('SupportTickets'),
     },
+    // Diagnostics : outil de développement, invisible sur le build App Store.
+    // `__DEV__` couvre les builds de debug ; `is_admin` (déjà utilisé pour le
+    // back-office support) garde l'accès sur une build de production pour nos
+    // seuls comptes — c'est là qu'il sert vraiment, un bug de scan ne se
+    // reproduisant pas dans un simulateur. Un chauffeur, lui, ne le voit jamais.
+    ...(__DEV__ || profile?.is_admin
+      ? [{
+          icon: 'stethoscope',
+          iconLib: 'mc' as const,
+          title: t('diagnostics.title'),
+          sub: t('diagnostics.menuSub'),
+          onPress: () => navigation.navigate('Diagnostics'),
+        }]
+      : []),
   ];
 
   const renderIcon = (item: MenuItem) => {
-    const color = item.accent ? colors.primary : colors.textMuted;
+    // Gris de la même valeur que le chevron : l'icône et la flèche encadrent le
+    // libellé sans lui disputer l'attention. C'est ce que fait le build blanc —
+    // icônes nues, gris moyen — transposé en sombre : là-bas gris foncé sur
+    // blanc, ici gris clair sur noir, même écart de contraste.
+    //
+    // Seule la ligne d'accent passe au vert. Une couleur qui ne sert qu'une fois
+    // par écran désigne ; répétée sur quinze lignes, elle ne désigne plus rien.
+    //
+    // Gris ÉCLAIRCI (`textMain` à 70 %) et non `textMuted` : sur blanc, un trait
+    // fin gris moyen tient parce que le fond réfléchit ; sur `#15241C` il
+    // s'efface, surtout à côté d'un intitulé blanc en gras. Le contraste brut
+    // était pourtant correct — c'est le rapport à son voisin qui comptait.
+    const color = item.accent ? colors.primary : 'rgba(255,255,255,0.7)';
     if (item.iconLib === 'feather') {
-      return <Feather name={item.icon as any} size={20} color={color} />;
+      return <Feather name={item.icon as any} size={ICON_SIZE} color={color} />;
     }
-    return <MaterialCommunityIcons name={item.icon as any} size={20} color={color} />;
+    return <MaterialCommunityIcons name={item.icon as any} size={ICON_SIZE} color={color} />;
   };
 
   const renderMenuGroup = (items: MenuItem[]) => (
@@ -179,24 +515,41 @@ const ProfileScreen = () => {
           key={i}
           style={[styles.menuRow, i < items.length - 1 && styles.menuRowDivider]}
           onPress={item.onPress}
+          // Une ligne à interrupteur n'est pas tapable dans son ensemble : le
+          // doigt qui vise le libellé ne doit pas basculer le réglage.
+          disabled={!item.onPress}
           activeOpacity={0.7}
-          accessibilityRole="button"
+          accessibilityRole={item.toggle ? 'switch' : 'button'}
           accessibilityLabel={item.title}
         >
-          <View style={[styles.menuIconWrap, item.accent && styles.menuIconWrapAccent]}>
-            {renderIcon(item)}
-          </View>
+          {/* Dégradé plutôt qu'aplat. Quinze tuiles rigoureusement identiques
+              alignées en colonne se lisent comme une trame, pas comme des
+              repères : c'est plat, et l'œil glisse. Le dégradé diagonal donne
+              du volume à chacune sans toucher à la saturation d'ensemble —
+              c'est le relief qui manquait, pas la couleur.
+
+              La variante « accent » n'existe plus : à 10 % d'opacité elle
+              rendait la ligne mise en avant PLUS pâle que les autres. */}
+          <View style={styles.menuIconWrap}>{renderIcon(item)}</View>
           <View style={styles.menuText}>
             <Text style={[styles.menuTitle, item.accent && { color: colors.textMain }]} numberOfLines={1}>
               {item.title}
             </Text>
-            {item.sub ? (
-              <Text style={[styles.menuSub, item.accent && { color: colors.primary }]} numberOfLines={1}>
-                {item.sub}
-              </Text>
-            ) : null}
+            {/* Sous-titres retirés : ils paraphrasaient l'intitulé de la ligne
+                (« Préférences » / « Paramètres d'acceptation des courses ») et
+                doublaient la hauteur de chaque entrée pour rien. Le champ `sub`
+                reste dans le type, les libellés existent toujours en traduction
+                — seul l'affichage est supprimé. */}
           </View>
-          {item.badge ? (
+          {item.plusLocked && <PlusBadge style={styles.menuPlusBadge} />}
+          {item.value ? <Text style={styles.menuValue}>{item.value}</Text> : null}
+          {item.toggle ? (
+            <Toggle
+              value={item.toggle.value}
+              onValueChange={item.toggle.onChange}
+              accessibilityLabel={item.title}
+            />
+          ) : item.badge ? (
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>{item.badge}</Text>
             </View>
@@ -208,15 +561,26 @@ const ProfileScreen = () => {
     </View>
   );
 
+  // Défilement de l'écran, lu par les surfaces de verre : le champ est fixe à
+  // l'appareil, c'est donc cette valeur qui leur dit où elles sont dans la lumière.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      {/* Posé en premier, donc derrière tout le reste. */}
+      <ScreenField />
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('profile.title')}</Text>
-      </View>
+      </AnimatedEntrance>
 
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
       >
         {/* ── PROFILE CARD ── */}
         <SafeGradient
@@ -224,7 +588,12 @@ const ProfileScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.profileCard}
+          onLayout={e => {
+            setCardWidth(e.nativeEvent.layout.width);
+            setCardHeight(e.nativeEvent.layout.height);
+          }}
         >
+
           <View style={styles.profileContent}>
             {isPlus && <View style={styles.plusGlow} />}
             <View style={styles.profileShimmer} />
@@ -248,10 +617,7 @@ const ProfileScreen = () => {
             ) : null}
 
             {isPlus ? (
-              <View style={styles.tierBadgePlus}>
-                <MaterialCommunityIcons name="crown" size={12} color={colors.background} />
-                <Text style={styles.tierBadgePlusText}>{t('tier.plusBadge')}</Text>
-              </View>
+              <PlanBadge style={styles.tierBadgeSpacing} />
             ) : (
               <TouchableOpacity
                 style={styles.upgradeBtnWrap}
@@ -264,13 +630,84 @@ const ProfileScreen = () => {
                   end={{ x: 1, y: 0 }}
                   style={styles.upgradeBtn}
                 >
-                  <MaterialCommunityIcons name="crown" size={14} color="#062318" />
+                  <Image
+                    source={require('../assets/strive-logo.png')}
+                    style={styles.upgradeBtnLogo}
+                  />
                   <Text style={styles.upgradeBtnText}>{t('profile.upgradeLink')}</Text>
                 </SafeGradient>
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Reflet qui traverse la carte. Incliné, sinon on ne lit qu'une barre
+              verticale qui glisse ; l'inclinaison est ce qui le fait passer pour
+              une lumière plutôt que pour un élément d'interface.
+              `pointerEvents="none"` : il couvre le bouton Plus, et rien de
+              décoratif ne doit intercepter un tap. */}
+          {cardWidth > 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.shine,
+                {
+                  height: shineHeight,
+                  top: -(shineHeight - cardHeight) / 2,
+                  transform: [{ translateX: shineTranslate }],
+                },
+              ]}
+            >
+              {/* La rotation est portée par une vue INTERNE et statique. Dans le
+                  même tableau de transformations que le `translateX` animé, le
+                  pilote natif refuse la propriété et retombe en JS — le balayage
+                  saccade dès que la liste défile. */}
+              <View style={styles.shineSkew}>
+                <SafeGradient
+                  // UN SEUL lobe. La version à deux lobes séparés d'un creux
+                  // avait été essayée pour imiter un satiné : à l'écran elle se
+                  // lisait comme deux reflets distincts qui traversent ensemble,
+                  // pas comme une surface polie.
+                  colors={[
+                    'rgba(255,255,255,0)',
+                    'rgba(255,255,255,0.10)',
+                    'rgba(255,255,255,0)',
+                  ]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            </Animated.View>
+          )}
         </SafeGradient>
+
+        {/* Gains de la semaine, posés entre l'identité et les réglages : c'est
+            le seul chiffre que le chauffeur vient chercher ici, et il donne au
+            profil une raison d'être ouvert autrement que pour se déconnecter. */}
+        {weekEarnings !== null && (
+          <View style={styles.earnCard}>
+            <View style={styles.earnTexts}>
+              <Text style={styles.earnLabel}>{t('profile.weekEarnings')}</Text>
+              <View style={styles.earnAmountRow}>
+                {/* `toLocaleString('fr-FR')` était épinglé au français : un
+                    chauffeur allemand lisait ses gains groupés à la française.
+                    Le groupement suit la langue comme le reste. */}
+                <Text style={styles.earnWhole}>
+                  {Math.floor(weekEarnings).toLocaleString(dateLocale(i18n.language, market))}
+                </Text>
+                {/* Les centimes en retrait : ils comptent, mais ce sont les
+                    euros qui se lisent d'un coup d'œil. */}
+                <Text style={styles.earnCents}>
+                  {decimalSeparator(i18n.language)}
+                  {Math.round((weekEarnings % 1) * 100).toString().padStart(2, '0')} {market.symbol}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.earnBadge}>
+              <Feather name="trending-up" size={20} color={colors.primary} />
+            </View>
+          </View>
+        )}
 
         {/* ── ACCOUNT SECTION ── */}
         <Text style={styles.sectionTitle}>{t('profile.general')}</Text>
@@ -290,55 +727,118 @@ const ProfileScreen = () => {
             >
               <View style={styles.profileUpgradeGlow} />
               <View style={styles.profileUpgradeRow}>
-                <SafeGradient
-                  colors={['#A4FF6B', '#00FF8C', colors.primary]}
-                  style={styles.profileUpgradeIconWrap}
-                >
-                  <MaterialCommunityIcons name="crown" size={18} color="#062318" />
-                </SafeGradient>
+                {/* Logo Strive plutôt qu'une couronne : c'est un passage à
+                    Strive Plus, pas à un rang. La marque dit ce qu'on achète,
+                    la couronne ne disait que « premium » en générique. */}
+                <Image
+                  source={require('../assets/strive-logo.png')}
+                  style={styles.profileUpgradeLogo}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.profileUpgradeTitle}>{t('profile.upgradeCardTitle')}</Text>
                   <Text style={styles.profileUpgradeSub}>{t('profile.upgradeCardSub')}</Text>
                 </View>
-                <Feather name="arrow-right" size={18} color={colors.primary} />
+                <Feather name="arrow-right" size={18} color={colors.textMuted} />
               </View>
             </SafeGradient>
           </TouchableOpacity>
         )}
 
-        {/* ── RESOURCES SECTION ── */}
-        <Text style={[styles.sectionTitle, !isPlus ? {} : { marginTop: 22 }]}>{t('profile.resources')}</Text>
+        {/* Les deux boutons drapeau laissent place à une ligne de réglage
+            classique, avec la langue courante affichée à droite. Deux langues
+            seulement : le tap bascule directement plutôt que d'ouvrir une liste
+            de deux entrées. */}
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.settings', 'Réglages')}</Text>
+        {renderMenuGroup([
+          {
+            icon: 'translate',
+            iconLib: 'mc',
+            title: t('preferences.language', 'Langue'),
+            // Le nom de la langue COURANTE, pas un ternaire à deux branches :
+            // choisir l'espagnol affichait « English », puisque tout ce qui
+            // n'était pas le français tombait dans l'autre branche.
+            value: LANGUAGE_NAMES[i18n.language] ?? i18n.language,
+            onPress: () => setLangSheetVisible(true),
+          },
+          // Un interrupteur qui ne peut pas s'allumer n'est pas un interrupteur.
+          // Après un refus système, iOS ne réaffiche jamais sa fenêtre :
+          // `registerPushToken` se fait répondre « non » de mémoire, sans rien
+          // montrer, et la bascule revenait en arrière toute seule. Le chauffeur
+          // voyait un réglage qui refuse de tenir, sans savoir pourquoi.
+          //
+          // Dans ce seul cas la ligne cesse d'être un interrupteur et devient un
+          // raccourci vers les Réglages iOS — le seul endroit où la décision peut
+          // encore être prise.
+          pushBlocked
+            ? {
+                icon: 'bell-off-outline',
+                iconLib: 'mc' as const,
+                title: t('preferences.push', 'Notifications push'),
+                sub: t('preferences.pushBlocked'),
+                onPress: () => openSettingsFor('notifications'),
+              }
+            : {
+                icon: 'bell-outline',
+                iconLib: 'mc' as const,
+                title: t('preferences.push', 'Notifications push'),
+                toggle: { value: pushEnabled, onChange: togglePush },
+              },
+        ])}
+
+        {/* Abonnement : « Passer à Strive Plus » n'apparaît qu'aux comptes
+            gratuits, « Gérer » qu'aux abonnés — proposer les deux ferait douter
+            de son propre statut. « Restaurer » reste dans les deux cas : c'est
+            une exigence de l'App Store, et c'est aussi le recours d'un abonné
+            que l'app croit gratuit. */}
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.subscription', 'Abonnement')}</Text>
+        {renderMenuGroup([
+          ...(isPlus ? [{
+            icon: 'crown-outline',
+            iconLib: 'mc' as const,
+            title: t('subscription.manage', 'Gérer mon abonnement'),
+            onPress: () => setSubSheetVisible(true),
+          }] : [{
+            icon: 'crown-outline',
+            iconLib: 'mc' as const,
+            title: t('profile.upgradeLink', 'Passer à Strive Plus'),
+            accent: true,
+            onPress: () => navigation.navigate('SubscriptionScreen'),
+          }]),
+          {
+            icon: 'restore',
+            iconLib: 'mc' as const,
+            title: t('subscription.restore', 'Restaurer les achats'),
+            onPress: () => setSubSheetVisible(true),
+          },
+        ])}
+
+        {/* ── SUPPORT ── */}
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.supportSection', 'Support')}</Text>
         {renderMenuGroup(resourceItems)}
 
-        {/* ── LANGUAGE SECTION ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 22 }]}>{t('profile.language')}</Text>
-        <View style={styles.langRow}>
-          <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'fr' && styles.langBtnActive]}
-            onPress={() => changeLanguage('fr')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Français"
-            accessibilityState={{ selected: i18n.language === 'fr' }}
-          >
-            <Text style={styles.langFlag}>🇫🇷</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'fr' && styles.langBtnTextActive]}>Français</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.langBtn, i18n.language === 'en' && styles.langBtnActive]}
-            onPress={() => changeLanguage('en')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="English"
-            accessibilityState={{ selected: i18n.language === 'en' }}
-          >
-            <Text style={styles.langFlag}>🇬🇧</Text>
-            <Text style={[styles.langBtnText, i18n.language === 'en' && styles.langBtnTextActive]}>English</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Légal : deux liens qu'Apple exige d'atteindre depuis l'app, et qui
+            étaient relégués en minuscules tout en bas de l'écran. */}
+        <Text style={[styles.sectionTitle, { marginTop: space.xl }]}>{t('profile.legal', 'Légal')}</Text>
+        {renderMenuGroup([
+          {
+            icon: 'file-document-outline',
+            iconLib: 'mc',
+            title: t('profile.terms', 'Conditions d\'utilisation'),
+            onPress: () => Linking.openURL('https://striveapp.fr/terms'),
+          },
+          {
+            icon: 'shield-lock-outline',
+            iconLib: 'mc',
+            title: t('profile.privacy', 'Politique de confidentialité'),
+            onPress: () => Linking.openURL('https://striveapp.fr/privacy'),
+          },
+        ])}
 
-        {/* ── DANGER ZONE ── */}
-        <View style={[styles.dangerGroup, { marginTop: 22 }]}>
+        <Text style={[styles.sectionTitle, styles.dangerSectionTitle, { marginTop: space.xl }]}>
+          {t('profile.session', 'Session')}
+        </Text>
+
+        <View style={styles.dangerGroup}>
           <TouchableOpacity
             style={[styles.menuRow, styles.menuRowDivider]}
             onPress={() => setIsLogoutModalVisible(true)}
@@ -378,18 +878,23 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* ── FOOTER ── */}
-        <View style={styles.legalLinksRow}>
-          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/privacy')}>
-            <Text style={styles.legalLink}>{t('profile.privacy', 'Confidentialité')}</Text>
-          </TouchableOpacity>
-          <Text style={styles.legalSep}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://striveapp.fr/terms')}>
-            <Text style={styles.legalLink}>{t('profile.terms', 'CGU')}</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.versionText}>v2.4.1 (Build 204)</Text>
-      </ScrollView>
+        {/* Les liens légaux ont rejoint leur propre section, et la version n'est
+            plus affichée ici. Elle reste jointe automatiquement aux demandes de
+            support (`supportService`, `HelpScreen`) et aux traces de scan : le
+            besoin réel — savoir sur quel build tourne un chauffeur qui signale
+            un problème — est couvert sans occuper le pied de page. */}
+      </Animated.ScrollView>
+
+      <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
+
+      <ManageSubscriptionSheet
+        visible={subSheetVisible}
+        onClose={() => setSubSheetVisible(false)}
+        isSubscribed={isPlus}
+        planLabel={isPlus ? t('tier.plusName', 'Plus') : t('tier.freeBadge', 'Free')}
+        userId={user?.id}
+        onRestored={() => refreshProfile?.()}
+      />
 
       {/* ── LOGOUT MODAL ── */}
       <Modal
@@ -440,13 +945,16 @@ const ProfileScreen = () => {
               {t('profile.deleteModal.message', 'Action irréversible : compte, préférences et historique des courses seront définitivement supprimés.')}
             </Text>
             <TextInput
-              style={styles.deleteInput}
+              style={[styles.deleteInput, isDeleteConfirmValid && styles.deleteInputValid]}
               placeholder={t('profile.deleteModal.placeholder', 'Tapez SUPPRIMER')}
               placeholderTextColor={colors.textDimmed}
               value={deleteConfirmation}
               onChangeText={setDeleteConfirmation}
               autoCapitalize="characters"
               autoCorrect={false}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => { if (isDeleteConfirmValid && !deleting) confirmDeleteAccount(); }}
             />
             <View style={styles.modalBtns}>
               <TouchableOpacity
@@ -457,9 +965,10 @@ const ProfileScreen = () => {
                 <Text style={styles.modalBtnCancelText}>{t('profile.logoutModal.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnConfirm, deleting && { opacity: 0.6 }]}
+                style={[styles.modalBtn, styles.modalBtnConfirm, (deleting || !isDeleteConfirmValid) && styles.modalBtnConfirmDisabled]}
                 onPress={confirmDeleteAccount}
-                disabled={deleting}
+                disabled={deleting || !isDeleteConfirmValid}
+                accessibilityState={{ disabled: deleting || !isDeleteConfirmValid }}
               >
                 <Text style={styles.modalBtnConfirmText}>
                   {deleting ? '…' : t('profile.deleteModal.confirm', 'Supprimer')}
@@ -474,23 +983,25 @@ const ProfileScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Même couleur que le sommet du champ : la bande sous l'encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
 
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  header: { paddingHorizontal: space.xl, paddingTop: space.sm, paddingBottom: space.md },
   headerTitle: { color: colors.textMain, fontSize: 28, fontWeight: '900' },
 
-  scrollContent: { paddingHorizontal: 20 },
+  scrollContent: { paddingHorizontal: space.xl },
 
   // Profile card
   profileCard: {
-    borderRadius: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(0,230,118,0.18)',
+    borderRadius: radius.lg,
+    marginBottom: space.xl,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     overflow: 'hidden',
   },
   profileContent: {
-    padding: 24,
+    padding: space.xl,
     alignItems: 'center',
   },
   profileShimmer: {
@@ -501,16 +1012,27 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0,230,118,0.32)',
   },
+  // Bande du reflet. `height` et `top` sont calculés au rendu depuis la hauteur
+  // mesurée de la carte — ils ne peuvent pas vivre dans une feuille statique.
+  shine: {
+    position: 'absolute',
+    left: 0,
+    width: SHINE_WIDTH,
+  },
+  shineSkew: {
+    flex: 1,
+    transform: [{ rotate: `${SHINE_ROTATE_DEG}deg` }],
+  },
   plusGlow: {
     position: 'absolute',
     top: -40,
     right: -40,
     width: 140,
     height: 140,
-    borderRadius: 70,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  avatarContainer: { marginBottom: 14 },
+  avatarContainer: { marginBottom: space.md },
   userName: {
     color: colors.textMain,
     fontSize: 20,
@@ -520,19 +1042,10 @@ const styles = StyleSheet.create({
   userEmail: {
     color: colors.textDimmed,
     fontSize: 12,
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: space.xs,
+    marginBottom: space.md,
   },
-  tierBadgePlus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginTop: 4,
-  },
+  tierBadgeSpacing: { marginTop: space.xs },
   tierBadgePlusText: {
     color: colors.background,
     fontSize: 11,
@@ -540,136 +1053,202 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   upgradeBtnWrap: {
-    marginTop: 8,
-    borderRadius: 22, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 },
-      android: { elevation: 8 },
-    }),
+    marginTop: space.sm,
+    borderRadius: radius.lg, overflow: 'hidden',
+    ...elevation.resting.shadow,
   },
   upgradeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 22,
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.sm,
+    borderRadius: radius.lg,
   },
   upgradeBtnText: { color: '#062318', fontSize: 13, fontWeight: '900', letterSpacing: 0.3 },
 
   // Upgrade CTA card
   profileUpgradeCard: {
-    marginTop: 18, marginBottom: 18, borderRadius: 18, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#00E676', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14 },
-      android: { elevation: 8 },
-    }),
+    marginTop: space.lg, marginBottom: space.lg, borderRadius: radius.md, overflow: 'hidden',
+    ...elevation.raised.shadow,
   },
   profileUpgradeGradient: {
-    borderRadius: 18, padding: 18,
-    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.25)',
+    borderRadius: radius.md, padding: space.lg,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
     overflow: 'hidden',
   },
   profileUpgradeGlow: {
     position: 'absolute', top: -20, right: -20,
-    width: 90, height: 90, borderRadius: 45,
+    width: 90, height: 90, borderRadius: radius.full,
     backgroundColor: 'rgba(0,230,118,0.08)',
   },
-  profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  profileUpgradeIconWrap: {
-    width: 42, height: 42, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#00FF8C', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8 },
-      android: { elevation: 6 },
-    }),
+  profileUpgradeRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // Le halo vert est conservé : il détachait la tuile du dégradé sombre de la
+  // carte, et le logo en a autant besoin que la couronne.
+  profileUpgradeLogo: {
+    width: 42, height: 42, borderRadius: radius.md,
+    ...elevation.resting.shadow,
   },
+  upgradeBtnLogo: { width: 16, height: 16, borderRadius: radius.full },
   profileUpgradeTitle: { color: colors.textMain, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
-  profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
+  profileUpgradeSub: { color: colors.textMuted, fontSize: 12, marginTop: space.tight, lineHeight: 16 },
 
   // Section title
+  earnCard: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.xl,
+    paddingHorizontal: space.xl,
+    // Même matériau que les groupes de menu. La carte était en blanc
+    // translucide, donc d'un gris légèrement différent de tout ce qui l'entoure,
+    // et l'écart se voyait sans rien signifier.
+    borderRadius: radius.md,
+    marginBottom: space.xl,
+    overflow: 'hidden',
+  },
+  earnTexts: { flex: 1 },
+  earnLabel: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  earnAmountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: space.sm },
+  earnWhole: {
+    color: colors.textMain,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1.2,
+  },
+  earnCents: {
+    color: colors.textMuted,
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  earnBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '1F',
+  },
+
   sectionTitle: {
     color: colors.textDimmed,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
-    marginBottom: 10,
-    marginLeft: 4,
+    marginBottom: space.sm,
+    marginLeft: space.xs,
     textTransform: 'uppercase',
   },
   dangerSectionTitle: { color: colors.danger, opacity: 0.7 },
 
   // Menu group (iOS settings-like card)
+  // Le groupe entier est UNE surface, pas une par ligne : les séparateurs
+  // suffisent à découper, et une carte par ligne hacherait la liste.
   menuGroup: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   dangerGroup: {
     backgroundColor: 'rgba(255,77,77,0.04)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.18)',
+    borderRadius: radius.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
     overflow: 'hidden',
+    // Dernier bloc de la page, et le seul à porter une bordure : les 16 px du
+    // `paddingBottom` du ScrollView (la convention partagée avec Accueil,
+    // Historique, Stats et Boutique) laissaient son trait rouge à ras de la
+    // barre d'onglets. Le pied de page portait autrefois le numéro de version,
+    // qui faisait tampon ; il a été retiré, pas remplacé. `space.xl` est le
+    // rythme des sections, pour que le bas respire comme le reste.
+    marginBottom: space.xl,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
   },
   menuRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
+  // Tuiles en aplat plein, comme la référence : le gris à 4 % d'opacité les
+  // rendait presque invisibles, et une liste de quinze lignes sans repère
+  // coloré se parcourt uniquement au texte.
+  // Le dégradé va de `primary` (haut gauche) à `primarySoft` (bas droite) : le
+  // vert vif n'occupe donc qu'un coin au lieu de toute la surface, ce qui laisse
+  // la colonne calme tout en donnant du relief. Un aplat de `primary` sur les
+  // quinze tuiles refaisait le mur fluo qui passait devant les intitulés.
+  //
+  // La lueur verte, discrète et diffuse, détache la tuile du fond de carte au
+  // lieu de la laisser collée dessus. C'est elle qui fait la différence entre
+  // « posé » et « imprimé ».
+  // Aucun fond : l'icône se pose directement sur la ligne. Le conteneur ne sert
+  // plus qu'à réserver une largeur constante pour que la colonne d'icônes reste
+  // alignée quelle que soit la forme du glyphe.
   menuIconWrap: {
-    width: 38,
-    height: 38,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  menuIconWrapAccent: {
-    backgroundColor: 'rgba(0,230,118,0.1)',
+    marginRight: space.md,
   },
   menuIconWrapDanger: {
     width: 38,
     height: 38,
     backgroundColor: 'rgba(255,77,77,0.1)',
-    borderRadius: 10,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: space.md,
   },
   menuText: { flex: 1 },
-  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  // 15/700, comme partout ailleurs dans l'app : `toggleTitle` de Preferences est
+  // en 14/700, les autres titres de ligne en 15/700 ou 800. Les métriques des
+  // Réglages iOS (17 pt, graisse normale) avaient été essayées et écartées —
+  // elles faisaient du Profil le seul écran hors convention.
+  //
+  // Aucune `fontFamily` n'est posée nulle part dans le projet : le rendu est
+  // déjà San Francisco sur iOS et Roboto sur Android.
+  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: space.tight },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
+  menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: space.sm },
+  menuPlusBadge: { marginRight: space.sm },
   newBadge: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.sm,
   },
   newBadgeText: { color: colors.background, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
 
   // Language
-  langRow: { flexDirection: 'row', gap: 10 },
+  langRow: { flexDirection: 'row', gap: space.sm },
   langBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: space.sm,
     backgroundColor: colors.surface,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: space.md,
+    borderRadius: radius.full,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   langBtnActive: {
     borderColor: colors.primary,
@@ -684,27 +1263,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 28,
-    marginBottom: 8,
+    gap: space.sm,
+    marginTop: space.xl,
+    marginBottom: space.sm,
   },
   legalLink: { color: colors.textDimmed, fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: colors.textDimmed, fontSize: 11 },
-  versionText: { textAlign: 'center', color: colors.textDimmed, fontSize: 11, marginBottom: 10 },
 
   deleteInput: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.35)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edgeLit,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
     color: colors.textMain,
     backgroundColor: 'rgba(239,68,68,0.05)',
-    marginBottom: 16,
+    marginBottom: space.lg,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,
+  },
+  deleteInputValid: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    color: colors.primary,
   },
 
   // Modal
@@ -713,48 +1296,45 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: space.xl,
   },
   modalCard: {
     backgroundColor: colors.surface,
     width: '100%',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: radius.lg,
+    padding: space.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    ...elevation.raised.shadow,
   },
   modalIconWrap: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,77,77,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
-  modalTitle: { color: colors.textMain, fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  modalTitle: { color: colors.textMain, fontSize: 20, fontWeight: 'bold', marginBottom: space.sm },
   modalMessage: {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 21,
-    marginBottom: 24,
+    marginBottom: space.xl,
   },
-  modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalBtns: { flexDirection: 'row', gap: space.md, width: '100%' },
   modalBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   modalBtnCancel: { backgroundColor: colors.surfaceLight },
   modalBtnConfirm: { backgroundColor: colors.danger },
+  modalBtnConfirmDisabled: { opacity: 0.4 },
   modalBtnCancelText: { color: colors.textMain, fontSize: 14, fontWeight: '600' },
   modalBtnConfirmText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
 });

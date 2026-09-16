@@ -33,7 +33,7 @@ object OcrParser {
 
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
-    private var fareMin = 5.0
+    private var fareMin = 8.0
     private var fareMax = 200.0
     private var distMin = 0.3
     private var distMax = 500.0
@@ -102,14 +102,41 @@ object OcrParser {
             // EN
             "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
         ).any { text.contains(it) }
-        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*€""").containsMatchIn(text)
-            || Regex("""€\s*\d""").containsMatchIn(text)
+        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*(?:€|£|CHF)""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+            || Regex("""(?:€|£|CHF)\s*\d""", RegexOption.IGNORE_CASE).containsMatchIn(text)
         val hasKm = Regex("""\d[\d.,]*\s*km""").containsMatchIn(text)
         val hasMin = Regex("""\d+\s*min""").containsMatchIn(text)
         return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
     }
 
     // Mots-clés de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs
+    /**
+     * Types de voie anglais qui sont AUSSI des mots français.
+     * 
+     * « court » (trajet court), « park », « close », « green » : quatre mots que
+     * l'app rencontre en France, et qui y feraient passer un bloc quelconque pour
+     * une adresse — au risque d'évincer la vraie. Consultés au UK seulement.
+     */
+    private val ukOnlyStreetKeywords = listOf("close", "court", "park", "green")
+
+    /**
+     * Code postal SORTANT seul, suivi d'une ville : « TW6, Hounslow ».
+     *
+     * C'est la forme qu'Uber affiche au Royaume-Uni — jamais le code complet.
+     * La virgule est obligatoire : la carte derrière l'offre est couverte de
+     * numéros de route (« E05 », « A421 », « M1 ») qui ont exactement la forme
+     * d'un code sortant. Exiger « code, ville » les écarte tous.
+     */
+    private val ukOutwardRegex = Regex("""\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Pays d'activité du chauffeur, posé par `ScanBridge.setMarket`.
+     * Il n'entre en jeu QUE pour ce qui serait faux en France : les miles et
+     * les quatre mots ci-dessus.
+     */
+    @JvmStatic
+    var marketCountry: String = "FR"
+
     private val addressStreetKeywords = listOf(
         // FR
         "rue", "avenue", "av.", "boulevard", "blvd", "bd", "bd.",
@@ -119,14 +146,20 @@ object OcrParser {
         "faubourg", "fg.", "voie", "sq.", "square",
         // EN
         "street", "road", "lane", "drive", "st.", "rd.", "ave.", "way",
+        // UK : « Close », « Crescent » et « Gardens » y sont aussi courants que
+        // « Street ». Sans eux, une adresse anglaise sans numéro ne passait pas.
+        "crescent", "terrace", "gardens", "mews", "row",
+        "walk", "grove", "hill", "rise", "wharf", "embankment",
         // ES
-        "calle", "avenida", "plaza", "paseo", "carretera", "camino", "ronda",
+        // « c/ » est l'abréviation ordinaire de « calle » : sans elle, la moitié des
+        // adresses espagnoles ne portent aucun mot de voie reconnaissable.
+        "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
         // IT
         "via", "viale", "corso", "piazza", "strada", "vicolo", "largo",
         // NL
         "straat", "laan", "plein", "gracht",
         // PT
-        "travessa", "rua",
+        "travessa", "rua", "praça", "praca", "estrada", "alameda",
         // POIs VTC — FR/EN + traductions EU
         "gare", "aéroport", "aeroport", "airport", "terminal",
         "porte", "hôpital", "hopital", "hospital", "station",
@@ -140,23 +173,53 @@ object OcrParser {
         "straße", "strasse", "str.", "gasse", "weg", "allee", "platz",
         "damm", "ufer", "ring",
     )
+    // Mots qui ne sont JAMAIS une adresse. Les cinq marchés non francophones
+    // ont les leurs : sans eux, un « Aceptar » ou un « Annehmen » seul sur sa
+    // ligne pouvait passer pour une adresse.
     private val nonAddressWords = setOf(
         "uber", "bolt", "heetch", "total", "fare", "gain", "tarif",
         "accepted", "accepté", "min", "km", "estimated", "estimé",
+        "aceptar", "aceptado", "estimado", "tarifa", "ganancia",
+        "aceitar", "aceite", "ganho",
+        "accetta", "accettata", "stimato", "tariffa", "guadagno",
+        "aanvaarden", "aanvaard", "geschat", "tarief", "inkomsten",
+        "annehmen", "angenommen", "geschätzt", "geschaetzt", "einnahmen",
     )
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
     private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)""")
-    // Tarif sans séparateur ("1743€" ou "17 €"). Min 2 chiffres : un "5€" sec
-    // n'est jamais un tarif — contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift).
-    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6})\s*€""")
+    // Tarif sans séparateur ("1743€" ou "17 €"). Deux chiffres ou plus, OU un
+    // chiffre seul de 6 à 9 : une course à 9 € existe (tarif minimum VTC), alors
+    // qu'un "5€" sec est presque toujours un pourboire, un pack ou une note —
+    // contrat fixtures/ocr/fare-ocr.json (aligné TS/Swift). La regex reste plus
+    // large que le plancher fareMin (8 €), qui écarte ensuite 6 et 7.
+    // Le symbole n'est plus l'euro en dur : une offre londonienne (« £16.40 ») ou
+    // genevoise (« CHF 24.50 ») ne déclenchait jamais ce repli. Mirror du JS.
+    private val CURRENCY_REGEX = Regex("""€|£|CHF""", RegexOption.IGNORE_CASE)
+    private val PRICE_GLUED_REGEX = Regex("""(\d{2,6}|[6-9])\s*(?:€|£|CHF)""", RegexOption.IGNORE_CASE)
     // Note de l'app ("★ 5,00", "* 5,00") à retirer avant de chercher un tarif.
     private val RATING_SEGMENT_REGEX = Regex("""[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}""")
     private val DISTANCE_REGEX = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
+    // Contexte vehicule electrique. Uber affiche sur certaines offres une info
+    // de recharge ou d'autonomie ("35 min", "250 km") etrangere a la course :
+    // sans ce filtre elle devient la duree ou la distance, et le EUR/h comme le
+    // EUR/km sont faux en silence.
+    // Contrat fixtures/ocr/core.json#ev-autonomy-not-ride-duration (aligne TS/Swift).
+    // ATTENTION : « charge » seul est PROSCRIT — « prise en charge » designe le pickup.
+    private val EV_CONTEXT_REGEX = Regex(
+        """(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)""", RegexOption.IGNORE_CASE)
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
-    private val PICKUP_COMBO_MIN_FIRST = Regex("""(\d{1,3})\s*min[^0-9a-zà-ü]{0,6}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
-    private val PICKUP_COMBO_KM_FIRST  = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9a-zà-ü]{0,6}(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
+    //
+    // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
+    // écartait le format réellement affiché par l'app Uber FR : "11 min (à 2,6 km)".
+    // Le « à » suffisait à faire échouer le match — l'approche n'était donc JAMAIS
+    // reconnue sur une offre Uber française, et ses km/min ne rentraient pas dans
+    // le total. Voir fixtures/ocr/core.json#uber-approach-longer-than-ride.
+    // La borne à 8 caractères garde le pont court : elle couvre " (à ", " · ",
+    // " away (" — pas " Course de ", qui relierait deux lignes distinctes.
+    private val PICKUP_COMBO_MIN_FIRST = Regex("""(\d{1,3})\s*min[^0-9]{0,8}(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km""", RegexOption.IGNORE_CASE)
+    private val PICKUP_COMBO_KM_FIRST  = Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*km[^0-9]{0,8}(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
 
     /** Supprime tous les espaces internes et remplace virgule par point — prêt pour toDouble(). */
     private fun cleanNum(raw: String) = raw.replace("\\s+".toRegex(), "").replace(',', '.')
@@ -167,6 +230,37 @@ object OcrParser {
      * Cible réelle observée : "1l.8 km" (ML Kit lit le 1 comme un L minuscule).
      * Safe pour les adresses : "Libération" n'a pas de digit adjacent à son "l".
      */
+    /**
+     * MILES → KILOMÈTRES, avant toute autre lecture.
+     *
+     * Les plateformes affichent des miles au Royaume-Uni, et toutes les
+     * expressions de ce parser sont ancrées sur « km » : un écran londonien ne
+     * rendait AUCUNE distance, donc aucun verdict, alors que le prix avait été lu.
+     *
+     * On réécrit le texte plutôt que d'ajouter une unité à chaque expression :
+     * celles-ci sont réglées au cas par cas sur des captures réelles, avec leurs
+     * indices de groupe et leurs gardes. Tout l'aval — bornes de plausibilité,
+     * colonne `rides.distance_km` — raisonne en kilomètres.
+     *
+     * BRANCHÉ DANS `normalizeOcrDigits` et non à l'entrée, contrairement au JS et
+     * au Swift : ici les blocs sont des `Text.TextBlock` de ML Kit, dont le
+     * texte est en lecture seule et ne se reconstruit pas. Tous les endroits qui
+     * lisent une distance passent par cette normalisation, la couverture est
+     * donc la même.
+     *
+     * « min » n'est pas touché : le `(?![a-z])` empêche « mi » de mordre dessus.
+     */
+    private val MILES_REGEX =
+        Regex("""(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])""", RegexOption.IGNORE_CASE)
+
+    private fun milesToKm(s: String): String {
+        if (!s.contains("mi", ignoreCase = true)) return s
+        return MILES_REGEX.replace(s) { m ->
+            val value = m.groupValues[1].replace(" ", "").replace(",", ".").toDoubleOrNull()
+            if (value == null) m.value else String.format(java.util.Locale.US, "%.1f km", value * 1.609344)
+        }
+    }
+
     private fun normalizeOcrDigits(s: String): String {
         // Cas ciblés :
         //   "ll.8", "1l.8", "l1.8"  → "11.8"  (run de l/I avant ".X")
@@ -174,7 +268,10 @@ object OcrParser {
         //   "1l8", "1o8"            → "118", "108"   (lettre isolée entre chiffres)
         // Les runs l/I/o/O à côté de lettres (ex: "Libération") ne matchent pas
         // grâce aux lookbehind/lookahead `(?<![a-zA-Zà-ü])`.
-        return s
+        // ⚠️ Les miles UNIQUEMENT au Royaume-Uni : ML Kit découpe parfois
+        // « 11 min » en deux blocs, et « 11 mi » seul deviendrait 17,7 km —
+        // une distance 1,6× trop grande, sans la moindre alerte.
+        return (if (marketCountry == "GB") milesToKm(s) else s)
             // Runs l/I avant ".X" ou avant un nombre décimal "X.Y"
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=[.,]\d)""")) { "1".repeat(it.value.length) }
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=\d[.,]\d)""")) { "1".repeat(it.value.length) }
@@ -229,19 +326,41 @@ object OcrParser {
         }
 
         val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock) ?: return null
-        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock, distance)
 
         if (!isSane(fare, distance)) return null
 
-        val pickup = extractPickupInfo(blocks, distance)
+        // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
+        // écarter le combo qui la porte, sinon les minutes d'approche deviennent
+        // celles de la course (cf. son repli n°2).
+        val pickup = extractPickupInfo(blocks, distance, screenHeight)
+        val duration = extractDuration(blocks, pickupAddrBlock, destAddrBlock, distance, pickup)
+
+        val pickupText = pickupAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) }
+        val destCandidate = destAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) }
+
+        // UNE ADRESSE DE PRISE EN CHARGE N'EST JAMAIS UNE ADRESSE D'ARRIVÉE.
+        //
+        // `dedupOverlappingAddresses` écarte déjà les candidats en doublon, mais
+        // il travaille sur les blocs AVANT recollage des continuations : deux
+        // ancres découpées différemment par l'OCR peuvent aboutir au même libellé
+        // final. Cette vérification-ci porte sur le résultat, elle ne peut donc
+        // pas être contournée par une variation de découpage.
+        //
+        // On préfère un champ VIDE à un champ faux. Une destination absente est
+        // visible, elle déclenche la capture diagnostique et n'induit personne en
+        // erreur ; une destination fausse est silencieuse, elle s'écrit en base et
+        // fausse le calcul économique sur lequel le chauffeur décide.
+        val destText =
+            if (destCandidate != null && pickupText != null && isSameAddress(destCandidate, pickupText)) null
+            else destCandidate
 
         return ScanResult(
             platform = platform,
             fare = fare,
             distanceKm = distance,
             durationMin = duration,
-            pickupAddress = pickupAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) },
-            destinationAddress = destAddrBlock?.let { mergeAddressContinuation(it, blocks, screenHeight) },
+            pickupAddress = pickupText,
+            destinationAddress = destText,
             pickupDurationMin = pickup?.first,
             pickupDistanceKm = pickup?.second,
         )
@@ -272,11 +391,52 @@ object OcrParser {
         if (Regex("""\d\s*(?:km|min)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return false
         if (Regex("""^\d{1,4}\s+[A-Za-zà-üÀ-Ü]""").containsMatchIn(t)) return false
         // Un mot de voie ⇒ nouvelle rue, pas une continuation.
-        val hasStreetKw = addressStreetKeywords.any { kw ->
+        val keywords = if (marketCountry == "GB")
+            addressStreetKeywords + ukOnlyStreetKeywords else addressStreetKeywords
+        val hasStreetKw = keywords.any { kw ->
             Regex("""(?<![a-zà-üß])${Regex.escape(kw)}(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(t)
         }
         if (hasStreetKw) return false
         return true
+    }
+
+    /**
+     * La ligne `tail` suit-elle immédiatement l'en-tête `head` (même colonne,
+     * collée dessous) ? Sert à reconnaître la paire « code postal / détail ».
+     */
+    private fun isUkOutwardHead(head: Text.TextBlock, tail: Text.TextBlock): Boolean {
+        val h = head.boundingBox ?: return false
+        val t = tail.boundingBox ?: return false
+        if (t.top < h.bottom) return false
+        if ((t.top - h.bottom) > h.height() * 1.5) return false
+        val overlap = minOf(h.right, t.right) - maxOf(h.left, t.left)
+        if (overlap < minOf(h.width(), t.width()) * 0.5) return false
+        // Deux codes sortants qui se suivent, c'est un départ et une arrivée.
+        return !ukOutwardRegex.containsMatchIn(tail.text)
+    }
+
+    /**
+     * Recolle devant l'adresse le « TW6, Hounslow » écarté des candidats.
+     *
+     * Choisir l'une des deux lignes aurait coûté quelque chose dans les deux
+     * sens : c'est l'en-tête qui GÉOCODE — « Terminal 3, Level 3, Row A » ne
+     * désigne aucun point sur Terre sans sa ville — mais c'est le détail que le
+     * chauffeur lit pour trouver son client dans un parking d'aéroport.
+     */
+    private fun withUkOutwardPrefix(
+        merged: String,
+        addrBlock: Text.TextBlock,
+        allBlocks: List<Text.TextBlock>,
+    ): String {
+        if (marketCountry != "GB") return merged
+        if (ukOutwardRegex.containsMatchIn(merged)) return merged
+        val above = allBlocks.firstOrNull { other ->
+            other !== addrBlock &&
+                ukOutwardRegex.containsMatchIn(other.text) &&
+                other.text.trim().length <= 40 &&
+                isUkOutwardHead(other, addrBlock)
+        } ?: return merged
+        return "${above.text.trim()}, $merged"
     }
 
     private fun mergeAddressContinuation(
@@ -285,14 +445,14 @@ object OcrParser {
         screenHeight: Int,
     ): String {
         var result = cleanAddressText(addrBlock.text).trim()
-        if (addrBlock.boundingBox == null) return result
+        if (addrBlock.boundingBox == null) return withUkOutwardPrefix(result, addrBlock, allBlocks)
         var current = addrBlock
         val used = mutableListOf(current)
         // Une adresse peut être coupée sur plusieurs lignes → on enchaîne les
         // continuations (max 3) tant qu'on en trouve une sous la précédente.
         repeat(3) {
             val cont = allBlocks.firstOrNull { c -> used.none { it === c } && isContinuationLine(current, c) }
-                ?: return result
+                ?: return withUkOutwardPrefix(result, addrBlock, allBlocks)
             val contText = cleanAddressText(cont.text).trim()
             // Tiret en fin de ligne OU en début de la suite (mot coupé) → collage
             // direct ; sinon espace de mot (newline, converti en espace pour TomTom).
@@ -301,7 +461,7 @@ object OcrParser {
             used.add(cont)
             current = cont
         }
-        return result
+        return withUkOutwardPrefix(result, addrBlock, allBlocks)
     }
 
     /**
@@ -322,7 +482,7 @@ object OcrParser {
         // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
         // matcher un code postal ou une heure qui contiendrait la même suite.
         val glued = "$euros${"%02d".format(cents)}"
-        return blocks.firstOrNull { it.text.contains(glued) && it.text.contains("€") }
+        return blocks.firstOrNull { it.text.contains(glued) && CURRENCY_REGEX.containsMatchIn(it.text) }
             ?.boundingBox?.centerY()
     }
 
@@ -581,6 +741,8 @@ object OcrParser {
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
+            // Autonomie annoncee en km -> ce n'est pas la distance de la course.
+            if (EV_CONTEXT_REGEX.containsMatchIn(block.text)) continue
             // Normalise les confusions OCR chiffre↔lettre dans les seules zones
             // numériques (ex: "1l.8 km" → "11.8 km"). Safe pour les adresses.
             val normalizedText = normalizeOcrDigits(block.text)
@@ -645,11 +807,14 @@ object OcrParser {
         pickupAddr: Text.TextBlock?,
         destAddr: Text.TextBlock?,
         courseDistanceKm: Double,
+        pickup: Pair<Int, Double>?,
     ): Int? {
         data class Cand(val value: Int, val km: Double?, val y: Int, val isPickupCombo: Boolean)
         val candidates = mutableListOf<Cand>()
 
         for (block in blocks) {
+            // Bloc d'info vehicule electrique -> ces minutes ne sont pas la course.
+            if (EV_CONTEXT_REGEX.containsMatchIn(block.text)) continue
             val lower = block.text.lowercase()
             val hasKm = lower.contains("km")
             val hasMin = lower.contains("min")
@@ -685,9 +850,17 @@ object OcrParser {
         //    distance de course (pas l'approche, dont le km est petit). Évite
         //    d'afficher le temps d'approche comme temps de course quand la course
         //    n'a pas de durée "pure" affichée (Uber : "Course de X km" sans min).
+        //    ⚠️ La tolérance est LARGE (plancher de 2 km) : sur une course courte,
+        //    le combo d'APPROCHE tombe dedans presque à coup sûr — 2,6 km
+        //    d'approche pour 2,3 km de course, c'est 0,3 d'écart. Ses minutes
+        //    devenaient alors la durée de course : 9 € pour « 11 min · 2,3 km »
+        //    → 49 €/h affichés au lieu de ~32, verdict vert sur une course qui ne
+        //    l'était pas. Le combo déjà identifié comme l'approche est donc
+        //    écarté d'emblée.
         val tol = maxOf(2.0, courseDistanceKm * 0.2)
         val courseCombo = candidates
             .filter { it.km != null && Math.abs(it.km!! - courseDistanceKm) <= tol }
+            .filter { c -> pickup == null || !(c.value == pickup.first && Math.abs((c.km ?: 0.0) - pickup.second) < 0.01) }
             .maxByOrNull { it.km!! }
         if (courseCombo != null) return courseCombo.value
         // 3. Aucune durée fiable (seules des approches/bandeaux) → null : le calcul
@@ -700,6 +873,7 @@ object OcrParser {
     private fun extractPickupInfo(
         blocks: List<Text.TextBlock>,
         courseDistanceKm: Double,
+        screenHeight: Int,
     ): Pair<Int, Double>? {
         data class PickupMatch(val durationMin: Int, val distanceKm: Double, val y: Int)
         val matches = mutableListOf<PickupMatch>()
@@ -727,12 +901,19 @@ object OcrParser {
             if (mv !in 1..60) continue
             if (kv !in 0.1..30.0) continue
             if (Math.abs(kv - courseDistanceKm) < 0.1) continue // c'est la course
-            // L'approche est toujours plus courte que la course → un combo dont le
-            // km ≥ distance de course est le bandeau nav (haut de l'écran), pas
-            // l'approche. L'exclure évite de gonfler durée/distance totales.
-            if (kv >= courseDistanceKm) continue
-
+            // L'APPROCHE N'EST PAS TOUJOURS PLUS COURTE QUE LA COURSE.
+            //
+            // Un `kv >= courseDistanceKm` écartait ici tout combo plus long que la
+            // course, au motif qu'il s'agissait du bandeau de navigation. C'est
+            // faux en ville : 2,6 km d'approche pour une course de 2,3 km est
+            // banal, et l'approche disparaissait alors du total — le chauffeur
+            // lisait « 11 min » sur une course annoncée « à 12 min » de lui.
+            // Le bandeau nav se distingue par sa POSITION, pas par ses kilomètres :
+            // il vit dans le quart haut de l'écran, la même bande que
+            // `findAddressBlocks` écarte déjà. Le combo de la course, lui, reste
+            // écarté par le test de distance juste au-dessus.
             val y = block.boundingBox?.centerY() ?: 0
+            if (y < screenHeight * 0.25) continue
             matches.add(PickupMatch(mv, kv, y))
         }
 
@@ -808,7 +989,9 @@ object OcrParser {
 
         // ── Signaux positifs ──
         // 1. Mot de voie (mot entier) : évite "via"→"aviation", "rue"→"cruelty".
-        val wordBoundaryMatch = addressStreetKeywords.any { kw ->
+        val keywords = if (marketCountry == "GB")
+            addressStreetKeywords + ukOnlyStreetKeywords else addressStreetKeywords
+        val wordBoundaryMatch = keywords.any { kw ->
             val escaped = Regex.escape(kw)
             Regex("""(?<![a-zà-üß])$escaped(?![a-zà-üß])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
         }
@@ -823,7 +1006,7 @@ object OcrParser {
         if (Regex("""[a-zà-üß]{4,}[\s,]+\d{1,4}\s*$""").containsMatchIn(text)) return true
         // 5. Code postal (4-5 chiffres) + lettres : "94430 Chennevières", "75011 Paris",
         //    "Libération, 94430 Sucy". Couvre les adresses SANS mot de voie connu.
-        if (Regex("""\b\d{4,5}\b""").containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
+        if (Regex("""\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) && Regex("""[a-zà-üß]{3,}""").containsMatchIn(text)) return true
         // 6. Segment avec virgule SUIVIE d'une lettre + assez de lettres :
         //    "Châtelet, Paris". On exige ", lettre" (pas une virgule décimale type
         //    "4,79") sinon une ligne note/tarif passe pour une adresse.
@@ -882,7 +1065,7 @@ object OcrParser {
                     // Adresse avec code postal (4-5 chiffres) = signal fort, jamais
                     // évincée même loin d'un bloc km/min (cas Heetch : adresses sans
                     // métrique à proximité).
-                    if (Regex("""\b\d{4,5}\b""").containsMatchIn(b.text)) return@filter true
+                    if (Regex("""\b\d{4,5}\b|\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b""", RegexOption.IGNORE_CASE).containsMatchIn(b.text)) return@filter true
                     val y = b.boundingBox?.centerY() ?: return@filter false
                     metricYs.any { Math.abs(it - y) <= radius }
                 }
@@ -896,6 +1079,23 @@ object OcrParser {
         candidates = candidates.filter { b ->
             candidates.none { head -> head !== b && isContinuationLine(head, b) }
         }
+
+        // Symétrique, pour le Royaume-Uni : retire l'EN-TÊTE « TW6, Hounslow »
+        // quand la ligne de détail la suit immédiatement.
+        //
+        // Uber écrit le lieu de prise en charge sur deux lignes là-bas, et les
+        // deux passent pour des adresses. Deux candidats pour UN lieu décalent
+        // tout : la ligne de détail prenait le slot de la destination, et la
+        // vraie destination tombait hors des deux premiers — donc aucun
+        // itinéraire calculé.
+        //
+        // Écartée ici, recollée à l'affichage par `mergeAddressContinuation`.
+        if (marketCountry == "GB") {
+            candidates = candidates.filter { b ->
+                if (!ukOutwardRegex.containsMatchIn(b.text) || b.text.trim().length > 40) true
+                else candidates.none { tail -> tail !== b && isUkOutwardHead(b, tail) }
+            }
+        }
         if (BuildConfig.DEBUG) Log.d("StriveScan", "  après filtre continuation: ${candidates.map { it.text.replace("\n", " ") }}")
 
         return dedupOverlappingAddresses(candidates)
@@ -907,15 +1107,61 @@ object OcrParser {
      * Si un candidat est préfixe d'un autre, on garde le plus long — l'info code
      * postal + ville est précieuse pour le géocodage TomTom.
      */
+    /**
+     * Réduit un libellé d'adresse à ce qui permet de le comparer à un autre :
+     * minuscules, et tout ce qui n'est ni lettre ni chiffre devient une coupure
+     * de mot. Deux occurrences d'une même adresse ne sont pas ponctuées ni
+     * coupées de la même façon par l'OCR.
+     */
+    private fun comparableAddress(s: String): String =
+        s.lowercase()
+            .map { if (it.isLetterOrDigit()) it else ' ' }
+            .joinToString("")
+            .split(' ')
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+
+    /**
+     * Deux libellés qui désignent le même lieu, à la mise en forme près.
+     *
+     * Le test est le PRÉFIXE et non l'égalité : l'une des deux occurrences
+     * s'arrête souvent avant le code postal ou le pays.
+     */
+    private fun isSameAddress(a: String, b: String): Boolean {
+        val x = comparableAddress(a)
+        val y = comparableAddress(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        return x.startsWith(y) || y.startsWith(x)
+    }
+
     private fun dedupOverlappingAddresses(candidates: List<Text.TextBlock>): List<Text.TextBlock> {
         // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
         // courte soit bien reconnue comme préfixe de la version longue (cas Heetch).
         val texts = candidates.map { cleanAddressText(it.text).trim() }
         return candidates.filterIndexed { i, _ ->
             val mine = texts[i]
-            candidates.indices.none { j ->
+            // Évincé par un candidat PLUS LONG qui commence par lui : la ligne
+            // courte est la version tronquée de la longue (cas Heetch).
+            val hasLonger = candidates.indices.any { j ->
                 j != i && texts[j].length > mine.length && texts[j].startsWith(mine)
             }
+            // Évincé par un candidat IDENTIQUE placé avant lui.
+            //
+            // Le test de longueur ci-dessus ne peut rien voir sur deux textes
+            // égaux, et c'est ce trou qui laissait passer les DEUX occurrences.
+            // Plusieurs écrans Uber affichent l'adresse de départ deux fois : le
+            // second slot adresse était donc pris par la répétition du départ, et
+            // la destination réelle, qui vient après le « Course de X km »,
+            // n'était jamais lue.
+            //
+            // Constaté sur six courses consécutives dont le prix, la distance et
+            // la durée variaient tous, alors que la destination enregistrée
+            // restait identique au caractère près — parce qu'elle décrivait la
+            // position du chauffeur et non celle du client.
+            val isLaterDuplicate = candidates.indices.any { j ->
+                j < i && texts[j] == mine
+            }
+            !hasLonger && !isLaterDuplicate
         }
     }
 

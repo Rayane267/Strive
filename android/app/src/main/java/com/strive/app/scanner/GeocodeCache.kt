@@ -29,6 +29,13 @@ object GeocodeCache {
     // v1 (sans formatted) sont ignorées et re-géocodées une fois (avec formatted).
     private const val KEY_PREFIX = "g2:"
 
+    // Préfixes purgés par clear() : le courant ET tous les précédents. Un bump de
+    // version (g: → g2:) rend les anciennes entrées illisibles mais ne les efface
+    // pas — et plus personne ne les lisant, le TTL ne les atteint jamais non plus.
+    // Elles contiennent des adresses de passagers et survivaient donc au logout
+    // comme à la suppression de compte. ⚠️ Tout futur bump s'ajoute ici.
+    private val PURGED_KEY_PREFIXES = listOf("g:", "g2:")
+
     /** Durée de vie d'une entrée (90 j). Coords stables mais on ne conserve pas
      *  une adresse de passager indéfiniment (RGPD). */
     private const val TTL_MS = 90L * 24 * 3600 * 1000
@@ -82,7 +89,7 @@ object GeocodeCache {
     fun clear() {
         val p = prefs ?: return
         val editor = p.edit()
-        for (k in p.all.keys) if (k.startsWith(KEY_PREFIX)) editor.remove(k)
+        for (k in p.all.keys) if (PURGED_KEY_PREFIXES.any { k.startsWith(it) }) editor.remove(k)
         editor.apply()
     }
 

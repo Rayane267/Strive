@@ -17,6 +17,25 @@ final class GeminiVisionService {
   /// JWT user — requis par l'edge function durcie (rate-limit + audit).
   var supabaseUserJwt: String?
 
+  /// Session dédiée : `URLRequest.timeoutInterval` ne borne que l'INACTIVITÉ
+  /// (le compteur repart à chaque paquet), pas la durée totale. Seul
+  /// `timeoutIntervalForResource` pose un plafond mur-à-mur — indispensable
+  /// pour tenir sous le sémaphore de 25 s de `AnalyzeRideIntent`.
+  ///
+  /// `waitsForConnectivity = false` : hors réseau (parking souterrain, tunnel —
+  /// là où le chauffeur attend justement des courses), on échoue immédiatement
+  /// au lieu d'attendre le retour de la connexion jusqu'au plafond.
+  ///
+  /// `ephemeral` : ni cache disque ni cookies pour un POST one-shot qui
+  /// transporte une image.
+  private static let session: URLSession = {
+    let cfg = URLSessionConfiguration.ephemeral
+    cfg.timeoutIntervalForRequest = 10
+    cfg.timeoutIntervalForResource = 12
+    cfg.waitsForConnectivity = false
+    return URLSession(configuration: cfg)
+  }()
+
   struct GeminiResult {
     let platform: String   // UBER, BOLT, HEETCH, UNKNOWN
     let fare: Double
@@ -24,6 +43,28 @@ final class GeminiVisionService {
     let durationMin: Int?
     let pickupAddress: String?
     let destinationAddress: String?
+    /// Trajet d'approche (chauffeur → client) lu à l'écran ("à 6 min (1,2 km)").
+    /// Nécessaire pour que la préférence `includePickup` ait un effet sur ce
+    /// chemin : sans ces valeurs, computeFinal ignore le réglage.
+    let pickupDurationMin: Int?
+    let pickupDistanceKm: Double?
+
+    /// Conversion vers le modèle partagé consommé par `ScanProcessor.computeFinal`
+    /// et `ScanResultModel.copy(...)`. Permet à la Share Extension d'utiliser ce
+    /// service directement, au lieu de la copie `GeminiVisionServiceLight` qui
+    /// avait divergé (prompt, bornes de validation).
+    var asScanResult: ScanResultModel {
+      ScanResultModel(
+        platform: ScanPlatform(rawValue: platform) ?? .UNKNOWN,
+        fare: fare,
+        distanceKm: distanceKm,
+        durationMin: durationMin,
+        pickupAddress: pickupAddress,
+        destinationAddress: destinationAddress,
+        pickupDurationMin: pickupDurationMin,
+        pickupDistanceKm: pickupDistanceKm
+      )
+    }
   }
 
   /// Analyse une image de course VTC via Gemini 2.5 Flash
@@ -80,7 +121,8 @@ final class GeminiVisionService {
             ["inline_data": ["mime_type": "image/jpeg", "data": base64]],
             ["text": Self.prompt],
           ]
-        ]]
+        ]],
+        "generationConfig": Self.generationConfig,
       ])
       request = req
     } else if let key = apiKey,
@@ -99,7 +141,8 @@ final class GeminiVisionService {
               "data": base64,
             ]],
           ]
-        ]]
+        ]],
+        "generationConfig": Self.generationConfig,
       ])
       request = req
     } else {
@@ -107,7 +150,7 @@ final class GeminiVisionService {
       return
     }
 
-    URLSession.shared.dataTask(with: request) { data, _, error in
+    Self.session.dataTask(with: request) { data, _, error in
       guard error == nil, let data = data else {
         DispatchQueue.main.async { completion(nil) }
         return
@@ -118,6 +161,19 @@ final class GeminiVisionService {
   }
 
   // MARK: - Private
+
+  /// Lecture d'écran structurée : aucun raisonnement à produire. Sans
+  /// `generationConfig`, gemini-2.5-flash déclenche son « thinking » dynamique et
+  /// ajoute plusieurs secondes de latence — inacceptable sur ce chemin, où la
+  /// carte déployée ne reste affichée que ~6 s (limite iOS) et où le fallback
+  /// est déjà le chemin le plus lent. Budget de réflexion à zéro, sortie JSON
+  /// stricte et bornée. À garder aligné avec `geminiFallback.ts`.
+  private static let generationConfig: [String: Any] = [
+    "thinkingConfig": ["thinkingBudget": 0],
+    "responseMimeType": "application/json",
+    "temperature": 0,
+    "maxOutputTokens": 512,
+  ]
 
   private static let prompt = """
   Analyse cette capture d'écran d'une offre de course VTC (Uber, Bolt ou Heetch).
@@ -130,10 +186,12 @@ final class GeminiVisionService {
     "distance_km": <distance de la COURSE en km, ex: 11.8>,
     "duration_min": <durée de la course en minutes ou null si non visible>,
     "pickup_address": <adresse de départ exacte lue à l'écran, string ou null>,
-    "destination_address": <adresse de destination exacte lue à l'écran, string ou null>
+    "destination_address": <adresse de destination exacte lue à l'écran, string ou null>,
+    "pickup_eta_min": <durée du trajet d'APPROCHE (chauffeur → client) en minutes, ou null si non visible>,
+    "pickup_distance_km": <distance du trajet d'APPROCHE en km, ou null si non visible>
   }
   IMPORTANT : distance_km = la distance TOTALE de la course (parfois affichée "Course de X km").
-  Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge).
+  Ne PAS confondre avec la distance d'approche pickup ("X min • Y km", ou "à X min (Y km)" sous l'adresse de prise en charge) : celle-ci va dans pickup_eta_min / pickup_distance_km.
   Extrais les adresses EXACTES lues à l'écran (ne devine pas). Ne retourne rien d'autre que le JSON.
   """
 
@@ -160,13 +218,26 @@ final class GeminiVisionService {
     guard let responseText = text else { return nil }
 
     // Extraire le JSON de la réponse (peut contenir du markdown ```json ... ```)
-    let jsonString: String
-    if let start = responseText.range(of: "{"),
-       let end = responseText.range(of: "}", options: .backwards) {
-      jsonString = String(responseText[start.lowerBound...end.upperBound])
-    } else {
-      return nil
-    }
+    //
+    // Intervalle SEMI-OUVERT (`..<`). `end.upperBound` est la position qui SUIT
+    // l'accolade fermante : avec un intervalle fermé, Swift lisait un caractère
+    // au-delà, et quand le `}` terminait la chaîne — le cas nominal, puisqu'on
+    // demande `responseMimeType: application/json` — cette position valait
+    // `endIndex`. Le runtime tuait alors le process (EXC_BREAKPOINT dans
+    // `String.index(after:)`), en plein callback URLSession : le raccourci
+    // rapportait « Strive a quitté inopinément » à chaque recours à Gemini.
+    //
+    // Bornes revalidées avant la découpe : `range(of:)` cherche les deux
+    // accolades indépendamment, rien ne garantit que la fermante suive
+    // l'ouvrante. Sur une réponse tronquée ou inattendue (« } … { »), l'ordre
+    // s'inverse et un intervalle inversé est, lui aussi, une erreur fatale.
+    // Aucune forme de réponse ne doit pouvoir faire tomber le process : ici on
+    // rend `nil`, et l'appelant traite l'échec Gemini comme tel.
+    guard let start = responseText.range(of: "{"),
+          let end = responseText.range(of: "}", options: .backwards),
+          start.lowerBound < end.upperBound
+    else { return nil }
+    let jsonString = String(responseText[start.lowerBound..<end.upperBound])
 
     guard let parsed = try? JSONSerialization.jsonObject(
       with: Data(jsonString.utf8)
@@ -184,8 +255,8 @@ final class GeminiVisionService {
     // Sanity bounds (mêmes que Android) + ratio plausible : rejette une distance
     // hallucinée minuscule → €/km démentiel. Mirror JS / Android.
     let ratio = distanceKm > 0 ? fare / distanceKm : .infinity
-    guard fare >= 3, fare <= 200,
-          distanceKm >= 0.3, distanceKm <= 1000,
+    guard fare >= 8, fare <= 200,
+          distanceKm >= 0.3, distanceKm <= 500,
           ratio >= 0.2, ratio <= 15
     else { return nil }
 
@@ -195,13 +266,32 @@ final class GeminiVisionService {
       return s
     }
 
+    // Approche : mêmes bornes que OcrParser.extractPickupInfo (1–60 min,
+    // 0,1–30 km) → on rejette en bloc si l'une des deux est absente ou
+    // aberrante, sinon le total serait faux.
+    // Le test « approche < course » a été RETIRÉ : 2,6 km d'approche pour une
+    // course de 2,4 km est banal en ville, et il faisait disparaître l'approche
+    // du total. Gemini renvoie des champs nommés — aucun risque de confondre
+    // l'approche avec un bandeau de navigation, contrairement à l'OCR.
+    var pickupMin = (parsed["pickup_eta_min"] as? NSNumber)?.intValue
+    var pickupKm = (parsed["pickup_distance_km"] as? NSNumber)?.doubleValue
+    if let m = pickupMin, let k = pickupKm,
+       m >= 1, m <= 60, k >= 0.1, k <= 30.0 {
+      // valeurs plausibles → conservées
+    } else {
+      pickupMin = nil
+      pickupKm = nil
+    }
+
     return GeminiResult(
       platform: platform,
       fare: fare,
       distanceKm: distanceKm,
       durationMin: durationMin,
       pickupAddress: cleanAddr("pickup_address"),
-      destinationAddress: cleanAddr("destination_address")
+      destinationAddress: cleanAddr("destination_address"),
+      pickupDurationMin: pickupMin,
+      pickupDistanceKm: pickupKm
     )
   }
 }

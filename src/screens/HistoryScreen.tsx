@@ -1,7 +1,14 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -11,198 +18,320 @@ import {
   Modal,
   Pressable,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
+import { calendarLocale } from '../utils/calendarLocales';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
-import { formatTimeAgo, getDayStart } from '../utils/dateUtils';
-import { getEffectivePlanTier } from '../services/subscriptionService';
-import { effectiveFare } from '../services/ridesService';
+import {
+  formatTimeAgo,
+  getDayStart,
+  toLocalDateKey,
+  parseLocalDateKey,
+} from '../utils/dateUtils';
+import {
+  getEffectivePlanTier,
+  getMaxRangeSpanDays,
+} from '../services/subscriptionService';
+import { effectiveFare, fetchRidesInRange } from '../services/ridesService';
 import { Ride } from '../types/database';
 import { computeRideScore, rideScoreColor } from '../utils/qualityScore';
 import { withTimeout } from '../utils/withTimeout';
 import { cacheRides, getCachedRides } from '../services/offlineService';
-import BrandLoader from '../components/BrandLoader';
+import { Skeleton } from '../components/Skeleton';
+import ListItemEntrance from '../components/ListItemEntrance';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
+import { stroke, strokeWidth } from '../theme/stroke';
+import { FIELD_TOP } from '../theme/field';
+import { useMarket } from '../hooks/useMarket';
+import {
+  formatMoney,
+  hourlyUnit,
+  distanceUnitLabel,
+  toMarketDistance,
+  toMarketRate,
+  dateLocale,
+  type Market,
+} from '../utils/market';
+import { inCurrency, countConverted } from '../services/fxService';
+import { useFxRates } from '../hooks/useFxRates';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
-LocaleConfig.locales['fr'] = {
-  monthNames: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-  monthNamesShort: ['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'],
-  dayNames: ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
-  dayNamesShort: ['Di','Lu','Ma','Me','Je','Ve','Sa'],
-  today: "Aujourd'hui",
-};
-LocaleConfig.locales['en'] = {
-  monthNames: ['January','February','March','April','May','June','July','August','September','October','November','December'],
-  monthNamesShort: ['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.'],
-  dayNames: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
-  dayNamesShort: ['Su','Mo','Tu','We','Th','Fr','Sa'],
-  today: 'Today',
-};
+/**
+ * `Animated.FlatList` perd le generique de la liste, donc `item` retombe en
+ * `any`. Le cast le retablit : la composante animee a la meme surface de
+ * props, elle sait seulement recevoir un `onScroll` pilote par `Animated.event`.
+ */
+const AnimatedFlatList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as typeof FlatList;
+
 
 const PLATFORM_CONFIG: Record<string, { accent: string; label: string }> = {
-  UBER:   { accent: '#FFFFFF', label: 'UBER'   },
-  BOLT:   { accent: '#34BB78', label: 'Bolt'   },
+  UBER: { accent: '#FFFFFF', label: 'Uber' },
+  BOLT: { accent: '#34BB78', label: 'Bolt' },
   HEETCH: { accent: '#FF3B80', label: 'Heetch' },
 };
 
-const RideCard = React.memo(({ ride, t, minHourly, minKm }: { ride: Ride; t: any; minHourly: number; minKm: number }) => {
-  const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
-  const isDeclined = ride.status === 'DECLINED';
-  const isPending = ride.status === 'PENDING';
-  const statusColor = isDeclined ? '#FF5252' : isPending ? '#FFB300' : colors.primary;
-  const fare = effectiveFare(ride);
-  const fareIsEstimated = ride.fare_final == null;
-
-  const score = computeRideScore(
-    Number(ride.hourly_rate || 0),
-    Number(ride.km_rate || 0),
+const RideCard = React.memo(
+  ({
+    ride,
+    t,
     minHourly,
     minKm,
-  );
-  const scoreColor = score != null ? rideScoreColor(score) : colors.textDimmed;
-  // L'accent latéral porte la qualité (score) ; le statut reste un chip dédié.
-  const accentColor = score != null ? scoreColor : statusColor;
+    market: display,
+  }: {
+    /** DÉJÀ convertie dans la devise lue — cf. `displayRides` dans l'écran. */
+    ride: Ride;
+    t: any;
+    minHourly: number;
+    minKm: number;
+    /** Marché COURANT, passé en prop et non lu par `useMarket` : la carte est
+     *  mémoïsée et rendue par centaines dans la liste. */
+    market: Market;
+  }) => {
+    // ── UNE SEULE MONNAIE, LIGNES COMPRISES ──────────────────────────────
+    // La carte affichait la devise que la course avait rapportée, et le total
+    // celle du chauffeur : une liste en euros sous une somme en livres, sans
+    // qu'aucun des deux chiffres ne soit comparable à son voisin. Tout est
+    // maintenant ramené à la devise lue, en amont dans `displayRides`, et la
+    // carte n'a plus qu'un marché à connaître — celui du chauffeur.
+    //
+    // Ce que ça coûte, et c'est assumé : le montant d'une course parisienne
+    // n'est plus celui que le chauffeur a encaissé. C'est `history.otherCurrency`
+    // qui porte l'avertissement, juste sous le total.
+    const pc = PLATFORM_CONFIG[ride.platform] || PLATFORM_CONFIG.UBER;
+    const isDeclined = ride.status === 'DECLINED';
+    const isPending = ride.status === 'PENDING';
+    const statusColor = isDeclined
+      ? '#FF5252'
+      : isPending
+      ? '#FFB300'
+      : colors.primary;
+    const fare = effectiveFare(ride);
 
-  const formattedTime = new Date(ride.created_at).toLocaleTimeString([], {
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  });
+    const score = computeRideScore(
+      Number(ride.hourly_rate || 0),
+      Number(ride.km_rate || 0),
+      minHourly,
+      minKm,
+    );
+    const scoreColor =
+      score != null ? rideScoreColor(score) : colors.textDimmed;
+    // La qualité (score) colore la bordure de la carte et les taux ; le statut
+    // garde son chip dédié, c'est la seule information non déductible du reste.
+    const accentColor = score != null ? scoreColor : statusColor;
 
-  return (
-    <View style={[styles.card, isDeclined && styles.cardDeclined]}>
-      <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
-      <View style={styles.cardInner}>
-        <View style={styles.cardTopRow}>
-          <View style={styles.topLeft}>
-            <View style={[styles.platformChip, { borderColor: pc.accent + '50' }]}>
-              <View style={[styles.platformDot, { backgroundColor: pc.accent }]} />
-              <Text style={styles.platformChipText}>{pc.label}</Text>
+    const formattedTime = new Date(ride.created_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    // Les taux portent la couleur du score : une seule histoire de couleur par
+    // carte. Avant, un score orange cohabitait avec des taux verts — deux verdicts
+    // contradictoires sur la même course.
+    const rateColor = isDeclined ? colors.textDimmed : accentColor;
+    const hasRoute = !!ride.pickup_address || !!ride.destination_address;
+
+    return (
+      <View style={styles.card}>
+        {isDeclined && <View style={[StyleSheet.absoluteFill, styles.cardDeclined]} pointerEvents="none" />}
+        <View style={styles.cardInner}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.topLeft}>
+              <View
+                style={[styles.platformDot, { backgroundColor: pc.accent }]}
+              />
+              <Text style={styles.platformName}>{pc.label}</Text>
+              <Text style={styles.topSep}>·</Text>
+              <Text style={styles.timeMain}>{formattedTime}</Text>
             </View>
-            <View style={[
-              styles.statusBadge,
-              isDeclined ? styles.statusBadgeDeclined : isPending ? styles.statusBadgePending : styles.statusBadgeAccepted,
-            ]}>
+            <View
+              style={[
+                styles.statusBadge,
+                isDeclined
+                  ? styles.statusBadgeDeclined
+                  : isPending
+                  ? styles.statusBadgePending
+                  : styles.statusBadgeAccepted,
+              ]}
+            >
               <Feather
-                name={isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'}
+                name={
+                  isDeclined ? 'x-circle' : isPending ? 'clock' : 'check-circle'
+                }
                 size={11}
                 color={statusColor}
               />
               <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                {t(`history.status.${ride.status}`, { defaultValue: ride.status })}
+                {t(`history.status.${ride.status}`, {
+                  defaultValue: ride.status,
+                })}
               </Text>
             </View>
           </View>
-          <View style={styles.timeBlock}>
-            <Text style={styles.timeMain}>{formattedTime}</Text>
-            <Text style={styles.timeAgo}>{formatTimeAgo(ride.created_at, t)}</Text>
-          </View>
-        </View>
 
-        <View style={styles.cardMidRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.fareText, isDeclined && styles.fareDeclined]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-              {fare.toFixed(2)}€
-            </Text>
-            {fareIsEstimated && !isDeclined && (
-              <Text style={styles.fareEst}>{t('dashboard.estimated', 'est.')}</Text>
+          <View style={styles.cardMidRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[styles.fareText, isDeclined && styles.fareDeclined]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
+                {formatMoney(fare, display, { decimals: 2 })}
+              </Text>
+              <Text style={styles.fareMeta} numberOfLines={1}>
+                {ride.duration_min || 0} {t('history.min')} ·{' '}
+                {toMarketDistance(Number(ride.distance_km) || 0, display).toFixed(1)}{' '}
+                {display.distanceUnit}
+                {' · '}
+                {formatTimeAgo(ride.created_at, t)}
+              </Text>
+            </View>
+            {score != null && (
+              <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
+                <Text style={[styles.scoreValue, { color: scoreColor }]}>
+                  {score}
+                </Text>
+                <Text style={styles.scoreMax}>/100</Text>
+              </View>
             )}
           </View>
-          {score != null && (
-            <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
-              <Text style={[styles.scoreValue, { color: scoreColor }]}>{score}</Text>
-              <Text style={styles.scoreMax}>/100</Text>
+
+          {/* Le « pourquoi » du score, au niveau qu'il mérite : ce sont les deux
+            chiffres sur lesquels le chauffeur décide. */}
+          <View style={styles.rateRow}>
+            <Text style={[styles.rateValue, { color: rateColor }]}>
+              {Number(ride.hourly_rate || 0).toFixed(0)}
+              <Text style={styles.rateUnit}>{hourlyUnit(display)}</Text>
+            </Text>
+            <View style={styles.rateDivider} />
+            <Text style={[styles.rateValue, { color: rateColor }]}>
+              {toMarketRate(Number(ride.km_rate) || 0, display).toFixed(2)}
+              <Text style={styles.rateUnit}>{distanceUnitLabel(display)}</Text>
+            </Text>
+          </View>
+
+          {hasRoute && (
+            <View style={styles.routeStrip}>
+              {/* Trait vertical entre les deux points : la paire se lit comme un
+                trajet, plus comme deux lignes de texte muet superposées. */}
+              <View style={styles.routeRail}>
+                {!!ride.pickup_address && (
+                  <View
+                    style={[
+                      styles.routeDot,
+                      {
+                        backgroundColor: isDeclined
+                          ? colors.textDimmed
+                          : colors.primary,
+                      },
+                    ]}
+                  />
+                )}
+                {!!ride.pickup_address && !!ride.destination_address && (
+                  <View style={styles.routeLine} />
+                )}
+                {!!ride.destination_address && <View style={styles.routeEnd} />}
+              </View>
+              <View style={styles.routeTexts}>
+                {!!ride.pickup_address && (
+                  <Text style={styles.routeText} numberOfLines={1}>
+                    {ride.pickup_address}
+                  </Text>
+                )}
+                {!!ride.destination_address && (
+                  <Text
+                    style={[styles.routeText, styles.routeTextDest]}
+                    numberOfLines={1}
+                  >
+                    {ride.destination_address}
+                  </Text>
+                )}
+              </View>
             </View>
           )}
         </View>
-
-        <View style={styles.metricsStrip}>
-          <View style={styles.metricPair}>
-            <Feather name="clock" size={11} color={colors.textDimmed} />
-            <Text style={styles.metricText}>{ride.duration_min || 0} {t('history.min')}</Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <Feather name="map-pin" size={11} color={colors.textDimmed} />
-            <Text style={styles.metricText}>{ride.distance_km || 0} {t('history.km')}</Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <Feather name="trending-up" size={11} color={isDeclined ? colors.textDimmed : colors.primary} />
-            <Text style={[styles.metricText, !isDeclined && styles.metricHighlight]}>
-              {Number(ride.hourly_rate || 0).toFixed(0)}€/h
-            </Text>
-          </View>
-          <View style={styles.metricSep} />
-          <View style={styles.metricPair}>
-            <MaterialCommunityIcons name="map-marker-distance" size={11} color={isDeclined ? colors.textDimmed : colors.primary} />
-            <Text style={[styles.metricText, !isDeclined && styles.metricHighlight]}>
-              {Number(ride.km_rate || 0).toFixed(2)}€/km
-            </Text>
-          </View>
-        </View>
-
-        {(ride.pickup_address || ride.destination_address) && (
-          <View style={styles.routeStrip}>
-            {!!ride.pickup_address && (
-              <View style={styles.routeRow}>
-                <View style={styles.routeDot} />
-                <Text style={styles.routeText} numberOfLines={1}>{ride.pickup_address}</Text>
-              </View>
-            )}
-            {!!ride.destination_address && (
-              <View style={styles.routeRow}>
-                <Feather name="map-pin" size={10} color={colors.textDimmed} />
-                <Text style={styles.routeText} numberOfLines={1}>{ride.destination_address}</Text>
-              </View>
-            )}
-          </View>
-        )}
       </View>
-    </View>
-  );
-});
+    );
+  },
+);
 
 type FilterType = 'all' | 'accepted' | 'declined';
 
 const HistoryScreen = () => {
+  const market = useMarket();
+  // Les taux servent aux TOTAUX seulement : chaque LIGNE garde la monnaie
+  // qu'elle a rapportée, et seule la somme a besoin d'une monnaie commune.
+  const fxRates = useFxRates();
   const { t, i18n } = useTranslation();
+  const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
 
-  const isPremium = getEffectivePlanTier(profile) !== 'free';
+  const planTier = getEffectivePlanTier(profile);
+  // Payant = 'plus' OU 'premium' : c'est ce qui ouvre le sélecteur de dates.
+  // Jusqu'où il ouvre dépend du tier exact — cf. getMaxRangeSpanDays plus bas.
+  const isPaid = planTier !== 'free';
 
   const [resetHour, setResetHour] = useState(0);
-  const [thresholds, setThresholds] = useState({ minHourly: 25, minKm: 1.2 });
+  // Défaut aligné sur le plancher du marché (1,00 €/km en France) : le tutoriel et le
+  // scanner utilisent cette valeur, un défaut divergent produisait un score
+  // différent le temps que les préférences arrivent.
+  const [thresholds, setThresholds] = useState<{
+    minHourly: number;
+    minKm: number;
+  }>({
+    minHourly: market.thresholds.hourly,
+    minKm: market.thresholds.distance,
+  });
 
   useEffect(() => {
-    LocaleConfig.defaultLocale = i18n.language === 'fr' ? 'fr' : 'en';
+    LocaleConfig.defaultLocale = calendarLocale(i18n.language);
   }, [i18n.language]);
 
   // Re-read day_reset_hour + seuils on focus so a change in Preferences is picked up
-  useFocusEffect(useCallback(() => {
-    if (!user) return;
-    supabase
-      .from('preferences')
-      .select('day_reset_hour, min_hourly_rate, min_km_rate')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        const h = data?.day_reset_hour === 4 ? 4 : 0;
-        setResetHour(h);
-        setThresholds({
-          minHourly: Number(data?.min_hourly_rate ?? 25) || 25,
-          minKm: Number(data?.min_km_rate ?? 1.2) || 1.2,
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      supabase
+        .from('preferences')
+        .select('day_reset_hour, min_hourly_rate, min_km_rate')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          const h = data?.day_reset_hour === 4 ? 4 : 0;
+          setResetHour(h);
+          // Seuils IMPOSÉS en free, comme au scan (DashboardScreen) : sinon le
+          // score affiché sur la carte d'une course est calculé sur d'autres
+          // seuils que le verdict rendu au moment du scan.
+          setThresholds({
+            minHourly: isPaid
+              ? Number(data?.min_hourly_rate ?? 25) || 25
+              : market.thresholds.hourly,
+            minKm: isPaid
+              ? Number(data?.min_km_rate ?? market.thresholds.distance) ||
+                market.thresholds.distance
+              : market.thresholds.distance,
+          });
+          setDateRange({ start: getDayStart(h), end: getDayStart(h) });
         });
-        setDateRange({ start: getDayStart(h), end: getDayStart(h) });
-      });
-  }, [user]));
+    }, [user, isPaid, market.thresholds.hourly, market.thresholds.distance]),
+  );
 
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,11 +340,14 @@ const HistoryScreen = () => {
   const [filter, setFilter] = useState<FilterType>('all');
 
   // Date range (Plus only)
-  const [dateRange, setDateRange] = useState({ start: getDayStart(0), end: getDayStart(0) });
+  const [dateRange, setDateRange] = useState({
+    start: getDayStart(0),
+    end: getDayStart(0),
+  });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectionStep, setSelectionStep] = useState(0);
   const [tempStart, setTempStart] = useState<string | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(toLocalDateKey(new Date()));
   const [modalAlert, setModalAlert] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
@@ -234,23 +366,15 @@ const HistoryScreen = () => {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
       rangeEnd.setHours(resetHour, 0, 0, 0);
 
-      const { data, error } = await withTimeout(
-        Promise.resolve(
-          supabase
-            .from('rides')
-            .select('*')
-            .eq('user_id', user.id)
-            .gte('created_at', rangeStart.toISOString())
-            .lte('created_at', rangeEnd.toISOString())
-            .order('created_at', { ascending: false }),
-        ),
-        10_000,
+      // 20 s et non 10 : une sélection Premium d'un an demande plusieurs
+      // pages, et un timeout trop court basculerait sur le cache local alors
+      // que la requête aboutissait.
+      const freshRides = await withTimeout(
+        fetchRidesInRange(user.id, rangeStart, rangeEnd),
+        20_000,
       );
-
-      if (error) throw error;
-      const freshRides = (data ?? []) as Ride[];
       setRides(freshRides);
-      cacheRides(freshRides);  // sauvegarde pour mode hors-ligne
+      cacheRides(freshRides); // sauvegarde pour mode hors-ligne
     } catch (e) {
       __DEV__ && console.warn('[History] fetch KO, fallback cache', e);
       // Fallback cache local si réseau/Supabase KO
@@ -273,13 +397,20 @@ const HistoryScreen = () => {
     setRefreshing(false);
   }, [fetchHistory]);
 
-  useFocusEffect(useCallback(() => { fetchHistory(); }, [fetchHistory]));
+  useFocusEffect(
+    useCallback(() => {
+      fetchHistory();
+    }, [fetchHistory]),
+  );
 
   // Re-fetch on foreground resume (picks up new day boundary automatically)
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
+    const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        setDateRange({ start: getDayStart(resetHour), end: getDayStart(resetHour) });
+        setDateRange({
+          start: getDayStart(resetHour),
+          end: getDayStart(resetHour),
+        });
       }
     });
     return () => sub.remove();
@@ -293,16 +424,22 @@ const HistoryScreen = () => {
       setTempStart(day.dateString);
       setSelectionStep(1);
     } else {
-      const start = new Date(tempStart!);
-      const end = new Date(day.dateString);
-      if (end < start) { setTempStart(day.dateString); return; }
-      const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000);
-      if (diffDays > 6) {
-        setModalAlert(t('analytics.alerts.limitText', 'Max 7 jours.'));
+      const start = parseLocalDateKey(tempStart!);
+      const end = parseLocalDateKey(day.dateString);
+      if (end < start) {
         setTempStart(day.dateString);
         return;
       }
-      setDateRange({ start: new Date(tempStart!), end: new Date(day.dateString) });
+      const diffDays = Math.ceil(
+        Math.abs(end.getTime() - start.getTime()) / 86400000,
+      );
+      const maxSpan = getMaxRangeSpanDays(planTier);
+      if (maxSpan !== null && diffDays > maxSpan) {
+        setModalAlert(t('analytics.alerts.limitText', { days: maxSpan + 1 }));
+        setTempStart(day.dateString);
+        return;
+      }
+      setDateRange({ start, end });
       setSelectionStep(0);
       setModalVisible(false);
     }
@@ -315,19 +452,32 @@ const HistoryScreen = () => {
     const mid = 'rgba(0,230,118,0.20)';
     const midText = colors.textMain;
     if (selectionStep === 1 && tempStart) {
-      marks[tempStart] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
+      marks[tempStart] = {
+        startingDay: true,
+        endingDay: true,
+        color: edge,
+        textColor: edgeText,
+      };
     } else if (dateRange.start && dateRange.end) {
-      const startStr = dateRange.start.toISOString().split('T')[0];
-      const endStr = dateRange.end.toISOString().split('T')[0];
+      const startStr = toLocalDateKey(dateRange.start);
+      const endStr = toLocalDateKey(dateRange.end);
       if (startStr === endStr) {
-        marks[startStr] = { startingDay: true, endingDay: true, color: edge, textColor: edgeText };
+        marks[startStr] = {
+          startingDay: true,
+          endingDay: true,
+          color: edge,
+          textColor: edgeText,
+        };
       } else {
-        let curr = new Date(startStr);
-        while (curr <= new Date(endStr)) {
-          const ds = curr.toISOString().split('T')[0];
-          if (ds === startStr)     marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
-          else if (ds === endStr)  marks[ds] = { endingDay: true, color: edge, textColor: edgeText };
-          else                     marks[ds] = { color: mid, textColor: midText };
+        let curr = parseLocalDateKey(startStr);
+        const last = parseLocalDateKey(endStr);
+        while (curr <= last) {
+          const ds = toLocalDateKey(curr);
+          if (ds === startStr)
+            marks[ds] = { startingDay: true, color: edge, textColor: edgeText };
+          else if (ds === endStr)
+            marks[ds] = { endingDay: true, color: edge, textColor: edgeText };
+          else marks[ds] = { color: mid, textColor: midText };
           curr.setDate(curr.getDate() + 1);
         }
       }
@@ -336,29 +486,47 @@ const HistoryScreen = () => {
   };
 
   const changeMonth = (offset: number) => {
-    const d = new Date(currentMonth);
+    const d = parseLocalDateKey(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    setCurrentMonth(d.toISOString().split('T')[0]);
+    setCurrentMonth(toLocalDateKey(d));
   };
 
   const renderCustomHeader = (date: any) => {
-    const locale = LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'];
+    const locale = LocaleConfig.locales[calendarLocale(i18n.language)];
     const d = new Date(date.getTime());
     return (
       <View style={styles.calHeaderRow}>
-        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={() => changeMonth(-1)}
+          style={styles.calNavBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Feather name="chevron-left" size={18} color={colors.textMain} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.calMonthBtn}
-          onPress={() => { setPickerYear(d.getFullYear()); setShowMonthPicker(true); }}
+          onPress={() => {
+            setPickerYear(d.getFullYear());
+            setShowMonthPicker(true);
+          }}
           accessibilityRole="button"
           accessibilityLabel={t('history.changeMonth', 'Changer le mois')}
         >
-          <Text style={styles.calMonthText}>{locale.monthNames[d.getMonth()]} {d.getFullYear()}</Text>
-          <Feather name="chevron-down" size={13} color={colors.primary} style={{ marginLeft: 6 }} />
+          <Text style={styles.calMonthText}>
+            {locale.monthNames[d.getMonth()]} {d.getFullYear()}
+          </Text>
+          <Feather
+            name="chevron-down"
+            size={13}
+            color={colors.primary}
+            style={{ marginLeft: space.sm }}
+          />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={() => changeMonth(1)}
+          style={styles.calNavBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Feather name="chevron-right" size={18} color={colors.textMain} />
         </TouchableOpacity>
       </View>
@@ -366,51 +534,105 @@ const HistoryScreen = () => {
   };
 
   const getHeaderDateText = () => {
-    const isFr = i18n.language === 'fr';
-    const fmt = (d: Date) => d.toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
-    if (dateRange.start.toDateString() === dateRange.end.toDateString()) return fmt(dateRange.start);
-    return isFr ? `Du ${fmt(dateRange.start)} au ${fmt(dateRange.end)}` : `${fmt(dateRange.start)} – ${fmt(dateRange.end)}`;
+    // La langue dit le mois, le marché dit l'ordre des éléments.
+    const loc = dateLocale(i18n.language, market);
+    const fmt = (d: Date) =>
+      d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
+    if (dateRange.start.toDateString() === dateRange.end.toDateString())
+      return fmt(dateRange.start);
+    return t('common.dateRange', {
+      start: fmt(dateRange.start),
+      end: fmt(dateRange.end),
+    });
   };
 
   // ── Computed ────────────────────────────────────────────────────────────────
 
   const accepted = rides.filter(r => r.status === 'ACCEPTED').length;
   const declined = rides.filter(r => r.status === 'DECLINED').length;
-  const acceptRate = rides.length > 0 ? Math.round((accepted / rides.length) * 100) : 0;
-  const dailyTotal = rides
-    .filter(r => r.status === 'ACCEPTED')
-    .reduce((sum, r) => sum + effectiveFare(r), 0);
+  const acceptRate =
+    rides.length > 0 ? Math.round((accepted / rides.length) * 100) : 0;
+  // ── TOUT DANS LA DEVISE LUE, LIGNES COMPRISES ────────────────────────────
+  // La ligne gardait la monnaie de la course, le total prenait celle du
+  // chauffeur : une liste en euros sous une somme en livres, où aucun chiffre
+  // ne se comparait à son voisin. Une seule monnaie à l'écran, au taux figé au
+  // scan — un mois passé ne bouge donc pas parce que la livre a bougé depuis.
+  //
+  // Converties UNE fois, à la source de l'écran : les lignes et le total sortent
+  // de la même liste, donc la somme affichée est forcément celle des lignes
+  // affichées. Convertir séparément, c'était laisser les deux diverger au
+  // premier arrondi.
+  const displayRides = useMemo(
+    () => rides.map(r => inCurrency(r, market.currency, fxRates)),
+    [rides, market.currency, fxRates],
+  );
 
-  const filteredRides = useMemo(() => rides.filter(r => {
-    if (filter === 'accepted') return r.status === 'ACCEPTED';
-    if (filter === 'declined') return r.status === 'DECLINED';
-    return true;
-  }), [rides, filter]);
+  // COMPTÉ SUR LES COURSES D'ORIGINE, et pas sur `displayRides` : une fois
+  // normalisées, elles portent toutes la devise cible et `countConverted` n'y
+  // trouverait plus rien. Or c'est ce compteur qui dit au chauffeur pourquoi son
+  // total ne tombera pas au centime sur son relevé de plateforme — maintenant
+  // que les lignes elles aussi sont converties, il est le seul indice qui reste.
+  const otherCurrencyCount = countConverted(
+    rides.filter(r => r.status === 'ACCEPTED'),
+    market.currency,
+  );
 
-  const renderRideCard = useCallback(({ item }: { item: Ride }) => (
-    <RideCard ride={item} t={t} minHourly={thresholds.minHourly} minKm={thresholds.minKm} />
-  ), [t, thresholds]);
+  const acceptedRides = displayRides.filter(r => r.status === 'ACCEPTED');
+  const dailyTotal = acceptedRides.reduce((sum, r) => sum + effectiveFare(r), 0);
+
+  const filteredRides = useMemo(
+    () =>
+      displayRides.filter(r => {
+        if (filter === 'accepted') return r.status === 'ACCEPTED';
+        if (filter === 'declined') return r.status === 'DECLINED';
+        return true;
+      }),
+    [displayRides, filter],
+  );
+
+  const renderRideCard = useCallback(
+    ({ item, index }: { item: Ride; index: number }) => (
+      <ListItemEntrance index={index}>
+        <RideCard
+          ride={item}
+          t={t}
+          minHourly={thresholds.minHourly}
+          minKm={thresholds.minKm}
+          market={market}
+        />
+      </ListItemEntrance>
+    ),
+    [t, thresholds, market],
+  );
 
   const todayDate = new Date().toLocaleDateString(i18n.language, {
-    weekday: 'long', day: 'numeric', month: 'long',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
   });
 
   const listHeader = (
     <View>
       {/* ── HEADER ── */}
-      <View style={styles.header}>
+      <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('history.title')}</Text>
         <Text style={styles.headerSub}>{todayDate}</Text>
-      </View>
+      </AnimatedEntrance>
 
       {/* ── DATE SELECTOR (Plus only) ── */}
-      {isPremium ? (
-        <TouchableOpacity style={styles.dateBtn} onPress={() => {
-          setSelectionStep(0);
-          setTempStart(null);
-          setCurrentMonth(dateRange.start.toISOString().split('T')[0]);
-          setModalVisible(true);
-        }} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel={t('history.selectDates', 'Select date range')}>
+      {isPaid ? (
+        <TouchableOpacity
+          style={styles.dateBtn}
+          onPress={() => {
+            setSelectionStep(0);
+            setTempStart(null);
+            setCurrentMonth(toLocalDateKey(dateRange.start));
+            setModalVisible(true);
+          }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={t('history.selectDates', 'Select date range')}
+        >
           <View style={styles.dateBtnLeft}>
             <View style={styles.dateBtnIcon}>
               <Feather name="calendar" size={16} color={colors.primary} />
@@ -425,8 +647,16 @@ const HistoryScreen = () => {
           onPress={() => navigation.navigate('SubscriptionScreen')}
           activeOpacity={0.85}
         >
-          <MaterialCommunityIcons name="crown" size={16} color={colors.primary} />
-          <Text style={styles.upgradeBannerText}>{t('history.upgradeForHistory', 'Passez Plus pour voir tout votre historique')}</Text>
+          <Image
+            source={require('../assets/strive-logo.png')}
+            style={styles.upgradeBannerLogo}
+          />
+          <Text style={styles.upgradeBannerText}>
+            {t(
+              'history.upgradeForHistory',
+              'Passez Plus pour voir tout votre historique',
+            )}
+          </Text>
           <Feather name="chevron-right" size={14} color={colors.primary} />
         </TouchableOpacity>
       )}
@@ -435,9 +665,13 @@ const HistoryScreen = () => {
       {fetchError && (
         <View style={styles.errorCard}>
           <Feather name="alert-circle" size={18} color={colors.danger} />
-          <Text style={styles.errorText}>{t('errors.loadFailed', 'Erreur de chargement')}</Text>
+          <Text style={styles.errorText}>
+            {t('errors.loadFailed', 'Erreur de chargement')}
+          </Text>
           <TouchableOpacity onPress={fetchHistory}>
-            <Text style={styles.errorRetry}>{t('errors.retry', 'Réessayer')}</Text>
+            <Text style={styles.errorRetry}>
+              {t('errors.retry', 'Réessayer')}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -450,45 +684,84 @@ const HistoryScreen = () => {
         style={styles.heroCard}
       >
         <View style={styles.heroContent}>
-        <View style={styles.heroMain}>
-          <View style={styles.heroLeft}>
-            <Text style={styles.heroLabel}>{t('history.earnings', 'Gains')}</Text>
-            <Text
-              style={styles.heroAmount}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.6}
-            >
-              {dailyTotal.toFixed(2)}€
-            </Text>
-          </View>
-          <View style={styles.acceptBlock}>
-            <Text style={styles.acceptValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{acceptRate}%</Text>
-            <Text style={styles.acceptLabel} numberOfLines={1}>{t('history.acceptRate')}</Text>
-            <View style={styles.acceptBar}>
-              <View style={[styles.acceptFill, { width: `${acceptRate}%` as any }]} />
+          <View style={styles.heroMain}>
+            <View style={styles.heroLeft}>
+              <Text style={styles.heroLabel}>
+                {t('history.earnings', 'Gains')}
+              </Text>
+              <Text
+                style={styles.heroAmount}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
+                {formatMoney(dailyTotal, market, { decimals: 2 })}
+              </Text>
+              {/* N'apparaît que si le chauffeur a des courses dans une autre
+                  monnaie — c'est-à-dire presque jamais. Mais un total muet qui
+                  ne compte pas tout serait pire qu'un total incomplet annoncé. */}
+              {otherCurrencyCount > 0 && (
+                <Text style={styles.heroOtherCurrency} numberOfLines={2}>
+                  {t('history.otherCurrency', { count: otherCurrencyCount })}
+                </Text>
+              )}
+            </View>
+            <View style={styles.acceptBlock}>
+              <Text
+                style={styles.acceptValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {acceptRate}%
+              </Text>
+              <Text style={styles.acceptLabel} numberOfLines={1}>
+                {t('history.acceptRate')}
+              </Text>
+              <View style={styles.acceptBar}>
+                <View
+                  style={[
+                    styles.acceptFill,
+                    { width: `${acceptRate}%` as any },
+                  ]}
+                />
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.heroSep} />
+          <View style={styles.heroSep} />
 
-        <View style={styles.heroStats}>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatVal}>{rides.length}</Text>
-            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.scanned')}</Text>
+          <View style={styles.heroStats}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatVal}>{rides.length}</Text>
+              <Text style={styles.heroStatLbl} numberOfLines={2}>
+                {t('history.scanned')}
+              </Text>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <Text style={[styles.heroStatVal, { color: '#00E676' }]}>
+                {accepted}
+              </Text>
+              <Text style={styles.heroStatLbl} numberOfLines={2}>
+                {t('history.status.ACCEPTED')}
+              </Text>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <Text
+                style={[
+                  styles.heroStatVal,
+                  declined > 0 ? { color: '#FF5252' } : {},
+                ]}
+              >
+                {declined}
+              </Text>
+              <Text style={styles.heroStatLbl} numberOfLines={2}>
+                {t('history.status.DECLINED')}
+              </Text>
+            </View>
           </View>
-          <View style={styles.heroStatDiv} />
-          <View style={styles.heroStat}>
-            <Text style={[styles.heroStatVal, { color: '#00E676' }]}>{accepted}</Text>
-            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.status.ACCEPTED')}</Text>
-          </View>
-          <View style={styles.heroStatDiv} />
-          <View style={styles.heroStat}>
-            <Text style={[styles.heroStatVal, declined > 0 ? { color: '#FF5252' } : {}]}>{declined}</Text>
-            <Text style={styles.heroStatLbl} numberOfLines={2}>{t('history.status.DECLINED')}</Text>
-          </View>
-        </View>
         </View>
       </SafeGradient>
 
@@ -497,14 +770,18 @@ const HistoryScreen = () => {
         {(['all', 'accepted', 'declined'] as FilterType[]).map(f => {
           const isActive = filter === f;
           const tabStyle = isActive
-            ? f === 'accepted' ? styles.filterTabActiveAccepted
-            : f === 'declined' ? styles.filterTabActiveDeclined
-            : styles.filterTabActive
+            ? f === 'accepted'
+              ? styles.filterTabActiveAccepted
+              : f === 'declined'
+              ? styles.filterTabActiveDeclined
+              : styles.filterTabActive
             : null;
           const textStyle = isActive
-            ? f === 'accepted' ? styles.filterTabTextActiveAccepted
-            : f === 'declined' ? styles.filterTabTextActiveDeclined
-            : styles.filterTabTextActive
+            ? f === 'accepted'
+              ? styles.filterTabTextActiveAccepted
+              : f === 'declined'
+              ? styles.filterTabTextActiveDeclined
+              : styles.filterTabTextActive
             : null;
           return (
             <TouchableOpacity
@@ -514,12 +791,20 @@ const HistoryScreen = () => {
               activeOpacity={0.7}
             >
               {isActive && f !== 'all' && (
-                <View style={[styles.filterDot, { backgroundColor: f === 'accepted' ? '#00E676' : '#FF5252' }]} />
+                <View
+                  style={[
+                    styles.filterDot,
+                    {
+                      backgroundColor: f === 'accepted' ? '#00E676' : '#FF5252',
+                    },
+                  ]}
+                />
               )}
               <Text style={[styles.filterTabText, textStyle]}>
                 {f === 'all'
                   ? t('history.filterAll', { count: rides.length })
-                  : f === 'accepted' ? `✓ ${accepted}`
+                  : f === 'accepted'
+                  ? `✓ ${accepted}`
                   : `✕ ${declined}`}
               </Text>
             </TouchableOpacity>
@@ -529,38 +814,81 @@ const HistoryScreen = () => {
 
       {/* ── LOADING / EMPTY ── */}
       {loading && (
-        <BrandLoader style={{ marginTop: 40 }} />
+        <View style={styles.skeletonList}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={styles.skeletonRow}>
+              <Skeleton width={44} height={44} radius={12} />
+              <View style={styles.skeletonRowText}>
+                <Skeleton width="60%" height={14} />
+                <Skeleton width="38%" height={12} />
+              </View>
+              <Skeleton width={58} height={22} radius={8} />
+            </View>
+          ))}
+        </View>
       )}
       {!loading && filteredRides.length === 0 && (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
-            <MaterialCommunityIcons name="radar" size={32} color={colors.textDimmed} />
+            <MaterialCommunityIcons
+              name="radar"
+              size={32}
+              color={colors.textDimmed}
+            />
           </View>
           <Text style={styles.emptyTitle}>{t('history.empty')}</Text>
-          <Text style={styles.emptyHint}>{t('history.emptyHint', 'Vos scans apparaîtront ici.')}</Text>
+          <Text style={styles.emptyHint}>
+            {t('history.emptyHint', 'Vos scans apparaîtront ici.')}
+          </Text>
           <TouchableOpacity
             style={styles.emptyCta}
             onPress={() => navigation.navigate('Dashboard' as never)}
             accessibilityRole="button"
           >
-            <MaterialCommunityIcons name="line-scan" size={16} color={colors.background} />
-            <Text style={styles.emptyCtaText}>{t('history.emptyCta', 'Lancer un scan')}</Text>
+            <MaterialCommunityIcons
+              name="line-scan"
+              size={16}
+              color={colors.background}
+            />
+            <Text style={styles.emptyCtaText}>
+              {t('history.emptyCta', 'Lancer un scan')}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
 
+  // Defilement de l ecran. Le champ est fixe a l appareil, donc c est cette
+  // valeur qui dit ou se trouve chaque surface dans la lumiere.
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
+      {/* Pose en premier, donc derriere tout le reste. */}
+      <ScreenField />
+      <AnimatedFlatList
         data={loading ? [] : filteredRides}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         renderItem={renderRideCard}
         ListHeaderComponent={listHeader}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + 16, paddingHorizontal: 20 }}
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + 16,
+          paddingHorizontal: space.xl,
+        }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
@@ -571,35 +899,73 @@ const HistoryScreen = () => {
         visible={modalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => { setModalVisible(false); setModalAlert(''); }}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setModalAlert('');
+        }}
       >
-        <Pressable style={styles.overlay} onPress={() => { setModalVisible(false); setModalAlert(''); }}>
-          <Pressable style={styles.modalCard} onPress={e => e.stopPropagation()}>
+        <Pressable
+          style={styles.overlay}
+          onPress={() => {
+            setModalVisible(false);
+            setModalAlert('');
+          }}
+        >
+          <Pressable
+            style={styles.modalCard}
+            onPress={e => e.stopPropagation()}
+          >
             {showMonthPicker ? (
               <View>
                 <View style={styles.calHeaderRow}>
-                  <TouchableOpacity onPress={() => setPickerYear(y => y - 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setPickerYear(y => y - 1)}
+                    style={styles.yearNavBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.yearNavText}>−</Text>
                   </TouchableOpacity>
                   <Text style={styles.calMonthText}>{pickerYear}</Text>
-                  <TouchableOpacity onPress={() => setPickerYear(y => y + 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setPickerYear(y => y + 1)}
+                    style={styles.yearNavBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.yearNavText}>+</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.monthGrid}>
-                  {LocaleConfig.locales[i18n.language === 'fr' ? 'fr' : 'en'].monthNamesShort.map((m: string, idx: number) => {
-                    const active = parseInt(currentMonth.split('-')[1]) - 1 === idx
-                      && pickerYear === parseInt(currentMonth.split('-')[0]);
+                  {LocaleConfig.locales[
+                    calendarLocale(i18n.language)
+                  ].monthNamesShort.map((m: string, idx: number) => {
+                    const active =
+                      parseInt(currentMonth.split('-')[1]) - 1 === idx &&
+                      pickerYear === parseInt(currentMonth.split('-')[0]);
                     return (
                       <TouchableOpacity
                         key={idx}
-                        style={[styles.monthCell, active && styles.monthCellActive]}
+                        style={[
+                          styles.monthCell,
+                          active && styles.monthCellActive,
+                        ]}
                         onPress={() => {
-                          setCurrentMonth(`${pickerYear}-${String(idx + 1).padStart(2, '0')}-01`);
+                          setCurrentMonth(
+                            `${pickerYear}-${String(idx + 1).padStart(
+                              2,
+                              '0',
+                            )}-01`,
+                          );
                           setShowMonthPicker(false);
                         }}
                       >
-                        <Text style={[styles.monthCellText, active && styles.monthCellTextActive]}>{m}</Text>
+                        <Text
+                          style={[
+                            styles.monthCellText,
+                            active && styles.monthCellTextActive,
+                          ]}
+                        >
+                          {m}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -607,12 +973,6 @@ const HistoryScreen = () => {
               </View>
             ) : (
               <>
-                {modalAlert ? (
-                  <View style={styles.modalAlertRow}>
-                    <Feather name="alert-circle" size={14} color="#FFCA28" />
-                    <Text style={styles.modalAlertText}>{modalAlert}</Text>
-                  </View>
-                ) : null}
                 <Calendar
                   key={currentMonth}
                   current={currentMonth}
@@ -636,268 +996,553 @@ const HistoryScreen = () => {
                     textDayHeaderFontSize: 13,
                   }}
                 />
+                {/* Alerte conditionnelle, placee APRES le calendrier : au-dessus,
+                    son apparition poussait toute la grille vers le bas, en pleine
+                    selection et sous le doigt. Ici la grille ne bouge pas. */}
+                {modalAlert ? (
+                  <View style={styles.modalAlertRow}>
+                    <Feather
+                      name="alert-circle"
+                      size={14}
+                      color={colors.danger}
+                    />
+                    <Text style={styles.modalAlertText}>{modalAlert}</Text>
+                  </View>
+                ) : null}
               </>
             )}
           </Pressable>
         </Pressable>
       </Modal>
-
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: 20 },
+  // Meme couleur que le sommet du champ : la bande sous l encoche se confond
+  // avec lui au lieu de former un bandeau plus sombre.
+  container: { flex: 1, backgroundColor: FIELD_TOP },
+  scroll: { paddingHorizontal: space.xl },
 
-  header: { paddingTop: 8, marginBottom: 16 },
+  header: { paddingTop: space.sm, marginBottom: space.lg },
   headerTitle: { color: colors.textMain, fontSize: 28, fontWeight: '900' },
-  headerSub: { color: colors.textMuted, fontSize: 13, marginTop: 4, textTransform: 'capitalize' },
+  headerSub: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: space.xs,
+    textTransform: 'capitalize',
+  },
 
   // Date selector
   dateBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: colors.surface, borderRadius: 14,
-    paddingVertical: 13, paddingHorizontal: 16, marginBottom: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    marginBottom: space.md,
   },
-  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dateBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   dateBtnIcon: {
-    width: 32, height: 32, borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
     backgroundColor: 'rgba(0,230,118,0.1)',
-    justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  dateBtnText: { color: colors.textMain, fontSize: 15, fontWeight: '600', textTransform: 'capitalize' },
+  dateBtnText: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
 
   // Upgrade banner
   upgradeBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
     backgroundColor: 'rgba(0,230,118,0.06)',
-    borderRadius: 12, padding: 12, marginBottom: 14,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.15)',
+    borderRadius: radius.sm,
+    padding: space.md,
+    marginBottom: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
-  upgradeBannerText: { flex: 1, color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  upgradeBannerLogo: { width: 18, height: 18, borderRadius: radius.full },
+  upgradeBannerText: {
+    flex: 1,
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
 
   // Error
   errorCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,77,77,0.08)', borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.2)',
-    padding: 14, marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.08)',
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
+    padding: space.md,
+    marginBottom: space.md,
   },
   errorText: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '500' },
   errorRetry: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   // Hero
   heroCard: {
-    borderRadius: 24, marginBottom: 18,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    borderRadius: radius.lg,
+    marginBottom: space.lg,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     overflow: 'hidden',
     backgroundColor: '#0A150E',
   },
   heroContent: {
-    padding: 20,
+    padding: space.xl,
   },
   heroMain: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-end', marginBottom: 20, gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: space.xl,
+    gap: space.md,
   },
   heroLeft: { flex: 1, minWidth: 0 },
-  heroLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
-  heroAmount: { color: colors.textMain, fontSize: 36, fontWeight: '900', letterSpacing: -1 },
+  heroLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: space.sm,
+  },
+  heroAmount: {
+    color: colors.textMain,
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  heroOtherCurrency: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
   acceptBlock: { alignItems: 'flex-end', flexShrink: 0, maxWidth: 100 },
   acceptValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },
-  acceptLabel: { color: colors.textDimmed, fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginBottom: 8 },
-  acceptBar: { width: 72, height: 4, backgroundColor: 'rgba(0,230,118,0.15)', borderRadius: 2, overflow: 'hidden' },
-  acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
-  heroSep: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 16 },
+  acceptLabel: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: space.sm,
+  },
+  acceptBar: {
+    width: 72,
+    height: 4,
+    backgroundColor: 'rgba(0,230,118,0.15)',
+    borderRadius: radius.xs,
+    overflow: 'hidden',
+  },
+  acceptFill: { height: 4, backgroundColor: colors.primary, borderRadius: radius.xs },
+  heroSep: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginBottom: space.lg,
+  },
   heroStats: { flexDirection: 'row' },
-  heroStat: { flex: 1, alignItems: 'center', gap: 4 },
+  heroStat: { flex: 1, alignItems: 'center', gap: space.xs },
   heroStatVal: { color: colors.textMain, fontSize: 20, fontWeight: '800' },
-  heroStatLbl: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center' },
-  heroStatDiv: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 4 },
+  heroStatLbl: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  heroStatDiv: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: space.xs,
+  },
 
   // Filter tabs
-  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  filterRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.lg },
   filterTab: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 10, borderRadius: 12,
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
-  filterTabActive: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' },
-  filterTabActiveAccepted: { backgroundColor: 'rgba(0,230,118,0.1)', borderColor: 'rgba(0,230,118,0.3)' },
-  filterTabActiveDeclined: { backgroundColor: 'rgba(255,82,82,0.1)', borderColor: 'rgba(255,82,82,0.3)' },
-  filterDot: { width: 6, height: 6, borderRadius: 3 },
+  filterTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: stroke.edgeLit,
+  },
+  filterTabActiveAccepted: {
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    borderColor: stroke.active,
+  },
+  filterTabActiveDeclined: {
+    backgroundColor: 'rgba(255,82,82,0.1)',
+    borderColor: stroke.edgeLit,
+  },
+  filterDot: { width: 6, height: 6, borderRadius: radius.full },
   filterTabText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   filterTabTextActive: { color: colors.textMain },
   filterTabTextActiveAccepted: { color: '#00E676' },
   filterTabTextActiveDeclined: { color: '#FF5252' },
 
   // Ride card
+  // Le conteneur opaque de l'app : même fond et même liseré que le bloc
+  // « Passez en ligne pour scanner » du Dashboard, qui sert de référence.
   card: {
-    flexDirection: 'row', backgroundColor: colors.surface,
-    borderRadius: 16, marginBottom: 10, overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25, shadowRadius: 8, elevation: 6,
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    borderRadius: radius.md,
+    marginBottom: space.sm,
+    overflow: 'hidden',
   },
-  cardAccent: { width: 4 },
-  // Course refusée : fond assombri (sans opacité) pour la repérer dans la liste.
-  cardDeclined: { backgroundColor: '#0E1613' },
-  cardInner: { flex: 1, padding: 14 },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  platformChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9,
-    borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.04)',
+  // Course refusée : voile sombre posé sur la carte pour la repérer dans la
+  // liste. Teinté du haut du champ, pas d'un gris neutre.
+  cardDeclined: { backgroundColor: FIELD_TOP, opacity: 0.55 },
+  cardInner: { padding: space.md },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.sm,
   },
-  platformDot: { width: 7, height: 7, borderRadius: 4 },
-  platformChipText: { color: colors.textMain, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  routeStrip: { marginTop: 10, gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 10 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  routeDot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 1, backgroundColor: colors.primary },
-  routeText: { color: colors.textMuted, fontSize: 12, flex: 1 },
-  timeBlock: { alignItems: 'flex-end' },
-  timeMain: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  timeAgo: { color: colors.textDimmed, fontSize: 11, marginTop: 2 },
-  cardMidRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
-  fareText: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
-  scoreBadge: {
-    width: 60, height: 60, borderRadius: 14, borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  scoreValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, lineHeight: 24 },
-  scoreMax: { color: colors.textDimmed, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: -1 },
-  fareDeclined: { color: colors.textDimmed, textDecorationLine: 'line-through' },
-  fareEst: { color: colors.textDimmed, fontSize: 10, fontWeight: '600', marginTop: 2 },
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
-  },
-  statusBadgeAccepted: { backgroundColor: 'rgba(0,230,118,0.08)', borderColor: 'rgba(0,230,118,0.22)' },
-  statusBadgeDeclined: { backgroundColor: 'rgba(255,82,82,0.07)', borderColor: 'rgba(255,82,82,0.18)' },
-  statusBadgePending:  { backgroundColor: 'rgba(255,179,0,0.08)', borderColor: 'rgba(255,179,0,0.22)' },
-  statusBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
-  metricsStrip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingTop: 11, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)',
-  },
-  metricPair: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  metricText: { color: colors.textDimmed, fontSize: 11, fontWeight: '600' },
-  metricHighlight: { color: colors.primary },
-  metricSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 2 },
-
-  // Empty state
-  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyHint: { color: colors.textDimmed, fontSize: 12, textAlign: 'center', marginTop: -4 },
-  emptyCta: {
-    marginTop: 14,
+  topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm,
+    flexShrink: 1,
+  },
+  platformDot: { width: 7, height: 7, borderRadius: radius.full },
+  platformName: {
+    color: colors.textMain,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  topSep: { color: colors.textDimmed, fontSize: 12, fontWeight: '700' },
+
+  // Taux : le deuxième niveau de lecture, coloré par le score.
+  rateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: space.md,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  rateValue: { flex: 1, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  rateUnit: { fontSize: 12, fontWeight: '700', letterSpacing: 0 },
+  rateDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginRight: space.md,
+  },
+
+  // Trajet : rail à gauche, adresses à droite.
+  routeStrip: {
+    flexDirection: 'row',
+    gap: space.sm,
+    marginTop: space.md,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  // Le 1 px de gauche est un calage OPTIQUE, pas du rythme : il centre le rail
+  // sur la colonne de pastilles. L echelle d espacement ne s y applique pas.
+  routeRail: { alignItems: 'center', paddingTop: space.xs, paddingLeft: 1 },
+  routeDot: { width: 7, height: 7, borderRadius: radius.full },
+  routeLine: {
+    width: 1,
+    flex: 1,
+    minHeight: 11,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: space.tight,
+  },
+  routeEnd: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.full,
+    borderWidth: strokeWidth.control,
+    borderColor: colors.textDimmed,
+  },
+  routeTexts: { flex: 1, gap: space.xs, minWidth: 0 },
+  routeText: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
+  routeTextDest: { color: colors.textDimmed },
+  timeMain: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  cardMidRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  fareText: {
+    color: '#FFFFFF',
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+  },
+  fareMeta: {
+    color: colors.textDimmed,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: space.tight,
+  },
+  scoreBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: radius.md,
+    borderWidth: strokeWidth.control,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  scoreValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    lineHeight: 24,
+  },
+  scoreMax: {
+    color: colors.textDimmed,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginTop: -1,
+  },
+  fareDeclined: {
+    color: colors.textDimmed,
+    textDecorationLine: 'line-through',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+  },
+  statusBadgeAccepted: {
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderColor: stroke.edge,
+  },
+  statusBadgeDeclined: {
+    backgroundColor: 'rgba(255,82,82,0.07)',
+    borderColor: stroke.edgeLit,
+  },
+  statusBadgePending: {
+    backgroundColor: 'rgba(255,179,0,0.08)',
+    borderColor: stroke.edgeLit,
+  },
+  statusBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
+
+  // Loading skeleton
+  skeletonList: { gap: space.md, marginTop: space.xs },
+  skeletonRow: {
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  skeletonRowText: { flex: 1, gap: space.sm },
+
+  // Empty state
+  emptyState: { alignItems: 'center', paddingVertical: space.xxxl, gap: space.sm },
+  emptyHint: {
+    color: colors.textDimmed,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: -4,
+  },
+  emptyCta: {
+    marginTop: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
   },
   emptyCtaText: { color: colors.background, fontWeight: '700', fontSize: 13 },
   emptyIconWrap: {
-    width: 72, height: 72, backgroundColor: colors.surface, borderRadius: 36,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.12)',
+    backgroundColor: colors.surface,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: space.lg,
   },
   emptyTitle: { color: colors.textMuted, fontSize: 14 },
 
   // Calendar modal
   overlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center', alignItems: 'center', padding: 20,
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: space.xl,
   },
   modalCard: {
-    backgroundColor: colors.surface, borderRadius: 22, padding: 18, width: '100%',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4, shadowRadius: 16, elevation: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    width: '100%',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+        ...elevation.raised.shadow,
   },
   modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: space.md,
   },
-  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   modalTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
   modalClose: {
-    width: 30, height: 30, borderRadius: 15,
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalPresets: {
-    flexDirection: 'row', gap: 8, marginBottom: 12,
+    flexDirection: 'row',
+    gap: space.sm,
+    marginBottom: space.md,
   },
   presetChip: {
     flex: 1,
-    paddingVertical: 9, paddingHorizontal: 8,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.sm,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
     alignItems: 'center',
   },
   presetChipText: {
-    color: colors.textMain, fontSize: 11, fontWeight: '700',
+    color: colors.textMain,
+    fontSize: 11,
+    fontWeight: '700',
     textAlign: 'center',
   },
+  // Rouge `danger` de la palette, et non un orange pose a la main hors systeme.
+  // Place sous le calendrier : voir le commentaire au point de rendu.
   modalAlertRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,202,40,0.1)', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10,
-    borderWidth: 1, borderColor: 'rgba(255,202,40,0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: 'rgba(255,77,77,0.10)',
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    marginTop: space.md,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.alert,
   },
-  modalAlertText: { color: '#FFCA28', fontSize: 12, flex: 1, lineHeight: 17 },
+  modalAlertText: {
+    color: colors.danger,
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 17,
+  },
 
   calHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 10,
-    gap: 14,
+    paddingBottom: space.sm,
+    gap: space.md,
   },
   calMonthBtn: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(0,230,118,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,230,118,0.18)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
   },
   calMonthText: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
   yearNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center', alignItems: 'center',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  yearNavText: { color: colors.textMain, fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  yearNavText: {
+    color: colors.textMain,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
   calNavBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center', alignItems: 'center',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   monthGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   monthCell: {
     width: '30%',
-    paddingVertical: 14,
+    paddingVertical: space.md,
     alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 10,
+    borderRadius: radius.sm,
+    marginBottom: space.sm,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderWidth: strokeWidth.control,
+    borderColor: stroke.edge,
   },
   monthCellActive: {
     backgroundColor: colors.primary,

@@ -10,6 +10,59 @@ public enum ScanPlatform: String {
   case UBER, BOLT, HEETCH, UNKNOWN
 }
 
+/// Code affiché à l'utilisateur quand un scan échoue, pour qu'il puisse le citer
+/// dans un ticket de support.
+///
+/// Chaque code correspond EXACTEMENT à un motif de `ScanFailureReason` (TS) et à
+/// la colonne `scan_failures.reason` — ce qu'un chauffeur rapporte est donc
+/// directement croisable avec la télémétrie. Particulièrement utile pour la
+/// Share Extension, qui affiche des erreurs mais n'écrit rien dans
+/// `scan_failures` : le code est alors le SEUL canal de remontée.
+///
+/// ⚠️ Contrat public : ces valeurs apparaissent dans l'historique de support.
+/// Ne jamais réaffecter un code existant à un autre motif — ajouter à la suite.
+/// Codes OPAQUES au format hexadécimal, délibérément non déchiffrables par
+/// l'utilisateur : le message affiché explique le problème en clair, le code
+/// n'est qu'une référence de support et ne révèle rien du fonctionnement interne.
+///
+/// Format `0xC0FEnnnn` — préfixe de « facility » fixe (identifie un code Strive
+/// au premier coup d'œil dans un ticket), puis 4 chiffres hexadécimaux propres à
+/// chaque motif. L'hexadécimal n'utilise que 0-9 et A-F : aucune confusion
+/// possible entre O et 0, ni entre I/L et 1, à la recopie.
+public enum ScanErrorCode: String {
+  case scannerOff     = "0xC0FE0113"
+  case sessionOff     = "0xC0FE0207"
+  case quotaReached   = "0xC0FE0342"
+  case invalidImage   = "0xC0FE0418"
+  case throttled      = "0xC0FE0526"
+  case ocrEmpty       = "0xC0FE0631"
+  case noAddresses    = "0xC0FE074B"
+  case notARide       = "0xC0FE0859"
+  case geminiKo       = "0xC0FE0962"
+  case laStartFailed  = "0xC0FE0A7D"
+  case expired        = "0xC0FE0B34"
+  case timeout        = "0xC0FE0C55"
+
+  /// Motif correspondant côté `scan_failures.reason` — garde le lien explicite
+  /// entre ce que voit l'utilisateur et ce que mesure la télémétrie.
+  public var reason: String {
+    switch self {
+    case .scannerOff:    return "scanner_off"
+    case .sessionOff:    return "session_off"
+    case .quotaReached:  return "quota_reached"
+    case .invalidImage:  return "invalid_image"
+    case .throttled:     return "throttled"
+    case .ocrEmpty:      return "ocr_empty"
+    case .noAddresses:   return "no_addresses"
+    case .notARide:      return "not_a_ride"
+    case .geminiKo:      return "gemini_ko"
+    case .laStartFailed: return "la_start_failed"
+    case .expired:       return "expired"
+    case .timeout:       return "timeout"
+    }
+  }
+}
+
 public struct ScanResultModel {
   public let platform: ScanPlatform
   public let fare: Double

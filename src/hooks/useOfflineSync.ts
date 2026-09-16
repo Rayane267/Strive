@@ -1,22 +1,32 @@
 /**
- * Hook qui synchronise les rides en queue offline vers Supabase.
+ * Reprise de l'ANCIENNE file d'écriture AsyncStorage.
+ *
+ * Les courses en attente d'écriture vivent désormais dans le journal natif des
+ * scans, rejoué par le natif à chaque retour au premier plan et purgé par
+ * `ackScan`. Ce hook ne sert plus qu'à récupérer ce qui dormait encore dans
+ * `@strive_offline_queue` sur les téléphones déjà installés.
+ *
+ * À supprimer une fois le parc migré.
+ *
  * Déclencheurs :
  *  - retour de connexion réseau (après une période offline)
  *  - démarrage/foreground de l'app (AppState actif)
- *  - appel manuel via `flush()` retourné (ex: après un scan réussi)
  */
 
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { useNetworkStatus } from './useNetworkStatus';
-import { syncOfflineQueue } from '../services/offlineService';
+import { drainLegacyOfflineQueue } from '../services/offlineService';
 import { createRide } from '../services/ridesService';
 import { useAuth } from '../context/AuthContext';
+import { useMarket } from '../hooks/useMarket';
+import { getFxRates } from '../services/fxService';
 
 export function useOfflineSync() {
   const { isConnected } = useNetworkStatus();
   const { user } = useAuth();
+  const market = useMarket();
   const syncingRef = useRef(false);
   const wasOfflineRef = useRef(false);
 
@@ -24,7 +34,8 @@ export function useOfflineSync() {
     if (!user || syncingRef.current) return;
     syncingRef.current = true;
     try {
-      const count = await syncOfflineQueue(async (ride) => {
+      const rates = await getFxRates();
+      const count = await drainLegacyOfflineQueue(async (ride) => {
         await createRide({
           userId: user.id,
           platform: ride.platform,
@@ -33,17 +44,30 @@ export function useOfflineSync() {
           durationMin: ride.duration_min,
           hourlyRate: ride.hourly_rate,
           kmRate: ride.km_rate,
+          // La file héritée ne portait pas de devise — elle date d'un build
+          // à un seul marché. On prend celle d'aujourd'hui : c'est la seule
+          // information disponible, et la file se vide en quelques secondes
+          // après le retour du réseau.
+          currency: market.currency,
+          fxRateEur: rates[market.currency],
+          // Ces trois champs étaient omis : une course reprise perdait son coût
+          // carburant, son net, et surtout sa clé de scan — donc sa date, que
+          // `createRide` dérive de `scanTs`. Elle atterrissait au jour de la
+          // reprise au lieu du jour du scan.
+          fuelCost: ride.fuel_cost,
+          netProfit: ride.net_profit,
+          scanTs: ride.scan_ts ?? null,
           pickupAddress: ride.pickup_address,
           destinationAddress: ride.destination_address,
         });
       });
-      if (count > 0) __DEV__ && console.log(`[SYNC] ${count} ride(s) synced from offline queue`);
+      if (count > 0) __DEV__ && console.log(`[SYNC] ${count} ride(s) récupérée(s) de l'ancienne file`);
     } catch (err) {
       Sentry.captureException(err, { tags: { flow: 'offline_sync' } });
     } finally {
       syncingRef.current = false;
     }
-  }, [user]);
+  }, [user, market.currency]);
 
   // Trigger 1 : retour de connexion après offline
   useEffect(() => {

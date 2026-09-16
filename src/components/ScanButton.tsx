@@ -7,6 +7,9 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { elevation } from '../theme/elevation';
+import { strokeWidth } from '../theme/stroke';
 
 interface ScanButtonProps {
   onPress?: (event: GestureResponderEvent) => void;
@@ -37,17 +40,13 @@ const styles = StyleSheet.create({
   button: {
     width: 65,
     height: 65,
-    borderRadius: 35,
+    borderRadius: radius.lg,
     backgroundColor: colors.background,
     borderColor: colors.primary,
-    borderWidth: 2,
+    borderWidth: strokeWidth.control,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 10,
+    ...elevation.resting.shadow,
   },
 });
 

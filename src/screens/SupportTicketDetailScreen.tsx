@@ -8,8 +8,14 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
+import { radius } from '../theme/radius';
+import { space } from '../theme/spacing';
+import { stroke, strokeWidth } from '../theme/stroke';
 import { fetchMessages, postUserMessage, SupportMessage } from '../services/supportService';
 import BrandLoader from '../components/BrandLoader';
+import { FIELD_TOP } from '../theme/field';
+import ScreenField from '../components/ScreenField';
+import AnimatedEntrance from '../components/AnimatedEntrance';
 
 const SupportTicketDetailScreen = () => {
   const { t } = useTranslation();
@@ -65,16 +71,17 @@ const SupportTicketDetailScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
+          l'encoche, et `container` porte la meme couleur que son sommet : la
+          bande de statut se confond avec lui au lieu de faire un bandeau. */}
+      <ScreenField />
+      <AnimatedEntrance step={0} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.textMain} />
+          <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{subject || t('support.title', 'Ticket')}</Text>
-          <Text style={styles.headerSub}>{t('support.title', 'Mes tickets')}</Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>{subject || t('support.title', 'Ticket')}</Text>
         <View style={{ width: 38 }} />
-      </View>
+      </AnimatedEntrance>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -82,7 +89,7 @@ const SupportTicketDetailScreen = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
         {loading ? (
-          <BrandLoader style={{ marginTop: 60 }} />
+          <BrandLoader style={{ marginTop: space.xxxl }} />
         ) : (
           <FlatList
             ref={listRef}
@@ -119,48 +126,50 @@ const SupportTicketDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: FIELD_TOP },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
+    paddingHorizontal: space.xl, paddingVertical: space.md,
     borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface,
+    marginLeft: -10,
+    width: 44, height: 44,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  headerCenter: { flex: 1, marginHorizontal: 14 },
-  headerTitle: { color: colors.textMain, fontSize: 16, fontWeight: '800' },
-  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: 2 },
+  headerCenter: { flex: 1, marginHorizontal: space.md },
+  headerTitle: {
+    marginRight: space.md,
+    flex: 1, color: colors.textMain, fontSize: 26, fontWeight: '800' },
+  headerSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
 
-  list: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
-  bubbleRow: { flexDirection: 'row', marginBottom: 2 },
+  list: { paddingHorizontal: space.lg, paddingVertical: space.lg, gap: space.sm },
+  bubbleRow: { flexDirection: 'row', marginBottom: space.tight },
   rowRight: { justifyContent: 'flex-end' },
   rowLeft: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '82%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
+  bubble: { maxWidth: '82%', borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
   bubbleUser: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
   bubbleStaff: {
     backgroundColor: colors.surface, borderBottomLeftRadius: 4,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
-  staffLabel: { color: colors.primary, fontSize: 11, fontWeight: '800', marginBottom: 4 },
+  staffLabel: { color: colors.primary, fontSize: 11, fontWeight: '800', marginBottom: space.xs },
   bubbleText: { color: colors.textMain, fontSize: 14, lineHeight: 20 },
 
   composer: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
-    paddingHorizontal: 14, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'flex-end', gap: space.sm,
+    paddingHorizontal: space.md, paddingVertical: space.sm,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
     backgroundColor: colors.background,
   },
   composerInput: {
     flex: 1, maxHeight: 120, minHeight: 44,
     backgroundColor: 'rgba(255,255,255,0.05)', color: colors.textMain,
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, fontSize: 15,
+    borderWidth: strokeWidth.control, borderColor: stroke.edge,
   },
   sendIcon: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary,
+    width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
 });
