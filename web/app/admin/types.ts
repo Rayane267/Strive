@@ -205,3 +205,87 @@ export const dur = (minutes: number) => {
 
 export const eur = (n: number | null | undefined) =>
   n == null ? '—' : `${n.toFixed(2).replace('.', ',')} €`;
+
+/* ──────────────────────────────────────────────────────────────────────────
+   `admin_feed(...)` — les flux récents (migration 20260916_admin_feed.sql).
+   ────────────────────────────────────────────────────────────────────────── */
+
+export interface Feed {
+  generated_at: string;
+  window_days: number;
+  subs_recent: SubEvent[];
+  subs_by_type: { event_type: string; total: number }[];
+  subs_active_by_product: { product_id: string; tier: Tier; total: number }[];
+  subs_expiring: {
+    user_id: string; email: string | null; tier: Tier;
+    status: string | null; expires_at: string;
+  }[];
+  failures_recent: Failure[];
+  failures_by_reason: { reason: string; total: number }[];
+  failures_by_version: { app_version: string; total: number; users: number }[];
+  failures_daily: { day: string; failures: number; scans: number }[];
+  /** Part des tentatives qui échouent, en %. Null si aucune tentative. */
+  failure_rate: number | null;
+  audit_recent: { created_at: string; action: string; details: unknown; email: string | null }[];
+  signups_daily: { day: string; signups: number }[];
+  activation: { signups: number; scanned: number; rode: number; paid: number };
+  waitlist: { total: number; window: number };
+}
+
+export interface SubEvent {
+  created_at: string;
+  user_id: string | null;
+  email: string | null;
+  event_type: string | null;
+  product_id: string | null;
+  status: string | null;
+  expires_at: string | null;
+  tier_now: Tier;
+}
+
+export interface Failure {
+  at: string;
+  reason: string;
+  os: string | null;
+  surface: string | null;
+  platform: string | null;
+  detail: string | null;
+  app_version: string | null;
+  email: string | null;
+}
+
+/** Les treize motifs normalisés par le RPC d'écriture (20260908_scan_failures).
+ *  Tout le reste tombe sur `other`, le brut étant conservé dans `detail`.
+ *  `blame` dit qui est en cause : ce qui vient de l'app se corrige, ce qui
+ *  vient du chauffeur ou de la capture ne se corrige pas de la même façon. */
+export const FAILURE: Record<string, { label: string; blame: 'app' | 'user' | 'source' }> = {
+  scanner_off:     { label: 'Scanner coupé',            blame: 'user' },
+  session_off:     { label: 'Pas de session',           blame: 'user' },
+  quota_reached:   { label: 'Quota atteint',            blame: 'user' },
+  invalid_image:   { label: 'Capture illisible',        blame: 'source' },
+  throttled:       { label: 'Double appui',             blame: 'user' },
+  ocr_empty:       { label: 'OCR vide',                 blame: 'app' },
+  not_a_ride:      { label: 'Pas une offre',            blame: 'source' },
+  gemini_ko:       { label: 'Gemini indisponible',      blame: 'app' },
+  no_addresses:    { label: 'Aucune adresse lue',       blame: 'app' },
+  la_start_failed: { label: 'Live Activity refusée',    blame: 'app' },
+  expired:         { label: 'Reprise par le système',   blame: 'app' },
+  timeout:         { label: 'Délai dépassé',            blame: 'app' },
+  other:           { label: 'Autre',                    blame: 'app' },
+};
+
+/** Libellés des événements RevenueCat. `tone` colore la lecture : une
+ *  annulation n'est pas un incident, un problème de paiement si. */
+export const SUB_EVENT: Record<string, { label: string; tone: 'good' | 'warn' | 'bad' | 'flat' }> = {
+  INITIAL_PURCHASE:     { label: 'Premier achat',        tone: 'good' },
+  RENEWAL:              { label: 'Renouvellement',       tone: 'good' },
+  PRODUCT_CHANGE:       { label: 'Changement de palier', tone: 'flat' },
+  UNCANCELLATION:       { label: 'Annulation annulée',   tone: 'good' },
+  CANCELLATION:         { label: 'Résiliation',          tone: 'warn' },
+  EXPIRATION:           { label: 'Expiration',           tone: 'warn' },
+  BILLING_ISSUE:        { label: 'Problème de paiement', tone: 'bad' },
+  REFUND:               { label: 'Remboursement',        tone: 'bad' },
+  SUBSCRIPTION_PAUSED:  { label: 'Abonnement en pause',  tone: 'warn' },
+  TRANSFER:             { label: 'Transfert de compte',  tone: 'flat' },
+  NON_RENEWING_PURCHASE:{ label: 'Achat ponctuel',       tone: 'good' },
+};

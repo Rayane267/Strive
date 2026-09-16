@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import type { Analytics } from './types';
 import { Card, Stat } from './ui';
 import LivePanel from './LivePanel';
+import FeedView from './FeedView';
 
 /* ──────────────────────────────────────────────────────────────────────────
    Palette data-viz — validée sur la surface #0F1311 (mode sombre) :
@@ -167,6 +168,8 @@ export default function AnalyticsView() {
             }
           />
         </div>
+
+        <FeedView days={days} />
       </div>
     </div>
   );
