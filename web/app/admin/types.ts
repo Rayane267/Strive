@@ -289,3 +289,19 @@ export const SUB_EVENT: Record<string, { label: string; tone: 'good' | 'warn' | 
   TRANSFER:             { label: 'Transfert de compte',  tone: 'flat' },
   NON_RENEWING_PURCHASE:{ label: 'Achat ponctuel',       tone: 'good' },
 };
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Navigation. L'accueil est une grille de tuiles en couleur pleine ; chaque
+   tuile ouvre SA page. La teinte suit la page jusque dans son en-tête, de
+   sorte qu'on sait toujours d'où l'on vient.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export type View = 'home' | 'drivers' | 'tickets' | 'subs' | 'errors' | 'activity';
+
+export const VIEWS: Record<Exclude<View, 'home'>, { title: string; sub: string }> = {
+  drivers:  { title: 'Chauffeurs',  sub: 'Le parc, palier par palier' },
+  tickets:  { title: 'Support',     sub: 'Les fils de discussion' },
+  errors:   { title: 'Erreurs',     sub: 'Ce que le scanner n’a pas réussi à lire' },
+  subs:     { title: 'Abonnements', sub: 'Mouvements, échéances et revenu' },
+  activity: { title: 'Activité',    sub: 'Scans, courses et heures en ligne' },
+};

@@ -1,11 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import { useState } from 'react';
 import type { Analytics } from './types';
+import { useAnalytics } from './data';
 import { Card, Stat } from './ui';
-import LivePanel from './LivePanel';
-import FeedView from './FeedView';
 
 /* ──────────────────────────────────────────────────────────────────────────
    Palette data-viz — validée sur la surface #0F1311 (mode sombre) :
@@ -28,12 +26,6 @@ const C = {
   grid: 'rgba(255,255,255,0.07)',
 };
 
-const RANGES = [
-  { days: 7, label: '7 j' },
-  { days: 30, label: '30 j' },
-  { days: 90, label: '90 j' },
-];
-
 const nf = new Intl.NumberFormat('fr-FR');
 const pct = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 100) : null);
 const pctLabel = (num: number, den: number) => {
@@ -41,72 +33,23 @@ const pctLabel = (num: number, den: number) => {
   return p === null ? '—' : `${p} %`;
 };
 
-export default function AnalyticsView() {
-  const [days, setDays] = useState(30);
-  const [data, setData] = useState<Analytics | null>(null);
-  const [err, setErr] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async (d: number) => {
-    setLoading(true);
-    setErr('');
-    const { data: res, error } = await supabase.rpc('admin_analytics', { p_days: d });
-    if (error) setErr(error.message);
-    else setData(res as Analytics);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(days); }, [days, load]);
+export default function ActivityView({ days }: { days: number }) {
+  const { data, err } = useAnalytics(days);
 
   if (err) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p role="alert" className="max-w-md text-center text-sm text-[#FF5A4D]">
-          Impossible de charger les statistiques : {err}
-        </p>
-      </div>
+      <p role="alert" className="p-8 text-center text-sm text-[#FF5A4D]">
+        Impossible de charger les statistiques : {err}
+      </p>
     );
   }
-
-  if (!data) {
-    return <div className="flex flex-1 items-center justify-center text-white/50">Chargement des statistiques…</div>;
-  }
-
+  if (!data) return <p className="p-8 text-center text-sm text-white/40">Chargement…</p>;
   const s = data.scans;
   const subs = data.subscriptions;
   const paying = subs.plus + subs.premium;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-6xl space-y-6 p-5 sm:p-8">
-
-        {/* Filtres — une seule rangée au-dessus des graphes */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-white/50">Période</span>
-            <div className="flex gap-1 rounded-lg border border-white/10 p-1">
-              {RANGES.map(r => (
-                <button
-                  key={r.days}
-                  onClick={() => setDays(r.days)}
-                  aria-pressed={days === r.days}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    days === r.days ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-white/40">
-            {loading && <span>mise à jour…</span>}
-            <span>Arrêté le {new Date(data.generated_at).toLocaleString('fr-FR')}</span>
-          </div>
-        </div>
-
-        <LivePanel />
-
+    <div className="space-y-6">
         {/* KPI — la forme juste pour un chiffre seul, pas un graphe à une barre */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
@@ -168,9 +111,6 @@ export default function AnalyticsView() {
             }
           />
         </div>
-
-        <FeedView days={days} />
-      </div>
     </div>
   );
 }

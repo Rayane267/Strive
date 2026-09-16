@@ -3,11 +3,17 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { STATUS, TIER, ago, eur, fmt, type DriverDetail as Detail } from './types';
-import { Field, OnlineDot, Pill } from './ui';
+import { C, Metric, Surface } from './ui';
 
-/** Panneau latéral d'un chauffeur. Monté à la demande : la fiche coûte un
- *  aller-retour, on ne la charge pas pour les cinquante lignes de la liste. */
-export default function DriverDetail({ id, onClose }: { id: string; onClose: () => void }) {
+/* ──────────────────────────────────────────────────────────────────────────
+   La fiche est une PAGE, pas un tiroir. Un panneau de 26 rem sur le côté
+   obligeait à lire un abonnement, un quota, un véhicule et vingt courses
+   dans une colonne de téléphone, pendant que la liste derrière continuait
+   de réclamer l'attention. Ici l'écran ne parle que de ce chauffeur, et le
+   retour est explicite.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export default function DriverDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState('');
 
@@ -23,206 +29,227 @@ export default function DriverDetail({ id, onClose }: { id: string; onClose: () 
     return () => { cancelled = true; };
   }, [id]);
 
-  // Échap ferme : un panneau qui ne se referme qu'à la souris piège le clavier.
+  // Échap revient à la liste : la page se quitte au clavier comme à la souris.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onBack(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onBack]);
 
   return (
-    <aside
-      role="dialog"
-      aria-label="Fiche chauffeur"
-      className="flex w-[26rem] flex-none flex-col border-l border-white/10 bg-[#0B0F0D]"
-    >
-      <header className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-white">
-            {d?.name ?? d?.email ?? 'Chargement…'}
-          </p>
-          {d && (
-            <p className="truncate text-xs text-white/45">
-              {d.name ? d.email : null}
-              {d.country ? ` · ${d.country}` : ''}
-            </p>
-          )}
-        </div>
+    <div className="min-h-0 flex-1 overflow-y-auto bg-[#0A120E]">
+      <div className="mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
         <button
-          onClick={onClose}
-          aria-label="Fermer la fiche"
-          className="flex-none rounded-lg bg-white/10 px-2.5 py-1 text-sm text-white/70 hover:bg-white/15"
+          onClick={onBack}
+          className="flex items-center gap-2 text-[13px] font-semibold outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-[#00E676]/60"
+          style={{ color: C.LOW }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = C.FG)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = C.LOW)}
         >
-          ✕
+          ← Tous les chauffeurs
         </button>
-      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {err && <p role="alert" className="text-sm text-[#FF5A4D]">{err}</p>}
-        {!d && !err && <p className="text-sm text-white/40">Chargement…</p>}
+        {err && <p role="alert" className="text-sm" style={{ color: C.BAD }}>{err}</p>}
+        {!d && !err && <p className="text-sm" style={{ color: C.LOW }}>Chargement…</p>}
 
         {d && (
-          <div className="space-y-6">
-            {/* ── État ─────────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Pill label={TIER[d.subscription.tier].label} color={TIER[d.subscription.tier].color} />
-              {d.online.since ? (
-                <span className="flex items-center gap-1.5 text-xs text-[#00E676]">
-                  <OnlineDot /> en ligne depuis {fmt(d.online.since)}
-                </span>
-              ) : (
-                <span className="text-xs text-white/45">vu {ago(d.last_sign_in_at)}</span>
-              )}
-              {d.is_admin && <Pill label="Admin" color="#3987e5" />}
+          <>
+            {/* ── Identité ─────────────────────────────────────────────── */}
+            <Surface depth={0}>
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="truncate text-3xl font-semibold tracking-[-0.02em]" style={{ color: C.FG }}>
+                      {d.name ?? d.email ?? 'Chauffeur'}
+                    </h1>
+                    <Badge label={TIER[d.subscription.tier].label} color={TIER[d.subscription.tier].color} />
+                    {d.is_admin && <Badge label="Admin" color="#3987E5" />}
+                  </div>
+                  <p className="mt-2 text-sm" style={{ color: C.MID }}>
+                    {d.name && d.email ? `${d.email} · ` : ''}
+                    inscrit le {fmt(d.created_at)}
+                    {d.country ? ` · ${d.country}` : ''}
+                  </p>
+                </div>
+
+                <p className="flex items-center gap-2 text-sm" style={{ color: d.online.since ? C.SIGNAL : C.LOW }}>
+                  {d.online.since && (
+                    <span className="relative flex h-2 w-2" aria-hidden>
+                      <span className="absolute inline-flex h-full w-full rounded-full opacity-70 motion-safe:animate-ping" style={{ background: C.SIGNAL }} />
+                      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.SIGNAL }} />
+                    </span>
+                  )}
+                  {d.online.since
+                    ? `en ligne depuis ${fmt(d.online.since)}`
+                    : `dernière connexion ${ago(d.last_sign_in_at)}`}
+                </p>
+              </div>
+            </Surface>
+
+            {/* ── Trente jours ─────────────────────────────────────────── */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Scans" value={String(d.activity_30d.scans)} unit="sur 30 j" />
+              <Metric
+                label="Courses"
+                value={String(d.activity_30d.rides)}
+                sub={`${d.activity_30d.accepted} prises · ${
+                  d.activity_30d.rides > 0
+                    ? Math.round((d.activity_30d.accepted / d.activity_30d.rides) * 100)
+                    : 0
+                } % d'acceptation`}
+              />
+              <Metric
+                label="Heures en ligne"
+                value={d.activity_30d.hours != null ? String(d.activity_30d.hours).replace('.', ',') : '—'}
+                unit="h"
+              />
+              <Metric
+                label="Gains"
+                value={eur(d.activity_30d.earnings_eur)}
+                sub="courses acceptées, consolidées en euros"
+              />
             </div>
 
-            {/* ── Activité 30 jours ────────────────────────────────── */}
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">
-                30 derniers jours
-              </h3>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Mini label="Scans" value={String(d.activity_30d.scans)} />
-                <Mini
-                  label="Courses"
-                  value={String(d.activity_30d.rides)}
-                  sub={`${d.activity_30d.accepted} prises`}
-                />
-                <Mini
-                  label="Heures en ligne"
-                  value={d.activity_30d.hours != null ? `${String(d.activity_30d.hours).replace('.', ',')} h` : '—'}
-                />
-                <Mini
-                  label="Gains"
-                  value={eur(d.activity_30d.earnings_eur)}
-                  hint="Courses acceptées, consolidées en euros au taux figé de chaque course."
-                />
-              </div>
-              <Spark rows={d.daily} />
-            </section>
+            {/* ── Rythme ───────────────────────────────────────────────── */}
+            <Surface depth={1}>
+              <p className="text-[13px] font-medium" style={{ color: C.MID }}>Rythme sur 30 jours</p>
+              <Rhythm rows={d.daily} />
+            </Surface>
 
-            {/* ── Abonnement ───────────────────────────────────────── */}
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">Abonnement</h3>
-              <div className="mt-2">
-                <Field label="Palier" value={TIER[d.subscription.tier].label} />
-                <Field label="Statut" value={d.subscription.status ?? '—'} />
-                <Field
-                  label="Échéance"
-                  value={d.subscription.expires_at ? fmt(d.subscription.expires_at) : '—'}
-                />
-                <Field label="Produit" value={d.subscription.product_id ?? '—'} mono />
-              </div>
-            </section>
+            <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+              {/* ── Abonnement ─────────────────────────────────────────── */}
+              <Surface depth={1}>
+                <h2 className="text-sm font-semibold" style={{ color: C.FG }}>Abonnement</h2>
+                <dl className="mt-4">
+                  <Row label="Palier" value={TIER[d.subscription.tier].label} />
+                  <Row label="Statut" value={d.subscription.status ?? '—'} />
+                  <Row label="Échéance" value={d.subscription.expires_at ? fmt(d.subscription.expires_at) : '—'} />
+                  <Row label="Produit" value={d.subscription.product_id ?? '—'} mono />
+                </dl>
+              </Surface>
 
-            {/* ── Quota ────────────────────────────────────────────── */}
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">
-                Quota de scans
-              </h3>
-              <div className="mt-2">
-                <Field
-                  label="Aujourd'hui"
-                  value={
-                    d.quota.stale
-                      ? <span className="text-white/45">0 <span className="text-xs">(compteur périmé, remis à zéro à la lecture)</span></span>
-                      : String(d.quota.scans_today)
-                  }
-                />
-                <Field label="Crédits achetés" value={String(d.quota.credits)} />
-                <Field
-                  label="Crédits de bienvenue"
-                  value={
-                    d.quota.welcome_credits > 0
-                      ? `${d.quota.welcome_credits}${d.quota.welcome_expires_at ? ` — expirent le ${fmt(d.quota.welcome_expires_at)}` : ''}`
-                      : '—'
-                  }
-                />
-              </div>
-            </section>
-
-            {/* ── Véhicule ─────────────────────────────────────────── */}
-            {(d.vehicle.make || d.vehicle.model) && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">Véhicule</h3>
-                <div className="mt-2">
-                  <Field
-                    label="Modèle"
-                    value={[d.vehicle.make, d.vehicle.model, d.vehicle.year].filter(Boolean).join(' ') || '—'}
-                  />
-                  <Field label="Carburant" value={d.vehicle.fuel_type ?? '—'} />
-                  <Field
-                    label="Consommation"
-                    value={d.vehicle.avg_cons != null ? String(d.vehicle.avg_cons).replace('.', ',') : '—'}
-                  />
-                </div>
-              </section>
-            )}
-
-            {/* ── Compte ───────────────────────────────────────────── */}
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">Compte</h3>
-              <div className="mt-2">
-                <Field label="Inscrit le" value={fmt(d.created_at)} />
-                <Field
-                  label="Dernière connexion"
-                  value={d.last_sign_in_at ? fmt(d.last_sign_in_at) : 'jamais'}
-                />
-                <Field label="Téléphone" value={d.phone ?? '—'} />
-                <Field label="Fuseau" value={d.timezone ?? '—'} />
-                <Field label="Identifiant" value={d.id} mono />
-              </div>
-            </section>
-
-            {/* ── Dernières courses ────────────────────────────────── */}
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">
-                20 dernières courses
-              </h3>
-              {d.recent_rides.length === 0 ? (
-                <p className="mt-3 text-sm text-white/40">Aucune course.</p>
-              ) : (
-                <ul className="mt-2 divide-y divide-white/5">
-                  {d.recent_rides.map((r, i) => (
-                    <li key={i} className="flex items-baseline justify-between gap-3 py-2 text-xs">
-                      <span className="flex-none text-white/40">{fmt(r.created_at)}</span>
-                      <span className="flex-1 truncate text-white/70">
-                        {r.platform ?? '—'} ·{' '}
-                        <span className={r.status === 'ACCEPTED' ? 'text-[#00E676]' : 'text-white/40'}>
-                          {r.status === 'ACCEPTED' ? 'prise' : r.status === 'DECLINED' ? 'refusée' : 'en attente'}
+              {/* ── Quota ──────────────────────────────────────────────── */}
+              <Surface depth={1}>
+                <h2 className="text-sm font-semibold" style={{ color: C.FG }}>Quota de scans</h2>
+                <dl className="mt-4">
+                  <Row
+                    label="Aujourd'hui"
+                    value={
+                      d.quota.stale ? (
+                        <span style={{ color: C.LOW }}>
+                          0 <span className="text-xs">(compteur périmé, lu comme zéro par le serveur)</span>
                         </span>
-                      </span>
-                      <span className="flex-none tabular-nums text-white/80">
-                        {money(r.fare_final ?? r.fare_estimated, r.currency)}
-                        {r.hourly_rate ? (
-                          <span className="text-white/40"> · {money(r.hourly_rate, r.currency)}/h</span>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                      ) : String(d.quota.scans_today)
+                    }
+                  />
+                  <Row label="Crédits achetés" value={String(d.quota.credits)} />
+                  <Row
+                    label="Crédits de bienvenue"
+                    value={
+                      d.quota.welcome_credits > 0
+                        ? `${d.quota.welcome_credits}${d.quota.welcome_expires_at ? ` — expirent le ${fmt(d.quota.welcome_expires_at)}` : ''}`
+                        : '—'
+                    }
+                  />
+                </dl>
+              </Surface>
 
-            {/* ── Tickets ──────────────────────────────────────────── */}
+              {/* ── Compte ─────────────────────────────────────────────── */}
+              <Surface depth={2}>
+                <h2 className="text-sm font-semibold" style={{ color: C.FG }}>Compte</h2>
+                <dl className="mt-4">
+                  <Row label="Téléphone" value={d.phone ?? '—'} />
+                  <Row label="Fuseau" value={d.timezone ?? '—'} />
+                  <Row label="Dernière connexion" value={d.last_sign_in_at ? fmt(d.last_sign_in_at) : 'jamais'} />
+                  <Row label="Identifiant" value={d.id} mono />
+                </dl>
+              </Surface>
+
+              {/* ── Véhicule ───────────────────────────────────────────── */}
+              <Surface depth={2}>
+                <h2 className="text-sm font-semibold" style={{ color: C.FG }}>Véhicule</h2>
+                {d.vehicle.make || d.vehicle.model ? (
+                  <dl className="mt-4">
+                    <Row
+                      label="Modèle"
+                      value={[d.vehicle.make, d.vehicle.model, d.vehicle.year].filter(Boolean).join(' ') || '—'}
+                    />
+                    <Row label="Carburant" value={d.vehicle.fuel_type ?? '—'} />
+                    <Row
+                      label="Consommation"
+                      value={d.vehicle.avg_cons != null ? String(d.vehicle.avg_cons).replace('.', ',') : '—'}
+                    />
+                  </dl>
+                ) : (
+                  <p className="mt-4 text-sm" style={{ color: C.LOW }}>
+                    Aucun véhicule renseigné — le coût carburant n&apos;est donc pas déduit de ses courses.
+                  </p>
+                )}
+              </Surface>
+            </div>
+
+            {/* ── Dernières courses ────────────────────────────────────── */}
+            <Surface depth={2}>
+              <h2 className="text-sm font-semibold" style={{ color: C.FG }}>20 dernières courses</h2>
+              {d.recent_rides.length === 0 ? (
+                <p className="mt-4 text-sm" style={{ color: C.LOW }}>Aucune course enregistrée.</p>
+              ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[34rem] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <Th>Date</Th>
+                        <Th>Plateforme</Th>
+                        <Th>Décision</Th>
+                        <Th right>Tarif</Th>
+                        <Th right>€/h</Th>
+                        <Th right>Distance</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.recent_rides.map((r, i) => (
+                        <tr key={i} style={{ borderTop: `1px solid ${C.LINE}` }}>
+                          <Td style={{ color: C.LOW }}>{fmt(r.created_at)}</Td>
+                          <Td style={{ color: C.MID }}>{r.platform ?? '—'}</Td>
+                          <Td style={{ color: r.status === 'ACCEPTED' ? C.SIGNAL : C.LOW }}>
+                            {r.status === 'ACCEPTED' ? 'prise' : r.status === 'DECLINED' ? 'refusée' : 'en attente'}
+                          </Td>
+                          <Td right style={{ color: C.FG }}>{money(r.fare_final ?? r.fare_estimated, r.currency)}</Td>
+                          <Td right style={{ color: C.MID }}>{money(r.hourly_rate, r.currency)}</Td>
+                          <Td right style={{ color: C.MID }}>
+                            {r.distance_km != null ? `${String(r.distance_km).replace('.', ',')} km` : '—'}
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Surface>
+
+            {/* ── Support ──────────────────────────────────────────────── */}
             {d.tickets.length > 0 && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">Support</h3>
-                <ul className="mt-2 divide-y divide-white/5">
+              <Surface depth={2}>
+                <h2 className="text-sm font-semibold" style={{ color: C.FG }}>Support</h2>
+                <ul className="mt-2">
                   {d.tickets.map((t) => (
-                    <li key={t.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                      <span className="min-w-0 flex-1 truncate text-white/80">{t.subject}</span>
-                      <Pill label={STATUS[t.status].label} color={STATUS[t.status].color} dim />
-                      <span className="flex-none text-white/35">{ago(t.last_message_at)}</span>
+                    <li
+                      key={t.id}
+                      className="flex items-center justify-between gap-4 py-2.5 text-sm"
+                      style={{ borderTop: `1px solid ${C.LINE}` }}
+                    >
+                      <span className="min-w-0 flex-1 truncate" style={{ color: C.FG }}>{t.subject}</span>
+                      <Badge label={STATUS[t.status].label} color={STATUS[t.status].color} />
+                      <span className="flex-none text-[13px]" style={{ color: C.LOW }}>{ago(t.last_message_at)}</span>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </Surface>
             )}
-          </div>
+          </>
         )}
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -235,32 +262,90 @@ function money(n: number | null, currency: string | null) {
   return `${n.toFixed(2).replace('.', ',')} ${sym}`;
 }
 
-function Mini({ label, value, sub, hint }: {
-  label: string; value: string; sub?: string; hint?: string;
-}) {
+function Badge({ label, color }: { label: string; color: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-[#0F1311] p-3" title={hint}>
-      <p className="text-[10px] uppercase tracking-wide text-white/45">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-white">{value}</p>
-      {sub && <p className="text-[10px] text-white/35">{sub}</p>}
+    <span
+      className="flex-none rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide"
+      style={{ background: color + '1F', color }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function Row({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div
+      className="flex items-baseline justify-between gap-6 py-2.5"
+      style={{ borderTop: `1px solid ${C.LINE}` }}
+    >
+      <dt className="flex-none text-[13px]" style={{ color: C.LOW }}>{label}</dt>
+      <dd className={`text-right text-sm ${mono ? 'font-mono text-xs' : ''}`} style={{ color: C.FG }}>
+        {value}
+      </dd>
     </div>
   );
 }
 
-/** Trente colonnes, une par jour. Pas d'axe ni de grille : à cette taille le
- *  graphe ne sert qu'à lire le rythme — des trous, une reprise, un arrêt. */
-function Spark({ rows }: { rows: { day: string; scans: number; rides: number }[] }) {
-  const max = Math.max(1, ...rows.map((r) => r.scans));
+function Th({ children, right = false }: { children: React.ReactNode; right?: boolean }) {
   return (
-    <div className="mt-3 flex h-12 items-end gap-[2px]" aria-hidden>
-      {rows.map((r) => (
-        <div
-          key={r.day}
-          title={`${new Date(r.day).toLocaleDateString('fr-FR')} — ${r.scans} scan(s), ${r.rides} course(s)`}
-          className="flex-1 rounded-sm bg-[#3987e5]"
-          style={{ height: `${Math.max(2, (r.scans / max) * 100)}%`, opacity: r.scans ? 1 : 0.18 }}
-        />
-      ))}
-    </div>
+    <th
+      className={`pb-2 text-[12px] font-medium ${right ? 'text-right' : 'text-left'}`}
+      style={{ color: C.LOW }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, right = false, style }: {
+  children: React.ReactNode; right?: boolean; style?: React.CSSProperties;
+}) {
+  return (
+    <td className={`py-2.5 ${right ? 'text-right tabular-nums' : ''}`} style={style}>
+      {children}
+    </td>
+  );
+}
+
+/** Deux séries par jour : scans en trace, courses en plein. Le survol donne
+ *  la valeur exacte — le graphe montre le rythme, il ne le fait pas deviner. */
+function Rhythm({ rows }: { rows: { day: string; scans: number; rides: number }[] }) {
+  const [at, setAt] = useState<number | null>(null);
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.scans, r.rides)));
+  const shown = at != null ? rows[at] : null;
+
+  return (
+    <>
+      <div className="mt-4 flex h-24 items-end gap-[3px]" onMouseLeave={() => setAt(null)}>
+        {rows.map((r, i) => (
+          <div
+            key={r.day}
+            onMouseEnter={() => setAt(i)}
+            className="relative h-full flex-1"
+          >
+            <span
+              className="absolute bottom-0 w-full rounded-t-[3px]"
+              style={{
+                height: `${Math.max(r.scans ? 4 : 1, (r.scans / max) * 100)}%`,
+                background: at === i ? C.SIGNAL : 'rgba(233,245,238,0.22)',
+              }}
+            />
+            <span
+              className="absolute bottom-0 w-full rounded-t-[3px]"
+              style={{
+                height: `${(r.rides / max) * 100}%`,
+                background: at === i ? C.SIGNAL : 'rgba(233,245,238,0.55)',
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 h-5 text-[13px] tabular-nums" style={{ color: C.MID }}>
+        {shown
+          ? `${new Date(shown.day).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })} — ${shown.scans} scan${shown.scans > 1 ? 's' : ''}, ${shown.rides} course${shown.rides > 1 ? 's' : ''}`
+          : 'Trace claire : les scans. Plein : les courses.'}
+      </p>
+    </>
   );
 }
