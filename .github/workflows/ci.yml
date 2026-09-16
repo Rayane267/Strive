@@ -52,3 +52,36 @@ jobs:
           name: coverage
           path: coverage/
           if-no-files-found: ignore
+
+  web:
+    name: Site web · Lint · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Build de production : détecte les erreurs de rendu (RSC, metadata,
+      # next/font) avant qu'elles n'arrivent en prod sur Vercel.
+      - name: Build
+        run: npm run build

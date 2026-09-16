@@ -35,7 +35,8 @@ export default function PrivacyPage() {
       <p>
         Le responsable du traitement est l&apos;éditeur de Strive :{' '}
         <strong>Rayane TALEB</strong>, entrepreneur individuel (auto-entrepreneur),
-        SIREN 988 905 394, siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France.
+        SIREN 988 905 394, siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France
+        (voir les <a href="/mentions-legales">mentions légales</a>).
         Pour toute question ou pour exercer vos droits :{' '}
         <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>.
       </p>
@@ -141,7 +142,11 @@ export default function PrivacyPage() {
       <h2>10. Cookies (site web)</h2>
       <p>
         Le site de présentation n&apos;utilise pas de cookies publicitaires ni de traceurs de
-        profilage.
+        profilage. La mesure d&apos;audience y est réalisée <strong>sans cookie et sans
+        identifiant persistant</strong> (statistiques agrégées de fréquentation et de performance),
+        ce qui ne requiert pas votre consentement préalable. Seule la console
+        d&apos;administration, réservée à notre équipe, conserve un jeton de session strictement
+        nécessaire à la connexion.
       </p>
 
       <h2>11. Mineurs</h2>
