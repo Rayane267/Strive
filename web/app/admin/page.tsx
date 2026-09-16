@@ -5,8 +5,9 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import TicketsView from './TicketsView';
 import AnalyticsView from './AnalyticsView';
+import DriversView from './DriversView';
 
-type Tab = 'tickets' | 'analytics';
+type Tab = 'tickets' | 'analytics' | 'drivers';
 
 export default function AdminPage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -104,6 +105,7 @@ function Console({ email }: { email: string }) {
   const tabs: { id: Tab; label: string; badge?: number | null }[] = [
     { id: 'tickets', label: 'Tickets', badge: openCount },
     { id: 'analytics', label: 'Analytics' },
+    { id: 'drivers', label: 'Chauffeurs' },
   ];
 
   return (
@@ -145,6 +147,9 @@ function Console({ email }: { email: string }) {
       </div>
       <div className={tab === 'analytics' ? 'flex min-h-0 flex-1' : 'hidden'}>
         {tab === 'analytics' && <AnalyticsView />}
+      </div>
+      <div className={tab === 'drivers' ? 'flex min-h-0 flex-1' : 'hidden'}>
+        {tab === 'drivers' && <DriversView />}
       </div>
     </main>
   );
