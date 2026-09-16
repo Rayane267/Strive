@@ -4,6 +4,7 @@ import Reveal from './components/Reveal';
 import ScanShowcase from './components/ScanShowcase';
 import Pricing from './components/Pricing';
 import Faq from './components/Faq';
+import { STORE_LINKS } from '../lib/stores';
 
 const features = [
   { k: '01', title: 'Scan en 2 secondes', desc: 'Capture l\'offre, Strive la lit par OCR et rend son verdict — sans quitter ton app VTC.' },
@@ -232,26 +233,50 @@ export default function Home() {
 
 function StoreBadge({ store }: { store: 'apple' | 'google' }) {
   const isApple = store === 'apple';
-  return (
-    <a
-      href="#"
-      className="store-badge glass group flex items-center gap-3 rounded-2xl px-5 py-3"
-    >
+  const href = STORE_LINKS[store];
+  const name = isApple ? 'App Store' : 'Google Play';
+
+  const inner = (
+    <>
       {isApple ? (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-fg">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-fg" aria-hidden="true">
           <path d="M17.05 12.04c-.03-2.6 2.12-3.84 2.21-3.9-1.2-1.76-3.08-2-3.75-2.03-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.89-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.78 1.3 10.33.86 1.25 1.89 2.65 3.23 2.6 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.39.81 1.4-.02 2.29-1.27 3.15-2.53 1-1.45 1.41-2.86 1.43-2.93-.03-.01-2.74-1.05-2.77-4.17zM14.62 4.47c.72-.87 1.2-2.08 1.07-3.29-1.03.04-2.28.69-3.02 1.56-.66.77-1.24 2-1.08 3.18 1.15.09 2.32-.58 3.03-1.45z" />
         </svg>
       ) : (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-signal">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-signal" aria-hidden="true">
           <path d="M3.6 2.3c-.2.2-.3.5-.3.9v17.6c0 .4.1.7.3.9l.1.1 9.9-9.9v-.2L3.6 2.3zM17.1 15.3l-3.3-3.3 3.3-3.3 4 2.3c1.1.6 1.1 1.7 0 2.3l-4 2zM13.4 12l-9.3 9.3c.4.4 1 .4 1.7 0l11-6.3-3.4-3zM5.8 2.4l7.6 7.6 3.4-3L6.5 2.4c-.7-.4-1.3-.4-1.7 0z" />
         </svg>
       )}
       <span className="text-left leading-tight">
         <span className="block font-mono text-[9px] uppercase tracking-widest text-muted">
-          {isApple ? 'Sur l\'' : 'Sur '}
+          {href ? (isApple ? 'Sur l\'' : 'Sur ') : 'Bientôt sur'}
         </span>
-        <span className="block font-display text-sm font-bold">{isApple ? 'App Store' : 'Google Play'}</span>
+        <span className="block font-display text-sm font-bold">{name}</span>
       </span>
+    </>
+  );
+
+  // Pas encore publiée : badge informatif, non cliquable (aucun lien mort).
+  if (!href) {
+    return (
+      <span
+        aria-label={`Strive bientôt disponible sur ${name}`}
+        className="glass flex cursor-default items-center gap-3 rounded-2xl px-5 py-3 opacity-70"
+      >
+        {inner}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Télécharger Strive sur ${name}`}
+      className="store-badge glass group flex items-center gap-3 rounded-2xl px-5 py-3"
+    >
+      {inner}
     </a>
   );
 }

@@ -22,12 +22,22 @@ const freeFeatures = [
   'Historique du jour seulement',
 ];
 
+// Source de vérité unique : le pourcentage d'économie et l'équivalent mensuel
+// sont dérivés des prix, pour qu'aucune annonce de réduction ne puisse diverger
+// des tarifs réellement facturés.
+const MONTHLY_PRICE = 9.99;
+const YEARLY_PRICE = 89.99;
+const SAVING_PERCENT = Math.round((1 - YEARLY_PRICE / (MONTHLY_PRICE * 12)) * 100);
+const eur = (n: number) => n.toFixed(2).replace('.', ',') + ' €';
+
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
 
-  const price = yearly ? '89,99 €' : '9,99 €';
+  const price = eur(yearly ? YEARLY_PRICE : MONTHLY_PRICE);
   const cycle = yearly ? '/an' : '/mois';
-  const equiv = yearly ? 'soit 7,49 € / mois' : 'Sans engagement';
+  const equiv = yearly
+    ? `soit ${eur(YEARLY_PRICE / 12)} / mois`
+    : 'Sans engagement';
 
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-7xl scroll-mt-28 px-5 py-32 sm:px-8">
@@ -58,7 +68,7 @@ export default function Pricing() {
           Annuel
         </span>
         <span className="rounded-full border border-amber/40 bg-amber/10 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-amber">
-          −33%
+          −{SAVING_PERCENT}%
         </span>
       </Reveal>
 

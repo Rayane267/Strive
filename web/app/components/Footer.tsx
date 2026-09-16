@@ -27,6 +27,7 @@ export default function Footer() {
               { label: 'Contact', href: 'mailto:contact@striveapp.fr' },
             ]} />
             <FooterCol title="Légal" links={[
+              { label: 'Mentions légales', href: '/mentions-legales' },
               { label: 'Confidentialité', href: '/privacy' },
               { label: 'CGU', href: '/terms' },
             ]} />

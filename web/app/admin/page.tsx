@@ -89,15 +89,18 @@ function Login() {
     <Shell>
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1311] p-8 text-left">
         <h1 className="text-xl font-bold text-white">Strive — Admin support</h1>
-        <p className="mt-1 text-sm text-white/50">Connecte-toi avec ton compte administrateur.</p>
-        <label className="mt-6 block text-xs font-semibold uppercase tracking-wide text-white/50">Identifiant</label>
-        <input type="text" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin"
+        <p className="mt-1 text-sm text-white/60">Connecte-toi avec ton compte administrateur.</p>
+        <label htmlFor="admin-id" className="mt-6 block text-xs font-semibold uppercase tracking-wide text-white/60">Identifiant</label>
+        <input id="admin-id" type="text" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin"
           autoCapitalize="none" autoComplete="username"
+          aria-invalid={!!err} aria-describedby={err ? 'admin-error' : undefined}
           className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-[#00E676]/50" />
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-white/50">Mot de passe</label>
-        <input type="password" value={pw} onChange={e => setPw(e.target.value)} required
+        <label htmlFor="admin-pw" className="mt-4 block text-xs font-semibold uppercase tracking-wide text-white/60">Mot de passe</label>
+        <input id="admin-pw" type="password" value={pw} onChange={e => setPw(e.target.value)} required
+          autoComplete="current-password" minLength={8}
+          aria-invalid={!!err} aria-describedby={err ? 'admin-error' : undefined}
           className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-[#00E676]/50" />
-        {err && <p className="mt-3 text-sm text-[#FF5A4D]">{err}</p>}
+        {err && <p id="admin-error" role="alert" className="mt-3 text-sm text-[#FF5A4D]">{err}</p>}
         <button disabled={busy} className="mt-6 w-full rounded-lg bg-[#00E676] py-2.5 font-bold text-[#05140c] disabled:opacity-60">
           {busy ? '…' : 'Se connecter'}
         </button>
