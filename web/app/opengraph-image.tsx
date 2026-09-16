@@ -1,6 +1,8 @@
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
+// Pas de `runtime = 'edge'` : sur Next 16 il desactive la generation statique
+// de l'image, qui repasse alors par une fonction a chaque crawler. Rendue au
+// build, elle est servie depuis le CDN et ne peut plus echouer en ligne.
 export const alt = 'Strive — Sache. Décide. Gagne.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';

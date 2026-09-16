@@ -1,6 +1,12 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import Waitlist from './Waitlist';
 import './waitlist.css';
+
+// Inter ne sert qu'ici : déclarée dans la page, Next ne la charge que sur
+// cette route. Déclarée dans le layout, elle aurait pesé sur l'accueil, qui
+// ne s'en sert pas.
+const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--f-inter' });
 
 // Date d'ouverture : surchargeable sans redéploiement via l'env Vercel
 // NEXT_PUBLIC_LAUNCH_DATE (ISO 8601 avec fuseau).
@@ -25,7 +31,7 @@ export const viewport: Viewport = { themeColor: '#080a09' };
 
 export default function WaitlistPage() {
   return (
-    <div className="wl">
+    <div className={`wl ${inter.variable}`}>
       <div className="wl-bg" aria-hidden="true" />
       <div className="wl-noise" aria-hidden="true" />
 

@@ -87,7 +87,10 @@ export default function Waitlist({ target }: { target: string }) {
 
       <h1 className="wl-title">Coming soon!</h1>
 
-      <div className="wl-countdown" id="wl-countdown" aria-live="polite">
+      {/* Pas d'aria-live ici : le compteur change chaque seconde, et une
+          region live le ferait relire en boucle par un lecteur d'ecran,
+          couvrant tout le reste de la page. */}
+      <div className="wl-countdown" id="wl-countdown">
         {UNITS.map((u, i) => (
           <div key={u.key} style={{ display: 'contents' }}>
             <div className="wl-cd-cell">

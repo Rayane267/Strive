@@ -1,6 +1,29 @@
 import type { Metadata } from 'next';
+import {
+  Bricolage_Grotesque,
+  Hanken_Grotesk,
+  Instrument_Serif,
+  JetBrains_Mono,
+} from 'next/font/google';
 import './globals.css';
 import { jsonLdGraph, organizationSchema, websiteSchema, SITE_URL } from './lib/schema';
+
+// Auto-hébergées et préchargées par Next : les fichiers partent du même
+// domaine que la page, dans le même build. Le <link> Google qui vivait ici
+// imposait deux connexions tierces (fonts.googleapis puis fonts.gstatic) et
+// une feuille bloquante avant le premier pixel — sur un réseau mobile, c'est
+// le titre qui attend. `display: swap` garde le texte lisible entre-temps.
+const display = Bricolage_Grotesque({ subsets: ['latin'], display: 'swap', variable: '--f-display' });
+const body = Hanken_Grotesk({ subsets: ['latin'], display: 'swap', variable: '--f-body' });
+const serif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--f-serif',
+});
+const mono = JetBrains_Mono({ subsets: ['latin'], display: 'swap', variable: '--f-mono' });
+const fontVars = [display, body, serif, mono].map((f) => f.variable).join(' ');
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -43,14 +66,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={fontVars}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
+        {/* Sans JS, IntersectionObserver ne tourne jamais et `.reveal` reste à
+            `opacity: 0` : la page entière serait blanche. Le repli rend le
+            contenu tel quel, animation en moins. */}
+        <noscript>
+          <style>{`.reveal{opacity:1;transform:none}`}</style>
+        </noscript>
         {/* Entités de site (Organization + WebSite) : présentes sur toutes les
             pages pour que les moteurs rattachent l'éditeur au domaine. Le
             balisage produit (MobileApplication, FAQPage) est sur l'accueil. */}

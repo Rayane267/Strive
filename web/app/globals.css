@@ -14,10 +14,14 @@
   --color-muted: #8b958e;
   --color-faint: #5b655e;
 
-  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
-  --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Les quatre familles sont auto-hébergées par next/font (app/layout.tsx) :
+     --f-* est la variable qu'il génère, le reste est la pile de repli. Plus de
+     feuille de style Google en tête de page, donc plus de requête bloquante
+     vers un domaine tiers avant le premier rendu. */
+  --font-display: var(--f-display), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--f-body), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--f-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--f-mono), ui-monospace, monospace;
 }
 
 * {
