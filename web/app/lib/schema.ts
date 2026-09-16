@@ -11,7 +11,10 @@
 // Les ajouter dès que les fiches sont publiées.
 
 import { faqs } from '../data/faq';
-import { PREMIUM_LIVE } from '../data/plans';
+import { PREMIUM_LIVE, monthlyEquivalent, planById } from '../data/plans';
+
+const plus = planById('plus');
+const premium = planById('premium');
 
 export const SITE_URL = 'https://striveapp.fr';
 export const CONTACT_EMAIL = 'contact@striveapp.fr';
@@ -84,7 +87,7 @@ export const appSchema = {
     {
       '@type': 'Offer',
       name: 'Strive Plus — mensuel',
-      price: 9.99,
+      price: plus.amount.monthly,
       priceCurrency: 'EUR',
       description:
         "20 scans par jour, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
@@ -92,9 +95,9 @@ export const appSchema = {
     {
       '@type': 'Offer',
       name: 'Strive Plus — annuel',
-      price: 89.99,
+      price: plus.amount.yearly,
       priceCurrency: 'EUR',
-      description: "Toutes les fonctions Strive Plus, soit 7,49 € par mois. Essai gratuit de 7 jours.",
+      description: `Toutes les fonctions Strive Plus, soit ${monthlyEquivalent(plus)} par mois. Essai gratuit de 7 jours.`,
     },
     // Premium n'est déclaré qu'une fois réellement en vente : un Offer que la
     // page n'affiche pas est du balisage trompeur. Voir PREMIUM_LIVE.
@@ -103,7 +106,7 @@ export const appSchema = {
           {
             '@type': 'Offer',
             name: 'Strive Premium — mensuel',
-            price: 24.99,
+            price: premium.amount.monthly,
             priceCurrency: 'EUR',
             description:
               'Tout Strive Plus, sans limite : scans illimités, historique et statistiques sans limite de date, support prioritaire.',
@@ -111,9 +114,9 @@ export const appSchema = {
           {
             '@type': 'Offer',
             name: 'Strive Premium — annuel',
-            price: 219.99,
+            price: premium.amount.yearly,
             priceCurrency: 'EUR',
-            description: 'Toutes les fonctions Strive Premium, soit 18,33 € par mois.',
+            description: `Toutes les fonctions Strive Premium, soit ${monthlyEquivalent(premium)} par mois.`,
           },
         ]
       : []),

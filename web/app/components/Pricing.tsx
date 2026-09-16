@@ -2,7 +2,14 @@
 
 import { useState } from 'react';
 import Reveal from './Reveal';
-import { COMPARISON, PLANS, PREMIUM_LIVE, type Cycle } from '../data/plans';
+import {
+  COMPARISON,
+  PLANS,
+  PREMIUM_LIVE,
+  SAVINGS_LABEL,
+  yearlyReference,
+  type Cycle,
+} from '../data/plans';
 
 export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>('monthly');
@@ -40,12 +47,14 @@ export default function Pricing() {
           ))}
         </div>
         <span className="rounded-full border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-amber">
-          3 mois offerts
+          {SAVINGS_LABEL}
         </span>
       </Reveal>
 
-      {/* Paliers */}
-      <div className={`mt-12 grid gap-5 md:items-stretch ${PREMIUM_LIVE ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+      {/* Paliers — trois colonnes seulement à partir de `lg`. À 768px, trois
+          cartes laissent ~157px de contenu utile une fois le `p-8` retiré :
+          « 159,99 € » en `text-5xl` y déborde. Deux colonnes puis trois. */}
+      <div className={`mt-12 grid gap-5 md:items-stretch ${PREMIUM_LIVE ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>
         {PLANS.map((plan, i) => (
           <Reveal
             key={plan.id}
@@ -74,11 +83,19 @@ export default function Pricing() {
               </h3>
               <p className="mt-1 max-w-[15rem] text-sm text-muted">{plan.tagline}</p>
 
-              <div className="mt-7 flex items-baseline gap-1.5">
+              <div className="mt-7 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
                 <span className="font-display text-5xl font-extrabold tracking-[-0.03em]">
                   {plan.price[cycle]}
                 </span>
                 <span className="text-muted">{plan.suffix[cycle]}</span>
+                {yearly && yearlyReference(plan) && (
+                  <span className="text-sm text-faint">
+                    {/* Lu à voix haute, un prix barré sans mise en garde passe pour
+                        LE prix. Le « au lieu de » n'est là que pour l'oreille. */}
+                    <span className="sr-only">au lieu de </span>
+                    <s>{yearlyReference(plan)}</s>
+                  </span>
+                )}
               </div>
               <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-faint">
                 {plan.note[cycle]}
@@ -125,7 +142,9 @@ export default function Pricing() {
       <Reveal delay={160} className="mt-20">
         <h3 className="font-display text-xl font-bold tracking-[-0.02em]">Le détail, ligne par ligne</h3>
         <div className="mt-6 -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
-          <table className="w-full min-w-[30rem] border-collapse text-sm">
+          <table
+            className={`w-full border-collapse text-sm ${PREMIUM_LIVE ? 'min-w-[36rem]' : 'min-w-[30rem]'}`}
+          >
             <thead>
               <tr className="text-left">
                 <th className="w-2/5 pb-4 font-mono text-[11px] font-medium uppercase tracking-widest text-faint">

@@ -4,14 +4,14 @@
 // est traité comme du balisage trompeur.
 
 /**
- * Strive Premium est entièrement écrit — cartes, comparatif, balisage, FAQ —
- * mais ne se vend qu'un à deux mois après le lancement de l'app. Tant que ce
- * booléen est `false`, le site ne le mentionne nulle part : ni carte, ni colonne
- * de comparatif, ni Offer JSON-LD, ni ligne dans llms.txt ou les CGU.
+ * Strive Premium est en vente : l'app expose bien `strive_premium_monthly` /
+ * `strive_premium_yearly` et l'entitlement `premium` (`src/services/iapService.ts:12`),
+ * donc les cartes, le comparatif, le balisage Offer, la FAQ et les CGU peuvent
+ * l'annoncer sans promettre ce qui ne s'achète pas.
  *
- * Le jour du lancement, il n'y a qu'une chose à faire ici : passer à `true`.
+ * Repasser à `false` suffit à le retirer de TOUT le site d'un coup.
  */
-export const PREMIUM_LIVE = false;
+export const PREMIUM_LIVE = true;
 
 export type Cycle = 'monthly' | 'yearly';
 
@@ -32,11 +32,34 @@ export type Plan = {
   tag?: string;
 };
 
-// 89,99 € = 9 mensualités de 9,99 € ; 219,99 € < 9 × 24,99 €. Dans les deux cas
-// l'annuel revient à payer neuf mois pour douze — « 3 mois offerts » est donc
-// littéralement vrai, là où le « −33 % » affiché jusqu'ici ne l'était pas
-// (89,99 € sur 119,88 €, c'est −25 %).
-export const ALL_PLANS: Plan[] = [
+// Combien de mensualités l'annuel fait réellement payer, et l'équivalent mensuel
+// qui va sous le prix. Les deux se calculent ici, à partir des seuls montants :
+// les chaînes écrites à la main (« soit 7,49 € par mois », « 3 mois offerts »)
+// ont survécu à un changement de grille de trop. Avec la grille App Store
+// actuelle, Plus fait payer 9 mois sur 12 (89,99 ÷ 9,99) et Premium 8
+// (159,99 ÷ 19,99, la promo posée sur l'annuel) : 3 et 4 mois offerts.
+const eur = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
+
+/** Équivalent mensuel d'un tarif annuel, arrondi au centime. */
+export const monthlyEquivalent = (p: Plan) => eur(p.amount.yearly / 12);
+
+/**
+ * Douze mensualités, barrées à côté du tarif annuel. Sans ce repère, « 159,99 € »
+ * se lit comme huit fois plus cher que « 19,99 € » au lieu de quatre mois de
+ * moins — c'est le repère que l'app pose déjà sur sa carte annuelle
+ * (`src/screens/SubscriptionScreen.tsx:527`). Rendu `null` quand l'annuel
+ * n'économise rien : un prix barré qui vaut le prix affiché est un faux rabais.
+ */
+export const yearlyReference = (p: Plan) =>
+  p.amount.monthly > 0 && p.amount.yearly < p.amount.monthly * 12
+    ? eur(p.amount.monthly * 12)
+    : null;
+
+/** Mensualités épargnées sur un an : 12 − (annuel ÷ mensuel). */
+export const monthsFree = (p: Plan) =>
+  p.amount.monthly > 0 ? Math.round(12 - p.amount.yearly / p.amount.monthly) : 0;
+
+const RAW_PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Gratuit',
@@ -62,7 +85,7 @@ export const ALL_PLANS: Plan[] = [
     price: { monthly: '9,99 €', yearly: '89,99 €' },
     amount: { monthly: 9.99, yearly: 89.99 },
     suffix: { monthly: '/mois', yearly: '/an' },
-    note: { monthly: 'Sans engagement', yearly: 'soit 7,49 € par mois' },
+    note: { monthly: 'Sans engagement', yearly: '' },
     points: [
       '20 scans par jour',
       'Tes seuils €/h et €/km, pas les nôtres',
@@ -82,10 +105,10 @@ export const ALL_PLANS: Plan[] = [
     id: 'premium',
     name: 'Strive Premium',
     tagline: 'Pour ceux qui scannent toute la journée.',
-    price: { monthly: '24,99 €', yearly: '219,99 €' },
-    amount: { monthly: 24.99, yearly: 219.99 },
+    price: { monthly: '19,99 €', yearly: '159,99 €' },
+    amount: { monthly: 19.99, yearly: 159.99 },
     suffix: { monthly: '/mois', yearly: '/an' },
-    note: { monthly: 'Sans engagement', yearly: 'soit 18,33 € par mois' },
+    note: { monthly: 'Sans engagement', yearly: '' },
     points: [
       'Tout ce que contient Plus',
       'Scans illimités',
@@ -97,7 +120,28 @@ export const ALL_PLANS: Plan[] = [
   },
 ];
 
+// `note.yearly` est laissée vide dans la liste au-dessus : elle se déduit du
+// montant annuel, et une valeur recopiée à la main finirait par le contredire.
+export const ALL_PLANS: Plan[] = RAW_PLANS.map((p) =>
+  p.amount.yearly > 0
+    ? { ...p, note: { ...p.note, yearly: `soit ${monthlyEquivalent(p)} par mois` } }
+    : p,
+);
+
 export const PLANS = ALL_PLANS.filter((p) => p.id !== 'premium' || PREMIUM_LIVE);
+
+export const planById = (id: Plan['id']) => ALL_PLANS.find((p) => p.id === id)!;
+
+// La pastille de la section Tarifs. Les paliers n'offrent pas le même nombre de
+// mois (3 sur Plus, 4 sur Premium via la promo annuelle) : annoncer le plus
+// grand sans « jusqu'à » promettrait à un futur abonné Plus un mois qu'il
+// n'aura pas.
+const FREE_MONTHS = PLANS.map(monthsFree).filter((m) => m > 0);
+const MAX_FREE = Math.max(0, ...FREE_MONTHS);
+export const SAVINGS_LABEL =
+  FREE_MONTHS.length > 1 && new Set(FREE_MONTHS).size > 1
+    ? `Jusqu'à ${MAX_FREE} mois offerts`
+    : `${MAX_FREE} mois offerts`;
 
 type ComparisonRow = { label: string; free: string; plus: string; premium: string };
 
