@@ -29,7 +29,7 @@ app/
 ├── error.tsx           # écran d'erreur client
 ├── globals.css         # thème de marque + utilitaires (glow, glass, reveal)
 ├── components/         # Header, Footer, Pricing, Faq, PhoneMockup, Reveal, Logo
-├── admin/              # console support (auth Supabase, noindex)
+├── admin/              # console support : onglets Tickets + Analytics (noindex)
 └── (legal)/            # /privacy, /terms, /mentions-legales
 lib/
 ├── stores.ts           # URLs App Store / Google Play
@@ -50,6 +50,7 @@ Esthétique éditoriale × instrument automobile/HUD.
 - Mesure d'audience **sans cookie** (Vercel Web Analytics + Speed Insights) → pas de bannière de consentement requise. Ajouter un outil à cookies obligerait à en mettre une.
 - Pages légales obligatoires : `/mentions-legales` (LCEN), `/privacy` (RGPD), `/terms`.
 - `/admin` est en `noindex` et exclue du `robots.txt` ; sa sécurité réelle repose sur les **policies RLS Supabase**, pas sur le contrôle `is_admin` côté client.
+- L'onglet Analytics passe par le RPC `admin_analytics` (migration `20260916_admin_analytics.sql`), `SECURITY DEFINER` et gardé par `is_admin()`. Il ne renvoie que des compteurs et des moyennes : aucune ligne `rides`, `profiles` ou `scan_events` n'atteint le navigateur. Nécessaire, car `scan_events` est en RLS « chacun ne voit que ses lignes » — un agrégat parc n'est pas lisible depuis le client.
 
 ## À personnaliser avant lancement
 
