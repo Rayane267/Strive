@@ -28,6 +28,7 @@ app/
 ├── globals.css         # thème de marque + utilitaires (glow, glass, reveal)
 ├── components/         # Header, Footer, Pricing, Faq, PhoneMockup, Reveal, Logo
 ├── waitlist/           # /waitlist (coming soon + compte à rebours + inscription)
+├── admin/              # console support : onglets Tickets + Analytics (noindex)
 └── (legal)/            # /privacy et /terms
 ```
 
@@ -72,3 +73,10 @@ Esthétique éditoriale × instrument automobile/HUD.
 - Email de contact (footer + pages légales) : `bouboullover6@gmail.com`.
 - `metadataBase` dans `layout.tsx` (actuellement `https://strive.app`).
 - Visuel OpenGraph (`/og-image`) si besoin d'un aperçu de partage.
+- `/admin` est en `noindex` et exclue du `robots.txt` ; sa sécurité réelle repose sur les
+  **policies RLS Supabase**, pas sur le contrôle `is_admin` côté client.
+- L'onglet Analytics passe par le RPC `admin_analytics` (migration
+  `20260916_admin_analytics.sql`), `SECURITY DEFINER` et gardé par `is_admin()`. Il ne
+  renvoie que des compteurs et des moyennes : aucune ligne `profiles` ou `scan_events`
+  n'atteint le navigateur. Nécessaire, car ces tables sont en RLS « chacun ne voit que
+  ses lignes » — un agrégat parc n'y est pas lisible depuis le client.
