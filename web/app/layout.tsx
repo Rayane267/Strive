@@ -1,10 +1,12 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import {
   Bricolage_Grotesque,
   Hanken_Grotesk,
   Instrument_Serif,
   JetBrains_Mono,
 } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 import { jsonLdGraph, organizationSchema, websiteSchema, SITE_URL } from './lib/schema';
 
@@ -64,6 +66,18 @@ export const metadata: Metadata = {
   },
 };
 
+// `colorScheme: dark` evite que le navigateur repeigne les controles de
+// formulaire en clair sur un fond quasi noir, et `viewportFit: cover` rend
+// les bords sur les ecrans a encoche. `themeColor` teinte la barre du
+// navigateur mobile a la couleur du fond.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  colorScheme: 'dark',
+  themeColor: '#080A09',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={fontVars}>
@@ -84,7 +98,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="grain">{children}</body>
+      <body className="grain">
+        {children}
+        {/* Mesure d'audience sans cookie ni identifiant persistant : aucune
+            bannière de consentement requise. */}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }

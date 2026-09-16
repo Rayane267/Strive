@@ -12,7 +12,7 @@
   --color-danger: #ff5a4d;
   --color-fg: #eef3ef;
   --color-muted: #8b958e;
-  --color-faint: #5b655e;
+  --color-faint: #78827a;
 
   /* Les quatre familles sont auto-hébergées par next/font (app/layout.tsx) :
      --f-* est la variable qu'il génère, le reste est la pile de repli. Plus de

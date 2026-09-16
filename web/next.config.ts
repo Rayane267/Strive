@@ -1,28 +1,60 @@
 import type { NextConfig } from 'next';
 
+const isDev = process.env.NODE_ENV === 'development';
+
+/**
+ * CSP volontairement lisible plutôt que minimale :
+ * - `unsafe-inline` en style est imposé par Tailwind + les `style={{…}}` de la
+ *   landing (animations décalées) ;
+ * - `unsafe-eval` n'est requis que par le HMR de `next dev` ;
+ * - Vercel Analytics / Speed Insights servent leur script en same-origin
+ *   (`/_vercel/…`) et envoient leurs beacons vers `*.vercel-insights.com` ;
+ * - `*.supabase.co` couvre l'auth et les requêtes de la console `/admin`.
+ */
+const csp = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+  'upgrade-insecure-requests',
+].join('; ');
+
+const securityHeaders = [
+  // La redirection http→https est faite par la plateforme ; HSTS interdit au
+  // navigateur de retenter en clair ensuite (2 ans, sous-domaines inclus).
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'Content-Security-Policy', value: csp },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
-  // Le dépôt contient deux package-lock.json : celui de l'app React Native à la
-  // racine et celui du site ici. Sans racine explicite, Turbopack remonte au
-  // premier lockfile trouvé et prend D:/…/strive comme racine du projet — les
-  // chemins de sortie et le tracing des fichiers partent alors de l'app mobile.
-  // La racine, c'est ce dossier.
+  // Le depot contient deux package-lock.json : celui de l'app React Native a
+  // la racine et celui du site ici. Sans racine explicite, Turbopack remonte
+  // au premier lockfile trouve et prend le dossier de l'app mobile comme
+  // racine du projet — les chemins de sortie et le tracing des fichiers en
+  // decoulent. La racine, c'est ce dossier.
   turbopack: { root: __dirname },
 
-  // Les en-têtes de sécurité ne coûtent rien à servir et ferment les usages où
-  // le site est encadré par un tiers ou son référent fuit vers l'extérieur.
+  poweredByHeader: false,
+  images: {
+    // Sert AVIF/WebP aux navigateurs qui les acceptent.
+    formats: ['image/avif', 'image/webp'],
+  },
+
   async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-        ],
-      },
-    ];
+    return [{ source: '/:path*', headers: securityHeaders }];
   },
 };
 

@@ -23,12 +23,18 @@ npm start        # serveur de production
 
 ```
 app/
-├── layout.tsx          # métadonnées, polices, SEO/OpenGraph
+├── layout.tsx          # métadonnées, polices (next/font), analytics, SEO/OpenGraph
 ├── page.tsx            # landing (hero, features, étapes, stats, CTA)
+├── not-found.tsx       # 404 personnalisée
+├── error.tsx           # écran d'erreur client
 ├── globals.css         # thème de marque + utilitaires (glow, glass, reveal)
 ├── components/         # Header, Footer, Pricing, Faq, PhoneMockup, Reveal, Logo
 ├── waitlist/           # /waitlist (coming soon + compte à rebours + inscription)
-└── (legal)/            # /privacy et /terms
+├── admin/              # console support : onglets Tickets + Analytics (noindex)
+└── (legal)/            # /privacy, /terms, /mentions-legales
+lib/
+├── stores.ts           # URLs App Store / Google Play
+└── supabaseClient.ts   # client navigateur (clé anon, sécurité par RLS)
 ```
 
 ## Liste d'attente (`/waitlist`)
@@ -62,13 +68,21 @@ garde sa DA verte.
 
 Esthétique éditoriale × instrument automobile/HUD.
 
-- **Palette** : canvas quasi-noir `#080A09`, surfaces `#0F1311`/`#161C18`, vert signal `#00E676` (GO), ambre `#FFC24B` (accent valeur), rouge `#FF5A4D` (refus).
-- **Typographie** : Bricolage Grotesque (display), Hanken Grotesk (corps), JetBrains Mono (data/labels).
+- **Palette** : canvas quasi-noir `#080A09`, surfaces `#0F1311`/`#161C18`, vert signal `#00E676` (GO), ambre `#FFC24B` (accent valeur), rouge `#FF5A4D` (refus). Tous les tons de texte passent le contraste WCAG AA sur le canvas.
+- **Typographie** : Bricolage Grotesque (display), Hanken Grotesk (corps), JetBrains Mono (data/labels), Instrument Serif (accents). Auto-hébergées via `next/font/google`.
 - **Détails** : grain SVG, lignes de grille blueprint, jauge €/h animée (`InstrumentCluster`), marquee, reveals au scroll, chiffres surdimensionnés. Tout en `prefers-reduced-motion`.
 
-## À personnaliser
+## Sécurité & conformité
 
-- Liens des badges App Store / Google Play (`StoreBadge` dans `page.tsx`) — placeholders `#`.
-- Email de contact (footer + pages légales) : `bouboullover6@gmail.com`.
-- `metadataBase` dans `layout.tsx` (actuellement `https://strive.app`).
-- Visuel OpenGraph (`/og-image`) si besoin d'un aperçu de partage.
+- En-têtes définis dans `next.config.ts` : HSTS (2 ans, preload), CSP, `X-Frame-Options`,
+  `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP.
+- Mesure d'audience **sans cookie** (Vercel Web Analytics + Speed Insights) → pas de
+  bannière de consentement requise. Ajouter un outil à cookies obligerait à en mettre une.
+- Pages légales obligatoires : `/mentions-legales` (LCEN), `/privacy` (RGPD), `/terms`.
+- `/admin` est en `noindex` et exclue du `robots.txt` ; sa sécurité réelle repose sur les
+  **policies RLS Supabase**, pas sur le contrôle `is_admin` côté client.
+- L'onglet Analytics passe par le RPC `admin_analytics` (migration
+  `20260916_admin_analytics.sql`), `SECURITY DEFINER` et gardé par `is_admin()`. Il ne
+  renvoie que des compteurs et des moyennes : aucune ligne `profiles` ou `scan_events`
+  n'atteint le navigateur. Nécessaire, car ces tables sont en RLS « chacun ne voit que
+  ses lignes » — un agrégat parc n'y est pas lisible depuis le client.
