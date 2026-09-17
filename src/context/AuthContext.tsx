@@ -8,6 +8,8 @@ import { initPurchases, logoutPurchases, getStoreEntitlement, syncPurchasesWithS
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
 import { scannerService } from '../services/scanner';
 import { clearOfflineCache } from '../services/offlineService';
+import { getOrCreateDeviceId } from '../utils/deviceId';
+import { TOMTOM_API_KEY } from '@env';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '../types/database';
 
@@ -72,6 +74,32 @@ const reconcileWithStore = (
   }).catch(() => {});
 };
 
+/**
+ * Clé TomTom au natif, dès qu'une session existe.
+ *
+ * Elle ne partait QUE du montage du Dashboard. Un chauffeur qui scanne depuis
+ * Uber via le raccourci sans jamais ouvrir l'app — installation fraîche,
+ * réinstallation, App Group vidé — laissait le scanner sans clé : pas de
+ * géocodage, pas d'itinéraire, et les chiffres affichés par la plateforme
+ * repris tels quels comme s'ils avaient été mesurés. Le login est le premier
+ * instant où l'app est certaine d'avoir un chauffeur : c'est là que la clé doit
+ * partir, pas trois écrans plus loin.
+ *
+ * Le `if` reste silencieux, mais il ne l'est plus vis-à-vis de Sentry : un build
+ * sans clé est une panne de mesure sur 100 % des scans, et elle ne se voyait
+ * nulle part.
+ */
+const pushTomTomKey = () => {
+  if (!TOMTOM_API_KEY) {
+    Sentry.captureMessage('TomTom API key missing from build', {
+      level: 'error',
+      tags: { flow: 'scanner_config' },
+    });
+    return;
+  }
+  try { scannerService.setTomTomApiKey(TOMTOM_API_KEY); } catch {}
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -131,6 +159,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const initAuth = async () => {
       __DEV__ && console.log('[AUTH] Checking session...');
+      // AVANT la première requête REST : la résolution pose l'en-tête
+      // `x-device-id`, sur lequel le serveur applique le plafond de scans par
+      // appareil. Attendu, et pas lancé en parallèle — une course scannée app
+      // fermée est insérée dès la première synchro, et partirait sans en-tête.
+      // Un échec Keychain n'a pas à retenir l'authentification.
+      try { await getOrCreateDeviceId(); } catch {}
       try {
         const { data, error } = await supabase.auth.getSession();
 
@@ -150,6 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           Sentry.addBreadcrumb({ category: 'auth', message: 'Session restored', level: 'info' });
           // JWT au natif → édge function gemini-proxy autorise l'appel.
           try { scannerService.setSupabaseUserJwt(initialSession.access_token); } catch {}
+          pushTomTomKey();
           // Préchauffe le cache des limites tier (free=3, plus=15, premium=null).
           // Silencieux : si fetch échoue, fallback hardcodé pris.
           fetchPlanLimits().catch(() => {});
@@ -185,6 +220,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Sync JWT au natif à chaque event (SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED…) :
         // pas cher, et indispensable pour que la bulle scanner ait toujours un JWT frais.
         try { scannerService.setSupabaseUserJwt(currentSession.access_token); } catch {}
+        pushTomTomKey();
 
         // Heavy ops UNIQUEMENT sur SIGNED_IN : TOKEN_REFRESHED arrive ~1× / heure
         // et n'a pas besoin de relancer RevenueCat / FCM / profile. initAuth() a
