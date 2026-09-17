@@ -117,6 +117,12 @@ const DiagnosticsScreen = () => {
       // pré-contrôle refusait encore « quota d'appareil atteint » sur un appareil
       // que le serveur voit vierge. La lecture porte déjà le nouvel en-tête, donc
       // elle rend 0.
+      // L'EFFACEMENT D'ABORD. `setDeviceScanCount` garde le MAXIMUM entre le
+      // compteur local et la valeur du serveur — volontairement : des scans faits
+      // app fermée ont monté le local sans que la base le sache. Conséquence, il
+      // ne redescend jamais dans la journée : envoyer 0 sur un local à 3 laissait
+      // 3, et « Réinitialiser l'appareil » ne réinitialisait rien du tout.
+      scannerService.resetDeviceScanCount?.();
       try {
         const used = await fetchDeviceScanUsage();
         scannerService.setDeviceScanCount?.(used);

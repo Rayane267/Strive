@@ -175,6 +175,19 @@ class FloatingBubbleService : Service() {
         }
 
         /**
+         * Efface le compteur de scans de l'appareil. RÉSERVÉ AU RESET DE DIAGNOSTIC.
+         *
+         * `seedDeviceScanCount` garde le maximum entre le local et le serveur —
+         * des scans faits process mort ont monté le compteur sans que la base le
+         * sache. Le compteur ne redescend donc jamais dans la journée, sauf ici.
+         */
+        fun clearDeviceScanCount(ctx: android.content.Context) {
+            ctx.applicationContext
+                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
+                .edit().remove(DEVICE_COUNT_KEY).remove(DEVICE_DAY_KEY).apply()
+        }
+
+        /**
          * Rend le scan qui n'a rien donné.
          *
          * Le compteur est incrémenté AVANT l'appel TomTom — il fallait bien qu'il

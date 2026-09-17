@@ -539,6 +539,13 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         FloatingBubbleService.seedDeviceScanCount(reactContext.applicationContext, deviceUsed)
     }
 
+    /** Efface le compteur d'appareil — réservé au reset de Diagnostic.
+     *  Voir `FloatingBubbleService.clearDeviceScanCount`. */
+    @ReactMethod
+    fun resetDeviceScanCount() {
+        FloatingBubbleService.clearDeviceScanCount(reactContext.applicationContext)
+    }
+
 // ─── Native → JS (events) ────────────────────────────────────────────────────
 
     companion object {

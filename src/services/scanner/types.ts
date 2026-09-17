@@ -174,6 +174,9 @@ export interface ScannerService {
    *  Le natif retient le MAXIMUM entre cette valeur et son compteur local : la
    *  base peut être en retard sur des scans faits app fermée. */
   setDeviceScanCount(deviceUsed: number): void;
+  /** Efface le compteur de scans de l'appareil. Réservé au reset de Diagnostic :
+   *  `setDeviceScanCount` ne fait que monter, jamais descendre. */
+  resetDeviceScanCount?(): void;
 
   /** Acquitte un scan du journal natif : la course est en base. Tant qu'un scan
    *  n'est pas acquitté il est ré-émis à chaque relève — c'est ce qui garantit

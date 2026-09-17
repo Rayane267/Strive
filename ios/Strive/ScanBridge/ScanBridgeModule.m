@@ -36,6 +36,7 @@ RCT_EXTERN_METHOD(setSupabaseUserJwt:(NSString *)jwt)
 RCT_EXTERN_METHOD(setParserConfig:(NSString *)configJson)
 
 RCT_EXTERN_METHOD(setTomTomApiKey:(NSString *)key)
+RCT_EXTERN_METHOD(resetDeviceScanCount)
 
 RCT_EXTERN_METHOD(clearGeocodeCache)
 

@@ -52,6 +52,7 @@ export const scannerService: ScannerService = {
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
   setDeviceQuotaLimit: (freeLimit: number) => ScanBridge.setDeviceQuotaLimit?.(freeLimit),
   setDeviceScanCount: (deviceUsed: number) => ScanBridge.setDeviceScanCount?.(deviceUsed),
+  resetDeviceScanCount: () => ScanBridge.resetDeviceScanCount?.(),
   ackScan: (rideId: string) => ScanBridge.ackScan?.(rideId),
 
   getPendingRideDecisions: async () => {

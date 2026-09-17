@@ -192,6 +192,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.setDeviceScanCount?.(deviceUsed);
   },
 
+  resetDeviceScanCount: () => {
+    ScanBridge?.resetDeviceScanCount?.();
+  },
+
   setScannerEnabled: (enabled: boolean) => {
     // `?.` : un bundle JS peut tourner sur un binaire natif antérieur à l'export
     // de cette méthode (canaux EAS) — sans ça l'appel jetterait un TypeError.

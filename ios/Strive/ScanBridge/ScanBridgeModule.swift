@@ -742,6 +742,23 @@ class ScanBridgeModule: RCTEventEmitter {
     defaults.set(max(local, deviceUsed.intValue), forKey: "deviceScanCountToday")
   }
 
+  /// Efface le compteur de scans de l'appareil. RÉSERVÉ AU RESET DE DIAGNOSTIC.
+  ///
+  /// `setDeviceScanCount` prend délibérément le MAXIMUM entre le compteur local
+  /// et la valeur du serveur : des scans faits app fermée ont déjà monté le
+  /// compteur local sans que la base le sache, et les écraser rendrait des scans
+  /// que l'appareil a bel et bien consommés. Le compteur ne redescend donc jamais
+  /// dans la journée — sauf ici.
+  ///
+  /// Sans cette porte, « Réinitialiser l'appareil » ne réinitialisait rien : le
+  /// nouvel identifiant rendait bien 0 côté serveur, mais `max(3, 0)` laissait 3
+  /// sur le téléphone, et le pré-contrôle continuait de refuser.
+  @objc func resetDeviceScanCount() {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    defaults.removeObject(forKey: "deviceScanCountToday")
+    defaults.removeObject(forKey: "deviceScanCountDay")
+  }
+
   @objc func setScanQuota(_ countToday: NSNumber, limit: NSNumber, resetHour: NSNumber) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
     defaults.set(limit.intValue, forKey: "scanQuotaLimit")
