@@ -69,9 +69,10 @@ Ce fichier a deux moitiés :
 >
 > **3. Setting up and accessing the main features**
 >
-> A demo account is provided in the App Review Information section. It is
-> configured with a Premium subscription, so no purchase is needed to reach any
-> feature.
+> A demo account is provided in the App Review Information section. Premium
+> features are unlocked from the Subscription tab with a sandbox purchase — the
+> subscription flow is part of what we would like you to test. On the free tier
+> the app allows three ride analyses per day, which is by design.
 >
 > 1. Launch the app and sign in with the demo credentials (or with Sign in with
 >    Apple — account creation is open).
@@ -164,11 +165,12 @@ Ce fichier a deux moitiés :
       dort dans le dépôt pendant que le binaire part est la façon la plus simple
       de livrer une app qui marche en local et casse en revue.
 
-- [ ] **Le compte de démo est en Premium.** Ce n'est pas du confort : le palier
-      gratuit est à 3 scans par jour, et le plafond par appareil ne s'applique
-      QU'AUX comptes gratuits. Un reviewer sur un compte gratuit épuise ses
-      scans en trois gestes, puis se heurte à des refus qu'il lira comme des
-      bugs. En Premium, ni quota journalier ni plafond d'appareil.
+- [ ] **Le reviewer peut atteindre le Premium.** Choix retenu : il l'achète en
+      sandbox depuis l'écran Abonnement. À vérifier avant chaque soumission — si
+      l'achat échoue, il reste bloqué au palier
+      gratuit, soit 3 scans par jour. Repli possible sans toucher au palier :
+      `welcome_credits` n'est pas protégé par `protect_tier_fields` et passe outre
+      le quota journalier comme le plafond d'appareil.
 
 - [ ] **`REVENUECAT_ALLOW_SANDBOX=true` est TOUJOURS actif.** Le reviewer teste
       les achats en sandbox : le retirer avant la publication fait rejeter l'app.
