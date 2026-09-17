@@ -76,9 +76,53 @@ const RootNavigator = () => {
     Promise.all([
       AsyncStorage.getItem(ONBOARDING_SEEN_KEY),
       AsyncStorage.getItem(TUTORIAL_SEEN_KEY),
-    ]).then(([onb, tuto]) => {
-      if (onb !== '1') setShowOnboardingFirst(true);
+    ]).then(async ([onb, tuto]) => {
+      // LE TUTORIEL EST LOCAL, ET C'EST VOULU. Il fait installer le raccourci,
+      // qui vit sur l'APPAREIL : une réinstallation a pu le casser, et le
+      // rejouer est alors la bonne réponse. Un drapeau local dit exactement ça.
       if (tuto !== '1') setShowTutorialFirst(true);
+
+      if (onb === '1') {
+        setTutorialChecked(true);
+        return;
+      }
+
+      // L'ONBOARDING, LUI, APPARTIENT AU COMPTE.
+      //
+      // Ses réponses partent dans `preferences` (objectif mensuel, heures,
+      // charges) et il en dérive `min_hourly_rate` / `min_km_rate`. Le drapeau
+      // était pourtant local, donc effacé par une désinstallation : un chauffeur
+      // qui réinstalle, ou qui change de téléphone, le retraversait en entier et
+      // ses seuils étaient RÉÉCRITS par les valeurs calculées. Celui qui avait
+      // ajusté son seuil à la main — 32 €/h parce qu'il connaît son coin — le
+      // perdait sans rien demander, et ne le voyait qu'à ses verdicts, qui
+      // changeaient de couleur.
+      //
+      // `monthly_goal` n'a pas de valeur par défaut et n'est écrit que par
+      // l'onboarding : sa présence signe un parcours déjà fait. `min_hourly_rate`
+      // couvre le cas du chauffeur qui l'avait passé puis réglé ses seuils
+      // lui-même — lui non plus n'a rien à refaire.
+      let alreadyAnswered = false;
+      try {
+        const { data } = await supabase
+          .from('preferences')
+          .select('monthly_goal, min_hourly_rate')
+          .eq('id', user.id)
+          .maybeSingle();
+        alreadyAnswered =
+          !!data && (data.monthly_goal != null || data.min_hourly_rate != null);
+      } catch {
+        // Réseau coupé : on ne sait pas. Poser les questions à quelqu'un qui y a
+        // déjà répondu est désagréable ; les sauter à un nouveau chauffeur le
+        // laisse sans seuils, donc sans verdict utile. On les pose.
+      }
+
+      if (alreadyAnswered) {
+        // On note localement, pour ne pas redemander au compte à chaque lancement.
+        AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1').catch(() => {});
+      } else {
+        setShowOnboardingFirst(true);
+      }
       setTutorialChecked(true);
     });
   }, [user, profile?.first_name]);
