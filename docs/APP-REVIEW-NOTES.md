@@ -69,7 +69,14 @@ Ce fichier a deux moitiés :
 >
 > **3. Setting up and accessing the main features**
 >
-> A demo account is provided in the App Review Information section. Premium
+> **There is no demo username and password, because the app has no password
+> login.** Authentication is Sign in with Apple or Google Sign-In only. You can
+> create an account in a few seconds with your own Apple ID — Sign in with
+> Apple is the flow shown in the screen recording — and delete it from the
+> Profile tab when you are done. Deletion is immediate and removes the account
+> and its data.
+>
+> Premium
 > features are unlocked from the Subscription tab with a sandbox purchase — the
 > subscription flow is part of what we would like you to test. On the free tier
 > the app allows three ride analyses per day, which is by design.
