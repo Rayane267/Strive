@@ -7,7 +7,7 @@
  * - Notifications de nouvelles fonctionnalités
  */
 
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { navigateFromNotification } from '../navigation/navigationRef';
@@ -335,4 +335,54 @@ export async function unregisterPushToken(userId: string): Promise<void> {
   } catch (e) {
     __DEV__ && console.warn('[NOTIF] unregisterPushToken error:', e);
   }
+}
+
+/** Cette installation a-t-elle déjà vu la proposition douce ? */
+const SOFT_ASK_KEY = '@strive_push_soft_ask';
+
+/**
+ * Propose d'activer les notifications, APRÈS un moment où leur absence s'est
+ * fait sentir — typiquement une course refusée dont le chauffeur n'a rien su.
+ *
+ * POURQUOI UNE PROPOSITION ET PAS LA FENÊTRE SYSTÈME. iOS ne montre la sienne
+ * QU'UNE FOIS par installation : un « non » est définitif, et il ne se rattrape
+ * qu'en allant dans les Réglages. C'est pour ça que la connexion est le pire
+ * instant pour la déclencher — le chauffeur vient d'arriver, il n'a aucune
+ * raison de dire oui. Ici, il vient au contraire de perdre une course sans
+ * explication : la question a un sens, et sa réponse est éclairée.
+ *
+ * Un « plus tard » ne coûte RIEN : la fenêtre système n'a pas été tirée, elle
+ * reste disponible depuis l'interrupteur du Profil. C'est tout l'intérêt du
+ * pré-consentement.
+ *
+ * Ne s'affiche pas si le chauffeur a déjà tranché (`getPushChoice`), ni deux
+ * fois sur la même installation : une relance non sollicitée est un harcèlement,
+ * pas un rappel.
+ */
+export async function offerPushOptIn(userId: string): Promise<void> {
+  try {
+    if (await getPushChoice()) return;
+    if (await AsyncStorage.getItem(SOFT_ASK_KEY)) return;
+    await AsyncStorage.setItem(SOFT_ASK_KEY, '1');
+  } catch {
+    // AsyncStorage injoignable : on s'abstient plutôt que de risquer de reposer
+    // la question à chaque refus.
+    return;
+  }
+
+  // `require` paresseux et non import de tête : même idiome que plus haut dans
+  // ce fichier, qui évite d'attacher `i18n` au graphe de modules de ce service.
+  const i18n = require('../i18n').default;
+
+  Alert.alert(
+    i18n.t('notifications.optIn.title'),
+    i18n.t('notifications.optIn.body'),
+    [
+      { text: i18n.t('notifications.optIn.later'), style: 'cancel' },
+      {
+        text: i18n.t('notifications.optIn.enable'),
+        onPress: () => { registerPushToken(userId, true).catch(() => {}); },
+      },
+    ],
+  );
 }

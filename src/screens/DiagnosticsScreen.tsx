@@ -45,7 +45,8 @@ import { supabase } from '../services/supabase';
 import { useMarket } from '../hooks/useMarket';
 import { scannerService } from '../services/scanner';
 import { hapticLight } from '../utils/haptics';
-import { resetSignupCounters } from '../utils/deviceId';
+import { resetSignupCounters, getOrCreateDeviceId } from '../utils/deviceId';
+import { fetchDeviceScanUsage } from '../services/subscriptionService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
@@ -100,6 +101,27 @@ const DiagnosticsScreen = () => {
     setResetting(true);
     try {
       await resetSignupCounters(true);
+
+      // LE NOUVEL IDENTIFIANT DOIT ENTRER EN VIGUEUR TOUT DE SUITE.
+      //
+      // `resetSignupCounters` l'écrit dans le Keychain, mais l'en-tête
+      // `x-device-id` des requêtes REST garde l'ancien EN MÉMOIRE jusqu'au
+      // prochain démarrage. Le registre de scans et les RPC continuaient donc de
+      // voir le téléphone d'avant : l'« appareil neuf » annoncé par cet écran
+      // n'était vrai qu'après avoir tué l'app — exactement le genre de demi-vérité
+      // qui fait conclure à un bug pendant un test.
+      await getOrCreateDeviceId();
+
+      // Le compteur de scans NATIF vit dans l'App Group / les SharedPreferences,
+      // que le changement d'identifiant ne touche pas. Sans cette relecture, le
+      // pré-contrôle refusait encore « quota d'appareil atteint » sur un appareil
+      // que le serveur voit vierge. La lecture porte déjà le nouvel en-tête, donc
+      // elle rend 0.
+      try {
+        const used = await fetchDeviceScanUsage();
+        scannerService.setDeviceScanCount?.(used);
+      } catch {}
+
       Alert.alert(t('diagnostics.countersReset'), t('diagnostics.countersDone'));
     } finally {
       setResetting(false);
