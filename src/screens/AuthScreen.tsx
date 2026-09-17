@@ -22,9 +22,6 @@ import { strokeWidth } from '../theme/stroke';
 import { useTranslation } from 'react-i18next';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '@env';
 import {
-  enforceOAuthSignupQuota,
-  registerOAuthSignup,
-  enforceSignupQuota,
 } from '../utils/deviceId';
 import { FIELD_TOP } from '../theme/field';
 import SafeGradient from '../components/SafeGradient';
@@ -254,61 +251,6 @@ const AuthScreen = () => {
     return msg;
   };
 
-  /**
-   * Empreinte de l'identité, partagée par les deux barrières.
-   *
-   * Normalisée avant hachage (minuscules, espaces retirés) pour que le même
-   * compte hache pareil d'un fournisseur à l'autre et d'une session à l'autre —
-   * sinon un retour légitime ne serait pas reconnu comme tel. Miroir de
-   * `normalize_email` côté SQL pour la casse ; on ne va pas plus loin (les
-   * alias `+` de Gmail restent des identités distinctes ici, c'est le rôle de
-   * l'index unique sur `email_normalized` de les rapprocher).
-   */
-  const identityHash = (email?: string | null): string | undefined => {
-    const e = (email ?? '').trim().toLowerCase();
-    return e ? sha256(e) : undefined;
-  };
-
-  const checkNewUserQuota = async (
-    createdAt: string,
-    email?: string | null,
-  ) => {
-    const isNewUser = Date.now() - new Date(createdAt).getTime() < 60_000;
-    if (!isNewUser) return;
-
-    // L'empreinte fait la différence entre une NOUVELLE inscription et un
-    // RETOUR. Un chauffeur qui a supprimé son compte et revient avec la même
-    // adresse ne consomme aucun slot et n'est jamais refusé : sans ça, il était
-    // renvoyé sur la page de connexion au troisième aller-retour, pour avoir
-    // exercé un droit qu'on lui doit.
-    const hash = identityHash(email);
-
-    // Barrière 1 — locale (Keychain, survit à la désinstallation). Gratuite et
-    // disponible hors ligne, mais contournable : elle dissuade, elle n'arrête pas.
-    // Google et Apple partagent ce compteur, c'est bien un cumul par appareil.
-    try {
-      await enforceOAuthSignupQuota(hash);
-    } catch {
-      await supabase.auth.signOut();
-      throw new Error('device_signup_limit_reached');
-    }
-
-    // Barrière 2 — serveur (table device_signups). C'est elle qui fait autorité :
-    // le compte vit en base, pas dans le téléphone. Elle vérifie ET enregistre.
-    try {
-      await enforceSignupQuota(hash);
-    } catch (e: any) {
-      if (e?.message === 'device_signup_limit_reached') {
-        await supabase.auth.signOut();
-        throw new Error('device_signup_limit_reached');
-      }
-      // Réseau coupé ou RPC indisponible : on ne bloque pas une inscription
-      // légitime pour autant. La barrière locale a déjà fait son office.
-      __DEV__ && console.warn('[AUTH] quota serveur indisponible', e?.message);
-    }
-
-    await registerOAuthSignup(hash);
-  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -322,14 +264,14 @@ const AuthScreen = () => {
       );
       const idToken = userInfo.data?.idToken;
       if (idToken) {
-        const { data, error } = await supabase.auth.signInWithIdToken({
+        // `data` n'est plus lu ici : le plafond d'appareil se vérifie à la
+        // création du profil, pas au retour d'OAuth (cf. claimSignupSlot).
+        const { error } = await supabase.auth.signInWithIdToken({
           provider: 'google',
           token: idToken,
           ...(rawNonce ? { nonce: rawNonce } : {}),
         });
         if (error) throw error;
-        if (data.user)
-          await checkNewUserQuota(data.user.created_at, data.user.email);
       }
     } catch (error: any) {
       showToast({
@@ -377,7 +319,6 @@ const AuthScreen = () => {
           const isNewUser =
             Date.now() - new Date(data.user.created_at).getTime() < 60_000;
           if (isNewUser) {
-            await checkNewUserQuota(data.user.created_at, data.user.email);
             const displayName = [fullName?.givenName, fullName?.familyName]
               .filter(Boolean)
               .join(' ');

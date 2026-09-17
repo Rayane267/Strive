@@ -188,3 +188,29 @@ export function getRemainingScans(
   return fromPlan + safeWelcome + safeExtra;
 }
 
+
+/**
+ * Scans déjà consommés AUJOURD'HUI depuis cet appareil, tous comptes confondus.
+ *
+ * Sert à réamorcer le compteur natif : il vit dans l'App Group / les
+ * SharedPreferences, que la désinstallation efface, alors que le `device_id` du
+ * Keychain — sur lequel le serveur tient ses comptes — survit. Sans ce
+ * réamorçage, « supprime le compte, désinstalle, réinstalle, recrée » repartait
+ * d'un compteur vierge : le scan passait, l'OCR et Gemini étaient dépensés, et
+ * c'est seulement à l'insertion que le serveur refusait.
+ *
+ * Rend 0 en cas d'échec, et c'est volontaire : ce chiffre ne sert qu'à REFUSER
+ * plus tôt. Une lecture ratée doit laisser scanner — le serveur reste juge à
+ * l'insertion. Bloquer sur une panne réseau punirait un chauffeur qui n'a rien
+ * consommé.
+ */
+export async function fetchDeviceScanUsage(): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('device_scan_usage');
+    if (error) return 0;
+    const n = Number(data);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}

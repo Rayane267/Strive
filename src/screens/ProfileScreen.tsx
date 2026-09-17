@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
@@ -49,6 +49,7 @@ import { fetchRides, effectiveFare } from '../services/ridesService';
 import { getWeekStart } from '../utils/dateUtils';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { revokeAppleAccess } from '../services/appleRevoke';
+import { scannerService } from '../services/scanner';
 import * as Sentry from '@sentry/react-native';
 
 /// Taille des icônes de menu. 22 et non 20 : posées à nu, sans tuile pour les
@@ -130,8 +131,18 @@ const ProfileScreen = () => {
   // vient d'en faire dix.
   const [weekEarnings, setWeekEarnings] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!user?.id) return;
+  // Relu À CHAQUE RETOUR SUR L'ÉCRAN, et plus une seule fois au montage.
+  //
+  // L'onglet Profil n'est pas démonté quand on le quitte : le total était donc
+  // figé sur sa valeur du premier affichage. Un chauffeur qui acceptait trois
+  // courses au Dashboard puis revenait ici lisait encore ses gains d'avant, et
+  // seul un redémarrage complet de l'app les remettait à jour.
+  //
+  // `useFocusEffect` plutôt qu'un écouteur `AppState` : la carte doit suivre les
+  // courses acceptées DANS l'app, pas seulement le retour au premier plan. C'est
+  // le même choix qu'Analytics, qui recharge de la même façon.
+  const loadWeekEarnings = useCallback(() => {
+    if (!user?.id) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -160,6 +171,8 @@ const ProfileScreen = () => {
     })();
     return () => { cancelled = true; };
   }, [user?.id, market.currency]);
+
+  useFocusEffect(loadWeekEarnings);
 
   // Notifications : l'état affiché croise DEUX conditions, le jeton enregistré
   // ET la permission système.
@@ -345,6 +358,13 @@ const ProfileScreen = () => {
       if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
     } catch {}
 
+    // Et la file de décisions, qui survivait elle aussi : le chauffeur suivant
+    // sur ce téléphone rejouait les « Prise / Refusée » du précédent. Ici et
+    // dans la suppression de compte seulement — un départ voulu. L'écouteur de
+    // `AuthContext` couvre aussi les sessions expirées, où ces décisions doivent
+    // au contraire être conservées jusqu'au renouvellement du jeton.
+    try { scannerService.clearRideDecisions?.(); } catch {}
+
     try {
       await GoogleSignin.signOut();
     } catch (e) {
@@ -399,7 +419,11 @@ const ProfileScreen = () => {
       }
       const { error } = await supabase.rpc('delete_account');
       if (error) throw error;
-      try { await GoogleSignin.signOut(); } catch {}
+      // `delete_account` emporte les courses en cascade. Toute décision encore
+      // en file vise désormais une ligne qui n'existe plus : elle serait rejouée
+      // sous le compte suivant créé sur ce téléphone, contre des ids inconnus.
+      try { scannerService.clearRideDecisions?.(); } catch {}
+        try { await GoogleSignin.signOut(); } catch {}
       await supabase.auth.signOut();
     } catch (e: any) {
       Alert.alert(
@@ -1224,7 +1248,14 @@ const styles = StyleSheet.create({
   //
   // Aucune `fontFamily` n'est posée nulle part dans le projet : le rendu est
   // déjà San Francisco sur iOS et Roboto sur Android.
-  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700', marginBottom: space.tight },
+  // Pas de `marginBottom` : c'était l'écart qui séparait l'intitulé de son
+  // sous-titre, et les sous-titres ont été retirés (voir le rendu de la ligne).
+  // La marge orpheline restait comptée dans la hauteur du bloc de texte, que
+  // `menuRow` centre verticalement — le TEXTE se retrouvait donc assis une
+  // demi-marge au-dessus du centre, pendant que la pastille Plus, le chevron et
+  // la valeur, eux, étaient centrés pour de bon. D'où le décalage visible sur
+  // « Paramètres du véhicule », la seule ligne qui porte une pastille.
+  menuTitle: { color: colors.textMain, fontSize: 15, fontWeight: '700' },
   menuSub: { color: colors.textDimmed, fontSize: 12, fontWeight: '500' },
   menuValue: { color: colors.primary, fontSize: 14, fontWeight: '700', marginRight: space.sm },
   menuPlusBadge: { marginRight: space.sm },

@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   Keyboard,
@@ -20,6 +21,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useTranslation } from 'react-i18next';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
+import { claimSignupSlot } from '../utils/deviceId';
 import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
@@ -78,6 +80,12 @@ export default function ProfileSetupScreen() {
   const [dobYear, setDobYear]         = useState('');
   const [avatarUrl, setAvatarUrl]     = useState('');
   const [loading, setLoading]         = useState(false);
+  // Plafond d'appareil atteint : cet écran refuse au lieu de saisir. C'est ICI
+  // que le refus doit tomber — le compte existe déjà dans `auth.users` (Supabase
+  // l'écrit pendant l'échange OAuth, avant qu'on puisse dire non), et le seul
+  // moment où l'on peut encore l'arrêter sans le laisser à moitié vivant, c'est
+  // avant qu'il ait un profil.
+  const [blocked, setBlocked] = useState(false);
   const [dialPickerOpen, setDialPickerOpen] = useState(false);
   const [dialQuery, setDialQuery] = useState('');
 
@@ -97,7 +105,9 @@ export default function ProfileSetupScreen() {
   // Chaînage du clavier. `returnKeyType="next"` DESSINE la touche mais ne fait
   // rien tout seul : sans `onSubmitEditing`, le chauffeur appuyait sur « Suivant »
   // et le clavier se contentait de se fermer.
+  const firstNameRef = useRef<TextInput>(null);
   const lastNameRef = useRef<TextInput>(null);
+  const dayRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const monthRef = useRef<TextInput>(null);
   const yearRef  = useRef<TextInput>(null);
@@ -106,6 +116,25 @@ export default function ProfileSetupScreen() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
+
+      // Le créneau d'inscription se réserve ICI, pas à l'échange OAuth.
+      //
+      // Atteindre cet écran veut dire « ce compte n'a pas encore de profil »
+      // (`RootNavigator` n'y envoie que sur `!profile.first_name`), et ce
+      // critère-là ne vieillit pas. L'ancien contrôle, lui, ne s'armait que dans
+      // les soixante secondes suivant la création du compte : il suffisait de
+      // réessayer deux minutes plus tard pour que la garde sorte d'elle-même et
+      // que le 6ᵉ compte passe.
+      //
+      // Un retour avec une identité déjà connue de l'appareil ne consomme rien
+      // et n'est jamais refusé — voir `claimSignupSlot`.
+      // On ne bloque que sur LE motif. Un Keychain injoignable ou un réseau
+      // coupé ne doit jamais fermer la porte à un chauffeur légitime : le refus
+      // se paie en compte inutilisable, c'est trop cher pour une panne.
+      claimSignupSlot(user.email).catch((e: any) => {
+        if (e?.message === 'device_signup_limit_reached') setBlocked(true);
+      });
+
       const meta = user.user_metadata ?? {};
       const given  = meta.given_name  || meta.full_name?.givenName
         || (meta.name ?? meta.full_name ?? '').split(' ')[0] || '';
@@ -172,6 +201,28 @@ export default function ProfileSetupScreen() {
     }
   };
 
+  // Refus : la saisie ne s'affiche pas du tout. Le chauffeur n'a rien à remplir
+  // s'il ne peut pas aller au bout — lui laisser taper son prénom puis le
+  // refuser serait la même panne, en plus vexante.
+  if (blocked) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <ScreenField />
+        <View style={styles.blockedWrap}>
+          <Text style={styles.title}>{t('profile.setup.blocked.title')}</Text>
+          <Text style={styles.subtitle}>{t('profile.setup.blocked.body')}</Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => { supabase.auth.signOut(); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.buttonText}>{t('profile.setup.blocked.action')}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS
@@ -205,9 +256,13 @@ export default function ProfileSetupScreen() {
 
           {/* ── Prénom ── */}
           <FieldLabel text={t('profile.setup.firstName')} />
-          <View style={[styles.inputWrap, !!errors.firstName && styles.inputWrapError]}>
+          <Pressable
+            style={[styles.inputWrap, !!errors.firstName && styles.inputWrapError]}
+            onPress={() => firstNameRef.current?.focus()}
+          >
             <Feather name="user" size={16} color={errors.firstName ? colors.danger : colors.textDimmed} style={styles.inputIcon} />
             <TextInput
+              ref={firstNameRef}
               style={styles.input}
               placeholder={t('profile.setup.placeholderFirstName')}
               placeholderTextColor={colors.textDimmed}
@@ -218,12 +273,15 @@ export default function ProfileSetupScreen() {
               onSubmitEditing={() => lastNameRef.current?.focus()}
               submitBehavior="submit"
             />
-          </View>
+          </Pressable>
           <FieldError msg={errors.firstName} />
 
           {/* ── Nom ── */}
           <FieldLabel text={t('profile.setup.lastName')} />
-          <View style={[styles.inputWrap, !!errors.lastName && styles.inputWrapError]}>
+          <Pressable
+            style={[styles.inputWrap, !!errors.lastName && styles.inputWrapError]}
+            onPress={() => lastNameRef.current?.focus()}
+          >
             <Feather name="user" size={16} color={errors.lastName ? colors.danger : colors.textDimmed} style={styles.inputIcon} />
             <TextInput
               ref={lastNameRef}
@@ -237,12 +295,17 @@ export default function ProfileSetupScreen() {
               onSubmitEditing={() => phoneRef.current?.focus()}
               submitBehavior="submit"
             />
-          </View>
+          </Pressable>
           <FieldError msg={errors.lastName} />
 
           {/* ── Téléphone ── */}
           <FieldLabel text={t('profile.setup.phone')} />
-          <View style={[styles.phoneRow, !!errors.phone && styles.inputWrapError]}>
+          {/* Le sélecteur d'indicatif garde ses propres taps : un enfant tactile
+              l'emporte sur le Pressable qui l'entoure. */}
+          <Pressable
+            style={[styles.phoneRow, !!errors.phone && styles.inputWrapError]}
+            onPress={() => phoneRef.current?.focus()}
+          >
             <TouchableOpacity
               style={styles.dialBtn}
               onPress={() => setDialPickerOpen(true)}
@@ -255,7 +318,7 @@ export default function ProfileSetupScreen() {
             <View style={styles.dialDivider} />
             <TextInput
               ref={phoneRef}
-              style={[styles.input, { flex: 1 }]}
+              style={styles.input}
               placeholder={t('profile.setup.placeholderPhone')}
               placeholderTextColor={colors.textDimmed}
               value={phoneNumber}
@@ -263,13 +326,25 @@ export default function ProfileSetupScreen() {
               keyboardType="phone-pad"
               returnKeyType="next"
             />
-          </View>
+          </Pressable>
           <FieldError msg={errors.phone} />
 
           {/* ── Date de naissance ── */}
           <FieldLabel text={t('profile.setup.dob')} />
-          <View style={[styles.dobRow, !!errors.dob && styles.inputWrapError]}>
+          {/* Trois champs étroits séparés par des « / » : entre eux et autour,
+              la majorité de la barre ne visait rien. Un tap hors segment reprend
+              la saisie là où elle s'est arrêtée, plutôt que de forcer le jour et
+              faire réécrire une date déjà entamée. */}
+          <Pressable
+            style={[styles.dobRow, !!errors.dob && styles.inputWrapError]}
+            onPress={() => {
+              if (dobDay.length < 2) dayRef.current?.focus();
+              else if (dobMonth.length < 2) monthRef.current?.focus();
+              else yearRef.current?.focus();
+            }}
+          >
             <TextInput
+              ref={dayRef}
               style={styles.dobInput}
               placeholder={t('profile.setup.placeholderDay')}
               placeholderTextColor={colors.textDimmed}
@@ -318,7 +393,7 @@ export default function ProfileSetupScreen() {
               maxLength={4}
               returnKeyType="done"
             />
-          </View>
+          </Pressable>
           <FieldError msg={errors.dob} />
 
           {/* ── CTA ── */}
@@ -442,6 +517,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
 
+  blockedWrap: {
+    flex: 1, justifyContent: 'center',
+    paddingHorizontal: space.xl, paddingBottom: space.xxl,
+  },
+
   title: { fontSize: 26, fontWeight: '900', color: colors.textMain, marginBottom: space.sm, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: space.xl },
 
@@ -457,7 +537,11 @@ const styles = StyleSheet.create({
   },
   inputWrapError: { borderColor: colors.danger },
   inputIcon: { marginLeft: space.md, marginRight: space.tight },
-  input: { paddingVertical: space.lg, paddingHorizontal: space.sm, fontSize: 16, color: colors.textMain },
+  // `flex: 1` : sans lui le champ ne mesurait que son contenu, et toute la
+  // barre à droite du texte n'était qu'un fond. Le Pressable qui entoure la
+  // ligne rattrape l'icône et les marges ; ceci rattrape le reste, et pose le
+  // curseur là où le doigt s'est posé plutôt qu'en fin de texte.
+  input: { flex: 1, paddingVertical: space.lg, paddingHorizontal: space.sm, fontSize: 16, color: colors.textMain },
 
   phoneRow: {
     flexDirection: 'row', alignItems: 'center',

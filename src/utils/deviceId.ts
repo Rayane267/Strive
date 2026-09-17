@@ -5,7 +5,8 @@
  */
 
 import * as Keychain from 'react-native-keychain';
-import { supabase } from '../services/supabase';
+import { sha256 } from 'js-sha256';
+import { supabase, setRequestDeviceId } from '../services/supabase';
 
 const KEYCHAIN_SERVICE = 'com.striveapp.deviceId';
 const KEYCHAIN_OAUTH_SERVICE = 'com.striveapp.oauthSignups';
@@ -18,14 +19,35 @@ function uuidV4(): string {
   });
 }
 
+/**
+ * Réamorce l'en-tête `x-device-id` des requêtes REST, par où le serveur applique
+ * le plafond de scans par appareil.
+ *
+ * Isolé dans son propre try/catch, et jamais dans celui qui entoure le Keychain :
+ * un échec d'amorçage ne doit pas être confondu avec un Keychain injoignable, ni
+ * faire rendre un identifiant jetable à la place du vrai. C'est une conséquence
+ * de la lecture, pas une étape dont son résultat dépend.
+ */
+function primeRequestDeviceId(id: string) {
+  try { setRequestDeviceId(id); } catch {}
+}
+
 export async function getOrCreateDeviceId(): Promise<string> {
   try {
     const existing = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE });
-    if (existing && existing.password.length >= 16) return existing.password;
+    if (existing && existing.password.length >= 16) {
+      primeRequestDeviceId(existing.password);
+      return existing.password;
+    }
     const fresh = uuidV4();
     await Keychain.setGenericPassword('deviceId', fresh, { service: KEYCHAIN_SERVICE });
+    primeRequestDeviceId(fresh);
     return fresh;
   } catch {
+    // Keychain injoignable : on rend un identifiant jetable pour ne pas bloquer
+    // l'appelant, mais on ne le pose SURTOUT PAS en en-tête. Il changerait à
+    // chaque appel, créerait une ligne de registre par scan, et le plafond par
+    // appareil ne compterait plus rien.
     return uuidV4();
   }
 }
@@ -189,4 +211,53 @@ async function recentOAuthSignups(): Promise<OAuthSignup[]> {
       .filter((e): e is OAuthSignup => e !== null && e.t > windowStart);
   } catch {}
   return [];
+}
+
+/**
+ * Réserve le créneau d'inscription de cet appareil, ou refuse.
+ *
+ * APPELÉE AU MOMENT OÙ LE CHAUFFEUR CRÉE SON PROFIL, et non juste après
+ * l'échange OAuth. La différence n'est pas cosmétique :
+ *
+ *   • L'ancien contrôle ne s'armait que si le compte avait MOINS DE 60 SECONDES
+ *     (`created_at < 60_000`). Or le refus laissait le compte déjà créé dans
+ *     `auth.users` — Supabase l'écrit avant qu'on puisse dire non. Deux minutes
+ *     plus tard, ce même compte n'était plus « nouveau », la garde sortait
+ *     immédiatement, et le 6ᵉ compte passait. Le plafond ne plafonnait pas : il
+ *     retardait d'une minute.
+ *
+ *   • Le critère est maintenant « ce compte n'a pas encore de profil », c'est-à-
+ *     dire l'écran de saisie du prénom. Il ne vieillit pas : réessayer plus tard
+ *     y ramène, et le refus tient.
+ *
+ * UN RETOUR N'EST JAMAIS REFUSÉ. Une identité déjà connue de cet appareil sort
+ * par le haut des deux barrières, sans rien consommer : c'est le chemin du
+ * chauffeur qui a supprimé son compte et revient avec la même adresse. Le droit
+ * à l'effacement ne doit pas être un aller simple.
+ *
+ * Lève `device_signup_limit_reached` quand l'appareil a déjà servi à créer cinq
+ * identités distinctes sur les 60 derniers jours.
+ */
+export async function claimSignupSlot(email?: string | null): Promise<void> {
+  const normalized = (email ?? '').trim().toLowerCase();
+  // Même normalisation que `normalize_email` côté SQL : le même compte doit
+  // hacher pareil d'un fournisseur à l'autre, sinon un retour légitime n'est pas
+  // reconnu comme tel.
+  const hash = normalized ? sha256(normalized) : undefined;
+
+  // Barrière 1 — locale (Keychain, survit à la désinstallation). Gratuite et
+  // disponible hors ligne, mais contournable : elle dissuade, elle n'arrête pas.
+  await enforceOAuthSignupQuota(hash);
+
+  // Barrière 2 — serveur (`device_signups`). C'est elle qui fait autorité : le
+  // compte vit en base, pas dans le téléphone. Elle vérifie ET enregistre.
+  try {
+    await enforceSignupQuota(hash);
+  } catch (e: any) {
+    if (e?.message === 'device_signup_limit_reached') throw e;
+    // Réseau coupé ou RPC indisponible : on ne bloque pas une inscription
+    // légitime pour autant. La barrière locale a déjà fait son office.
+  }
+
+  await registerOAuthSignup(hash);
 }

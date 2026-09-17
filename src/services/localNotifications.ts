@@ -205,11 +205,23 @@ export function cancelWeeklyRecap() {
  * n'apparaîtra pas dans ses stats. Auparavant la course était réessayée 5 fois
  * puis supprimée sans qu'il puisse faire le lien avec quoi que ce soit.
  */
-export function notifyRideRejected(reason: 'quota' | 'other') {
+export function notifyRideRejected(
+  reason: 'quota' | 'deviceQuota' | 'priorAccount' | 'other',
+) {
+  // `priorAccount` : le plafond de l'appareil a été atteint par un compte
+  // SUPPRIMÉ sur ce téléphone — très probablement celui du chauffeur lui-même,
+  // juste avant. Lui dire « avec un autre compte » serait faux, et lui ferait
+  // chercher un vol de compte là où il n'y a que le registre qui fait son
+  // travail. Le compte recréé est normal ; c'est sa consommation de scans qui
+  // suit l'appareil.
+  const body = reason === 'quota' ? 'bodyQuota'
+    : reason === 'deviceQuota' ? 'bodyDeviceQuota'
+    : reason === 'priorAccount' ? 'bodyPriorAccount'
+    : 'bodyOther';
   scheduleNative(
     'ride-rejected',
     i18n.t('notifications.rideRejected.title'),
-    i18n.t(`notifications.rideRejected.${reason === 'quota' ? 'bodyQuota' : 'bodyOther'}`),
+    i18n.t(`notifications.rideRejected.${body}`),
     0,
   );
 }

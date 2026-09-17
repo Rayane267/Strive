@@ -1,0 +1,66 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Retrait du cooldown de 60 s entre l'inscription et le premier scan
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- ⚠️ CE FICHIER CONTENAIT PAR ERREUR une copie exacte de
+-- `20260917_device_scan_ledger_fix_pk.sql`. Le correctif de clé primaire vit
+-- donc là-bas, sous son vrai nom, et ce fichier-ci porte enfin ce que son nom
+-- annonce. Rien n'est perdu : les deux contenus étaient identiques au bit près.
+--
+-- CE QUE FAISAIT LE COOLDOWN. `enforce_first_scan_cooldown` (20260425) refusait
+-- la PREMIÈRE course d'un compte âgé de moins de 60 secondes, pour empêcher un
+-- bot d'enchaîner « inscription → scan » en deux secondes.
+--
+-- POURQUOI IL PART. Il tape à côté de sa cible depuis que le registre existe.
+--
+--   • Ce qu'il protégeait, `device_scan_ledger` le protège mieux : un appareil
+--     qui a consommé les scans gratuits du jour ne les regagne pas en changeant
+--     de compte. Le bot qui s'inscrit en boucle n'obtient plus rien à la fin de
+--     la chaîne — ralentir chaque maillon de 60 s ne change plus la somme.
+--
+--   • Il frappait surtout des chauffeurs honnêtes. Le geste naturel après une
+--     inscription, c'est d'essayer tout de suite : on installe l'app pendant
+--     qu'une offre est à l'écran, et on scanne. Ces soixante secondes tombaient
+--     exactement sur le premier scan de la vie du compte — celui qui décide si
+--     le chauffeur reste.
+--
+--   • Et surtout : il frappait AUSSI toute recréation de compte. Un chauffeur
+--     qui supprime son compte puis le recrée doit être traité comme n'importe
+--     quel autre — seule sa consommation de scans est retenue, par le registre
+--     d'appareil. Le cooldown ajoutait une punition de plus, sur le geste même
+--     que la suppression de compte est censée rendre possible.
+--
+-- CE QUI RESTE EN FACE DES BOTS. La confirmation d'e-mail, la normalisation des
+-- adresses, la blocklist (20260425), le quota de 5 identités par appareil sur
+-- 60 jours (20260902), les crédits de bienvenue verrouillés à l'appareil
+-- (20260830) et le registre de scans par appareil (20260917). Le cooldown était
+-- la plus faible des six, et la seule à se payer sur l'utilisateur légitime.
+--
+-- CÔTÉ CLIENT. `DashboardScreen.tsx` traite `account_too_new` comme une panne
+-- PASSAGÈRE : la course reste au journal natif et se rejoue plus tard. Cette
+-- branche devient inatteignable, mais elle est conservée — un binaire déjà
+-- installé peut parler à une base qui n'a pas encore reçu cette migration, et
+-- l'ordre inverse coûterait une course perdue par chauffeur.
+
+drop trigger if exists check_account_age on public.rides;
+drop function if exists public.enforce_first_scan_cooldown();
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- VÉRIFICATIONS
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Le trigger a disparu :
+--   select tgname from pg_trigger
+--    where tgrelid = 'public.rides'::regclass and not tgisinternal;
+--   → plus de `check_account_age`
+--
+-- La fonction aussi :
+--   select proname from pg_proc where proname = 'enforce_first_scan_cooldown';
+--   → 0 ligne
+--
+-- Et un compte neuf peut scanner immédiatement :
+--   (sur un compte créé il y a moins de 60 s)
+--   insert into public.rides (user_id, platform, status, fare_estimated,
+--                             distance_km, duration_min, hourly_rate, km_rate)
+--   values (auth.uid(), 'UBER', 'PENDING', 18.38, 5, 29, 38.03, 3.68);
+--   → pas d'erreur `account_too_new`
