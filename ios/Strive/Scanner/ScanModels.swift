@@ -42,6 +42,12 @@ public enum ScanErrorCode: String {
   case laStartFailed  = "0xC0FE0A7D"
   case expired        = "0xC0FE0B34"
   case timeout        = "0xC0FE0C55"
+  /// TomTom n'a pas répondu — réseau coupé, timeout, erreur HTTP.
+  case routeUnreachable = "0xC0FE0D6E"
+  /// TomTom a répondu, mais l'adresse lue n'est pas exploitable.
+  case routeUnusable    = "0xC0FE0E42"
+  /// Aucune clé TomTom sur cette installation : rien n'est mesurable.
+  case routeNoKey       = "0xC0FE0F17"
 
   /// Motif correspondant côté `scan_failures.reason` — garde le lien explicite
   /// entre ce que voit l'utilisateur et ce que mesure la télémétrie.
@@ -59,6 +65,49 @@ public enum ScanErrorCode: String {
     case .laStartFailed: return "la_start_failed"
     case .expired:       return "expired"
     case .timeout:       return "timeout"
+    case .routeUnreachable: return "route_unreachable"
+    case .routeUnusable:    return "route_unusable"
+    case .routeNoKey:       return "route_no_key"
+    }
+  }
+}
+
+/// A-t-on MESURÉ la course, ou seulement recopié ce que la plateforme affiche ?
+///
+/// Sans cette distinction, un échec d'itinéraire retombait sur les chiffres lus
+/// à l'écran et les présentait avec le même verdict coloré qu'une vraie mesure.
+/// Le chauffeur voyait « 100 €/h » sur une course qui en valait 38, et rien —
+/// ni l'écran, ni la base — ne disait lequel des deux il regardait. Strive
+/// existe pour contester le chiffre de la plateforme : le réafficher en silence
+/// sous ses propres couleurs est le seul bug qu'elle n'a pas le droit d'avoir.
+public enum RouteStatus {
+  /// Itinéraire TomTom appliqué : distance et durée sont mesurées.
+  case ok
+  /// TomTom n'a pas répondu. Se retente.
+  case unreachable
+  /// Adresse illisible ou trajet hors bornes. Se recapture.
+  case unusable
+  /// Pas de clé sur cette installation.
+  case noKey
+
+  /// Code de support correspondant. `nil` quand tout va bien.
+  public var errorCode: ScanErrorCode? {
+    switch self {
+    case .ok:          return nil
+    case .unreachable: return .routeUnreachable
+    case .unusable:    return .routeUnusable
+    case .noKey:       return .routeNoKey
+    }
+  }
+
+  /// Vrai si le motif est un défaut de liaison — l'app n'a pas pu joindre le
+  /// service de mesure. Deux motifs, un seul message : de la place du chauffeur,
+  /// « pas de réseau » et « pas de clé » se réessaient de la même façon. Le code
+  /// de support, lui, les sépare.
+  public var isNetwork: Bool {
+    switch self {
+    case .unreachable, .noKey: return true
+    case .ok, .unusable:       return false
     }
   }
 }

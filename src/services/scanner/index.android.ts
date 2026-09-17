@@ -50,6 +50,8 @@ export const scannerService: ScannerService = {
   clearGeocodeCache: () => ScanBridge.clearGeocodeCache?.(),
   setQuotaReached: (reached: boolean, isFree: boolean) => ScanBridge.setQuotaReached(reached, isFree),
   setScanQuota: (countToday: number, limit: number, resetHour: number) => ScanBridge.setScanQuota?.(countToday, limit, resetHour),
+  setDeviceQuotaLimit: (freeLimit: number) => ScanBridge.setDeviceQuotaLimit?.(freeLimit),
+  setDeviceScanCount: (deviceUsed: number) => ScanBridge.setDeviceScanCount?.(deviceUsed),
   ackScan: (rideId: string) => ScanBridge.ackScan?.(rideId),
 
   getPendingRideDecisions: async () => {
@@ -62,6 +64,7 @@ export const scannerService: ScannerService = {
   ackRideDecision: (rideId: string) => ScanBridge.ackRideDecision?.(rideId),
   queueRideDecision: (rideId: string, status: 'ACCEPTED' | 'DECLINED') =>
     ScanBridge.queueRideDecision?.(rideId, status === 'ACCEPTED'),
+  clearRideDecisions: () => ScanBridge.clearRideDecisions?.(),
   // Retire la notification de résultat quand la décision a été prise dans
   // l'app : elle restait sinon affichée avec ses boutons, sur une course déjà
   // tranchée. Pendant de `clearLiveActivityResult` côté iOS.

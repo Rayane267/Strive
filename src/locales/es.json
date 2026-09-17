@@ -149,6 +149,11 @@
         "dobNotExist": "Esta fecha no existe",
         "dobMinAge": "Debes tener al menos 18 años",
         "saveFailed": "Error al guardar"
+      },
+      "blocked": {
+        "title": "Demasiadas cuentas en este teléfono",
+        "body": "Este dispositivo ha creado cinco cuentas en los últimos sesenta días. Vuelve a iniciar sesión con una de ellas o inténtalo más tarde.",
+        "action": "Volver al inicio de sesión"
       }
     },
     "deleteAccountSub": "Acción irreversible",
@@ -792,7 +797,10 @@
       "gemini_ko": "El análisis con IA ha fallado",
       "la_start_failed": "No se ha podido mostrar",
       "expired": "Análisis interrumpido",
-      "timeout": "Análisis demasiado largo"
+      "timeout": "Análisis demasiado largo",
+      "route_unreachable": "Servicio de rutas inaccesible",
+      "route_unusable": "No se pudo calcular la ruta",
+      "route_no_key": "Medición no disponible en este dispositivo"
     }
   },
   "iap": {
@@ -1019,6 +1027,8 @@
     "rideRejected": {
       "title": "Viaje no registrado",
       "bodyQuota": "Cuota diaria superada: este viaje no se ha podido añadir a tus estadísticas.",
+      "bodyDeviceQuota": "Los 3 escaneos gratuitos de este teléfono ya se han usado hoy, con otra cuenta. Vuelve mañana o pásate a Plus.",
+      "bodyPriorAccount": "Los escaneos gratuitos de este teléfono ya se han usado hoy. El contador sigue al dispositivo, no a la cuenta: se reinicia mañana.",
       "bodyOther": "Este viaje ha sido rechazado al registrarse. Contacta con soporte si vuelve a ocurrir."
     },
     "sessionClosed": {
@@ -1033,6 +1043,12 @@
       "title": "📊 Tu balance de la semana",
       "body": "Ven a ver cuánto más podrías ganar con Strive.",
       "bodyLoss": "≈ {{amount}} por debajo de tu objetivo esta semana. Mira cómo evitarlo."
+    },
+    "optIn": {
+      "title": "¿Activar las notificaciones?",
+      "body": "Este viaje fue rechazado y nada te lo indicó. Con las notificaciones, Strive te avisa cuando un viaje no se guarda, cuando tu cuota se reinicia y cuando una sesión sigue abierta.",
+      "enable": "Activar",
+      "later": "Más tarde"
     }
   },
   "tier": {
@@ -1157,10 +1173,10 @@
     "failuresEmpty": "Ningún fallo registrado en los últimos 30 días.",
     "reload": "Recargar",
     "countersTitle": "Contadores antiabuso",
-    "countersHint": "Vacía el contador de registros del Keychain y regenera el identificador del dispositivo. Úsalo para repetir un ciclo de creación → eliminación → recreación de cuenta.",
+    "countersHint": "Vacía el contador de registros del Keychain, regenera el identificador del dispositivo y pone a cero los escaneos del dispositivo. Úsalo para repetir un ciclo crear → eliminar → recrear cuenta.",
     "countersReset": "Reiniciar el dispositivo",
     "countersResetting": "Reiniciando…",
-    "countersDone": "Contadores vaciados. El dispositivo se ve como nuevo: cuota de registro libre y regalo de bienvenida repetible.",
+    "countersDone": "Dispositivo nuevo, de inmediato: cuota de registro libre, regalo de bienvenida repetible y escaneos del dispositivo a cero. No hace falta reiniciar la app.",
     "presTitle": "Dynamic Island — presentaciones",
     "widgetNeverSeen": "nunca visto — no escribe en el App Group",
     "presNeedsTracing": "Activa la recogida arriba y conduce con normalidad. Los contadores se llenan con cada resultado de escaneo.",
@@ -1273,6 +1289,10 @@
   },
   "native": {
     "analysisFailed": "Análisis imposible",
+    "networkFailed": "Error de red",
+    "networkRetry": "Comprueba tu conexión y vuelve a escanear",
+    "bubbleErrorCapture": "Captura ilegible",
+    "bubbleErrorNetwork": "Error de red",
     "analyzing": "Analizando…",
     "goPlus": "Pasa a Plus para verlo",
     "sessionRunning": "Sesión en curso",

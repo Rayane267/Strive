@@ -41,6 +41,14 @@ RCT_EXTERN_METHOD(clearGeocodeCache)
 
 RCT_EXTERN_METHOD(setQuotaReached:(BOOL)reached isFree:(BOOL)isFree)
 
+// Limite du palier gratuit, pour le plafond d'appareil (anti-farming par
+// suppression de compte). Le compteur associé est tenu par le natif.
+RCT_EXTERN_METHOD(setDeviceQuotaLimit:(nonnull NSNumber *)freeLimit)
+
+// Compteur d'appareil redescendu du serveur : l'App Group part à la
+// désinstallation, le device_id du Keychain non.
+RCT_EXTERN_METHOD(setDeviceScanCount:(nonnull NSNumber *)deviceUsed)
+
 RCT_EXTERN_METHOD(setScanQuota:(nonnull NSNumber *)countToday
                   limit:(nonnull NSNumber *)limit
                   resetHour:(nonnull NSNumber *)resetHour)
@@ -54,6 +62,9 @@ RCT_EXTERN_METHOD(getPendingRideDecisions:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(ackRideDecision:(NSString *)rideId)
+
+// Purge totale de la file, au départ délibéré d'un compte.
+RCT_EXTERN_METHOD(clearRideDecisions)
 
 // Décision prise dans l'app dont l'écriture a échoué : elle rejoint la file, au
 // même titre que celles tapées sur la carte ou la notification.

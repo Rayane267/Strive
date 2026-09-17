@@ -149,6 +149,11 @@
         "dobNotExist": "This date does not exist",
         "dobMinAge": "You must be at least 18 years old",
         "saveFailed": "Error while saving"
+      },
+      "blocked": {
+        "title": "Too many accounts on this phone",
+        "body": "This device has created five accounts in the last sixty days. Sign back in with one of them, or try again later.",
+        "action": "Back to sign-in"
       }
     },
     "deleteAccountSub": "This cannot be undone",
@@ -784,7 +789,10 @@
       "gemini_ko": "AI analysis failed",
       "la_start_failed": "Could not display",
       "expired": "Analysis interrupted",
-      "timeout": "Analysis timed out"
+      "timeout": "Analysis timed out",
+      "route_unreachable": "Routing service unreachable",
+      "route_unusable": "Route could not be computed",
+      "route_no_key": "Measurement unavailable on this device"
     }
   },
   "iap": {
@@ -1011,6 +1019,8 @@
     "rideRejected": {
       "title": "Ride not saved",
       "bodyQuota": "Daily quota exceeded: this ride could not be added to your stats.",
+      "bodyDeviceQuota": "This phone's 3 free scans have already been used today, on another account. Come back tomorrow or go Plus.",
+      "bodyPriorAccount": "This phone's free scans have already been used today. The counter follows the device, not the account — it resets tomorrow.",
       "bodyOther": "This ride was rejected on save. Contact support if it happens again."
     },
     "sessionClosed": {
@@ -1025,6 +1035,12 @@
       "title": "📊 Your week in review",
       "body": "See how much more you could earn with Strive.",
       "bodyLoss": "≈ {{amount}} below your target this week. See how to avoid it."
+    },
+    "optIn": {
+      "title": "Turn on notifications?",
+      "body": "This ride was refused and nothing told you. With notifications, Strive warns you when a ride isn't saved, when your quota resets and when a session stays open.",
+      "enable": "Turn on",
+      "later": "Later"
     }
   },
   "tier": {
@@ -1149,10 +1165,10 @@
     "failuresEmpty": "No failures recorded in the last 30 days.",
     "reload": "Reload",
     "countersTitle": "Anti-abuse counters",
-    "countersHint": "Clears the Keychain signup counter and regenerates the device identifier. Use it to replay a create → delete → recreate account cycle.",
+    "countersHint": "Clears the Keychain signup counter, regenerates the device identifier and resets the device scan count. Use it to replay a create → delete → recreate account cycle.",
     "countersReset": "Reset this device",
     "countersResetting": "Resetting…",
-    "countersDone": "Counters cleared. The device now looks brand new: signup quota free and welcome gift replayable.",
+    "countersDone": "Fresh device, right away: signup quota open, welcome gift replayable and device scans back to zero. No app restart needed.",
     "presTitle": "Dynamic Island — presentations",
     "widgetNeverSeen": "never seen — it isn’t writing to the App Group",
     "presNeedsTracing": "Turn collection on above, then drive as usual. Counters fill up on every scan result.",
@@ -1265,6 +1281,10 @@
   },
   "native": {
     "analysisFailed": "Analysis failed",
+    "networkFailed": "Network error",
+    "networkRetry": "Check your connection and scan again",
+    "bubbleErrorCapture": "Unreadable screenshot",
+    "bubbleErrorNetwork": "Network error",
     "analyzing": "Analyzing…",
     "goPlus": "Go Plus to see",
     "sessionRunning": "Session running",

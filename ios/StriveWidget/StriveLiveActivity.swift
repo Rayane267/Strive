@@ -30,7 +30,11 @@ struct StriveLiveActivity: Widget {
       // traité explicitement là où il doit s'afficher.
       let isRecap = !stale && context.state.platform == "RECAP"
       let isIdle = stale || context.state.platform == "IDLE" || isRecap
-      let isError = !stale && context.state.platform == "ERROR"
+      // Deux erreurs, une seule carte : le rouge, la croix et la mise en page
+      // ne changent pas — seul le texte dit lequel des deux motifs, parce qu'un
+      // réseau se retente et qu'une capture se refait.
+      let isError = !stale && (context.state.platform == "ERROR" || context.state.platform == "ERROR_NET")
+      let isNetError = !stale && context.state.platform == "ERROR_NET"
       // Teaser quota free : on réutilise le visuel résultat mais flouté + cadenas.
       let isLocked = !stale && context.state.platform == "LOCKED"
       let errorRed = Color(red: 0.94, green: 0.27, blue: 0.27)
@@ -98,7 +102,7 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.center) {
           if isError {
-            Text(StriveNativeStrings.get("analysisFailed"))
+            Text(StriveNativeStrings.get(isNetError ? "networkFailed" : "analysisFailed"))
               .font(.system(size: 14, weight: .semibold))
               .foregroundColor(.white.opacity(0.75))
           } else if isScanning {
@@ -129,7 +133,7 @@ struct StriveLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           if isError {
-            Text(StriveNativeStrings.get("tryAnother"))
+            Text(StriveNativeStrings.get(isNetError ? "networkRetry" : "tryAnother"))
               .font(.system(size: 13, weight: .medium))
               .foregroundColor(.white.opacity(0.45))
               .padding(.vertical, 4)
@@ -276,7 +280,8 @@ private struct LockScreenView: View {
     // le temoin doit passer par ici, sinon il ne verrait jamais ces appareils.
     let _ = laStampLocale()
     let isScanning = !stale && state.platform == "SCANNING"
-    let isError = !stale && state.platform == "ERROR"
+    let isError = !stale && (state.platform == "ERROR" || state.platform == "ERROR_NET")
+    let isNetError = !stale && state.platform == "ERROR_NET"
     let isLocked = !stale && state.platform == "LOCKED"
     // Vraie course (UBER/BOLT/HEETCH/UNKNOWN…) — ni idle, ni scanning, ni erreur,
     // ni teaser. C'est le seul état où l'on veut la CARTE RÉSULTAT sur le lock
@@ -399,7 +404,9 @@ private struct LockScreenView: View {
                 .foregroundColor(.white.opacity(0.5))
             }
           } else if isError {
-            Text(StriveNativeStrings.get("error"))
+            // Le lock screen a la place d'un motif, contrairement aux slots
+            // compacts de l'îlot : autant dire lequel des deux c'est.
+            Text(StriveNativeStrings.get(isNetError ? "networkFailed" : "error"))
               .font(.system(size: 11, weight: .bold))
               .foregroundColor(errorRed)
           } else {
@@ -813,7 +820,7 @@ private func laCountPresentation(_ p: LAPresentation, platform: String) -> Bool 
   // timer de session tourne) et noierait la mesure sous des milliers de passages
   // qui n'ont rien à voir avec l'affichage d'un verdict.
   switch platform {
-  case "IDLE", "SCANNING", "RECAP", "ERROR", "LOCKED": return false
+  case "IDLE", "SCANNING", "RECAP", "ERROR", "ERROR_NET", "LOCKED": return false
   default: break
   }
   let groupId = Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String

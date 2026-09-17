@@ -149,6 +149,11 @@
         "dobNotExist": "Esta data não existe",
         "dobMinAge": "Tem de ter pelo menos 18 anos",
         "saveFailed": "Erro ao guardar"
+      },
+      "blocked": {
+        "title": "Demasiadas contas neste telemóvel",
+        "body": "Este aparelho criou cinco contas nos últimos sessenta dias. Volte a iniciar sessão com uma delas ou tente mais tarde.",
+        "action": "Voltar ao início de sessão"
       }
     },
     "deleteAccountSub": "Ação irreversível",
@@ -792,7 +797,10 @@
       "gemini_ko": "A análise por IA falhou",
       "la_start_failed": "Não foi possível mostrar",
       "expired": "Análise interrompida",
-      "timeout": "Análise demasiado longa"
+      "timeout": "Análise demasiado longa",
+      "route_unreachable": "Serviço de rotas inacessível",
+      "route_unusable": "Não foi possível calcular o trajeto",
+      "route_no_key": "Medição indisponível neste dispositivo"
     }
   },
   "iap": {
@@ -1019,6 +1027,8 @@
     "rideRejected": {
       "title": "Viagem não registada",
       "bodyQuota": "Limite diário ultrapassado: esta viagem não pôde ser adicionada às suas estatísticas.",
+      "bodyDeviceQuota": "Os 3 scans gratuitos deste telemóvel já foram usados hoje, noutra conta. Volte amanhã ou mude para Plus.",
+      "bodyPriorAccount": "Os scans gratuitos deste telemóvel já foram usados hoje. O contador segue o aparelho, não a conta: reinicia amanhã.",
       "bodyOther": "Esta viagem foi recusada no registo. Contacte o apoio se voltar a acontecer."
     },
     "sessionClosed": {
@@ -1033,6 +1043,12 @@
       "title": "📊 O seu balanço da semana",
       "body": "Venha ver quanto poderia ganhar a mais com o Strive.",
       "bodyLoss": "≈ {{amount}} abaixo do seu objetivo esta semana. Veja como evitar isso."
+    },
+    "optIn": {
+      "title": "Ativar as notificações?",
+      "body": "Esta viagem foi recusada e nada o avisou. Com as notificações, a Strive avisa-o quando uma viagem não é guardada, quando a sua quota reinicia e quando uma sessão fica aberta.",
+      "enable": "Ativar",
+      "later": "Mais tarde"
     }
   },
   "tier": {
@@ -1157,10 +1173,10 @@
     "failuresEmpty": "Nenhuma falha registada nos últimos 30 dias.",
     "reload": "Recarregar",
     "countersTitle": "Contadores antiabuso",
-    "countersHint": "Esvazia o contador de registos do Keychain e regenera o identificador do dispositivo. Use para repetir um ciclo criação → eliminação → recriação de conta.",
+    "countersHint": "Esvazia o contador de registos do Keychain, regenera o identificador do aparelho e repõe a zero os scans do aparelho. Use para repetir um ciclo criar → eliminar → recriar conta.",
     "countersReset": "Reiniciar o dispositivo",
     "countersResetting": "A reiniciar…",
-    "countersDone": "Contadores esvaziados. O dispositivo é visto como novo: limite de registo livre e oferta de boas-vindas repetível.",
+    "countersDone": "Aparelho novo, de imediato: quota de registo livre, presente de boas-vindas repetível e scans do aparelho a zero. Não é preciso reiniciar a app.",
     "presTitle": "Dynamic Island — apresentações",
     "widgetNeverSeen": "nunca visto — não escreve no App Group",
     "presNeedsTracing": "Ative a recolha acima e conduza normalmente. Os contadores enchem-se a cada resultado de análise.",
@@ -1273,6 +1289,10 @@
   },
   "native": {
     "analysisFailed": "Análise impossível",
+    "networkFailed": "Erro de rede",
+    "networkRetry": "Verifique a sua ligação e repita",
+    "bubbleErrorCapture": "Captura ilegível",
+    "bubbleErrorNetwork": "Erro de rede",
     "analyzing": "A analisar…",
     "goPlus": "Passe a Plus para ver",
     "sessionRunning": "Sessão em curso",

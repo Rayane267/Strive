@@ -83,6 +83,9 @@ final class ScanProcessor {
     let totalDurationMin: Int
     let totalDistanceKm: Double
     let verdictLevel: Int
+    /// A-t-on mesuré, ou recopié l'écran ? Décide de ce qui est affiché et de ce
+    /// qui est enregistré : hors `.ok`, la course n'est ni montrée ni écrite.
+    let routeStatus: RouteStatus
     /// Tarif À AFFICHER : net du carburant estimé si la préférence
     /// « retirer le carburant du prix » est active, sinon égal à `scan.fare`.
     /// Volontairement séparé — `scan.fare` reste le tarif brut, celui qui part en
@@ -154,35 +157,47 @@ final class ScanProcessor {
       let dest = result.destinationAddress?.replacingOccurrences(of: "\n", with: " ")
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-      if pickup.isEmpty || dest.isEmpty || !TomTomService.shared.isReady {
-        gate.fire(self.computeFinal(scan: result))
+      if pickup.isEmpty || dest.isEmpty {
+        gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+        return
+      }
+      if !TomTomService.shared.isReady {
+        gate.fire(self.computeFinal(scan: result, routeStatus: .noKey))
         return
       }
 
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
-        guard let route = route,
-              route.distanceKm >= 0.3,
-              route.distanceKm <= 500,
-              route.durationMin <= 300 else {
-          gate.fire(self.computeFinal(scan: result))
-          return
-        }
+      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
+        switch outcome {
+        case .noKey:
+          gate.fire(self.computeFinal(scan: result, routeStatus: .noKey))
+        case .unreachable:
+          gate.fire(self.computeFinal(scan: result, routeStatus: .unreachable))
+        case .unusable:
+          gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+        case .ok(let route):
+          guard route.distanceKm >= 0.3,
+                route.distanceKm <= 500,
+                route.durationMin <= 300 else {
+            gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+            return
+          }
 
-        let ratio = result.fare / route.distanceKm
-        guard ratio >= 0.2 && ratio <= 12.0 else {
-          gate.fire(self.computeFinal(scan: result))
-          return
-        }
+          let ratio = result.fare / route.distanceKm
+          guard ratio >= 0.2 && ratio <= 12.0 else {
+            gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+            return
+          }
 
-        // Affiche les adresses canoniques TomTom (propres) plutôt que le texte
-        // OCR bruité (ex: "All AV. … Çueue") — fallback OCR si TomTom n'en fournit pas.
-        let updated = result.copy(
-          distanceKm: route.distanceKm,
-          durationMin: route.durationMin,
-          pickupAddress: route.pickupFormatted,
-          destinationAddress: route.destFormatted
-        )
-        gate.fire(self.computeFinal(scan: updated))
+          // Affiche les adresses canoniques TomTom (propres) plutôt que le texte
+          // OCR bruité (ex: "All AV. … Çueue") — fallback OCR si TomTom n'en fournit pas.
+          let updated = result.copy(
+            distanceKm: route.distanceKm,
+            durationMin: route.durationMin,
+            pickupAddress: route.pickupFormatted,
+            destinationAddress: route.destFormatted
+          )
+          gate.fire(self.computeFinal(scan: updated, routeStatus: .ok))
+        }
       }
     }
   }
@@ -250,7 +265,7 @@ final class ScanProcessor {
 
   /// Exposé (non-private) pour permettre au fallback Gemini de l'AppIntent de
   /// construire un FinalResult à partir d'un ScanResultModel reconstitué.
-  func computeFinal(scan: ScanResultModel) -> FinalResult {
+  func computeFinal(scan: ScanResultModel, routeStatus: RouteStatus) -> FinalResult {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     let prefs = UserDefaults(suiteName: appGroupId)
@@ -306,6 +321,7 @@ final class ScanProcessor {
       totalDurationMin: Int(totalDuration.rounded()),
       totalDistanceKm: totalDistance,
       verdictLevel: level,
+      routeStatus: routeStatus,
       displayFare: displayFare
     )
   }

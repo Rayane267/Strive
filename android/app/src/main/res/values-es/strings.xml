@@ -14,4 +14,6 @@
   <string name="scanner_ride_decline">❌ Rechazada</string>
   <string name="scanner_quota_reached">Cuota alcanzada</string>
   <string name="scanner_quota_reached_free">Cuota alcanzada · Pasa a Plus</string>
+  <string name="scanner_error_capture">Captura ilegible</string>
+  <string name="scanner_error_network">Error de red</string>
 </resources>

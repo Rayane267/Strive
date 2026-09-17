@@ -28,6 +28,43 @@ object GeminiVisionService {
     /** JWT user pour l'edge function durcie (rate-limit + audit par user_id) */
     var supabaseUserJwt: String = ""
 
+    /** Marge d'horloge avant de déclarer le jeton périmé. La comparaison se fait
+     *  avec l'horloge DU TÉLÉPHONE, celle-là même qui peut dériver : la marge
+     *  penche du côté du doute, on laisse passer et c'est le serveur qui
+     *  tranche. Parité iOS (`AnalyzeRideIntent.jwtClockGrace`). */
+    private const val JWT_CLOCK_GRACE_S = 120L
+
+    /** Le jeton est-il périmé ?
+     *
+     *  Un jeton d'accès Supabase vit une heure et n'est renouvelé que par le JS,
+     *  donc seulement quand l'app tourne. Sans ce test, le scan partait, l'OCR
+     *  tournait, puis `gemini-proxy` rejetait l'appel — il revalide le jeton par
+     *  `getUser`, qui contrôle l'expiration. Le chauffeur attendait pour rien.
+     *
+     *  `exp` est lu en décodant le payload, SANS vérifier la signature : ce test
+     *  ne protège rien, il évite une dépense. Toute anomalie de lecture rend
+     *  `false` — on ne bloque jamais sur un doute, le pire cas dégradé est le
+     *  comportement d'avant. Parité iOS (`isSessionExpired`). */
+    fun isJwtExpired(): Boolean {
+        val jwt = supabaseUserJwt
+        if (jwt.isEmpty()) return false
+        val parts = jwt.split(".")
+        if (parts.size != 3) return false
+        return try {
+            val payload = android.util.Base64.decode(
+                parts[1],
+                android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING
+                    or android.util.Base64.NO_WRAP,
+            )
+            val exp = org.json.JSONObject(String(payload, Charsets.UTF_8))
+                .optLong("exp", 0L)
+            if (exp <= 0L) return false
+            System.currentTimeMillis() / 1000 > exp + JWT_CLOCK_GRACE_S
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private val useEdgeFunction get() = edgeFunctionUrl.isNotEmpty() && supabaseAnonKey.isNotEmpty()
 
     /** true si Gemini est configuré (edge function ou clé directe) */

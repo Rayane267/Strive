@@ -28,6 +28,10 @@ public enum StriveNativeStrings {
 
   static let table: [String: [String: String]] = [
     "analysisFailed": ["fr": "Analyse impossible", "en": "Analysis failed", "es": "Análisis imposible", "pt": "Análise impossível", "nl": "Analyse mislukt", "de": "Analyse fehlgeschlagen", "it": "Analisi impossibile"],
+    "networkFailed": ["fr": "Erreur réseau", "en": "Network error", "es": "Error de red", "pt": "Erro de rede", "nl": "Netwerkfout", "de": "Netzwerkfehler", "it": "Errore di rete"],
+    "networkRetry": ["fr": "Vérifiez votre connexion et relancez", "en": "Check your connection and scan again", "es": "Comprueba tu conexión y vuelve a escanear", "pt": "Verifique a sua ligação e repita", "nl": "Controleer je verbinding en scan opnieuw", "de": "Verbindung prüfen und erneut scannen", "it": "Controlla la connessione e riprova"],
+    "bubbleErrorCapture": ["fr": "Capture illisible", "en": "Unreadable screenshot", "es": "Captura ilegible", "pt": "Captura ilegível", "nl": "Onleesbare schermafbeelding", "de": "Screenshot unlesbar", "it": "Schermata illeggibile"],
+    "bubbleErrorNetwork": ["fr": "Erreur réseau", "en": "Network error", "es": "Error de red", "pt": "Erro de rede", "nl": "Netwerkfout", "de": "Netzwerkfehler", "it": "Errore di rete"],
     "analyzing": ["fr": "Analyse…", "en": "Analyzing…", "es": "Analizando…", "pt": "A analisar…", "nl": "Analyseren…", "de": "Analyse…", "it": "Analisi…"],
     "goPlus": ["fr": "Passe Plus pour voir", "en": "Go Plus to see", "es": "Pasa a Plus para verlo", "pt": "Passe a Plus para ver", "nl": "Ga naar Plus om te zien", "de": "Plus holen, um zu sehen", "it": "Passa a Plus per vedere"],
     "sessionRunning": ["fr": "Session en cours", "en": "Session running", "es": "Sesión en curso", "pt": "Sessão em curso", "nl": "Sessie bezig", "de": "Sitzung läuft", "it": "Sessione in corso"],

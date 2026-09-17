@@ -268,10 +268,11 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         MarketFormat.setMarket(reactContext, country, currency)
     }
 
-    /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS. */
+    /** Clé TomTom — permet au foreground service de géocoder sans dépendre du JS.
+     *  Persistée : la bulle survit à la mort du process RN, pas une statique. */
     @ReactMethod
     fun setTomTomApiKey(key: String) {
-        TomTomService.apiKey = key
+        TomTomService.setApiKey(reactApplicationContext, key)
     }
 
     /** Purge le cache de géocodage local (adresses = PII). Appelé par le JS au
@@ -335,6 +336,22 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             kept.put(o)
         }
         prefs.edit().putString(DECISIONS_KEY, kept.toString()).apply()
+    }
+
+    /** Vide la file entière. Appelé au départ DÉLIBÉRÉ d'un compte —
+     *  déconnexion demandée, suppression de compte — et jamais sur une session
+     *  simplement expirée, où les décisions en attente doivent survivre au
+     *  renouvellement du jeton.
+     *
+     *  Sans ça la file traversait le changement de compte : les décisions du
+     *  chauffeur précédent étaient rejouées sous l'identité du suivant, contre
+     *  des courses que la suppression du compte avait emportées en cascade.
+     *  Parité iOS (`clearRideDecisions`). */
+    @ReactMethod
+    fun clearRideDecisions() {
+        reactContext.applicationContext
+            .getSharedPreferences(DECISIONS_PREFS, Context.MODE_PRIVATE)
+            .edit().remove(DECISIONS_KEY).apply()
     }
 
     /** Empile une décision prise DANS l'app, quand son écriture en base n'a pas
@@ -438,6 +455,10 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 if (o.isNull("platform")) putNull("platform") else putString("platform", o.optString("platform"))
                 if (o.isNull("detail")) putNull("detail") else putString("detail", o.optString("detail"))
                 putDouble("occurredAt", o.optDouble("occurredAt", 0.0))
+                // La capture OCR de l'écran fautif : c'est elle qui deviendra une
+                // fixture, donc un cas de non-régression pour les trois parsers.
+                o.optString("blocks").takeIf { it.isNotEmpty() }?.let { putString("blocks", it) }
+                o.optInt("screenHeight", 0).takeIf { it > 0 }?.let { putInt("screenHeight", it) }
             })
         }
     }
@@ -499,6 +520,23 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             FloatingBubbleService.scanCountToday =
                 maxOf(FloatingBubbleService.scanCountToday, countToday)
         }
+    }
+
+    /** Limite du palier GRATUIT, pour le plafond d'appareil. Le COMPTEUR associé
+     *  n'est jamais poussé d'ici : il est tenu par le natif en
+     *  SharedPreferences, et c'est ce qui le rend insensible au changement de
+     *  compte. Parité iOS (`setDeviceQuotaLimit`). */
+    @ReactMethod
+    fun setDeviceQuotaLimit(freeLimit: Int) {
+        FloatingBubbleService.deviceFreeLimit = freeLimit
+    }
+
+    /** Compteur d'appareil redescendu du serveur (`device_scan_usage`), pour
+     *  qu'une réinstallation ne reparte pas d'un compteur vierge.
+     *  Parité iOS (`setDeviceScanCount`). */
+    @ReactMethod
+    fun setDeviceScanCount(deviceUsed: Int) {
+        FloatingBubbleService.seedDeviceScanCount(reactContext.applicationContext, deviceUsed)
     }
 
 // ─── Native → JS (events) ────────────────────────────────────────────────────
@@ -684,20 +722,34 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         const val FAILS_KEY = "pending"
         private const val FAILS_MAX = 50
 
+        /**
+         * @param blocks Les blocs OCR de l'écran qui vient d'échouer, quand il y
+         *   en a. Sans eux, `scan_debug` ne se remplissait que sur les scans qui
+         *   RÉUSSISSENT — la capture était écrite après l'enregistrement de la
+         *   course. Les écrans que ni les règles ni Gemini n'ont su lire ne
+         *   laissaient donc rien à rejouer : on comptait les échecs sans jamais
+         *   pouvoir les corriger. Plafonné en taille — la file vit dans des
+         *   SharedPreferences relevées au prochain réveil du JS.
+         */
         fun emitScanFailure(
             ctx: Context,
             reason: String,
             detail: String? = null,
             platform: String? = null,
             surface: String = "bubble",
+            blocks: String? = null,
+            screenHeight: Int = 0,
         ) {
             val occurredAt = System.currentTimeMillis() / 1000.0
+            val keptBlocks = blocks?.takeIf { it.length <= 96_000 }
             val map = Arguments.createMap().apply {
                 putString("reason", reason)
                 putString("surface", surface)
                 if (platform != null) putString("platform", platform) else putNull("platform")
                 if (detail != null) putString("detail", detail) else putNull("detail")
                 putDouble("occurredAt", occurredAt)
+                if (keptBlocks != null) putString("blocks", keptBlocks)
+                if (keptBlocks != null && screenHeight > 0) putInt("screenHeight", screenHeight)
             }
             // Même règle que les résultats : on ne bufferise QUE si le JS n'a pas
             // pu recevoir l'événement, sinon la vidange le rejouerait en double.
@@ -711,6 +763,10 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                     put("platform", platform ?: JSONObject.NULL)
                     put("detail", detail ?: JSONObject.NULL)
                     put("occurredAt", occurredAt)
+                    if (keptBlocks != null) {
+                        put("blocks", keptBlocks)
+                        if (screenHeight > 0) put("screenHeight", screenHeight)
+                    }
                 })
                 val trimmed = if (arr.length() > FAILS_MAX) {
                     JSONArray().also { out ->

@@ -599,7 +599,11 @@ final class LiveActivityManager {
   /// - Returns: `false` si aucune activité n'est en cours — l'erreur n'a donc été
   ///   montrée nulle part et l'appelant doit notifier à la place.
   @discardableResult
-  func showError() -> Bool {
+  /// Carte d'échec. `network` choisit le motif affiché : « erreur réseau » se
+  /// retente tel quel, « analyse impossible » demande une autre capture. Avant,
+  /// un échec d'itinéraire n'affichait rien du tout — il laissait passer les
+  /// chiffres de la plateforme sous les couleurs d'un verdict Strive.
+  func showError(network: Bool = false) -> Bool {
     guard let activity = liveActivity() else {
       log("showError() — no live activity, skip")
       return false
@@ -607,7 +611,7 @@ final class LiveActivityManager {
     log("showError() on \(activity.id)")
     let prev = freshestState(of: activity)
     let errorState = StriveActivityAttributes.State(
-      platform: "ERROR",
+      platform: network ? "ERROR_NET" : "ERROR",
       fare: 0, hourlyRate: 0, kmRate: 0,
       distanceKm: 0, durationMin: 0, verdictLevel: 0,
       todayEarnings: prev.todayEarnings,
@@ -654,7 +658,7 @@ final class LiveActivityManager {
     // Tant que la dernière course attend une décision, le dashboard ne doit pas
     // écraser son verdict. `RideDecisionIntent` efface `rideId` en revenant aux KPI.
     let resultShowing = prev.rideId != nil
-      && prev.platform != "IDLE" && prev.platform != "ERROR"
+      && prev.platform != "IDLE" && prev.platform != "ERROR" && prev.platform != "ERROR_NET"
     log("updateSessionKPI earnings=\(todayEarnings) rate=\(todayHourlyRate) resultShowing=\(resultShowing)")
     let state = StriveActivityAttributes.State(
       platform: resultShowing ? prev.platform : "IDLE",

@@ -1,5 +1,6 @@
 package com.strive.scanner
 
+import android.content.Context
 import android.util.Log
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -20,8 +21,32 @@ object TomTomService {
     private const val TIMEOUT_MS   = 4_000
     private const val TAG          = "TomTomService"
 
-    /** Clé API TomTom — renseignée depuis JS au démarrage via setTomTomApiKey. */
+    /** Clé API TomTom — poussée depuis JS au login via setTomTomApiKey.
+     *
+     *  PERSISTÉE, comme la langue et le pays : le service de bulle survit à la
+     *  mort du process RN (Android le tue pour récupérer de la mémoire, c'est
+     *  banal), et une statique seule repartait alors vide. Le scan suivant
+     *  tournait sans géocodage ni itinéraire — et, avant le repli explicite,
+     *  affichait les chiffres de la plateforme comme s'il les avait mesurés. */
     var apiKey: String = ""
+
+    private const val PREFS = "strive_scanner_tomtom"
+    private const val KEY = "apiKey"
+
+    /** Écrit la clé ET la persiste. Appelée par le bridge, depuis le JS. */
+    fun setApiKey(ctx: Context, key: String) {
+        apiKey = key
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY, key).apply()
+    }
+
+    /** Rend la clé au service qui redémarre sans JS. Mirror `MarketFormat.hydrate`. */
+    fun hydrate(ctx: Context) {
+        if (apiKey.isNotEmpty()) return
+        apiKey = ctx.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY, "") ?: ""
+    }
 
     /**
      * Pays d'activité du chauffeur, pour le géocodage.
@@ -68,45 +93,86 @@ object TomTomService {
     private const val MIN_SCORE = 3.0
 
     /**
+     * Issue d'un calcul d'itinéraire. Mirror iOS `TomTomService.RouteOutcome`.
+     *
+     * `null` ne disait que « pas d'itinéraire », et l'appelant se rabattait alors
+     * sur les chiffres lus à l'écran — ceux de la plateforme — sans que le
+     * chauffeur puisse le savoir. Les deux motifs ne se soignent pourtant pas de
+     * la même façon : un réseau absent se retente, une adresse illisible se
+     * recapture. Deux messages, donc deux valeurs.
+     */
+    sealed class RouteOutcome {
+        data class Ok(val route: RouteResult) : RouteOutcome()
+        /** Aucune clé configurée : rien n'est mesurable sur cette install. */
+        object NoKey : RouteOutcome()
+        /** TomTom n'a pas répondu — réseau, timeout, erreur HTTP. */
+        object Unreachable : RouteOutcome()
+        /** TomTom a répondu, résultat inexploitable : adresse sous le plancher
+         *  de fiabilité, ou trajet hors bornes. */
+        object Unusable : RouteOutcome()
+    }
+
+    /** Issue d'un géocodage. Même raison d'être que [RouteOutcome]. */
+    private sealed class GeocodeOutcome {
+        data class Hit(val hit: GeocodeHit) : GeocodeOutcome()
+        object Unreachable : GeocodeOutcome()
+        object Unusable : GeocodeOutcome()
+    }
+
+    /**
      * Calcule le trajet (distance + durée trafic) entre deux adresses texte.
      * Appelle le callback avec le résultat ou null si TomTom échoue.
      */
     fun calculateRoute(
         pickupAddress: String,
         destinationAddress: String,
-        callback: (RouteResult?) -> Unit,
+        callback: (RouteOutcome) -> Unit,
     ) {
-        if (!isReady) { callback(null); return }
-        if (pickupAddress.isBlank() || destinationAddress.isBlank()) { callback(null); return }
+        if (!isReady) { callback(RouteOutcome.NoKey); return }
+        if (pickupAddress.isBlank() || destinationAddress.isBlank()) {
+            callback(RouteOutcome.Unusable); return
+        }
 
         Thread {
             try {
                 // Geocoding pickup + destination en parallèle — chacun fait jusqu'à
                 // 3 variantes d'adresse en série, donc parallèliser les 2 colonnes
                 // divise potentiellement par 2 le temps total avant routing.
-                var fromHit: GeocodeHit? = null
-                var toHit: GeocodeHit? = null
-                val tFrom = Thread { fromHit = geocodeBestVariant(pickupAddress) }
-                val tTo = Thread { toHit = geocodeBestVariant(destinationAddress) }
+                var fromOutcome: GeocodeOutcome = GeocodeOutcome.Unusable
+                var toOutcome: GeocodeOutcome = GeocodeOutcome.Unusable
+                val tFrom = Thread { fromOutcome = geocodeBestVariant(pickupAddress) }
+                val tTo = Thread { toOutcome = geocodeBestVariant(destinationAddress) }
                 tFrom.start(); tTo.start()
                 tFrom.join(); tTo.join()
 
-                val from = fromHit
-                val to = toHit
+                val from = (fromOutcome as? GeocodeOutcome.Hit)?.hit
+                val to = (toOutcome as? GeocodeOutcome.Hit)?.hit
                 if (from == null || to == null) {
-                    Log.w(TAG, "geocode failed pickup=$from dest=$to")
-                    callback(null); return@Thread
+                    // Un réseau absent l'emporte sur une adresse douteuse : c'est
+                    // le motif le plus probable des deux, et le seul qui vaille la
+                    // peine d'être retenté tel quel.
+                    val unreachable = fromOutcome is GeocodeOutcome.Unreachable ||
+                        toOutcome is GeocodeOutcome.Unreachable
+                    Log.w(TAG, "geocode failed unreachable=" + unreachable)
+                    callback(if (unreachable) RouteOutcome.Unreachable else RouteOutcome.Unusable)
+                    return@Thread
                 }
                 Log.i(TAG, "geocode scores pickup=${"%.1f".format(from.score)} dest=${"%.1f".format(to.score)}")
                 // Enrichit avec les adresses canoniques TomTom → affichage propre.
-                val route = getRoute(from.coords, to.coords)?.copy(
-                    pickupFormatted = from.formatted,
-                    destFormatted = to.formatted,
-                )
-                callback(route)
+                when (val routeOutcome = getRoute(from.coords, to.coords)) {
+                    is RouteOutcome.Ok -> callback(
+                        RouteOutcome.Ok(
+                            routeOutcome.route.copy(
+                                pickupFormatted = from.formatted,
+                                destFormatted = to.formatted,
+                            )
+                        )
+                    )
+                    else -> callback(routeOutcome)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "exception", e)
-                callback(null)
+                callback(RouteOutcome.Unreachable)
             }
         }.start()
     }
@@ -117,18 +183,28 @@ object TomTomService {
      * Essaie l'adresse telle quelle puis des variantes si le score est bas.
      * Garde le meilleur score. Early-exit si on trouve un résultat fiable.
      */
-    private fun geocodeBestVariant(address: String): GeocodeHit? {
+    private fun geocodeBestVariant(address: String): GeocodeOutcome {
         val variants = buildAddressVariants(address)
         var best: GeocodeHit? = null
+        var sawUnreachable = false
         for (variant in variants) {
-            val hit = geocode(variant) ?: continue
-            if (best == null || hit.score > best.score) best = hit
-            if (best.score >= MIN_SCORE + 2) return best
+            when (val outcome = geocode(variant)) {
+                is GeocodeOutcome.Hit -> {
+                    val hit = outcome.hit
+                    val current = best
+                    if (current == null || hit.score > current.score) best = hit
+                    val kept = best
+                    if (kept != null && kept.score >= MIN_SCORE + 2) return GeocodeOutcome.Hit(kept)
+                }
+                GeocodeOutcome.Unreachable -> sawUnreachable = true
+                GeocodeOutcome.Unusable -> continue
+            }
         }
         // Plancher de fiabilité : un score < MIN_SCORE = match centroïde ville/pays
-        // (adresse OCR douteuse). On préfère null → pas de "vraie" distance fausse :
-        // le pipeline retombe sur l'OCR plutôt qu'un trajet centre-à-centre.
-        return best?.takeIf { it.score >= MIN_SCORE }
+        // (adresse OCR douteuse). On préfère échouer → pas de "vraie" distance
+        // fausse, et surtout pas un trajet centre-à-centre présenté comme mesuré.
+        best?.takeIf { it.score >= MIN_SCORE }?.let { return GeocodeOutcome.Hit(it) }
+        return if (sawUnreachable) GeocodeOutcome.Unreachable else GeocodeOutcome.Unusable
     }
 
     /**
@@ -155,17 +231,21 @@ object TomTomService {
         return result.toList()
     }
 
-    private fun geocode(address: String): GeocodeHit? {
+    private fun geocode(address: String): GeocodeOutcome {
         // Cache local — les coords GPS d'une adresse sont stables dans le temps.
         // Hit cache → 0 requête TomTom. Voir GeocodeCache pour la normalisation.
-        GeocodeCache.get(address)?.let { return it }
+        GeocodeCache.get(address)?.let { return GeocodeOutcome.Hit(it) }
 
         val encoded = URLEncoder.encode(address, "UTF-8")
         val url = "$BASE_SEARCH/$encoded.json?key=$apiKey&language=$geocodeLanguage&countrySet=$countrySet&limit=1"
-        val json = httpGet(url) ?: return null
+        // La distinction porte ici : pas de réponse = réseau, réponse illisible =
+        // adresse. Confondre les deux, c'est dire « recapture » à quelqu'un qui est
+        // simplement dans un parking souterrain.
+        val json = httpGet(url) ?: return GeocodeOutcome.Unreachable
         val hit = try {
-            val results = JSONObject(json).optJSONArray("results") ?: return null
-            if (results.length() == 0) return null
+            val results = JSONObject(json).optJSONArray("results")
+                ?: return GeocodeOutcome.Unusable
+            if (results.length() == 0) return GeocodeOutcome.Unusable
             val first = results.getJSONObject(0)
             val pos = first.getJSONObject("position")
             val score = first.optDouble("score", 0.0)
@@ -179,17 +259,17 @@ object TomTomService {
         // bas) cacherait à vie un mauvais POI. Le seuil MIN_SCORE est aussi
         // celui utilisé par geocodeBestVariant pour décider si on continue.
         if (hit != null && hit.score >= MIN_SCORE) GeocodeCache.put(address, hit)
-        return hit
+        return if (hit != null) GeocodeOutcome.Hit(hit) else GeocodeOutcome.Unusable
     }
 
     // ─── Routing ──────────────────────────────────────────────────────────────────
 
-    private fun getRoute(from: Coords, to: Coords): RouteResult? {
+    private fun getRoute(from: Coords, to: Coords): RouteOutcome {
         val waypoints = "${from.lat},${from.lon}:${to.lat},${to.lon}"
         // traffic=true + departAt=now → trafic temps réel (flux live + incidents)
         // à l'instant du calcul ; routeType=fastest → meilleur trajet.
         val url = "$BASE_ROUTING/$waypoints/json?key=$apiKey&travelMode=car&traffic=true&routeType=fastest&departAt=now"
-        val json = httpGet(url) ?: return null
+        val json = httpGet(url) ?: return RouteOutcome.Unreachable
         return try {
             val summary = JSONObject(json)
                 .getJSONArray("routes")
@@ -197,12 +277,14 @@ object TomTomService {
                 .getJSONObject("summary")
             val seconds = summary.getInt("travelTimeInSeconds")
             val meters = summary.getInt("lengthInMeters")
-            RouteResult(
-                distanceKm = Math.round(meters / 100.0) / 10.0,
-                durationMin = Math.round(seconds / 60.0).toInt(),
+            RouteOutcome.Ok(
+                RouteResult(
+                    distanceKm = Math.round(meters / 100.0) / 10.0,
+                    durationMin = Math.round(seconds / 60.0).toInt(),
+                )
             )
         } catch (e: Exception) {
-            Log.w(TAG, "route parse", e); null
+            Log.w(TAG, "route parse", e); RouteOutcome.Unusable
         }
     }
 

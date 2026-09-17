@@ -149,6 +149,11 @@
         "dobNotExist": "Deze datum bestaat niet",
         "dobMinAge": "Je moet minstens 18 jaar zijn",
         "saveFailed": "Fout bij het opslaan"
+      },
+      "blocked": {
+        "title": "Te veel accounts op deze telefoon",
+        "body": "Dit toestel heeft de afgelopen zestig dagen vijf accounts aangemaakt. Meld je aan met een daarvan, of probeer het later opnieuw.",
+        "action": "Terug naar aanmelden"
       }
     },
     "deleteAccountSub": "Onomkeerbare actie",
@@ -792,7 +797,10 @@
       "gemini_ko": "De AI-analyse is mislukt",
       "la_start_failed": "Weergave onmogelijk",
       "expired": "Analyse onderbroken",
-      "timeout": "Analyse duurde te lang"
+      "timeout": "Analyse duurde te lang",
+      "route_unreachable": "Routeservice onbereikbaar",
+      "route_unusable": "Route kon niet worden berekend",
+      "route_no_key": "Meting niet beschikbaar op dit toestel"
     }
   },
   "iap": {
@@ -1019,6 +1027,8 @@
     "rideRejected": {
       "title": "Rit niet geregistreerd",
       "bodyQuota": "Daglimiet overschreden: deze rit kon niet aan je statistieken worden toegevoegd.",
+      "bodyDeviceQuota": "De 3 gratis scans van deze telefoon zijn vandaag al gebruikt, met een ander account. Kom morgen terug of ga naar Plus.",
+      "bodyPriorAccount": "De gratis scans van deze telefoon zijn vandaag al gebruikt. De teller volgt het toestel, niet het account — morgen begint hij opnieuw.",
       "bodyOther": "Deze rit werd geweigerd bij de registratie. Neem contact op met support als dit opnieuw gebeurt."
     },
     "sessionClosed": {
@@ -1033,6 +1043,12 @@
       "title": "📊 Je balans van de week",
       "body": "Kom kijken hoeveel je meer zou kunnen verdienen met Strive.",
       "bodyLoss": "≈ {{amount}} onder je doel deze week. Bekijk hoe je dat voorkomt."
+    },
+    "optIn": {
+      "title": "Meldingen inschakelen?",
+      "body": "Deze rit is geweigerd en niets liet het je weten. Met meldingen waarschuwt Strive je wanneer een rit niet wordt opgeslagen, wanneer je quotum opnieuw begint en wanneer een sessie open blijft.",
+      "enable": "Inschakelen",
+      "later": "Later"
     }
   },
   "tier": {
@@ -1157,10 +1173,10 @@
     "failuresEmpty": "Geen fouten geregistreerd in de laatste 30 dagen.",
     "reload": "Opnieuw laden",
     "countersTitle": "Antimisbruiktellers",
-    "countersHint": "Leegt de registratieteller van de Keychain en genereert de toestel-id opnieuw. Te gebruiken om een cyclus aanmaken → verwijderen → opnieuw aanmaken van een account over te doen.",
+    "countersHint": "Wist de aanmeldteller in de Keychain, genereert een nieuwe toestel-id en zet de scanteller van het toestel op nul. Om een cyclus aanmaken → verwijderen → opnieuw aanmaken te herhalen.",
     "countersReset": "Toestel resetten",
     "countersResetting": "Resetten…",
-    "countersDone": "Tellers geleegd. Het toestel wordt als nieuw gezien: vrije registratielimiet en welkomstgeschenk opnieuw te spelen.",
+    "countersDone": "Nieuw toestel, meteen: aanmeldquotum vrij, welkomstcadeau opnieuw speelbaar en toestelscans op nul. De app hoeft niet opnieuw te starten.",
     "presTitle": "Dynamic Island — weergaven",
     "widgetNeverSeen": "nooit gezien — schrijft niet naar de App Group",
     "presNeedsTracing": "Schakel het verzamelen hierboven in en rijd normaal. De tellers vullen zich bij elk scanresultaat.",
@@ -1273,6 +1289,10 @@
   },
   "native": {
     "analysisFailed": "Analyse mislukt",
+    "networkFailed": "Netwerkfout",
+    "networkRetry": "Controleer je verbinding en scan opnieuw",
+    "bubbleErrorCapture": "Onleesbare schermafbeelding",
+    "bubbleErrorNetwork": "Netwerkfout",
     "analyzing": "Analyseren…",
     "goPlus": "Ga naar Plus om te zien",
     "sessionRunning": "Sessie bezig",

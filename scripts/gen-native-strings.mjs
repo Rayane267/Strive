@@ -89,6 +89,8 @@ const ANDROID = {
   scanner_ride_decline: 'bubbleRideDeclined',
   scanner_quota_reached: 'bubbleQuota',
   scanner_quota_reached_free: 'bubbleQuotaFree',
+  scanner_error_capture: 'bubbleErrorCapture',
+  scanner_error_network: 'bubbleErrorNetwork',
 };
 
 /** `values` sans suffixe = le français, défaut du projet Android. */

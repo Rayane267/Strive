@@ -149,6 +149,11 @@
         "dobNotExist": "Questa data non esiste",
         "dobMinAge": "Devi avere almeno 18 anni",
         "saveFailed": "Errore durante il salvataggio"
+      },
+      "blocked": {
+        "title": "Troppi account su questo telefono",
+        "body": "Questo dispositivo ha creato cinque account negli ultimi sessanta giorni. Accedi con uno di essi o riprova più tardi.",
+        "action": "Torna all'accesso"
       }
     },
     "deleteAccountSub": "Azione irreversibile",
@@ -792,7 +797,10 @@
       "gemini_ko": "L'analisi con IA non è riuscita",
       "la_start_failed": "Visualizzazione impossibile",
       "expired": "Analisi interrotta",
-      "timeout": "Analisi troppo lunga"
+      "timeout": "Analisi troppo lunga",
+      "route_unreachable": "Servizio itinerari irraggiungibile",
+      "route_unusable": "Itinerario non calcolabile",
+      "route_no_key": "Misurazione non disponibile su questo dispositivo"
     }
   },
   "iap": {
@@ -1019,6 +1027,8 @@
     "rideRejected": {
       "title": "Corsa non registrata",
       "bodyQuota": "Limite giornaliero superato: questa corsa non ha potuto essere aggiunta alle tue statistiche.",
+      "bodyDeviceQuota": "I 3 scan gratuiti di questo telefono sono già stati usati oggi, con un altro account. Torna domani o passa a Plus.",
+      "bodyPriorAccount": "Le scansioni gratuite di questo telefono sono già state usate oggi. Il contatore segue il dispositivo, non l'account: riparte domani.",
       "bodyOther": "Questa corsa è stata rifiutata al momento della registrazione. Contatta l'assistenza se si ripete."
     },
     "sessionClosed": {
@@ -1033,6 +1043,12 @@
       "title": "📊 Il tuo bilancio della settimana",
       "body": "Vieni a vedere quanto potresti guadagnare in più con Strive.",
       "bodyLoss": "≈ {{amount}} sotto il tuo obiettivo questa settimana. Scopri come evitarlo."
+    },
+    "optIn": {
+      "title": "Attivare le notifiche?",
+      "body": "Questa corsa è stata rifiutata e nulla te l'ha detto. Con le notifiche, Strive ti avvisa quando una corsa non viene salvata, quando la tua quota riparte e quando una sessione resta aperta.",
+      "enable": "Attiva",
+      "later": "Più tardi"
     }
   },
   "tier": {
@@ -1157,10 +1173,10 @@
     "failuresEmpty": "Nessun errore registrato negli ultimi 30 giorni.",
     "reload": "Ricarica",
     "countersTitle": "Contatori antiabuso",
-    "countersHint": "Svuota il contatore di registrazioni del Keychain e rigenera l'identificativo del dispositivo. Da usare per rigiocare un ciclo creazione → eliminazione → ricreazione di un account.",
+    "countersHint": "Svuota il contatore di registrazioni del Keychain, rigenera l'identificatore del dispositivo e azzera il contatore di scansioni del dispositivo. Serve a ripetere un ciclo creazione → eliminazione → ricreazione dell'account.",
     "countersReset": "Reimposta il dispositivo",
     "countersResetting": "Reimpostazione…",
-    "countersDone": "Contatori svuotati. Il dispositivo è visto come nuovo: limite di registrazione libero e regalo di benvenuto ripetibile.",
+    "countersDone": "Dispositivo nuovo, subito: quota di registrazione libera, regalo di benvenuto ripetibile e scansioni del dispositivo azzerate. Non serve riavviare l'app.",
     "presTitle": "Dynamic Island — presentazioni",
     "widgetNeverSeen": "mai visto — non scrive nell’App Group",
     "presNeedsTracing": "Attiva la raccolta qui sopra e guida normalmente. I contatori si riempiono a ogni risultato di scansione.",
@@ -1273,6 +1289,10 @@
   },
   "native": {
     "analysisFailed": "Analisi impossibile",
+    "networkFailed": "Errore di rete",
+    "networkRetry": "Controlla la connessione e riprova",
+    "bubbleErrorCapture": "Schermata illeggibile",
+    "bubbleErrorNetwork": "Errore di rete",
     "analyzing": "Analisi…",
     "goPlus": "Passa a Plus per vedere",
     "sessionRunning": "Sessione in corso",

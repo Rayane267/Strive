@@ -534,11 +534,32 @@ class ShareViewController: UIViewController {
           self.fallbackToGemini(image: image)
           return
         }
+        // Même règle que le raccourci : sans itinéraire, rien n'a été mesuré —
+        // on ne montre pas les chiffres de l'écran comme un verdict Strive.
+        guard result.routeStatus == .ok else {
+          self.showRouteFailure(result.routeStatus)
+          return
+        }
         self.incrementScanCount()
         self.showResult(from: result)
         self.saveSharedResult(result)
       }
     }
+  }
+
+  /// Échec d'itinéraire : deux motifs, deux messages. Le réseau se retente, une
+  /// adresse illisible demande une autre capture.
+  private func showRouteFailure(_ status: RouteStatus) {
+    showError(
+      status.isNetwork
+        ? localizedString(
+            fr: "Erreur réseau — vérifiez votre connexion et relancez",
+            en: "Network error — check your connection and scan again")
+        : localizedString(
+            fr: "Analyse impossible — réessayez avec une autre capture",
+            en: "Analysis failed — try another screenshot"),
+      code: status.errorCode
+    )
   }
 
   private func fallbackToGemini(image: UIImage) {
@@ -602,30 +623,32 @@ class ShareViewController: UIViewController {
       // qui applique les seuils ET la préférence `includePickup` (l'ancien calcul
       // local ici ignorait le réglage → verdict identique ON/OFF).
       guard TomTomService.shared.isReady else {
-        DispatchQueue.main.async {
-          let final = ScanProcessor.shared.computeFinal(scan: result)
-          self.incrementScanCount()
-          self.showResult(from: final)
-          self.saveSharedResult(final)
-        }
+        DispatchQueue.main.async { self.showRouteFailure(.noKey) }
         return
       }
 
       DispatchQueue.main.async { self.statusLabel.text = self.localizedString(fr: "Calcul de l'itinéraire…", en: "Calculating the route…") }
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
+      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
         // calculateRoute rend la main sur le main thread.
-        var refined = result
-        if let route = route,
-           route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 {
-          let ratio = result.fare / route.distanceKm
-          if ratio >= 0.2, ratio <= 12.0 {
-            refined = result.copy(
-              distanceKm: route.distanceKm, durationMin: route.durationMin,
-              pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
-            )
+        guard case .ok(let route) = outcome,
+              route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 else {
+          switch outcome {
+          case .unreachable: self.showRouteFailure(.unreachable)
+          case .noKey:       self.showRouteFailure(.noKey)
+          default:           self.showRouteFailure(.unusable)
           }
+          return
         }
-        let final = ScanProcessor.shared.computeFinal(scan: refined)
+        let ratio = result.fare / route.distanceKm
+        guard ratio >= 0.2, ratio <= 12.0 else {
+          self.showRouteFailure(.unusable)
+          return
+        }
+        let refined = result.copy(
+          distanceKm: route.distanceKm, durationMin: route.durationMin,
+          pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
+        )
+        let final = ScanProcessor.shared.computeFinal(scan: refined, routeStatus: .ok)
         self.incrementScanCount()
         self.showResult(from: final)
         self.saveSharedResult(final)

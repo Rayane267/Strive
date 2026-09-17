@@ -14,4 +14,6 @@
   <string name="scanner_ride_decline">❌ Geweigerd</string>
   <string name="scanner_quota_reached">Limiet bereikt</string>
   <string name="scanner_quota_reached_free">Limiet bereikt · Ga naar Plus</string>
+  <string name="scanner_error_capture">Onleesbare schermafbeelding</string>
+  <string name="scanner_error_network">Netwerkfout</string>
 </resources>

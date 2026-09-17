@@ -112,6 +112,32 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       return .result(value: "signed_out")
     }
 
+    // Jeton présent mais périmé. Le scan aurait tourné puis échoué à l'appel de
+    // `gemini-proxy` : autant le dire tout de suite, avant l'OCR.
+    //
+    // Le message NE DIT PAS « reconnectez-vous ». Un jeton d'accès expiré ne
+    // signifie pas que le compte est déconnecté : le refresh token reste valide
+    // des semaines, et il suffit que l'app s'ouvre pour que tout reparte.
+    // Annoncer une déconnexion ferait croire au chauffeur qu'il a perdu son
+    // compte, en pleine journée de travail, pour quelque chose que deux
+    // secondes d'ouverture corrigent.
+    //
+    // `session_off` au journal : le vocabulaire de `log_scan_failure` est fermé
+    // et n'a pas de motif propre à ce cas. C'est la même famille — session
+    // inutilisable — même si la cause diffère.
+    guard !isSessionExpired else {
+      sendLocalNotification(
+        title: "Strive",
+        body: localizedString(
+          "notif.sessionStale",
+          fr: "Ouvrez Strive pour réactiver le scan.",
+          en: "Open Strive to reactivate scanning."
+        )
+      )
+      logFailure("session_off")
+      return .result(value: "session_stale")
+    }
+
     guard isScannerEnabled else {
       sendLocalNotification(
         title: "Strive",
@@ -127,6 +153,25 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       )
       logFailure("session_off")
       return .result(value: "session_off")
+    }
+
+    // AVANT le plafond du compte, et surtout avant le décodage de l'image : un
+    // scan interdit ne doit coûter ni OCR, ni TomTom, ni Gemini. C'est tout
+    // l'intérêt de tenir le compteur d'appareil ici plutôt que de laisser le
+    // serveur refuser l'insertion — à ce moment-là, la dépense est déjà faite.
+    guard !isDeviceQuotaReached else {
+      sendLocalNotification(
+        title: "Strive",
+        // Sans chiffre, comme le message voisin : ce process ne connaît que la
+        // limite poussée par le JS, et `plan_limits` est modifiable en base.
+        body: localizedString(
+          "notif.quotaDevice",
+          fr: "Ce téléphone a déjà utilisé ses scans gratuits du jour, avec un autre compte. Revenez demain ou passez à Plus.",
+          en: "This phone has already used today's free scans, on another account. Come back tomorrow or go Plus."
+        )
+      )
+      logFailure("quota_reached")
+      return .result(value: "device_quota_reached")
     }
 
     guard !isQuotaReached else {
@@ -321,6 +366,21 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     }
     // Verrou anti double-appui libéré dès qu'on a un résultat à montrer.
     ScanProcessor.markScanFinished()
+
+    // RIEN N'A ÉTÉ MESURÉ → RIEN N'EST MONTRÉ, RIEN N'EST ENREGISTRÉ.
+    //
+    // Sans cette garde, un itinéraire manquant retombait ici avec la distance et
+    // la durée LUES SUR L'ÉCRAN — celles de la plateforme — et les présentait
+    // avec le même verdict coloré qu'une vraie mesure. Deux chauffeurs côte à
+    // côte sur la même course ont vu 100 €/h et 38 €/h ; le second avait raison.
+    // Strive existe pour contester le chiffre de la plateforme : le réafficher
+    // en silence sous ses propres couleurs était le seul bug qu'elle n'avait pas
+    // le droit d'avoir.
+    if result.routeStatus != .ok {
+      presentRouteFailure(result.routeStatus, done: done)
+      return
+    }
+
     let scanTs = Date().timeIntervalSince1970
     let rideId = UUID().uuidString
     // liveActivityReady (et pas useLiveActivity) : si la LA est coupée dans les
@@ -450,7 +510,13 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // `lastScanMayBeRide` distingue les deux causes : écran sans signal VTC
     // (on n'a même pas appelé Gemini) vs Gemini appelé mais sans réponse
     // exploitable. Sans ça les deux se confondent dans les agrégats.
-    logFailure(ScanProcessor.shared.lastScanMayBeRide ? "gemini_ko" : "not_a_ride")
+    // `gemini_ko` = les règles ont calé ET Gemini n'a pas rattrapé. C'est l'écran
+    // le plus précieux du parc : celui qu'aucun des deux lecteurs n'a su lire.
+    logFailure(
+      ScanProcessor.shared.lastScanMayBeRide ? "gemini_ko" : "not_a_ride",
+      blocks: ScanProcessor.shared.lastScanMayBeRide ? ScanProcessor.shared.lastBlocksJson : nil,
+      screenHeight: ScanProcessor.shared.lastScreenHeight
+    )
     // Même règle que presentResult : sans activité en cours, showError() ne
     // montre rien du tout — on notifie alors, plutôt que d'échouer en silence.
     var shown = false
@@ -479,6 +545,48 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       )
     }
     markPresented()
+  }
+
+  /// Itinéraire impossible : on le dit, et on n'enregistre rien.
+  ///
+  /// Deux motifs, deux messages — parce qu'ils ne se soignent pas pareil. Le
+  /// réseau se retente sur place ; une adresse illisible demande une autre
+  /// capture. Le code de support, lui, distingue les trois causes réelles
+  /// (réseau, adresse, clé absente) sans les exposer au chauffeur.
+  private func presentRouteFailure(
+    _ status: RouteStatus,
+    done: @escaping (String) -> Void
+  ) {
+    guard !hasPresented else { done(""); return }
+    // L'écran a été lu (on a des adresses), c'est l'itinéraire qui manque — la
+    // capture reste utile : elle dit quelles adresses le parser a produites, donc
+    // ce que le géocodeur a refusé.
+    logFailure(
+      status.errorCode?.reason ?? "route_ko",
+      blocks: status == .unusable ? ScanProcessor.shared.lastBlocksJson : nil,
+      screenHeight: ScanProcessor.shared.lastScreenHeight
+    )
+
+    let body = status.isNetwork
+      ? StriveNativeStrings.get("networkFailed") + " — " + StriveNativeStrings.get("networkRetry")
+      : StriveNativeStrings.get("analysisFailed") + " — " + StriveNativeStrings.get("tryAnother")
+
+    var shown = false
+    if liveActivityReady {
+      shown = LiveActivityManager.shared.showError(network: status.isNetwork)
+    }
+    if !shown {
+      sendLocalNotification(
+        title: "Strive",
+        body: body,
+        code: status.errorCode,
+        // Le chauffeur a dix secondes pour décider : un verdict qui ne vient
+        // pas doit se dire tout de suite, pas après l'expiration de l'offre.
+        level: .timeSensitive
+      )
+    }
+    markPresented()
+    done(body)
   }
 
   /// Scan abandonné avant tout affichage : assertion de fond expirée (`.expired`)
@@ -527,20 +635,30 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         pickupDurationMin: gem.pickupDurationMin, pickupDistanceKm: gem.pickupDistanceKm
       )
       guard TomTomService.shared.isReady else {
-        completion(ScanProcessor.shared.computeFinal(scan: base)); return
+        completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .noKey)); return
       }
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { route in
-        var refined = base
-        if let route = route, route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 {
-          let r = gem.fare / route.distanceKm
-          if r >= 0.2, r <= 12.0 {
-            refined = base.copy(
-              distanceKm: route.distanceKm, durationMin: route.durationMin,
-              pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
-            )
+      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
+        switch outcome {
+        case .noKey:
+          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .noKey))
+        case .unreachable:
+          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unreachable))
+        case .unusable:
+          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable))
+        case .ok(let route):
+          guard route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 else {
+            completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable)); return
           }
+          let r = gem.fare / route.distanceKm
+          guard r >= 0.2, r <= 12.0 else {
+            completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable)); return
+          }
+          let refined = base.copy(
+            distanceKm: route.distanceKm, durationMin: route.durationMin,
+            pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
+          )
+          completion(ScanProcessor.shared.computeFinal(scan: refined, routeStatus: .ok))
         }
-        completion(ScanProcessor.shared.computeFinal(scan: refined))
       }
     }
   }
@@ -587,6 +705,58 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     return !(d.string(forKey: "supabaseUserJwt") ?? "").isEmpty
   }
 
+  /// Marge d'horloge avant de déclarer un jeton périmé.
+  ///
+  /// La comparaison se fait avec l'horloge DU TÉLÉPHONE, celle-là même qui peut
+  /// dériver. Un appareil légèrement en avance ferait passer pour mort un jeton
+  /// encore accepté par le serveur, et refuserait un scan parfaitement valide.
+  /// La marge penche donc du côté du doute : en cas d'hésitation on laisse
+  /// scanner, et c'est le serveur qui tranche — il est seul à faire autorité.
+  private static let jwtClockGrace: TimeInterval = 120
+
+  /// Le jeton stocké est-il périmé ?
+  ///
+  /// `isSignedIn` ne vérifie que la PRÉSENCE du jeton. Or un jeton d'accès
+  /// Supabase vit une heure, et il n'est renouvelé que par le JS — donc
+  /// seulement quand l'app tourne. Un chauffeur qui n'a pas ouvert Strive depuis
+  /// deux heures en a donc un, bien présent et parfaitement mort.
+  ///
+  /// Sans ce test, le scan partait quand même : Vision faisait l'OCR, puis
+  /// `gemini-proxy` rejetait l'appel (il revalide le jeton par `getUser`, qui
+  /// contrôle l'expiration). Le chauffeur attendait pour rien.
+  ///
+  /// On lit `exp` en décodant le payload, SANS vérifier la signature — inutile
+  /// ici : ce test ne protège rien, il évite une dépense. Falsifier son propre
+  /// jeton pour s'autoriser un scan que le serveur refusera ensuite n'a aucun
+  /// intérêt.
+  ///
+  /// Toute anomalie de lecture rend `false` : jeton illisible, payload non
+  /// conforme, `exp` absent. On ne bloque JAMAIS sur un doute — le pire cas
+  /// dégradé est le comportement d'avant.
+  private var isSessionExpired: Bool {
+    guard let d = UserDefaults(suiteName: appGroupId),
+          let jwt = d.string(forKey: "supabaseUserJwt"),
+          !jwt.isEmpty
+    else { return false }
+
+    let parts = jwt.split(separator: ".")
+    guard parts.count == 3 else { return false }
+
+    // base64url → base64, puis padding à un multiple de 4. `Data(base64Encoded:)`
+    // refuse les deux écarts, et un payload JWT n'est presque jamais padé.
+    var b64 = String(parts[1])
+      .replacingOccurrences(of: "-", with: "+")
+      .replacingOccurrences(of: "_", with: "/")
+    while b64.count % 4 != 0 { b64 += "=" }
+
+    guard let data = Data(base64Encoded: b64),
+          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let exp = payload["exp"] as? Double
+    else { return false }
+
+    return Date().timeIntervalSince1970 > exp + Self.jwtClockGrace
+  }
+
   private var appGroupId: String {
     (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String) ?? "group.com.striveapp.app"
   }
@@ -618,10 +788,49 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     return Self.scanCountForToday(d) >= limit
   }
 
+  /// Plafond de l'APPAREIL, tous comptes confondus — l'anti-farming par
+  /// suppression de compte.
+  ///
+  /// `scanCountToday` ne peut pas servir à ça : le JS le réécrit à chaque
+  /// ouverture du Dashboard avec le compteur que le SERVEUR tient pour le compte
+  /// courant. Un compte neuf le remet donc à zéro, ce qui est exactement le
+  /// geste qu'on veut rendre inopérant. D'où un second compteur, que le JS
+  /// n'écrase jamais et que seul un scan incrémente.
+  ///
+  /// `deviceUsed > ownUsed` : au moins un AUTRE compte a scanné depuis ce
+  /// téléphone aujourd'hui. Sans ce test, un chauffeur seul au bout de ses scans
+  /// verrait « avec un autre compte » alors qu'il n'y en a qu'un — son propre
+  /// plafond le refuse déjà, avec le bon motif.
+  ///
+  /// Comptes GRATUITS seulement : un abonné n'a rien à farmer, et le bloquer
+  /// parce qu'un remplaçant a utilisé le téléphone serait le punir de ce qu'il
+  /// a payé pour éviter.
+  ///
+  /// Miroir exact de la règle serveur (`enforce_scan_quota`, plafond
+  /// d'appareil). Un écart entre les deux ferait refuser ici ce que la base
+  /// accepte, ou l'inverse.
+  private var isDeviceQuotaReached: Bool {
+    guard let d = UserDefaults(suiteName: appGroupId) else { return false }
+    guard (d.object(forKey: "isFreeTier") as? Bool) ?? true else { return false }
+    // 0 = limite inconnue (JS jamais passé, première installation). On laisse
+    // scanner : le serveur, lui, refusera si c'est vraiment du farming.
+    let freeLimit = d.integer(forKey: "deviceFreeLimit")
+    if freeLimit <= 0 { return false }
+    let deviceUsed = Self.deviceScanCountForToday(d)
+    return deviceUsed >= freeLimit && deviceUsed > Self.scanCountForToday(d)
+  }
+
   /// Compteur du jour, en ignorant une valeur datée d'hier.
   private static func scanCountForToday(_ d: UserDefaults) -> Int {
     if d.integer(forKey: "scanCountDay") != currentQuotaDay(d) { return 0 }
     return d.integer(forKey: "scanCountToday")
+  }
+
+  /// Idem pour le compteur d'appareil. Même bornage par la date : le plafond
+  /// d'appareil se rouvre chaque jour comme celui du compte.
+  private static func deviceScanCountForToday(_ d: UserDefaults) -> Int {
+    if d.integer(forKey: "deviceScanCountDay") != currentQuotaDay(d) { return 0 }
+    return d.integer(forKey: "deviceScanCountToday")
   }
 
   /// Jour de quota (yyyymmdd) tenant compte du `quotaResetHour` (0 ou 4h).
@@ -638,6 +847,14 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     let base = d.integer(forKey: "scanCountDay") == today ? d.integer(forKey: "scanCountToday") : 0
     d.set(today, forKey: "scanCountDay")
     d.set(base + 1, forKey: "scanCountToday")
+    // Le compteur d'appareil suit le même scan, dans la même foulée : les deux
+    // doivent bouger ensemble, sinon `deviceUsed > ownUsed` se déclenche sur un
+    // écart d'écriture et le chauffeur se voit refuser pour « un autre compte »
+    // qui n'existe pas.
+    let deviceBase = d.integer(forKey: "deviceScanCountDay") == today
+      ? d.integer(forKey: "deviceScanCountToday") : 0
+    d.set(today, forKey: "deviceScanCountDay")
+    d.set(deviceBase + 1, forKey: "deviceScanCountToday")
   }
 
   private func localizedString(_ key: String, fr: String, en: String) -> String {
@@ -714,7 +931,20 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// relève au prochain passage au premier plan (`occurredAt` conserve l'heure
   /// réelle). Sans ça, un scan qui casse ici ne laisse aucune trace nulle part —
   /// c'est ce qui a rendu invisible le bug « ça scanne mais rien ne s'affiche ».
-  private func logFailure(_ reason: String, detail: String? = nil) {
+  /// Trace d'un scan qui n'aboutit pas.
+  ///
+  /// `blocks` joint LA CAPTURE qui a causé l'échec. Sans elle, `scan_debug` ne
+  /// se remplissait que sur les scans qui RÉUSSISSENT — la capture était écrite
+  /// après l'enregistrement de la course. Les écrans les plus durs, ceux que ni
+  /// les règles ni Gemini n'ont su lire, ne laissaient donc rien à rejouer : on
+  /// comptait les échecs sans jamais pouvoir les corriger. Ce sont pourtant les
+  /// seuls qui feraient progresser le parser.
+  private func logFailure(
+    _ reason: String,
+    detail: String? = nil,
+    blocks: String? = nil,
+    screenHeight: Int? = nil
+  ) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
@@ -729,6 +959,13 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       "occurredAt": Date().timeIntervalSince1970,
     ]
     if let detail = detail { entry["detail"] = detail }
+    // Plafond de taille : un dump OCR pèse quelques dizaines de Ko et cette file
+    // vit dans l'App Group, relevée seulement au prochain passage de l'app. Mieux
+    // vaut une capture perdue qu'un `UserDefaults` obese.
+    if let blocks = blocks, blocks.count <= 96_000 {
+      entry["blocks"] = blocks
+      if let h = screenHeight, h > 0 { entry["screenHeight"] = h }
+    }
     queue.append(entry)
     if queue.count > 50 { queue = Array(queue.suffix(50)) }
     if let data = try? JSONSerialization.data(withJSONObject: queue) {

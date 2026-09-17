@@ -148,6 +148,10 @@ export const scannerService: ScannerService = {
     ScanBridge?.queueRideDecision?.(rideId, status === 'ACCEPTED');
   },
 
+  clearRideDecisions: () => {
+    ScanBridge?.clearRideDecisions?.();
+  },
+
   ackScan: (rideId: string) => {
     ScanBridge?.ackScan?.(rideId);
   },
@@ -178,6 +182,14 @@ export const scannerService: ScannerService = {
 
   setScanQuota: (countToday: number, limit: number, resetHour: number) => {
     ScanBridge?.setScanQuota?.(countToday, limit, resetHour);
+  },
+
+  setDeviceQuotaLimit: (freeLimit: number) => {
+    ScanBridge?.setDeviceQuotaLimit?.(freeLimit);
+  },
+
+  setDeviceScanCount: (deviceUsed: number) => {
+    ScanBridge?.setDeviceScanCount?.(deviceUsed);
   },
 
   setScannerEnabled: (enabled: boolean) => {

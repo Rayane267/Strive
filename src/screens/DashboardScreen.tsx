@@ -31,6 +31,7 @@ import { space } from '../theme/spacing';
 import { FIELD_TOP } from '../theme/field';
 import { stroke, strokeWidth } from '../theme/stroke';
 import ScreenField from '../components/ScreenField';
+import { Toast, useToast } from '../components/Toast';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 import { supabase } from '../services/supabase';
 import { RIDE_NETWORK_ENABLED } from '../services/networkDemo';
@@ -42,7 +43,7 @@ import { Ride } from '../types/database';
 import { formatDuration, getDayStart } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 
-import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits } from '../services/subscriptionService';
+import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredits, fetchDeviceScanUsage } from '../services/subscriptionService';
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
@@ -59,7 +60,7 @@ import { useMarket } from '../hooks/useMarket';
 import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
 import { getFxRates, inCurrency, normalizeRides } from '../services/fxService';
 import { useFxRates } from '../hooks/useFxRates';
-import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
+import { registerPushToken, setupNotificationListeners, offerPushOptIn } from '../services/notificationService';
 import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
 import DashboardRideCard from '../components/DashboardRideCard';
@@ -177,6 +178,12 @@ type LocalDecision = { status: 'ACCEPTED' | 'DECLINED'; at: number };
 // course modifiée ailleurs (autre appareil, Historique).
 const LOCAL_DECISION_TTL_MS = 5 * 60_000;
 
+// Tentatives d'écriture d'une décision avant abandon, quand la course visée
+// n'existe pas en base. Assez haut pour laisser passer une insertion en retard
+// — elles se comptent en secondes, pas en tours de drain — assez bas pour que
+// l'abandon soit immédiat à l'échelle du chauffeur.
+const NO_ROW_MAX_RETRIES = 5;
+
 /**
  * Recouvre une liste lue en base par les décisions DÉJÀ écrites localement.
  *
@@ -237,6 +244,12 @@ const DashboardScreen = () => {
   );
   const [stats, setStats] = useState({ earnings: '0', avgRate: '0', scans: 0 });
   const [loading, setLoading] = useState(true);
+  // Le refus d'enregistrement ne passait QUE par une notification locale. Or la
+  // permission n'est jamais demandée à la connexion (`registerPushToken(id, false)`
+  // dans AuthContext) : un compte fraîchement créé ne l'a donc jamais accordée,
+  // le système jette la notification, et le chauffeur voit un verdict puis... rien.
+  // La course n'apparaît nulle part et aucun message ne dit pourquoi.
+  const { toast, showToast, dismissToast } = useToast();
   // `scan_debug_opt_out` : opposition à la capture de diagnostic
   // (PRIVACY_POLICY §2.6). Défaut `false` — pas opposé — pour que le
   // comportement d'un profil sans ligne de préférences reste celui d'avant.
@@ -521,6 +534,11 @@ const DashboardScreen = () => {
   // Décisions écrites en base mais pas encore reflétées par une lecture partie
   // avant elles (cf. `overlayLocalDecisions`).
   const localDecisionsRef = useRef<Map<string, LocalDecision>>(new Map());
+  // Échecs consécutifs par course pour cause de ligne absente, cf. le catch de
+  // `handleStatusUpdate`. Vidé au succès, et jamais persisté : une décision qui
+  // survit à un redémarrage repart avec un compteur neuf, ce qui laisse sa
+  // chance à une course dont l'insertion a réellement été retardée.
+  const noRowRetriesRef = useRef<Map<string, number>>(new Map());
   // Passe-plat pour `fetchData`, qui applique les décisions en attente et est
   // déclaré plus bas. Une ref et pas une dépendance : `applyRideDecision`
   // dépend de `handleStatusUpdate`, lui-même de `sessionSeconds` — donc d'une
@@ -609,6 +627,22 @@ const DashboardScreen = () => {
       ? -1
       : dailyScans + bonusCredits;
     try { scannerService.setScanQuota(stats.scans, nativeLimit, dayResetHour); } catch {}
+    // Plafond d'APPAREIL — l'anti-farming par suppression de compte. On ne pousse
+    // que la limite du palier GRATUIT : le compteur associé est tenu par le natif
+    // et ne doit jamais être réécrit d'ici, sinon un compte neuf le remettrait à
+    // zéro, ce qui est précisément le geste à rendre inopérant.
+    //
+    // La limite du gratuit et pas celle du palier courant : un abonné n'est pas
+    // soumis à ce plafond (le natif teste `isFreeTier`), mais la valeur doit
+    // rester juste pour le jour où il redevient gratuit, sans attendre un
+    // nouveau passage ici.
+    //
+    // Appel isolé, comme les deux précédents : une régression de signature
+    // native ne doit pas emporter les autres.
+    try {
+      const freeLimit = getPlanLimits('free').dailyScans;
+      scannerService.setDeviceQuotaLimit?.(freeLimit ?? 0);
+    } catch {}
     // `dayResetHour`, jamais 0 en dur : chez un chauffeur réglé sur 4 h, la
     // notification « quota rechargé » partait à minuit alors que le scan restait
     // refusé quatre heures de plus. Et sa clé de dédup, calculée sur la journée
@@ -616,6 +650,33 @@ const DashboardScreen = () => {
     // sur la journée de 4 h — les deux pouvaient donc partir le même jour.
     if (!canScan) scheduleQuotaResetNotification(dayResetHour);
   }, [canScan, tier, stats.scans, dailyScans, bonusCredits, dayResetHour]);
+
+  // Le COMPTEUR d'appareil, lui, est redescendu du serveur — une fois par
+  // session, et non à chaque changement de quota : c'est un aller-retour réseau,
+  // pas une lecture locale.
+  //
+  // Il vit dans l'App Group / les SharedPreferences, que la désinstallation
+  // efface, alors que le `device_id` du Keychain survit. Sans ce réamorçage,
+  // réinstaller repartait d'un compteur vierge et le scan passait avant que le
+  // serveur ne le refuse — OCR et Gemini dépensés pour rien.
+  //
+  // Une seule lecture au montage suffit : la désinstallation emporte aussi le
+  // JWT de l'App Group, et le raccourci refuse tout scan sans jeton. Le chauffeur
+  // doit donc rouvrir l'app et se connecter avant de pouvoir scanner — il n'y a
+  // pas de fenêtre où un scan part sans que ceci ait tourné. Entre deux
+  // lancements, le natif tient son compteur lui-même.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const used = await fetchDeviceScanUsage();
+      // `<= 0` : rien à pousser, et surtout rien à ÉCRASER. Le natif retient le
+      // maximum, mais autant ne pas le déranger pour une lecture vide ou ratée.
+      if (cancelled || used <= 0) return;
+      try { scannerService.setDeviceScanCount?.(used); } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // Tease de perte hebdo (free uniquement) — calcul sur les vraies courses des
   // 7 derniers jours. Aversion à la perte (perte projetée) → conversion Plus.
@@ -741,11 +802,24 @@ const DashboardScreen = () => {
       // servant qu'aux scans lancés depuis le Dashboard. On part donc de ce que le
       // natif rapporte, et le repli JS ne fait que s'y ajouter.
       let usedGemini = nativeResult.geminiUsed === true;
-      if (ocrLooksBad && nativeResult.imageBase64) {
-        __DEV__ && console.info('[Scanner:Fallback] OCR natif incomplet — Gemini');
-        const gemini = await extractWithGemini(nativeResult.imageBase64);
-        if (gemini) { result = { ...gemini, imageBase64: undefined }; usedGemini = true; }
-      } else if (nativeResult.imageBase64 && (!result.pickupAddress || !result.destinationAddress)) {
+      if (ocrLooksBad) {
+        // ON N'INVENTE PAS UNE COURSE QUE PERSONNE N'A MESURÉE.
+        //
+        // Cette branche rebattait tout le résultat avec ce que Gemini LISAIT À
+        // L'ÉCRAN — le prix, la distance et la durée affichés par la plateforme —
+        // puis l'enregistrait comme une mesure Strive. Le JS n'appelle jamais
+        // TomTom : il n'a aucun moyen de mesurer quoi que ce soit. Désormais le
+        // natif ne remet un résultat QUE s'il a obtenu un itinéraire ; si les
+        // valeurs arrivent quand même vides, c'est un bug de pont, pas une
+        // course à sauver. L'échec est déjà affiché côté natif (Live Activity
+        // iOS, pastille Android) : on acquitte et on s'arrête.
+        __DEV__ && console.warn('[Scanner] valeurs natives vides — course ignorée');
+        if (rideId) {
+          try { scannerService.ackScan(rideId); } catch {}
+        }
+        return;
+      }
+      if (nativeResult.imageBase64 && (!result.pickupAddress || !result.destinationAddress)) {
         // Récupération CIBLÉE d'adresse : l'OCR a le prix/distance mais a raté une
         // adresse (souvent une destination POI sans mot-clé de voie ni numéro).
         // On ne refait pas tout le parse — Gemini comble uniquement l'adresse
@@ -987,7 +1061,25 @@ const DashboardScreen = () => {
         //  • Panne passagère (réseau). On n'acquitte SURTOUT pas : l'entrée reste
         //    dans le journal natif et sera rejouée à la prochaine relève.
         const code = (e as { code?: string })?.code;
-        const permanent = code === 'P0001' || (!!code && /^(22|23|42)/.test(code));
+        const message = (e as { message?: string })?.message ?? '';
+
+        // `account_too_new` est le SEUL P0001 du schéma qui soit temporaire.
+        // `enforce_first_scan_cooldown` refuse la première course d'un compte
+        // âgé de moins de 60 secondes, pour empêcher un bot d'enchaîner
+        // « inscription → scan » en deux secondes.
+        //
+        // Classé « définitif » avec les autres P0001, il faisait acquitter la
+        // course — donc la SUPPRIMER du journal natif — alors que la même
+        // insertion aurait réussi quarante secondes plus tard. Un chauffeur qui
+        // scannait dans la minute suivant son inscription perdait sa course pour
+        // de bon, avec « contactez le support » pour toute explication.
+        //
+        // Traité en panne passagère, il est rejoué à la relève suivante et passe
+        // de lui-même. Le cooldown garde tout son effet — le bot est ralenti —
+        // sans que le chauffeur y laisse une course.
+        const tooNew = message.includes('account_too_new');
+        const permanent = !tooNew
+          && (code === 'P0001' || (!!code && /^(22|23|42)/.test(code)));
 
         if (permanent) {
           __DEV__ && console.warn('[SCAN] refus définitif du serveur', code, e);
@@ -998,7 +1090,49 @@ const DashboardScreen = () => {
           if (rideId) {
             try { scannerService.ackScan(rideId); } catch {}
           }
-          notifyRideRejected(code === 'P0001' ? 'quota' : 'other');
+          // Le motif se lit dans le MESSAGE, pas dans le code. `P0001` est le
+          // code générique que Postgres attribue à tout `raise exception` sans
+          // errcode explicite : le schéma en compte une dizaine — quota, mais
+          // aussi `device_signup_limit_reached`, `invalid_device_id`,
+          // `profile_not_found` et les gardes `… is read-only from client` de
+          // `prevent_tier_tampering`. Les annoncer tous comme un dépassement de
+          // quota affichait au chauffeur un motif faux, et envoyait chercher la
+          // panne du côté du quota alors que son compteur n'avait jamais bougé.
+          //
+          // `device_scan_quota_exceeded` mérite son propre message : le compteur
+          // du chauffeur est à zéro, son compte est neuf, et lui dire « quota
+          // dépassé » ne lui décrit rien de ce qu'il voit. Le refus vient du
+          // téléphone, pas de lui.
+          // `prior_account_scans_on_device` ne partage aucun préfixe avec les
+          // deux autres : les tests par `includes()` ne peuvent pas se voler la
+          // priorité entre eux.
+          const rejection =
+            message.includes('prior_account_scans_on_device') ? 'priorAccount'
+            : message.includes('device_scan_quota_exceeded') ? 'deviceQuota'
+            : message.includes('daily_scan_quota_exceeded') ? 'quota'
+            : 'other';
+          // Notification POUR L'APP EN ARRIÈRE-PLAN (le scan vient du raccourci
+          // ou de la bulle, l'app n'est pas forcément à l'écran)...
+          notifyRideRejected(rejection);
+          // ...et toast POUR L'APP À L'ÉCRAN, qui ne dépend d'aucune permission.
+          // Sans lui, un chauffeur qui n'a jamais accordé les notifications — tout
+          // compte neuf — voit sa course disparaître sans un mot.
+          // Le refus vient de passer sous son nez sans notification : c'est
+          // l'instant où la question a un sens. Une seule fois par installation,
+          // et jamais s'il a déjà tranché.
+          if (userId) offerPushOptIn(userId);
+          showToast({
+            type: 'error',
+            title: t('notifications.rideRejected.title'),
+            message: t(
+              `notifications.rideRejected.${
+                rejection === 'priorAccount' ? 'bodyPriorAccount'
+                : rejection === 'deviceQuota' ? 'bodyDeviceQuota'
+                : rejection === 'quota' ? 'bodyQuota'
+                : 'bodyOther'
+              }`,
+            ),
+          });
           return;
         }
 
@@ -1061,6 +1195,40 @@ const DashboardScreen = () => {
       // Mémorisé localement pour être joint au prochain ticket de support :
       // un chauffeur qui écrit vient presque toujours de vivre cet échec.
       rememberLastFailure(failure);
+
+      // L'ÉCRAN QUI A CAUSÉ L'ÉCHEC, GARDÉ POUR ÊTRE REJOUÉ.
+      //
+      // `scan_debug` ne se remplissait que sur les scans qui ABOUTISSENT : la
+      // capture partait après l'enregistrement de la course. Les écrans que ni
+      // les règles ni Gemini n'ont su lire — les seuls qui feraient vraiment
+      // progresser le parser — ne laissaient donc rien derrière eux. On comptait
+      // 88 `gemini_ko` sans pouvoir en rejouer un seul.
+      //
+      // Une ligne ici devient un cas dans `fixtures/ocr/`, donc une non-régression
+      // pour les trois parsers à la fois (TS, Swift, Kotlin).
+      if (f.blocks && !preferences.scan_debug_opt_out) {
+        const nothingWasRead = f.reason === 'gemini_ko' || f.reason === 'ocr_empty';
+        logScanDebug({
+          platform: f.platform ?? 'UNKNOWN',
+          screenHeight: f.screenHeight ?? null,
+          blocksJson: f.blocks,
+          // L'échec ne transporte pas de valeurs : il n'y en a pas eu. Les
+          // colonnes restent à zéro, ce sont les drapeaux qui portent le sens.
+          nativePickup: null,
+          nativeDestination: null,
+          nativeFare: 0,
+          nativeDistanceKm: 0,
+          nativeDurationMin: null,
+          // Un échec d'itinéraire avait bien ses deux adresses — c'est le
+          // géocodage qui les a refusées, pas la lecture qui les a manquées.
+          pickupMissing: nothingWasRead,
+          destMissing: nothingWasRead,
+          geminiUsed: f.reason === 'gemini_ko',
+          geminiPickup: null,
+          geminiDestination: null,
+          appVersion: APP_VERSION_LABEL,
+        });
+      }
     });
 
     return () => {
@@ -1068,7 +1236,7 @@ const DashboardScreen = () => {
       subFailed?.remove();
       subFailure?.remove();
     };
-  }, [user?.id, preferences, t, market.currency]);
+  }, [user?.id, preferences, t, market.currency, showToast]);
 
   const handleToggleScanner = async () => {
     if (scannerActive) {
@@ -1172,8 +1340,49 @@ const DashboardScreen = () => {
     localDecisionsRef.current.set(id, { status: newStatus, at: Date.now() });
     try {
       await updateRideStatus(id, newStatus);
+      noRowRetriesRef.current.delete(id);
     } catch (e) {
       localDecisionsRef.current.delete(id);
+      // « Aucune ligne modifiée » couvre DEUX situations opposées, et le même
+      // traitement ne peut pas convenir aux deux :
+      //
+      //  • la course n'est pas ENCORE en base — scan pris app suspendue, elle
+      //    est au journal natif et arrivera à la relève suivante. Rejouer est
+      //    exactement ce qu'il faut faire, c'est le cas décrit plus bas.
+      //  • la course ne sera JAMAIS en base — insertion refusée définitivement
+      //    par le serveur, ou décision héritée d'un compte supprimé dont les
+      //    lignes sont parties en cascade. La file native survit au logout, donc
+      //    ces ids-là reviennent à chaque session.
+      //
+      // Rien ne les distingue à la première tentative. Mais le second cas ne
+      // converge jamais : chaque échec remettait la décision en file, relançait
+      // une resynchro, qui redrainait la file — une boucle qui tenait le réseau
+      // et le serveur occupés jusqu'à ce que le chauffeur ferme l'app, en
+      // écrivant un event Sentry par tour.
+      //
+      // On borne donc les tentatives. Au-delà, la décision est abandonnée : on
+      // ne rejoue pas, on ne resynchronise pas, et on rend la main SANS lever —
+      // c'est ce retour normal qui fait acquitter `applyRideDecision`, et donc
+      // sortir l'entrée de la file native pour de bon.
+      const noRow = e instanceof Error
+        && e.message.startsWith('ride_status_update_no_row:');
+      if (noRow) {
+        const tries = (noRowRetriesRef.current.get(id) ?? 0) + 1;
+        noRowRetriesRef.current.set(id, tries);
+        if (tries >= NO_ROW_MAX_RETRIES) {
+          noRowRetriesRef.current.delete(id);
+          // `warning` et pas `captureException` : ce n'est plus une panne, c'est
+          // une décision qu'on jette sciemment. En `error` elle réveillait
+          // l'alerting à chaque tour de boucle.
+          Sentry.captureMessage(`ride_decision_dropped:${id}`, {
+            level: 'warning',
+            tags: { flow: 'ride_status_update' },
+            extra: { status: newStatus, tries },
+          });
+          hapticError();
+          return;
+        }
+      }
       // La décision rejoint la FILE NATIVE, là où vivent déjà celles tapées sur
       // la carte ou la notification. Sans ça, le choix fait dans l'app était le
       // seul à se perdre : une course scannée app suspendue n'est pas encore en
@@ -1821,6 +2030,7 @@ const DashboardScreen = () => {
           l'encoche, et `container` porte la même couleur que son sommet : la
           bande de statut se confond avec lui au lieu de faire un bandeau. */}
       <ScreenField />
+      <Toast data={toast} onDismiss={dismissToast} />
       <Animated.ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
         showsVerticalScrollIndicator={false}

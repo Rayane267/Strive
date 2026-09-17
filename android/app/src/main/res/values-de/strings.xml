@@ -14,4 +14,6 @@
   <string name="scanner_ride_decline">❌ Abgelehnt</string>
   <string name="scanner_quota_reached">Limit erreicht</string>
   <string name="scanner_quota_reached_free">Limit erreicht · Hol dir Plus</string>
+  <string name="scanner_error_capture">Screenshot unlesbar</string>
+  <string name="scanner_error_network">Netzwerkfehler</string>
 </resources>

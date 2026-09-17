@@ -449,6 +449,20 @@ class ScanBridgeModule: RCTEventEmitter {
     }
   }
 
+  /// Vide la file entière. Appelé au départ DÉLIBÉRÉ d'un compte — déconnexion
+  /// demandée, suppression de compte — et jamais sur une session simplement
+  /// expirée, où les décisions en attente doivent survivre au renouvellement du
+  /// jeton.
+  ///
+  /// Sans ça la file traversait le changement de compte : les décisions du
+  /// chauffeur précédent étaient rejouées sous l'identité du suivant, contre des
+  /// courses que la suppression du compte avait emportées en cascade. Elles ne
+  /// visaient plus rien et revenaient à chaque session.
+  @objc func clearRideDecisions() {
+    UserDefaults(suiteName: Self.appGroupId)?
+      .removeObject(forKey: Self.rideDecisionsKey)
+  }
+
   /// Vide la file des échecs empilés par l'AppIntent (autre process, pas de
   /// session Supabase) et les remonte au JS, qui écrit la trace. `occurredAt`
   /// porte l'heure réelle : la relève peut arriver longtemps après.
@@ -470,6 +484,10 @@ class ScanBridgeModule: RCTEventEmitter {
       if let detail = f["detail"] as? String { body["detail"] = detail }
       if let platform = f["platform"] as? String { body["platform"] = platform }
       if let ts = (f["occurredAt"] as? NSNumber)?.doubleValue, ts > 0 { body["occurredAt"] = ts }
+      // La capture OCR de l'écran fautif, quand l'échec en portait une : c'est
+      // elle qui deviendra une fixture, donc un cas de non-régression.
+      if let blocks = f["blocks"] as? String { body["blocks"] = blocks }
+      if let h = (f["screenHeight"] as? NSNumber)?.intValue, h > 0 { body["screenHeight"] = h }
       sendEvent(withName: "onScanFailure", body: body)
     }
   }
@@ -689,6 +707,41 @@ class ScanBridgeModule: RCTEventEmitter {
   /// le quota lui-même — sans dépendre du JS, qui est suspendu pendant un scan
   /// via l'extension. Le natif incrémente entre deux syncs ; le JS réécrit la
   /// valeur réelle au foreground.
+  /// Limite du palier GRATUIT, pour le plafond d'appareil appliqué par
+  /// `AnalyzeRideIntent`. Séparée de `scanQuotaLimit`, qui porte la limite du
+  /// palier COURANT plus les crédits : le plafond d'appareil, lui, se mesure
+  /// toujours à l'aune du gratuit, y compris quand le compte connecté est Plus.
+  ///
+  /// Seule valeur poussée par le JS pour ce plafond. Le compteur, lui, est tenu
+  /// par le natif et n'est jamais réécrit depuis le JS — c'est ce qui le rend
+  /// insensible au changement de compte.
+  @objc func setDeviceQuotaLimit(_ freeLimit: NSNumber) {
+    UserDefaults(suiteName: Self.appGroupId)?
+      .set(freeLimit.intValue, forKey: "deviceFreeLimit")
+  }
+
+  /// Réamorce le compteur d'appareil depuis le serveur (`device_scan_usage`).
+  ///
+  /// Le compteur vit dans l'App Group, que la désinstallation efface — alors que
+  /// le `device_id` du Keychain, lui, survit. Sans ce réamorçage, « supprime le
+  /// compte, désinstalle, réinstalle, recrée » repartait de zéro côté natif : le
+  /// scan passait, l'OCR et Gemini étaient dépensés, et c'est seulement à
+  /// l'insertion que le serveur refusait.
+  ///
+  /// `max` et non affectation : la valeur serveur peut être EN RETARD. Des scans
+  /// faits app fermée ont déjà monté le compteur local sans que la base le sache
+  /// encore — les écraser rendrait des scans que l'appareil a bel et bien
+  /// consommés. Le compteur ne redescend que par le changement de journée.
+  @objc func setDeviceScanCount(_ deviceUsed: NSNumber) {
+    guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+    let today = Self.currentQuotaDay(defaults)
+    let local = defaults.integer(forKey: "deviceScanCountDay") == today
+      ? defaults.integer(forKey: "deviceScanCountToday")
+      : 0
+    defaults.set(today, forKey: "deviceScanCountDay")
+    defaults.set(max(local, deviceUsed.intValue), forKey: "deviceScanCountToday")
+  }
+
   @objc func setScanQuota(_ countToday: NSNumber, limit: NSNumber, resetHour: NSNumber) {
     guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
     defaults.set(limit.intValue, forKey: "scanQuotaLimit")

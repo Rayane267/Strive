@@ -126,6 +126,86 @@ class FloatingBubbleService : Service() {
         fun scanCountForToday(): Int =
             if (scanCountDay == todayKey()) scanCountToday else 0
 
+        /** Limite du palier GRATUIT, poussée par le JS (setDeviceQuotaLimit).
+         *  Distincte de `scanQuotaLimit` (palier courant + crédits) : le plafond
+         *  d'appareil se mesure toujours à l'aune du gratuit. */
+        var deviceFreeLimit: Int = 0
+
+        /** Fichier du compteur d'APPAREIL. En SharedPreferences et non en
+         *  mémoire comme `scanCountToday` : il doit survivre à la mort du
+         *  process et surtout au changement de compte — c'est précisément le
+         *  geste qu'il est censé rendre inopérant. */
+        private const val DEVICE_QUOTA_PREFS = "strive_device_quota"
+        private const val DEVICE_COUNT_KEY = "deviceScanCountToday"
+        private const val DEVICE_DAY_KEY = "deviceScanCountDay"
+
+        fun deviceScanCountForToday(ctx: android.content.Context): Int {
+            val p = ctx.applicationContext
+                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
+            if (p.getInt(DEVICE_DAY_KEY, 0) != todayKey()) return 0
+            return p.getInt(DEVICE_COUNT_KEY, 0)
+        }
+
+        /** Réamorce le compteur d'appareil depuis le serveur
+         *  (`device_scan_usage`). Les SharedPreferences partent à la
+         *  désinstallation, le `device_id` du Keychain non : sans ce réamorçage,
+         *  une réinstallation redonnait un compteur vierge et le scan passait
+         *  avant que le serveur ne le refuse — OCR et Gemini dépensés pour rien.
+         *
+         *  `maxOf` et non affectation : la valeur serveur peut être en retard
+         *  sur des scans faits app fermée. L'écraser rendrait des scans déjà
+         *  consommés. Parité iOS (`setDeviceScanCount`). */
+        fun seedDeviceScanCount(ctx: android.content.Context, deviceUsed: Int) {
+            val p = ctx.applicationContext
+                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
+            val today = todayKey()
+            val local = if (p.getInt(DEVICE_DAY_KEY, 0) == today) p.getInt(DEVICE_COUNT_KEY, 0) else 0
+            p.edit()
+                .putInt(DEVICE_DAY_KEY, today)
+                .putInt(DEVICE_COUNT_KEY, maxOf(local, deviceUsed))
+                .apply()
+        }
+
+        fun incrementDeviceScanCount(ctx: android.content.Context) {
+            val p = ctx.applicationContext
+                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
+            val today = todayKey()
+            val base = if (p.getInt(DEVICE_DAY_KEY, 0) == today) p.getInt(DEVICE_COUNT_KEY, 0) else 0
+            p.edit().putInt(DEVICE_DAY_KEY, today).putInt(DEVICE_COUNT_KEY, base + 1).apply()
+        }
+
+        /**
+         * Rend le scan qui n'a rien donné.
+         *
+         * Le compteur est incrémenté AVANT l'appel TomTom — il fallait bien qu'il
+         * le soit, la bulle pouvant mourir entre les deux. Mais depuis qu'un
+         * itinéraire manquant se solde par un échec et non plus par les chiffres
+         * de la plateforme, le chauffeur payait un scan pour un message d'erreur.
+         * iOS ne compte le sien qu'au moment d'afficher un résultat : on s'aligne.
+         */
+        fun refundDeviceScanCount(ctx: android.content.Context) {
+            val p = ctx.applicationContext
+                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
+            if (p.getInt(DEVICE_DAY_KEY, 0) != todayKey()) return
+            val base = p.getInt(DEVICE_COUNT_KEY, 0)
+            if (base <= 0) return
+            p.edit().putInt(DEVICE_COUNT_KEY, base - 1).apply()
+        }
+
+        /** Plafond d'appareil : ce téléphone a épuisé les scans gratuits du jour
+         *  avec un AUTRE compte. Miroir de `AnalyzeRideIntent.isDeviceQuotaReached`
+         *  et de la règle serveur — les trois doivent rester identiques.
+         *
+         *  `deviceUsed > scanCountForToday()` : sans ce test, un chauffeur seul
+         *  au bout de ses scans verrait « un autre compte » alors qu'il n'y en a
+         *  qu'un. Son propre plafond le refuse déjà, avec le bon motif. */
+        fun isDeviceQuotaReached(ctx: android.content.Context): Boolean {
+            if (!isFreeTier) return false
+            if (deviceFreeLimit <= 0) return false
+            val deviceUsed = deviceScanCountForToday(ctx)
+            return deviceUsed >= deviceFreeLimit && deviceUsed > scanCountForToday()
+        }
+
         /** KPI de session du jour poussés par le JS (updateSessionKPI) — affichés
          *  dans la notification persistante du foreground service. Équivalent
          *  Android du tableau de bord Live Activity iOS. */
@@ -154,6 +234,9 @@ class FloatingBubbleService : Service() {
         // géocodeur repartiraient alors sur leurs valeurs par défaut. On leur
         // rend le pays écrit en préférences avant le premier scan.
         MarketFormat.hydrate(this)
+        // Idem pour la clé TomTom : sans elle, le scan suivant se rabat sur les
+        // chiffres lus à l'écran — ceux de la plateforme, pas une mesure.
+        TomTomService.hydrate(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -297,6 +380,19 @@ class FloatingBubbleService : Service() {
             mainHandler.postDelayed({ showIdleState() }, 2500)
             return
         }
+        // Jeton présent mais périmé : le scan aurait tourné puis échoué à l'appel
+        // de l'edge function. On refuse AVANT la capture et l'OCR.
+        //
+        // Même famille au journal (`session_off`) : le vocabulaire de
+        // `log_scan_failure` est fermé et n'a pas de motif propre à ce cas.
+        // Parité iOS (AnalyzeRideIntent.isSessionExpired).
+        if (GeminiVisionService.isJwtExpired()) {
+            ScanBridgeModule.emitScanFailure(this, "session_off")
+            notifySessionRequired()
+            showSessionRequiredState()
+            mainHandler.postDelayed({ showIdleState() }, 2500)
+            return
+        }
         // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
         // émis au JS, donc rien ne part en queue offline non plus.
         // Compteur natif (poussé par le JS + incrémenté localement) OU flag JS :
@@ -310,6 +406,15 @@ class FloatingBubbleService : Service() {
         // `scanQuotaLimit` est la limite EFFECTIVE poussée par le JS : celle du
         // plan PLUS les crédits achetés. Ce calcul ne connaît pas les crédits,
         // et sans eux il bloquait un chauffeur qui venait d'en acheter.
+        // AVANT tout : un scan interdit ne doit coûter ni OCR, ni TomTom, ni
+        // Gemini. Testé en premier pour que le motif soit le bon — le plafond
+        // d'appareil et celui du compte donnent deux messages différents.
+        if (isDeviceQuotaReached(this)) {
+            ScanBridgeModule.emitScanFailure(this, "quota_reached")
+            showQuotaReachedState()
+            mainHandler.postDelayed({ showIdleState() }, 2500)
+            return
+        }
         val quotaByCount = scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             ScanBridgeModule.emitScanFailure(this, "quota_reached")
@@ -414,7 +519,12 @@ class FloatingBubbleService : Service() {
                 } else {
                     mainHandler.post {
                         onScanError()
-                        ScanBridgeModule.emitScanFailure(this, "gemini_ko", "null_result")
+                        // L'écran le plus précieux du parc : ni les règles ni Gemini
+                        // n'ont su le lire. Sans ses blocs, il ne reste qu'un compteur.
+                        ScanBridgeModule.emitScanFailure(
+                            this, "gemini_ko", "null_result",
+                            blocks = debugBlocks, screenHeight = screenHeight,
+                        )
                         ScanBridgeModule.emitScanFailed()
                     }
                 }
@@ -423,7 +533,10 @@ class FloatingBubbleService : Service() {
         } else {
             bitmap.recycle()
             onScanError()
-            ScanBridgeModule.emitScanFailure(this, "gemini_ko", "not_configured")
+            ScanBridgeModule.emitScanFailure(
+                this, "gemini_ko", "not_configured",
+                blocks = debugBlocks, screenHeight = screenHeight,
+            )
             ScanBridgeModule.emitScanFailed()
             scanInProgress = false
         }
@@ -499,6 +612,10 @@ class FloatingBubbleService : Service() {
         val today = todayKey()
         scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
         scanCountDay = today
+        // Le compteur d'appareil suit le même scan, dans la même foulée : un
+        // écart entre les deux ferait croire à un second compte et déclencherait
+        // le refus « autre compte » sur un chauffeur seul.
+        incrementDeviceScanCount(this)
         // Horodatage du scan (secondes epoch) : il DATE la course — jour
         // d'affectation et registre de quota. Il ne l'identifie plus.
         val scanTs = System.currentTimeMillis() / 1000.0
@@ -518,31 +635,76 @@ class FloatingBubbleService : Service() {
         if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom? pickup='$pickup' dest='$dest' ready=${TomTomService.isReady}")
 
         if (pickup.isEmpty() || dest.isEmpty() || !TomTomService.isReady) {
-            // Pas d'adresses ou pas de clé → affiche direct les valeurs OCR.
-            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → valeurs OCR")
-            mainHandler.post { showResultState(ocr); applyVerdict(ocr); postRideDecisionNotification(ocr, rideId) }
-            ScanBridgeModule.emitScanResult(this, ocr, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
+            // RIEN N'A ÉTÉ MESURÉ → RIEN N'EST MONTRÉ, RIEN N'EST ENREGISTRÉ.
+            //
+            // Ce chemin affichait les valeurs OCR — la distance et la durée LUES
+            // SUR L'ÉCRAN, celles de la plateforme — avec le même verdict coloré
+            // qu'une vraie mesure. Deux chauffeurs côte à côte sur la même course
+            // ont vu 100 €/h et 38 €/h ; le second avait raison. Strive existe pour
+            // contester le chiffre de la plateforme : le réafficher en silence
+            // sous ses propres couleurs était le seul bug qu'elle n'avait pas le
+            // droit d'avoir.
+            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → échec")
+            val network = !TomTomService.isReady
+            refundDeviceScanCount(this)
+            mainHandler.post { showErrorState(network) }
+            // Le motif part en base, comme sur iOS : sans lui, un échec
+            // d'itinéraire Android ne se compterait nulle part.
+            ScanBridgeModule.emitScanFailure(
+                this,
+                if (network) "route_no_key" else "route_unusable",
+                if (network) "no_key" else "missing_addresses",
+                platform = ocr.platform.name,
+                blocks = debugBlocks, screenHeight = screenHeight,
+            )
+            ScanBridgeModule.emitScanFailed()
             return
         }
 
-        TomTomService.calculateRoute(pickup, dest) { route ->
-            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom route=$route (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
+        TomTomService.calculateRoute(pickup, dest) { outcome ->
+            if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom outcome=$outcome (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
+            val route = (outcome as? TomTomService.RouteOutcome.Ok)?.route
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
-            val finalResult = if (route != null
+            val measured = route != null
                 && route.distanceKm in 0.3..500.0
-                && route.durationMin != null && route.durationMin <= 300
-                && ratio in 0.2..12.0) {
-                ocr.copy(
-                    distanceKm = route.distanceKm,
-                    durationMin = route.durationMin,
-                    // Adresses canoniques TomTom (propres) plutôt que le texte OCR
-                    // bruité (ex: "All AV. … Çueue") — fallback OCR si absentes.
-                    pickupAddress = route.pickupFormatted ?: ocr.pickupAddress,
-                    destinationAddress = route.destFormatted ?: ocr.destinationAddress,
+                && route.durationMin <= 300
+                && ratio in 0.2..12.0
+
+            if (!measured || route == null) {
+                // Même règle que le SKIP ci-dessus : sans mesure, pas de verdict.
+                // Un réseau absent se retente sur place ; une adresse illisible
+                // demande une autre capture. Deux motifs, deux messages.
+                val network = outcome is TomTomService.RouteOutcome.Unreachable ||
+                    outcome is TomTomService.RouteOutcome.NoKey
+                refundDeviceScanCount(this)
+                mainHandler.post { showErrorState(network) }
+                // Le motif exact part en base : c'est lui qui dira, dans une
+                // semaine, s'il faut un retry réseau ou un meilleur géocodage.
+                val reason = when (outcome) {
+                    is TomTomService.RouteOutcome.Unreachable -> "route_unreachable"
+                    is TomTomService.RouteOutcome.NoKey -> "route_no_key"
+                    else -> "route_unusable"
+                }
+                ScanBridgeModule.emitScanFailure(
+                    this, reason,
+                    platform = ocr.platform.name,
+                    // Une adresse refusée par le géocodeur se rejoue ; un réseau
+                    // coupé ne dit rien sur la lecture de l'écran.
+                    blocks = if (network) null else debugBlocks,
+                    screenHeight = screenHeight,
                 )
-            } else {
-                ocr
+                ScanBridgeModule.emitScanFailed()
+                return@calculateRoute
             }
+
+            val finalResult = ocr.copy(
+                distanceKm = route.distanceKm,
+                durationMin = route.durationMin,
+                // Adresses canoniques TomTom (propres) plutôt que le texte OCR
+                // bruité (ex: "All AV. … Çueue") — fallback OCR si absentes.
+                pickupAddress = route.pickupFormatted ?: ocr.pickupAddress,
+                destinationAddress = route.destFormatted ?: ocr.destinationAddress,
+            )
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
             ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
         }
@@ -1050,7 +1212,12 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
-    private fun showErrorState() {
+    /**
+     * Pastille d'échec. [network] choisit le motif : « erreur réseau » se retente
+     * tel quel, « capture illisible » demande une autre capture. Le libellé était
+     * codé en dur (« Échec ») et ne disait donc rien de ce qu'il fallait faire.
+     */
+    private fun showErrorState(network: Boolean = false) {
         clearTransientState()
         bubbleContainer.removeAllViews()
 
@@ -1069,7 +1236,11 @@ class FloatingBubbleService : Service() {
             setPadding(0, 0, dpToPx(6), 0)
         })
         pill.addView(TextView(this).apply {
-            text = "Échec"; textSize = 13f; setTextColor(Color.WHITE)
+            text = str(
+                if (network) com.strive.R.string.scanner_error_network
+                else com.strive.R.string.scanner_error_capture
+            )
+            textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
 

@@ -72,6 +72,31 @@ final class TomTomService {
 
   var isReady: Bool { apiKey() != nil }
 
+  /// Issue d'un calcul d'itinéraire.
+  ///
+  /// `nil` disait seulement « pas d'itinéraire », et l'appelant se rabattait
+  /// alors sur les chiffres lus à l'écran — ceux de la plateforme — sans que le
+  /// chauffeur puisse le savoir. Les deux motifs ne se soignent pourtant pas de
+  /// la même façon : un réseau absent se retente, une adresse illisible se
+  /// recapture. Ils méritent deux messages, donc deux valeurs.
+  enum RouteOutcome {
+    case ok(RouteResult)
+    /// Aucune clé configurée : l'app ne peut rien mesurer sur cette install.
+    case noKey
+    /// TomTom n'a pas répondu — réseau coupé, timeout, erreur HTTP.
+    case unreachable
+    /// TomTom a répondu, mais le résultat n'est pas exploitable : adresse sous
+    /// le plancher de fiabilité, ou trajet hors bornes.
+    case unusable
+  }
+
+  /// Issue d'un géocodage. Même raison d'être que `RouteOutcome`.
+  private enum GeocodeOutcome {
+    case hit(GeocodeHit)
+    case unreachable
+    case unusable
+  }
+
   struct Coords { let lat: Double; let lon: Double }
   struct GeocodeHit { let coords: Coords; let score: Double; let formatted: String? }
   struct RouteResult {
@@ -82,65 +107,85 @@ final class TomTomService {
     let destFormatted: String?
   }
 
-  /// Calcule le trajet entre 2 adresses texte. Renvoie nil si TomTom n'est
-  /// pas configuré, si une adresse est vide, ou si geocoding/routing échoue.
+  /// Calcule le trajet entre 2 adresses texte. L'issue dit POURQUOI quand il
+  /// n'y a pas d'itinéraire — l'appelant en fait un message, plus un silence.
   func calculateRoute(
     pickupAddress: String,
     destinationAddress: String,
-    completion: @escaping (RouteResult?) -> Void
+    completion: @escaping (RouteOutcome) -> Void
   ) {
-    guard isReady else { completion(nil); return }
+    guard isReady else { completion(.noKey); return }
     let pickup = pickupAddress.trimmingCharacters(in: .whitespacesAndNewlines)
     let dest = destinationAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !pickup.isEmpty, !dest.isEmpty else { completion(nil); return }
+    guard !pickup.isEmpty, !dest.isEmpty else { completion(.unusable); return }
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      guard let self = self else { completion(nil); return }
+      guard let self = self else { completion(.unreachable); return }
       // Geocoding pickup + destination en parallèle — divise par ~2 le temps
       // total. Chaque variant chain reste séquentiel à l'intérieur d'une
       // adresse (early-exit sur bon score), seuls les 2 fronts sont lancés.
       let group = DispatchGroup()
-      var fromHit: GeocodeHit?
-      var toHit: GeocodeHit?
+      var fromOutcome: GeocodeOutcome = .unusable
+      var toOutcome: GeocodeOutcome = .unusable
       group.enter()
       DispatchQueue.global(qos: .userInitiated).async {
-        fromHit = self.geocodeBestVariant(pickup)
+        fromOutcome = self.geocodeBestVariant(pickup)
         group.leave()
       }
       group.enter()
       DispatchQueue.global(qos: .userInitiated).async {
-        toHit = self.geocodeBestVariant(dest)
+        toOutcome = self.geocodeBestVariant(dest)
         group.leave()
       }
       group.wait()
 
-      guard let from = fromHit, let to = toHit else {
-        completion(nil); return
+      // Un réseau absent l'emporte sur une adresse douteuse : c'est le motif le
+      // plus probable des deux, et le seul qui vaille la peine d'être retenté.
+      guard case .hit(let from) = fromOutcome, case .hit(let to) = toOutcome else {
+        let unreachable: Bool = {
+          if case .unreachable = fromOutcome { return true }
+          if case .unreachable = toOutcome { return true }
+          return false
+        }()
+        DispatchQueue.main.async { completion(unreachable ? .unreachable : .unusable) }
+        return
       }
-      let route = self.getRoute(from: from.coords, to: to.coords)
-      // Enrichit avec les adresses canoniques TomTom → affichage propre.
-      let enriched = route.map {
-        RouteResult(distanceKm: $0.distanceKm, durationMin: $0.durationMin,
-                    pickupFormatted: from.formatted, destFormatted: to.formatted)
+
+      switch self.getRoute(from: from.coords, to: to.coords) {
+      case .ok(let route):
+        // Enrichit avec les adresses canoniques TomTom → affichage propre.
+        let enriched = RouteResult(
+          distanceKm: route.distanceKm, durationMin: route.durationMin,
+          pickupFormatted: from.formatted, destFormatted: to.formatted
+        )
+        DispatchQueue.main.async { completion(.ok(enriched)) }
+      case let other:
+        DispatchQueue.main.async { completion(other) }
       }
-      DispatchQueue.main.async { completion(enriched) }
     }
   }
 
   // MARK: - Geocoding
 
-  private func geocodeBestVariant(_ address: String) -> GeocodeHit? {
+  private func geocodeBestVariant(_ address: String) -> GeocodeOutcome {
     var best: GeocodeHit?
+    var sawUnreachable = false
     for variant in buildAddressVariants(address) {
-      guard let hit = geocode(variant) else { continue }
-      if best == nil || hit.score > best!.score { best = hit }
-      if best!.score >= Self.minScore + 2 { return best }
+      switch geocode(variant) {
+      case .hit(let hit):
+        if best == nil || hit.score > best!.score { best = hit }
+        if best!.score >= Self.minScore + 2 { return .hit(best!) }
+      case .unreachable:
+        sawUnreachable = true
+      case .unusable:
+        continue
+      }
     }
     // Plancher de fiabilité : un score < minScore = match centroïde ville/pays
-    // (adresse OCR douteuse). On préfère nil → pas de "vraie" distance fausse :
-    // le pipeline retombe sur l'OCR plutôt que de présenter un trajet centre-à-centre.
-    guard let b = best, b.score >= Self.minScore else { return nil }
-    return b
+    // (adresse OCR douteuse). On préfère échouer → pas de "vraie" distance
+    // fausse, et surtout pas un trajet centre-à-centre présenté comme mesuré.
+    if let b = best, b.score >= Self.minScore { return .hit(b) }
+    return sawUnreachable ? .unreachable : .unusable
   }
 
   private func buildAddressVariants(_ address: String) -> [String] {
@@ -174,56 +219,59 @@ final class TomTomService {
     return variants
   }
 
-  private func geocode(_ address: String) -> GeocodeHit? {
+  private func geocode(_ address: String) -> GeocodeOutcome {
     // Cache local — les coords GPS d'une adresse sont stables dans le temps.
     // Hit cache → 0 requête TomTom. Voir GeocodeCache pour la normalisation.
-    if let cached = GeocodeCache.shared.get(address: address) { return cached }
+    if let cached = GeocodeCache.shared.get(address: address) { return .hit(cached) }
 
-    guard let key = apiKey(),
-          let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-    else { return nil }
+    guard let key = apiKey() else { return .unusable }
+    guard let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+    else { return .unusable }
 
     let urlString = "\(Self.baseSearch)/\(encoded).json?key=\(key)&language=\(geocodeLanguage)&countrySet=\(activeCountrySet)&limit=1"
-    guard let url = URL(string: urlString),
-          let data = httpGet(url),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+    guard let url = URL(string: urlString) else { return .unusable }
+    // La distinction porte ici : pas de réponse = réseau, réponse illisible =
+    // adresse. Confondre les deux, c'est dire « recapture » à quelqu'un qui est
+    // simplement dans un parking souterrain.
+    guard let data = httpGet(url) else { return .unreachable }
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let results = json["results"] as? [[String: Any]],
           let first = results.first,
           let pos = first["position"] as? [String: Any],
           let lat = (pos["lat"] as? NSNumber)?.doubleValue,
           let lon = (pos["lon"] as? NSNumber)?.doubleValue
-    else { return nil }
+    else { return .unusable }
     let score = (first["score"] as? NSNumber)?.doubleValue ?? 0
     let formatted = (first["address"] as? [String: Any])?["freeformAddress"] as? String
     let hit = GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score, formatted: formatted)
     // Persiste uniquement les résultats fiables — un faux match (score bas)
     // cacherait à vie un mauvais POI. Seuil aligné sur geocodeBestVariant.
     if score >= Self.minScore { GeocodeCache.shared.put(address: address, hit: hit) }
-    return hit
+    return .hit(hit)
   }
 
   // MARK: - Routing
 
-  private func getRoute(from: Coords, to: Coords) -> RouteResult? {
-    guard let key = apiKey() else { return nil }
+  private func getRoute(from: Coords, to: Coords) -> RouteOutcome {
+    guard let key = apiKey() else { return .noKey }
     let waypoints = "\(from.lat),\(from.lon):\(to.lat),\(to.lon)"
     // traffic=true + departAt=now → trafic temps réel (flux live + incidents) à
     // l'instant du calcul ; routeType=fastest → meilleur trajet.
     let urlString = "\(Self.baseRouting)/\(waypoints)/json?key=\(key)&travelMode=car&traffic=true&routeType=fastest&departAt=now"
-    guard let url = URL(string: urlString),
-          let data = httpGet(url),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+    guard let url = URL(string: urlString) else { return .unusable }
+    guard let data = httpGet(url) else { return .unreachable }
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let routes = json["routes"] as? [[String: Any]],
           let summary = routes.first?["summary"] as? [String: Any],
           let seconds = (summary["travelTimeInSeconds"] as? NSNumber)?.doubleValue,
           let meters = (summary["lengthInMeters"] as? NSNumber)?.doubleValue
-    else { return nil }
+    else { return .unusable }
 
-    return RouteResult(
+    return .ok(RouteResult(
       distanceKm: (meters / 100.0).rounded() / 10.0,
       durationMin: Int((seconds / 60.0).rounded()),
       pickupFormatted: nil, destFormatted: nil
-    )
+    ))
   }
 
   // MARK: - HTTP helper

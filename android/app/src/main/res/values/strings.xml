@@ -14,5 +14,7 @@
   <string name="scanner_ride_decline">❌ Refusée</string>
   <string name="scanner_quota_reached">Quota atteint</string>
   <string name="scanner_quota_reached_free">Quota atteint · Passez à Plus</string>
+  <string name="scanner_error_capture">Capture illisible</string>
+  <string name="scanner_error_network">Erreur réseau</string>
   <string name="expo_runtime_version">2.4.1</string>
 </resources>

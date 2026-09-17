@@ -30,7 +30,10 @@ export type ScanFailureReason =
   | 'no_addresses'
   | 'la_start_failed'
   | 'expired'
-  | 'timeout';
+  | 'timeout'
+  | 'route_unreachable'
+  | 'route_unusable'
+  | 'route_no_key';
 
 /** Où le scan a été déclenché. */
 export type ScanSurface = 'shortcut' | 'share_ext' | 'bubble';
@@ -66,6 +69,9 @@ export const SCAN_ERROR_CODES: Record<ScanFailureReason, string> = {
   la_start_failed: '0xC0FE0A7D',
   expired:         '0xC0FE0B34',
   timeout:         '0xC0FE0C55',
+  route_unreachable: '0xC0FE0D6E',
+  route_unusable:    '0xC0FE0E42',
+  route_no_key:      '0xC0FE0F17',
 };
 
 /**

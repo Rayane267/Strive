@@ -151,6 +151,29 @@ export interface ScannerService {
    *  (scan via extension/bulle = JS suspendu) en situant correctement la
    *  frontière de journée. `limit <= 0` = illimité. */
   setScanQuota(countToday: number, limit: number, resetHour: number): void;
+  /** Limite du palier GRATUIT, pour le plafond de scans par APPAREIL — celui qui
+   *  empêche de regagner trois scans en supprimant son compte.
+   *
+   *  Distincte de `setScanQuota` : celle-ci porte la limite du palier courant
+   *  plus les crédits, alors que le plafond d'appareil se mesure toujours à
+   *  l'aune du gratuit, même quand le compte connecté est Plus.
+   *
+   *  Seule valeur poussée pour ce plafond. Le compteur associé est tenu par le
+   *  natif et n'est JAMAIS réécrit depuis le JS : c'est ce qui le rend
+   *  insensible au changement de compte. */
+  setDeviceQuotaLimit(freeLimit: number): void;
+  /** Réamorce le compteur de scans de l'APPAREIL depuis le serveur
+   *  (`device_scan_usage`).
+   *
+   *  Le compteur natif vit dans l'App Group / les SharedPreferences, que la
+   *  désinstallation efface — alors que le `device_id` du Keychain, lui, survit.
+   *  Sans ce réamorçage, réinstaller repartait d'un compteur vierge : le scan
+   *  passait, l'OCR et Gemini étaient dépensés, et c'est seulement à l'insertion
+   *  que le serveur refusait.
+   *
+   *  Le natif retient le MAXIMUM entre cette valeur et son compteur local : la
+   *  base peut être en retard sur des scans faits app fermée. */
+  setDeviceScanCount(deviceUsed: number): void;
 
   /** Acquitte un scan du journal natif : la course est en base. Tant qu'un scan
    *  n'est pas acquitté il est ré-émis à chaque relève — c'est ce qui garantit
@@ -168,6 +191,14 @@ export interface ScannerService {
    *  expirée. Elle y attend le prochain drain, comme celles tapées sur la carte
    *  ou la notification. Dédoublonné sur `rideId` côté natif. */
   queueRideDecision(rideId: string, status: 'ACCEPTED' | 'DECLINED'): void;
+  /** Vide la file de décisions. À n'appeler QUE sur un départ délibéré du compte
+   *  — déconnexion demandée, suppression de compte. Sur une session simplement
+   *  expirée, les décisions doivent survivre au renouvellement du jeton.
+   *
+   *  La file vit dans l'App Group / les SharedPreferences : sans cette purge
+   *  elle traverse le changement de compte et rejoue les décisions du chauffeur
+   *  précédent sous l'identité du suivant. */
+  clearRideDecisions(): void;
   /** Efface le verdict affiché sur la Live Activity / la notification de
    *  résultat, quand la décision a été prise DANS l'app. Sans effet si la carte
    *  montre déjà une autre course. */
@@ -196,7 +227,18 @@ export interface ScannerService {
    *  pour les scans cassés pendant que le JS ne tournait pas : le natif les
    *  empile (App Group / SharedPreferences) et les vide à l'abonnement. */
   onScanFailure(
-    cb: (f: { reason: string; surface: string; platform?: string | null; detail?: string | null; occurredAt?: number | null }) => void,
+    cb: (f: {
+      reason: string;
+      surface: string;
+      platform?: string | null;
+      detail?: string | null;
+      occurredAt?: number | null;
+      /** Dump JSON des blocs OCR de l'écran fautif, quand l'échec en portait un.
+       *  C'est le matériau des fixtures : sans lui, un échec n'est qu'un compteur
+       *  et l'écran qui l'a causé est perdu. */
+      blocks?: string | null;
+      screenHeight?: number | null;
+    }) => void,
   ): { remove: () => void } | undefined;
   /** Trace de diagnostic Live Activity, telle que stockée côté natif.
    *  iOS uniquement — Android n'a pas de Live Activity, la trace y est vide. */

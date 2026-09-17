@@ -149,6 +149,11 @@
         "dobNotExist": "Dieses Datum gibt es nicht",
         "dobMinAge": "Du musst mindestens 18 Jahre alt sein",
         "saveFailed": "Fehler beim Speichern"
+      },
+      "blocked": {
+        "title": "Zu viele Konten auf diesem Telefon",
+        "body": "Mit diesem Gerät wurden in den letzten sechzig Tagen fünf Konten erstellt. Melde dich mit einem davon an oder versuche es später.",
+        "action": "Zurück zur Anmeldung"
       }
     },
     "deleteAccountSub": "Unumkehrbare Aktion",
@@ -792,7 +797,10 @@
       "gemini_ko": "Die KI-Auswertung ist fehlgeschlagen",
       "la_start_failed": "Anzeige nicht möglich",
       "expired": "Auswertung unterbrochen",
-      "timeout": "Auswertung zu lang"
+      "timeout": "Auswertung zu lang",
+      "route_unreachable": "Routendienst nicht erreichbar",
+      "route_unusable": "Route nicht berechenbar",
+      "route_no_key": "Messung auf diesem Gerät nicht verfügbar"
     }
   },
   "iap": {
@@ -1019,6 +1027,8 @@
     "rideRejected": {
       "title": "Fahrt nicht erfasst",
       "bodyQuota": "Tageslimit überschritten: diese Fahrt konnte deiner Statistik nicht hinzugefügt werden.",
+      "bodyDeviceQuota": "Die 3 kostenlosen Scans dieses Telefons wurden heute bereits mit einem anderen Konto genutzt. Komm morgen wieder oder wechsle zu Plus.",
+      "bodyPriorAccount": "Die kostenlosen Scans dieses Telefons sind heute schon aufgebraucht. Der Zähler hängt am Gerät, nicht am Konto — morgen startet er neu.",
       "bodyOther": "Diese Fahrt wurde beim Erfassen abgelehnt. Wende dich an den Support, falls das wieder vorkommt."
     },
     "sessionClosed": {
@@ -1033,6 +1043,12 @@
       "title": "📊 Deine Bilanz der Woche",
       "body": "Schau nach, wie viel mehr du mit Strive verdienen könntest.",
       "bodyLoss": "≈ {{amount}} unter deinem Ziel diese Woche. So vermeidest du das."
+    },
+    "optIn": {
+      "title": "Mitteilungen aktivieren?",
+      "body": "Diese Fahrt wurde abgelehnt und nichts hat es dir gesagt. Mit Mitteilungen warnt dich Strive, wenn eine Fahrt nicht gespeichert wird, wenn dein Kontingent neu startet und wenn eine Sitzung offen bleibt.",
+      "enable": "Aktivieren",
+      "later": "Später"
     }
   },
   "tier": {
@@ -1157,10 +1173,10 @@
     "failuresEmpty": "Kein Fehler in den letzten 30 Tagen erfasst.",
     "reload": "Neu laden",
     "countersTitle": "Missbrauchsschutz-Zähler",
-    "countersHint": "Leert den Registrierungszähler im Keychain und erzeugt die Geräte-ID neu. Zu verwenden, um einen Zyklus Erstellen → Löschen → Neuerstellen eines Kontos zu wiederholen.",
+    "countersHint": "Leert den Registrierungszähler im Keychain, erzeugt eine neue Geräte-ID und setzt den Scan-Zähler des Geräts zurück. Um einen Zyklus erstellen → löschen → neu erstellen zu wiederholen.",
     "countersReset": "Gerät zurücksetzen",
     "countersResetting": "Zurücksetzen…",
-    "countersDone": "Zähler geleert. Das Gerät gilt als neu: freies Registrierungslimit und wiederholbares Willkommensgeschenk.",
+    "countersDone": "Sofort ein neues Gerät: Registrierungskontingent frei, Willkommensgeschenk wiederholbar und Geräte-Scans auf null. Kein Neustart nötig.",
     "presTitle": "Dynamic Island — Darstellungen",
     "widgetNeverSeen": "nie gesehen — schreibt nicht in die App Group",
     "presNeedsTracing": "Aktiviere oben das Sammeln und fahr normal. Die Zähler füllen sich bei jedem Scan-Ergebnis.",
@@ -1273,6 +1289,10 @@
   },
   "native": {
     "analysisFailed": "Analyse fehlgeschlagen",
+    "networkFailed": "Netzwerkfehler",
+    "networkRetry": "Verbindung prüfen und erneut scannen",
+    "bubbleErrorCapture": "Screenshot unlesbar",
+    "bubbleErrorNetwork": "Netzwerkfehler",
     "analyzing": "Analyse…",
     "goPlus": "Plus holen, um zu sehen",
     "sessionRunning": "Sitzung läuft",
