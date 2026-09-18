@@ -52,17 +52,23 @@ begin
     return new;
   end if;
 
+  -- Le rôle est NOMMÉ dans le message. Le refus d'origine ne disait pas d'où il
+  -- venait : face à « read-only from client » depuis le tableau de bord, on ne
+  -- pouvait que deviner quel rôle avait déclenché la garde, et donc quelle porte
+  -- ouvrir. Le texte d'origine est conservé tel quel en tête du message : le
+  -- client JS reconnaît ces refus par `includes()`, un préfixe modifié les
+  -- rendrait invisibles.
   if old.subscription_tier is distinct from new.subscription_tier then
-    raise exception 'subscription_tier is read-only from client';
+    raise exception 'subscription_tier is read-only from client (role %)', current_user;
   end if;
   if old.extra_scan_credits is distinct from new.extra_scan_credits then
-    raise exception 'extra_scan_credits is read-only from client';
+    raise exception 'extra_scan_credits is read-only from client (role %)', current_user;
   end if;
   if old.daily_scans_count is distinct from new.daily_scans_count then
-    raise exception 'daily_scans_count is read-only from client';
+    raise exception 'daily_scans_count is read-only from client (role %)', current_user;
   end if;
   if old.last_reset_date is distinct from new.last_reset_date then
-    raise exception 'last_reset_date is read-only from client';
+    raise exception 'last_reset_date is read-only from client (role %)', current_user;
   end if;
 
   return new;
@@ -94,7 +100,13 @@ $$;
 --      → ERROR: subscription_tier is read-only from client
 --      rollback;
 --
--- 3. Et le webhook continue de passer :
+-- 3. Quel rôle écrit depuis le tableau de bord ? La réponse est désormais dans
+--    le message d'erreur lui-même. Si l'éditeur de tables refusait encore, le
+--    refus nommerait son rôle et il suffirait de l'ajouter à la sortie 2.
+--    Pour le savoir sans provoquer d'erreur :
+--      select current_user, session_user, current_setting('request.jwt.claim.role', true);
+--
+-- 4. Et le webhook continue de passer :
 --      begin;
 --      select set_config('request.jwt.claim.role', 'service_role', true);
 --      set local role authenticated;
