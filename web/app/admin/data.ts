@@ -66,18 +66,20 @@ export function useLive(refreshMs = 30_000): State<Live> {
 }
 
 /* ── Revenu ──────────────────────────────────────────────────────────────
-   Les prix ne sont PAS recopiés ici : ils viennent de `app/data/plans.ts`,
-   la même source que les cartes tarifaires du site, donc la grille App
-   Store. Un annuel compte pour un douzième — ce qu'il rapporte par mois,
-   pas ce qu'il a encaissé d'un coup. */
+   Les prix Plus viennent de `app/data/plans.ts`, la même source que les
+   cartes tarifaires du site, donc la grille App Store. Premium n'est plus en
+   vente et a quitté la grille publique : ses montants restent écrits ici,
+   pour les seuls abonnés déjà en cours. Un annuel compte pour un douzième —
+   ce qu'il rapporte par mois, pas ce qu'il a encaissé d'un coup. */
+const LEGACY_PREMIUM = { monthly: 19.99, yearly: 159.99 };
+
 export function monthlyValue(productId: string): number | null {
   const plus = planById('plus');
-  const premium = planById('premium');
   switch (productId) {
     case 'strive_plus_monthly':    return plus.amount.monthly;
     case 'strive_plus_yearly':     return plus.amount.yearly / 12;
-    case 'strive_premium_monthly': return premium.amount.monthly;
-    case 'strive_premium_yearly':  return premium.amount.yearly / 12;
+    case 'strive_premium_monthly': return LEGACY_PREMIUM.monthly;
+    case 'strive_premium_yearly':  return LEGACY_PREMIUM.yearly / 12;
     default:                       return null;
   }
 }

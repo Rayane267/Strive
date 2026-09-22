@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Politique de Confidentialité</h1>
-      <p className="!text-faint text-sm">Dernière mise à jour : 13 juin 2026</p>
+      <p className="!text-faint text-sm">Dernière mise à jour : 22 septembre 2026</p>
 
       <p>
         La présente Politique décrit comment l&apos;éditeur de l&apos;application Strive
@@ -78,8 +78,7 @@ export default function PrivacyPage() {
       <h2>3. La technologie OCR : fonctionnement et garanties</h2>
       <ul>
         <li><strong>Lecture volontaire et ponctuelle</strong> : l&apos;OCR n&apos;est déclenché que par une action délibérée (le Scan). L&apos;Application ne lit pas l&apos;écran en continu et ne surveille pas votre activité en arrière-plan.</li>
-        <li><strong>Traitement principalement local</strong> : l&apos;analyse se fait sur votre appareil (ML Kit sous Android, Vision sous iOS). <strong>Aucune capture d&apos;écran n&apos;est conservée.</strong></li>
-        <li><strong>Traitement cloud de secours</strong> : si la lecture locale échoue, l&apos;image de l&apos;offre peut être transmise de façon sécurisée, le temps de l&apos;analyse uniquement, à notre prestataire (API Google Gemini).</li>
+        <li><strong>Traitement local</strong> : l&apos;analyse se fait sur votre appareil (ML Kit sous Android, Vision sous iOS). L&apos;image de l&apos;offre n&apos;est transmise à aucun service d&apos;analyse externe. <strong>Aucune capture d&apos;écran n&apos;est conservée.</strong></li>
         <li><strong>Non-exploitation des données des passagers</strong> : les éventuelles données de tiers visibles à l&apos;écran (prénom, adresse exacte d&apos;un passager) <strong>ne sont ni exploitées, ni revendues</strong>, et ne servent qu&apos;au calcul de rentabilité que vous demandez. Elles ne figurent jamais dans la télémétrie.</li>
       </ul>
 
@@ -95,7 +94,6 @@ export default function PrivacyPage() {
       <p>Nous ne vendons aucune donnée et n&apos;affichons aucune publicité. Nous recourons à des sous-traitants techniques (art. 28 RGPD) strictement nécessaires :</p>
       <ul>
         <li><strong>Supabase</strong> — hébergement, base de données, authentification ;</li>
-        <li><strong>Google (API Gemini)</strong> — traitement d&apos;image cloud de secours ;</li>
         <li><strong>Google (Firebase, Sign-In, Play)</strong> — notifications, connexion, distribution ;</li>
         <li><strong>TomTom</strong> — géolocalisation, géocodage et calcul d&apos;itinéraire ;</li>
         <li><strong>RevenueCat</strong> — gestion technique des abonnements (via les stores) ;</li>

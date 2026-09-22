@@ -11,10 +11,9 @@
 // Les ajouter dès que les fiches sont publiées.
 
 import { faqs } from '../data/faq';
-import { PREMIUM_LIVE, monthlyEquivalent, planById } from '../data/plans';
+import { monthlyEquivalent, planById } from '../data/plans';
 
 const plus = planById('plus');
-const premium = planById('premium');
 
 export const SITE_URL = 'https://striveapp.fr';
 export const CONTACT_EMAIL = 'contact@striveapp.fr';
@@ -90,7 +89,7 @@ export const appSchema = {
       price: plus.amount.monthly,
       priceCurrency: 'EUR',
       description:
-        "20 scans par jour, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
+        "Scans illimités, seuils €/h et €/km personnalisés, carburant déduit par modèle, 7 jours d'historique. Essai gratuit de 7 jours, sans engagement.",
     },
     {
       '@type': 'Offer',
@@ -99,27 +98,6 @@ export const appSchema = {
       priceCurrency: 'EUR',
       description: `Toutes les fonctions Strive Plus, soit ${monthlyEquivalent(plus)} par mois. Essai gratuit de 7 jours.`,
     },
-    // Premium n'est déclaré qu'une fois réellement en vente : un Offer que la
-    // page n'affiche pas est du balisage trompeur. Voir PREMIUM_LIVE.
-    ...(PREMIUM_LIVE
-      ? [
-          {
-            '@type': 'Offer',
-            name: 'Strive Premium — mensuel',
-            price: premium.amount.monthly,
-            priceCurrency: 'EUR',
-            description:
-              'Tout Strive Plus, sans limite : scans illimités, historique et statistiques sans limite de date, support prioritaire.',
-          },
-          {
-            '@type': 'Offer',
-            name: 'Strive Premium — annuel',
-            price: premium.amount.yearly,
-            priceCurrency: 'EUR',
-            description: `Toutes les fonctions Strive Premium, soit ${monthlyEquivalent(premium)} par mois.`,
-          },
-        ]
-      : []),
   ],
 };
 

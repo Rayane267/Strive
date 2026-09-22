@@ -1,6 +1,6 @@
 # Strive — Site web
 
-Landing marketing premium pour l'app Strive (assistant chauffeurs VTC).
+Landing marketing pour l'app Strive (assistant chauffeurs VTC).
 
 ## Stack
 

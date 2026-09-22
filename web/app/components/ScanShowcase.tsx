@@ -34,15 +34,15 @@ type Scenario = {
 // €/km = tarif / distance totale.
 const SCENARIOS: Scenario[] = [
   {
-    // 17,18 € · 1,2 + 11,8 = 13,0 km · 27 min → 38 €/h · 1,32 €/km
+    // 27,69 € · 1,2 + 11,8 = 13,0 km · 27 min → 62 €/h · 2,13 €/km
     kind: 'go',
     accent: '#00e676',
     caption: 'Verdict : prends-la.',
-    why: { head: 'Une vraie bonne course', body: '13 km, 27 min approche comprise → 38 €/h net. Les deux seuils sont dépassés : fonce.' },
-    bubble: { kmRate: '€1.32/km', hourly: '38', net: '€17', durationMin: '27min', distanceKm: '13.0km' },
+    why: { head: 'Une vraie bonne course', body: '13 km, 27 min approche comprise → 62 €/h net. Les deux seuils sont dépassés : fonce.' },
+    bubble: { kmRate: '€2.13/km', hourly: '62', net: '€28', durationMin: '27min', distanceKm: '13.0km' },
     offer: {
       category: 'Standard',
-      fare: '17,18 €',
+      fare: '27,69 €',
       rating: '5,00',
       pickup: { eta: 'à 6 min (1.2 km)', addr: '65 Route de la Libération, 94430 Chennevières-sur-Marne' },
       dest: { course: 'Course de 11.8 km', addr: '16 Rue Charles Pathé, 94300 Vincennes' },

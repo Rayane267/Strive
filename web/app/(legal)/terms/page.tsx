@@ -1,4 +1,3 @@
-import { PREMIUM_LIVE } from '../../data/plans';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -12,7 +11,7 @@ export default function TermsPage() {
   return (
     <>
       <h1>Conditions Générales d&apos;Utilisation</h1>
-      <p className="!text-faint text-sm">Dernière mise à jour : 13 juin 2026</p>
+      <p className="!text-faint text-sm">Dernière mise à jour : 22 septembre 2026</p>
 
       <div className="!my-7 rounded-2xl border border-signal/30 bg-signal/[0.06] p-5 text-sm leading-relaxed text-fg">
         ⚠️ <strong>À retenir avant tout.</strong> Strive est un éditeur <strong>100 % indépendant</strong>.
@@ -93,10 +92,7 @@ export default function TermsPage() {
       <h2>7. Abonnements, achats et facturation</h2>
       <ul>
         <li><strong>Offre gratuite</strong> : accès assorti d&apos;un quota limité de Scans par jour.</li>
-        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (20 scans/jour + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 7 jours</strong>.</li>
-        {PREMIUM_LIVE && (
-          <li><strong>Strive Premium</strong> : abonnement mensuel ou annuel reprenant les fonctions de Strive Plus, sans plafond de Scans quotidiens ni limite de profondeur d&apos;historique.</li>
-        )}
+        <li><strong>Strive Plus</strong> : abonnement mensuel ou annuel (Scans illimités + fonctions avancées), avec une <strong>période d&apos;essai gratuite de 7 jours</strong>.</li>
         <li><strong>Packs de Scans</strong> : crédits ponctuels (achats non renouvelables).</li>
         <li><strong>Facturation via les stores</strong> : tous les paiements sont traités par l&apos;App Store (Apple) ou Google Play, selon leurs conditions. L&apos;Éditeur n&apos;a accès à aucune donnée bancaire.</li>
         <li><strong>Renouvellement automatique</strong> pour une période identique, sauf résiliation au moins 24 h avant la fin de la période en cours ; en cas d&apos;essai, facturation à l&apos;issue si non annulé à temps.</li>

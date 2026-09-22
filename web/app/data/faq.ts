@@ -2,11 +2,9 @@
 // FAQPage lisent ce tableau. Deux copies divergeraient, et un schema qui ne
 // correspond pas au contenu affiché est traité comme du balisage trompeur.
 
-import { PREMIUM_LIVE } from './plans';
+export type FaqItem = { q: string; a: string };
 
-export type FaqItem = { q: string; a: string; /** Masquée tant que Premium n'est pas en vente. */ premiumOnly?: boolean };
-
-const allFaqs: FaqItem[] = [
+export const faqs: FaqItem[] = [
   {
     q: 'Comment fonctionne le scanner ?',
     a: "Capture l'offre affichée dans ton app VTC, Strive en extrait le prix, la distance et le temps par OCR, puis affiche un verdict selon tes seuils minimum — en 2 secondes.",
@@ -29,14 +27,7 @@ const allFaqs: FaqItem[] = [
   },
   {
     q: 'Combien de scans par jour ?',
-    a: PREMIUM_LIVE
-      ? '3 scans par jour en gratuit, 20 par jour avec Strive Plus, et sans limite avec Strive Premium.'
-      : '3 scans par jour en gratuit, 20 par jour avec Strive Plus.',
-  },
-  {
-    q: 'Quelle différence entre Plus et Premium ?',
-    a: "Plus donne 20 scans par jour et 7 jours d'historique — le bon plan pour une journée de service normale. Premium retire les deux plafonds : scans illimités et historique complet. Tout le reste est identique.",
-    premiumOnly: true,
+    a: '3 scans par jour en gratuit, sans limite avec Strive Plus.',
   },
   {
     q: "Comment fonctionne l'essai gratuit de 7 jours ?",
@@ -51,7 +42,3 @@ const allFaqs: FaqItem[] = [
     a: "Tout est chiffré et stocké de manière sécurisée. Aucune donnée vendue, aucune publicité, aucun tracking tiers. Tu peux supprimer ton compte à tout moment depuis l'app.",
   },
 ];
-
-// Les questions propres à Premium disparaissent tant qu'il n'est pas en vente —
-// la FAQ visible et le balisage FAQPage lisent tous deux ce tableau filtré.
-export const faqs: FaqItem[] = allFaqs.filter((f) => PREMIUM_LIVE || !f.premiumOnly);

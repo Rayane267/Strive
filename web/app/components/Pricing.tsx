@@ -5,7 +5,6 @@ import Reveal from './Reveal';
 import {
   COMPARISON,
   PLANS,
-  PREMIUM_LIVE,
   SAVINGS_LABEL,
   yearlyReference,
   type Cycle,
@@ -51,10 +50,8 @@ export default function Pricing() {
         </span>
       </Reveal>
 
-      {/* Paliers — trois colonnes seulement à partir de `lg`. À 768px, trois
-          cartes laissent ~157px de contenu utile une fois le `p-8` retiré :
-          « 159,99 € » en `text-5xl` y déborde. Deux colonnes puis trois. */}
-      <div className={`mt-12 grid gap-5 md:items-stretch ${PREMIUM_LIVE ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>
+      {/* Paliers — deux colonnes à partir de `md`. */}
+      <div className="mt-12 grid gap-5 md:grid-cols-2 md:items-stretch">
         {PLANS.map((plan, i) => (
           <Reveal
             key={plan.id}
@@ -143,7 +140,7 @@ export default function Pricing() {
         <h3 className="font-display text-xl font-bold tracking-[-0.02em]">Le détail, ligne par ligne</h3>
         <div className="mt-6 -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
           <table
-            className={`w-full border-collapse text-sm ${PREMIUM_LIVE ? 'min-w-[36rem]' : 'min-w-[30rem]'}`}
+            className="w-full min-w-[30rem] border-collapse text-sm"
           >
             <thead>
               <tr className="text-left">
@@ -156,11 +153,6 @@ export default function Pricing() {
                 <th className="pb-4 font-mono text-[11px] font-bold uppercase tracking-widest text-signal">
                   Plus
                 </th>
-                {PREMIUM_LIVE && (
-                  <th className="pb-4 font-mono text-[11px] font-bold uppercase tracking-widest text-fg">
-                    Premium
-                  </th>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -171,7 +163,6 @@ export default function Pricing() {
                   </th>
                   <td className="py-4 pr-4 text-faint">{row.free}</td>
                   <td className="py-4 pr-4 font-semibold text-signal">{row.plus}</td>
-                  {PREMIUM_LIVE && <td className="py-4 font-semibold text-fg">{row.premium}</td>}
                 </tr>
               ))}
             </tbody>

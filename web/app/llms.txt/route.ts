@@ -1,5 +1,5 @@
 import { faqs } from '../data/faq';
-import { PREMIUM_LIVE, monthlyEquivalent, planById } from '../data/plans';
+import { monthlyEquivalent, planById } from '../data/plans';
 import { CONTACT_EMAIL, SITE_URL } from '../lib/schema';
 
 // `/llms.txt` — convention llmstxt.org : un résumé factuel en Markdown, servi en
@@ -13,17 +13,9 @@ import { CONTACT_EMAIL, SITE_URL } from '../lib/schema';
 export const dynamic = 'force-static';
 
 const plus = planById('plus');
-const premium = planById('premium');
 
 function body(): string {
   const faqBlock = faqs.map((f) => `### ${f.q}\n${f.a}`).join('\n\n');
-
-  // Premium ne se lance qu'après Plus : tant que PREMIUM_LIVE est false, il ne
-  // doit apparaître nulle part — surtout pas dans le fichier que les moteurs
-  // génératifs citent comme la source de vérité des tarifs.
-  const premiumLine = PREMIUM_LIVE
-    ? `- **Strive Premium** — ${premium.price.monthly} par mois ou ${premium.price.yearly} par an (soit ${monthlyEquivalent(premium)} par mois) : tout Strive Plus, plus des scans illimités, un historique sans limite de date et un support prioritaire.\n`
-    : '';
 
   return `# Strive
 
@@ -53,8 +45,8 @@ Application mobile iOS et Android. Interface en français et en anglais.
 ## Tarifs
 
 - **Gratuit** — 3 scans par jour, estimations basiques, historique du jour uniquement.
-- **Strive Plus** — ${plus.price.monthly} par mois ou ${plus.price.yearly} par an (soit ${monthlyEquivalent(plus)} par mois) : 20 scans par jour, seuils €/h et €/km personnalisés, coût carburant par modèle, 7 jours d'historique et de statistiques, réglages véhicule débloqués.
-${premiumLine}- Essai gratuit de 7 jours sur Strive Plus, sans engagement. Résiliation en 1 clic depuis les réglages de l'App Store ou Google Play. Facturation gérée par les stores : Strive n'a accès à aucune donnée bancaire.
+- **Strive Plus** — ${plus.price.monthly} par mois ou ${plus.price.yearly} par an (soit ${monthlyEquivalent(plus)} par mois) : scans illimités, seuils €/h et €/km personnalisés, coût carburant par modèle, 7 jours d'historique et de statistiques, réglages véhicule débloqués.
+- Essai gratuit de 7 jours sur Strive Plus, sans engagement. Résiliation en 1 clic depuis les réglages de l'App Store ou Google Play. Facturation gérée par les stores : Strive n'a accès à aucune donnée bancaire.
 
 ## Questions fréquentes
 
