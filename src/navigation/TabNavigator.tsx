@@ -24,7 +24,9 @@ import DashboardScreenRaw from '../screens/DashboardScreen';
 import HistoryScreenRaw from '../screens/HistoryScreen';
 import AnalyticsScreenRaw from '../screens/AnalyticsScreen';
 import ProfileScreenRaw from '../screens/ProfileScreen';
+import ShopScreenRaw from '../screens/ShopScreen';
 import { withErrorBoundary } from '../components/ErrorBoundary';
+import { SHOP_ENABLED } from '../services/subscriptionService';
 
 // Chaque tab isolé dans son ErrorBoundary : un crash dans Analytics ne
 // blanchit pas Dashboard/History/etc.
@@ -32,6 +34,7 @@ const DashboardScreen = withErrorBoundary(DashboardScreenRaw);
 const HistoryScreen = withErrorBoundary(HistoryScreenRaw);
 const AnalyticsScreen = withErrorBoundary(AnalyticsScreenRaw);
 const ProfileScreen = withErrorBoundary(ProfileScreenRaw);
+const ShopScreen = withErrorBoundary(ShopScreenRaw);
 
 const Tab = createBottomTabNavigator();
 
@@ -42,6 +45,7 @@ const TAB_ICONS: Record<string, (color: string, size: number) => React.ReactNode
   Dashboard: (c, s) => <MaterialCommunityIcons name="home"              size={s} color={c} />,
   History:   (c, s) => <MaterialCommunityIcons name="history"           size={s} color={c} />,
   Analytics: (c, s) => <MaterialCommunityIcons name="google-analytics"  size={s} color={c} />,
+  Shop:      (c, s) => <MaterialCommunityIcons name="storefront"        size={s} color={c} />,
   Profile:   (c, s) => <MaterialCommunityIcons name="account"           size={s} color={c} />,
 };
 
@@ -446,10 +450,17 @@ const CustomTabBar = (props: BottomTabBarProps) => {
 const TabNavigator = () => {
   const { t } = useTranslation();
 
+  // En suspens pour la v1 (`SHOP_ENABLED`) : l'onglet n'est pas ENREGISTRÉ,
+  // donc la route n'existe pas — ni pour un `navigate('Shop')`, ni pour une
+  // restauration d'état. Masquer le bouton de la barre ne suffirait pas, et
+  // surtout : les quatre packs de scans ne sont pas soumis à Apple tant que
+  // personne ne peut les atteindre. La barre se dimensionne sur
+  // `state.routes.length`, il n'y a donc rien d'autre à ajuster ici.
   const labels: Record<string, string> = {
     Dashboard: t('nav.dashboard'),
     History:   t('nav.history'),
     Analytics: t('nav.analytics'),
+    ...(SHOP_ENABLED ? { Shop: t('nav.shop') } : {}),
     Profile:   t('nav.profile'),
   };
 
@@ -466,6 +477,7 @@ const TabNavigator = () => {
           Dashboard: DashboardScreen,
           History:   HistoryScreen,
           Analytics: AnalyticsScreen,
+          Shop:      ShopScreen,
           Profile:   ProfileScreen,
         };
         return (

@@ -147,16 +147,17 @@ const computeVideoHeight = (viewportH: number, belowH: number): number | undefin
 
 /** Les quatre exigences de l'installation iOS. `notif` est la seule que l'app
  *  puisse vérifier ; `shortcut` ne peut être que DÉCLARÉE par le chauffeur ;
- *  les deux dernières n'ont aucune API et restent « à vérifier ». */
+ *  `urgent` est tenue pour prête dès que son réglage a été ouvert ; `bubble`
+ *  n'a aucune API et reste « à vérifier ». */
 const RECAP_ROWS = [
   // Chaque exigence porte SA destination. Un unique bouton « Ouvrir les
   // Réglages » sous les quatre lignes obligeait le chauffeur à deviner laquelle
   // il allait régler — et le déposait au même endroit dans les quatre cas.
   { key: 'notif',    target: 'notifications' as const },
   // Le raccourci mène à l'app Raccourcis, pas aux Réglages : c'est là qu'on le
-  // VOIT. iOS n'offre aucun moyen de vérifier son existence par programme, donc
-  // la ligne ne prétend rien — elle emmène regarder, et affiche « confirmé » si
-  // le chauffeur l'a déclaré à l'étape 2.
+  // VOIT — une fois confirmé. Tant qu'il ne l'est pas, la ligne rouvre le lien
+  // d'installation. iOS n'offre aucun moyen de vérifier son existence par
+  // programme : « confirmé » ne vient que de la déclaration du chauffeur.
   { key: 'shortcut', target: 'shortcuts' as const },
   { key: 'bubble',   target: 'accessibility' as const },
   { key: 'urgent',   target: 'notifications' as const },
@@ -166,6 +167,11 @@ const RECAP_ROWS = [
  *  PAS une vérification — iOS n'en offre aucune — mais c'est la sienne, pas une
  *  supposition de l'app. Persisté pour que le récap s'en souvienne au rejeu. */
 const SHORTCUT_DECLARED_KEY = '@strive_shortcut_declared';
+
+/** Le chauffeur a ouvert la page des notifications pour les « urgentes ». On le
+ *  tient pour réglé : iOS expose bien le réglage de l'app, mais pas ce que le
+ *  mode Conduite laisse passer — le vérifier à moitié ne prouverait rien. */
+const URGENT_OPENED_KEY = '@strive_urgent_opened';
 
 /** Le nom EXACT du raccourci dans l'app Raccourcis. Non traduit — c'est un nom
  *  propre, et le chauffeur doit retrouver cette chaîne telle quelle dans sa
@@ -243,6 +249,8 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
   const [shortcutOpened, setShortcutOpened] = useState(false);
   /** Le chauffeur a confirmé l'avoir ajouté. Sa parole, pas notre supposition. */
   const [shortcutDeclared, setShortcutDeclared] = useState(false);
+  /** Il a ouvert le réglage des notifications urgentes — tenu pour prêt. */
+  const [urgentOpened, setUrgentOpened] = useState(false);
   /// État réel de la permission notifications, relu sans jamais afficher la
   /// fenêtre système — elle ne s'affiche qu'une fois par installation, la brûler
   /// pour peindre un bouton en vert serait le pire échange.
@@ -275,6 +283,9 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     refreshNotifStatus();
     AsyncStorage.getItem(SHORTCUT_DECLARED_KEY).then(v => {
       if (v === '1') { setShortcutDeclared(true); setShortcutOpened(true); }
+    });
+    AsyncStorage.getItem(URGENT_OPENED_KEY).then(v => {
+      if (v === '1') setUrgentOpened(true);
     });
     // Le chauffeur peut accorder la permission depuis les Réglages iOS, hors de
     // l'app : on relit à chaque retour au premier plan plutôt que de rester sur
@@ -383,6 +394,13 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     hapticSuccess();
     setShortcutDeclared(true);
     AsyncStorage.setItem(SHORTCUT_DECLARED_KEY, '1');
+  };
+
+  const openUrgent = () => {
+    hapticLight();
+    openSettingsFor('notifications');
+    setUrgentOpened(true);
+    AsyncStorage.setItem(URGENT_OPENED_KEY, '1');
   };
 
   /// Chaque ligne du récap mène à SA destination — le raccourci vers l'app
@@ -574,11 +592,13 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                       sub={t('tutorial.iosInstall.urgentS')}
                     >
                       <TouchableOpacity
-                        style={styles.cta}
-                        onPress={() => openSettingsFor('notifications')}
+                        style={[styles.cta, urgentOpened && styles.ctaGhost]}
+                        onPress={openUrgent}
                         activeOpacity={0.85}
                       >
-                        <Text style={styles.ctaTxt}>{t('tutorial.iosInstall.urgentCta')}</Text>
+                        <Text style={[styles.ctaTxt, urgentOpened && styles.ctaGhostTxt]}>
+                          {urgentOpened ? t('tutorial.iosInstall.ctaDone') : t('tutorial.iosInstall.urgentCta')}
+                        </Text>
                       </TouchableOpacity>
                     </LoopStep>
 
@@ -656,8 +676,8 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                  réellement vérifiable : les notifications. Le raccourci ne peut
                  être que déclaré par le chauffeur, et il est affiché comme tel —
                  « confirmé par vous », pas « prêt ». iOS n'expose AUCUNE API pour
-                 AssistiveTouch ni pour le niveau d'interruption : ces deux-là
-                 restent « à vérifier », avec le chemin pour le faire soi-même.
+                 AssistiveTouch, qui reste « à vérifier » avec son chemin. Les
+                 urgentes passent « prêtes » dès que leur réglage a été ouvert.
                  Peindre un faux vert serait bien pire que d'admettre l'ignorance. */}
             {isRecap ? (
               <View style={styles.blockList}>
@@ -667,11 +687,25 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                   // par le chauffeur à l'étape 2 — affiché « confirmé », jamais
                   // « prêt ». La bulle AssistiveTouch n'expose aucune API et
                   // reste « à vérifier ».
+                  // Les urgentes passent « prêtes » dès que le chauffeur a ouvert
+                  // leur réglage (cf. `URGENT_OPENED_KEY`).
                   const state = row.key === 'notif'
                     ? (notifGranted ? 'ok' : 'todo')
                     : row.key === 'shortcut' && shortcutDeclared
                     ? 'declared'
+                    : row.key === 'urgent' && urgentOpened
+                    ? 'ok'
                     : 'unknown';
+                  // Raccourci pas encore confirmé : la ligne REMÈNE à
+                  // l'installation. Ouvrir l'app Raccourcis à quelqu'un qui a
+                  // sauté l'étape 2 lui montrait une liste vide, sans aucun moyen
+                  // de l'ajouter depuis le tutoriel.
+                  const shortcutToInstall = row.key === 'shortcut' && !shortcutDeclared;
+                  const onRowPress = shortcutToInstall
+                    ? () => { hapticLight(); openShortcut(); }
+                    : row.key === 'urgent'
+                    ? openUrgent
+                    : () => openRecapTarget(row.target);
                   const stateColor = state === 'ok' || state === 'declared'
                     ? A
                     : state === 'todo'
@@ -681,7 +715,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     <TouchableOpacity
                       key={row.key}
                       style={[styles.recapRow, index < RECAP_ROWS.length - 1 && styles.recapRowDivided]}
-                      onPress={() => openRecapTarget(row.target)}
+                      onPress={onRowPress}
                       activeOpacity={0.6}
                       accessibilityRole="button"
                       accessibilityLabel={`${t(`tutorial.recap.${row.key}T`)} — ${t(`tutorial.recap.state_${state}`)}`}
@@ -710,7 +744,16 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                             {t(`tutorial.recap.state_${state}`)}
                           </Text>
                         </View>
-                        <Text style={styles.stepSub}>{t(`tutorial.recap.${row.key}S`)}</Text>
+                        <Text style={styles.stepSub}>
+                          {shortcutToInstall
+                            ? t('tutorial.recap.shortcutS_install')
+                            : t(`tutorial.recap.${row.key}S`)}
+                        </Text>
+                        {shortcutToInstall && shortcutOpened ? (
+                          <TouchableOpacity style={styles.cta} onPress={declareShortcut} activeOpacity={0.85}>
+                            <Text style={styles.ctaTxt}>{t('tutorial.iosInstall.confirmCta')}</Text>
+                          </TouchableOpacity>
+                        ) : null}
                         {row.key === 'shortcut' ? (
                           <View style={styles.shortcutChip}>
                             {/* La vraie icône Raccourcis d'Apple. Elle porte déjà sa
@@ -726,6 +769,21 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                         ) : (
                           <Text style={styles.recapPath}>{t(`tutorial.recap.${row.key}Path`)}</Text>
                         )}
+                        {/* Confirmé ne veut pas dire « toujours là » : s'il l'a
+                            supprimé depuis, la ligne mène à l'app Raccourcis, où il
+                            n'y a plus rien. Ce lien rouvre l'installation. */}
+                        {row.key === 'shortcut' && shortcutDeclared ? (
+                          <TouchableOpacity
+                            style={styles.reinstallLink}
+                            onPress={() => { hapticLight(); openShortcut(); }}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityRole="button"
+                          >
+                            <Feather name="download" size={12} color={colors.textMuted} />
+                            <Text style={styles.videoReplayTxt}>{t('tutorial.recap.shortcutReinstall')}</Text>
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                     </TouchableOpacity>
                   );
@@ -1201,6 +1259,15 @@ const styles = StyleSheet.create({
     gap: space.sm,
     marginTop: -10,
     marginBottom: space.xl,
+  },
+  /// « Réinstaller » sous la ligne du raccourci : même poids que « Revoir la
+  /// vidéo », un recours discret et non une action principale.
+  reinstallLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: space.sm,
+    marginTop: space.sm,
   },
   videoReplayTxt: {
     color: colors.textMuted,

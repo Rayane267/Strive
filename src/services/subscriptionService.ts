@@ -13,7 +13,7 @@ export interface PlanLimits {
 // garder une UX correcte en degraded mode.
 const FALLBACK_LIMITS: Record<PlanTier, PlanLimits> = {
   free: { dailyScans: 3, analyticsRangeDays: 1 },
-  plus: { dailyScans: 20, analyticsRangeDays: 7 },
+  plus: { dailyScans: null, analyticsRangeDays: 7 },
   premium: { dailyScans: null, analyticsRangeDays: null },
 };
 
@@ -69,6 +69,37 @@ export async function fetchPlanLimits(): Promise<void> {
     // Fail-silent : on garde le fallback
   }
 }
+
+/**
+ * La Boutique est EN SUSPENS — hors de portée pour la v1.
+ *
+ * À `false`, l'onglet n'est pas ENREGISTRÉ dans `TabNavigator` : les quatre
+ * consommables `strive_scan_pack_*` ne sont donc vendus nulle part dans le
+ * binaire. C'est volontaire et c'est lié à App Review — un produit d'achat
+ * intégré que le reviewer ne peut pas atteindre se fait rejeter, et les quatre
+ * SKU restent pour cette raison NON soumis dans App Store Connect (cf.
+ * `docs/APP-REVIEW-NOTES.md`).
+ *
+ * Le jour où la Boutique s'ouvre, l'ordre compte : passer ce drapeau à `true`,
+ * builder, soumettre les quatre consommables AVEC ce build — pas l'inverse.
+ * Les SKU ne doivent jamais être supprimés côté Apple : un ID de produit
+ * supprimé n'est pas réutilisable, et ces IDs sont câblés ici, dans
+ * `iapService.ts`, dans `subscription_products` et dans le webhook RevenueCat.
+ */
+export const SHOP_ENABLED = false;
+
+/**
+ * Premium est EN SUSPENS : Plus est le seul palier vendu, et il a repris les
+ * scans illimités de Premium (20260922_plus_unlimited_scans.sql).
+ *
+ * À `false`, le paywall ne montre ni la pastille Plus/Premium ni la montée en
+ * gamme d'un abonné Plus, et l'entrée « Meilleurs créneaux » (propre à
+ * Premium) disparaît d'Analytics. Le palier reste reconnu partout ailleurs
+ * (`getPlanTier`, webhook, `plan_limits`) : un abonné Premium existant garde
+ * ses droits. Les SKU `strive_premium_*` ne doivent pas être supprimés côté
+ * store — un ID supprimé n'est pas réutilisable.
+ */
+export const PREMIUM_ENABLED = false;
 
 // Doit rester synchro avec public.subscription_products (seed migration).
 // quantity/price sont des fallbacks UI — la source de vérité finale est le

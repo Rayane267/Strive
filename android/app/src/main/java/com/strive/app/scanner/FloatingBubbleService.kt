@@ -489,10 +489,10 @@ class FloatingBubbleService : Service() {
                 } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
                     // Les blocs partent avec : c'est un écran d'offre que le parser
                     // local n'a pas su lire, donc exactement la fixture qui manque.
-                    fallbackGemini(fullBitmap, debugBlocks, h)
+                    failUnreadable(fullBitmap, debugBlocks, h)
                 } else {
                     // Pré-filtre anti-pub : du texte a été lu mais aucun signal VTC
-                    // (prix €, km/min, plateforme) → inutile de payer un appel Gemini.
+                    // (prix €, km/min, plateforme) → « pas une offre » plutôt qu'un échec.
                     // Mirror iOS (ScanProcessor.lastScanMayBeRide).
                     fullBitmap.recycle()
                     onNotARide()
@@ -503,56 +503,33 @@ class FloatingBubbleService : Service() {
             }
             .addOnFailureListener {
                 ocrBitmap?.recycle()
-                fallbackGemini(fullBitmap)
+                failUnreadable(fullBitmap)
             }
     }
 
-    /** `debugBlocks` / `screenHeight` : les blocs OCR du scan qui vient d'échouer,
-     *  quand il y en a. C'est le cas le PLUS intéressant à rejouer en fixture —
-     *  le parsing par règles n'a pas su lire un écran que Gemini, lui, a su lire.
-     *  Ils sont nuls quand l'OCR lui-même a échoué (`addOnFailureListener`) : il
-     *  n'y a alors aucun bloc à conserver. */
-    private fun fallbackGemini(
+    /** Écran d'offre que le parsing par règles n'a pas su lire, ou OCR en échec.
+     *
+     *  Il n'y a PLUS de repli Gemini : le scan échoue ici. `GeminiVisionService`
+     *  reste dans le binaire pour le jeton de session et l'encodage d'image, mais
+     *  `analyze` n'est plus appelé nulle part.
+     *
+     *  Le motif reste `gemini_ko` — le vocabulaire de `log_scan_failure` est fermé,
+     *  et c'est toujours « les règles ont calé sur un écran qui ressemblait à une
+     *  offre ». `debugBlocks` / `screenHeight` partent avec : c'est exactement la
+     *  fixture qui manque au parser. Ils sont nuls quand l'OCR lui-même a échoué. */
+    private fun failUnreadable(
         bitmap: Bitmap,
         debugBlocks: String? = null,
         screenHeight: Int = 0,
     ) {
-        if (GeminiVisionService.isReady) {
-            showLoadingState()
-            // On encode d'abord : si Gemini natif réussit on transmettra aussi
-            // l'image au JS (il peut l'utiliser en retry sanity-check).
-            val base64 = GeminiVisionService.encodeForBridge(bitmap)
-            GeminiVisionService.analyze(bitmap) { result ->
-                bitmap.recycle()
-                if (result != null) {
-                    // B : on route le résultat Gemini par la MÊME résolution TomTom
-                    // que l'OCR (adresses → vraie distance). Gemini peut désormais
-                    // renvoyer pickup/destination → TomTom s'applique aussi ici.
-                    resolveTomTomAndEmit(result, base64, debugBlocks, screenHeight, geminiUsed = true)
-                } else {
-                    mainHandler.post {
-                        onScanError()
-                        // L'écran le plus précieux du parc : ni les règles ni Gemini
-                        // n'ont su le lire. Sans ses blocs, il ne reste qu'un compteur.
-                        ScanBridgeModule.emitScanFailure(
-                            this, "gemini_ko", "null_result",
-                            blocks = debugBlocks, screenHeight = screenHeight,
-                        )
-                        ScanBridgeModule.emitScanFailed()
-                    }
-                }
-                scanInProgress = false
-            }
-        } else {
-            bitmap.recycle()
-            onScanError()
-            ScanBridgeModule.emitScanFailure(
-                this, "gemini_ko", "not_configured",
-                blocks = debugBlocks, screenHeight = screenHeight,
-            )
-            ScanBridgeModule.emitScanFailed()
-            scanInProgress = false
-        }
+        bitmap.recycle()
+        onScanError()
+        ScanBridgeModule.emitScanFailure(
+            this, "gemini_ko", "no_fallback",
+            blocks = debugBlocks, screenHeight = screenHeight,
+        )
+        ScanBridgeModule.emitScanFailed()
+        scanInProgress = false
     }
 
     private fun onScanError() {
@@ -560,7 +537,7 @@ class FloatingBubbleService : Service() {
         mainHandler.postDelayed({ showIdleState() }, 2500)
     }
 
-    /** Écran scanné sans signal d'offre VTC (pub, etc.) — pas d'appel Gemini. */
+    /** Écran scanné sans signal d'offre VTC (pub, etc.). */
     private fun onNotARide() {
         mainHandler.post { showNotARideState() }
         mainHandler.postDelayed({ showIdleState() }, 2500)

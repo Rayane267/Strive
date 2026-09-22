@@ -47,7 +47,6 @@ import { getEffectivePlanTier, getPlanLimits, getRemainingScans, getWelcomeCredi
 import { scannerService } from '../services/scanner';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY, TOMTOM_API_KEY } from '@env';
 import { maybePromptRating, markRatingPrompted, openStoreForRating } from '../utils/ratingPrompt';
-import { extractWithGemini } from '../services/scanner/geminiFallback';
 import { logScanEvent, fareBucket } from '../services/telemetryService';
 import { logScanDebug, hasIncoherentAddresses } from '../services/scanDebugService';
 import { logScanFailure, rememberLastFailure } from '../services/scanFailureService';
@@ -789,19 +788,17 @@ const DashboardScreen = () => {
       }
 
       // Le natif a déjà appelé TomTom et mis à jour la bulle. Ici on :
-      //  - fallback Gemini si l'OCR est totalement vide (cas extrême)
       //  - ajoute le trajet d'approche (pickup) si la pref est active
       //  - consolide les valeurs pour la DB
       const ocrLooksBad =
         !Number.isFinite(nativeResult.fare) || nativeResult.fare <= 0 ||
         !Number.isFinite(nativeResult.distanceKm) || nativeResult.distanceKm <= 0;
 
-      let result = nativeResult;
-      // Le natif a pu appeler Gemini AVANT de nous remettre le résultat (raccourci
-      // iOS, bulle Android) — c'est même le cas normal, le repli JS ci-dessous ne
-      // servant qu'aux scans lancés depuis le Dashboard. On part donc de ce que le
-      // natif rapporte, et le repli JS ne fait que s'y ajouter.
-      let usedGemini = nativeResult.geminiUsed === true;
+      const result = nativeResult;
+      // Plus aucun repli Gemini, ni natif ni JS. Le drapeau reste lu tel que le
+      // natif le rapporte : un build antérieur encore installé peut l'envoyer, et
+      // la télémétrie doit rester juste pour lui.
+      const usedGemini = nativeResult.geminiUsed === true;
       if (ocrLooksBad) {
         // ON N'INVENTE PAS UNE COURSE QUE PERSONNE N'A MESURÉE.
         //
@@ -819,37 +816,16 @@ const DashboardScreen = () => {
         }
         return;
       }
-      if (nativeResult.imageBase64 && (!result.pickupAddress || !result.destinationAddress)) {
-        // Récupération CIBLÉE d'adresse : l'OCR a le prix/distance mais a raté une
-        // adresse (souvent une destination POI sans mot-clé de voie ni numéro).
-        // On ne refait pas tout le parse — Gemini comble uniquement l'adresse
-        // manquante, on garde les valeurs natives. Borné par le budget Gemini.
-        __DEV__ && console.info('[Scanner:Fallback] adresse manquante — Gemini (ciblé)');
-        const gemini = await extractWithGemini(nativeResult.imageBase64);
-        if (gemini) {
-          result = {
-            ...result,
-            pickupAddress: result.pickupAddress ?? gemini.pickupAddress,
-            destinationAddress: result.destinationAddress ?? gemini.destinationAddress,
-            // Sans ça l'approche lue par Gemini était jetée → includePickup
-            // restait sans effet sur tout scan passé par le fallback.
-            pickupDurationMin: result.pickupDurationMin ?? gemini.pickupDurationMin,
-            pickupDistanceKm: result.pickupDistanceKm ?? gemini.pickupDistanceKm,
-          };
-          usedGemini = true;
-        }
-      }
-
       // Règle produit : sans les 2 adresses, aucun géocodage TomTom possible →
       // les métriques reposent sur l'OCR brut, peu fiable (durée d'approche
-      // confondue avec la course → €/h gonflé). Le fallback Gemini a déjà été
-      // tenté ci-dessus. On refuse de persister/afficher une course douteuse :
-      // scan échoué plutôt qu'une valeur trompeuse.
+      // confondue avec la course → €/h gonflé). Il n'y a plus de repli Gemini
+      // pour rattraper une adresse manquée. On refuse de persister/afficher une
+      // course douteuse : scan échoué plutôt qu'une valeur trompeuse.
       // Sans les 2 adresses on n'enregistre pas (métriques non fiables sans
       // géocodage). Le « scan échoué » est affiché DANS la Live Activity côté
       // natif — inutile (et indésirable) de l'afficher aussi dans l'app. Sur iOS
-      // ce cas n'arrive quasi plus : l'AppIntent tente Gemini puis montre
-      // l'erreur en LA sans rien sauvegarder. Garde silencieuse de sécurité.
+      // ce cas n'arrive pas : l'AppIntent montre l'erreur en LA sans rien
+      // sauvegarder. Garde silencieuse de sécurité.
       if (!result.pickupAddress?.trim() || !result.destinationAddress?.trim()) {
         __DEV__ && console.warn('[Scanner] adresses incomplètes — course ignorée (silencieux)');
         // Abandon volontaire : rejouer donnerait le même verdict. On acquitte.
@@ -1223,7 +1199,9 @@ const DashboardScreen = () => {
           // géocodage qui les a refusées, pas la lecture qui les a manquées.
           pickupMissing: nothingWasRead,
           destMissing: nothingWasRead,
-          geminiUsed: f.reason === 'gemini_ko',
+          // Plus de repli Gemini : `gemini_ko` ne veut plus dire que « les
+          // règles ont calé sur un écran d'offre ».
+          geminiUsed: false,
           geminiPickup: null,
           geminiDestination: null,
           appVersion: APP_VERSION_LABEL,
@@ -2380,7 +2358,7 @@ const DashboardScreen = () => {
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.upgradeCardTitle}>{t('dashboard.upgradeCard.title', 'Arrête de rouler à perte')}</Text>
-                  <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course évitée')}</Text>
+                  <Text style={styles.upgradeCardSub}>{t('dashboard.upgradeCard.sub', 'Plus se rembourse en une seule course')}</Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </View>
@@ -2388,7 +2366,7 @@ const DashboardScreen = () => {
               <View style={styles.upgradeCardBottom}>
                 <View style={styles.upgradeCardPerk}>
                   <Feather name="zap" size={12} color={colors.textMuted} />
-                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', '20 scans/jour')}</Text>
+                  <Text style={styles.upgradeCardPerkText}>{t('dashboard.upgradeCard.perk1', 'Scans illimités')}</Text>
                 </View>
                 <View style={styles.upgradeCardPerkDot} />
                 <View style={styles.upgradeCardPerk}>

@@ -997,20 +997,7 @@ class ScanBridgeModule: RCTEventEmitter {
 
     VisionOCRService.shared.recognizeText(from: image) { [weak self] ocrResult in
       guard let ocrResult = ocrResult, !ocrResult.blocks.isEmpty else {
-        // Fallback Gemini
-        GeminiVisionService.shared.analyze(image: image) { geminiResult in
-          guard let geminiResult = geminiResult else {
-            reject("OCR_FAILED", "Échec de l'analyse OCR et Gemini", nil)
-            return
-          }
-          let body: [String: Any] = [
-            "platform": geminiResult.platform,
-            "fare": geminiResult.fare,
-            "distanceKm": geminiResult.distanceKm,
-            "durationMin": geminiResult.durationMin as Any,
-          ]
-          resolve(body)
-        }
+        reject("OCR_FAILED", "Échec de l'analyse OCR", nil)
         return
       }
 

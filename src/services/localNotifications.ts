@@ -137,9 +137,12 @@ export function notifyQuotaReached(resetHour: number, isFree = false, plusScans?
   const mins = Math.floor((diffMs % 3600_000) / 60_000);
   const timeStr = hours > 0 ? `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}` : `${mins}min`;
 
-  // Repli sur le message neutre si la limite Plus est inconnue (cache runtime pas
-  // encore chargé) : mieux vaut ne rien promettre qu'annoncer un chiffre faux.
-  const body = isFree && plusScans
+  // `plusScans === null` : Plus est illimité (convention de `plan_limits`), on
+  // vend donc l'illimité et non un chiffre. Un 0 ou un `undefined` retombe sur
+  // le message neutre : mieux vaut ne rien promettre qu'annoncer un chiffre faux.
+  const body = isFree && plusScans === null
+    ? i18n.t('notifications.quotaReached.bodyFreeUnlimited', { time: timeStr })
+    : isFree && plusScans
     // `scans` et surtout pas `count` : i18next réserve `count` à la
     // pluralisation. Il chercherait `bodyFree_one` / `bodyFree_other`, et ne
     // retomberait sur la clé de base que faute de les trouver — le jour où une

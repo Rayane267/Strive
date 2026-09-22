@@ -76,10 +76,11 @@ Ce fichier a deux moitiés :
 > Profile tab when you are done. Deletion is immediate and removes the account
 > and its data.
 >
-> Premium
-> features are unlocked from the Subscription tab with a sandbox purchase — the
+> Strive Plus
+> is unlocked from the Subscription tab with a sandbox purchase — the
 > subscription flow is part of what we would like you to test. On the free tier
-> the app allows three ride analyses per day, which is by design.
+> the app allows three ride analyses per day, which is by design; Strive Plus
+> removes that limit.
 >
 > 1. Launch the app and sign in with the demo credentials (or with Sign in with
 >    Apple — account creation is open).
@@ -108,7 +109,6 @@ Ce fichier a deux moitiés :
 > | Sign in with Apple / Google Sign-In | Authentication providers |
 > | RevenueCat | Subscription management on top of Apple In-App Purchase |
 > | TomTom | Geocoding and routing with live traffic |
-> | Google Gemini | Reading a ride-offer screenshot when the on-device text recognition is not sufficient. Called through our own server function; the image is never stored |
 > | Firebase Cloud Messaging | Push notifications |
 > | Sentry | Crash and error reporting |
 > | data.economie.gouv.fr | French government open data, used for fuel prices |
@@ -154,6 +154,61 @@ Ce fichier a deux moitiés :
 
 ---
 
+## 1 bis. Rejet du 21 septembre 2026 — build 143 (à coller dans la réponse ASC)
+
+Deux motifs : **2.1(b)** (produits d'achat intégré non soumis) et **Guideline 5**
+(CallKit + Chine). Aucun des deux ne vient du code applicatif ; les deux se
+règlent dans App Store Connect, plus un nouveau binaire qu'Apple exige.
+
+Sur CallKit : l'app ne passe **aucun appel**. Le seul symbole CallKit du binaire
+est `CXCallObserver`, en lecture seule, dans
+`ios/Strive/AppIntents/AnalyzeRideIntent.swift` — il sert à savoir si un appel
+occupe déjà l'Îlot dynamique, auquel cas le verdict part *aussi* en notification
+locale (sinon le chauffeur ne voit qu'une pastille de couleur). Pas de
+`CXProvider`, pas de PushKit, pas de mode d'arrière-plan `voip`, pas
+d'entitlement CallKit, aucune dépendance de téléphonie. C'est le scan statique
+d'Apple qui voit l'`import CallKit`, pas une fonctionnalité d'appel.
+
+Le correctif retenu est de **retirer la Chine continentale des territoires**
+(App Store Connect → Pricing and Availability → Availability). Strive se vend en
+France, Belgique, Suisse, Espagne, Portugal et Royaume-Uni : la Chine n'apporte
+rien et la condition posée par Apple (« CallKit *et* Chine disponible ») tombe.
+L'alternative — retirer `CXCallObserver` du binaire — coûterait la notification
+de secours pendant un appel, sans contrepartie.
+
+> **Guideline 2.1(b) — In-App Purchase products**
+>
+> Every In-App Purchase product offered by this version is now submitted for
+> review together with this build: two auto-renewable subscriptions
+> (`strive_plus_monthly`, `strive_plus_yearly`), in the "Strive" subscription
+> group. Each one has its
+> localisations, its price and its App Review screenshot, and each one is
+> attached to this version of the app.
+>
+> They are offered on the Subscription tab, reachable from the tab bar once
+> signed in, and can be purchased in the sandbox with no prior setup. **The app
+> offers no other in-app purchase in this version.**
+>
+> **Guideline 5 — CallKit in China**
+>
+> Strive has no calling functionality of any kind. It is not a VoIP app: it does
+> not place, receive, answer or display calls, it links no telephony SDK, it
+> declares no `voip` background mode and no CallKit entitlement, and it never
+> uses `CXProvider`, `CXCallController` or PushKit.
+>
+> The only CallKit symbol in the binary is `CXCallObserver`, used read-only in a
+> single place, to know whether a call is currently occupying the Dynamic
+> Island. When one is, the app additionally delivers a local notification so the
+> driver can still read the result of a ride analysis, which would otherwise be
+> reduced to a coloured dot. No call is ever created, modified or presented by
+> the app, and no call state is stored or transmitted.
+>
+> To remove any ambiguity, we have also removed China mainland from the app's
+> territories in App Store Connect. Strive is now available in France, Belgium,
+> Switzerland, Spain, Portugal and the United Kingdom only.
+
+---
+
 ## 2. Checklist interne — à repasser avant CHAQUE soumission
 
 ### Ce qui fait rejeter, et qu'on a déjà vu casser
@@ -172,7 +227,17 @@ Ce fichier a deux moitiés :
       dort dans le dépôt pendant que le binaire part est la façon la plus simple
       de livrer une app qui marche en local et casse en revue.
 
-- [ ] **Le reviewer peut atteindre le Premium.** Choix retenu : il l'achète en
+- [ ] **Les SKU `strive_premium_*` sont DÉTACHÉS de cette version** dans App
+      Store Connect. Premium est en suspens (`PREMIUM_ENABLED = false`) : le
+      paywall ne le vend plus, et un abonnement soumis que le reviewer ne peut
+      pas atteindre fait rejeter le build. Ne pas les supprimer — un ID supprimé
+      n'est pas réutilisable.
+
+- [ ] **Plus est à 8,99 €/mois et 79,99 €/an dans App Store Connect.** Les
+      montants du code (`FALLBACK_AMOUNT`) ne servent que si le store ne répond
+      pas ; le prix facturé est celui du store.
+
+- [ ] **Le reviewer peut atteindre Plus.** Choix retenu : il l'achète en
       sandbox depuis l'écran Abonnement. À vérifier avant chaque soumission — si
       l'achat échoue, il reste bloqué au palier
       gratuit, soit 3 scans par jour. Repli possible sans toucher au palier :
@@ -184,6 +249,28 @@ Ce fichier a deux moitiés :
       Il se retire APRÈS.
 
 - [ ] **Les produits d'achat intégré sont soumis AVEC le build**, pas après.
+      C'est le motif du rejet du 21/09/2026 (2.1(b)) : les 8 produits existaient
+      dans App Store Connect mais aucun n'était **rattaché à la version**, donc
+      aucun n'est parti en revue. Créer un produit ne le soumet pas.
+      **Seuls les 4 abonnements partent.** Les 4 consommables
+      (`strive_scan_pack_*`) ne sont vendus que par `ShopScreen`, qui n'est
+      branché sur aucun navigateur : le reviewer ne peut pas les atteindre, et
+      un produit introuvable se fait rejeter. Ils restent donc en
+      « Missing Metadata » dans ASC, non rattachés à la version — **sans les
+      supprimer** : Apple interdit de réutiliser l'ID d'un produit supprimé, et
+      ces IDs sont câblés dans `iapService.ts`, dans `subscription_products` et
+      dans le webhook RevenueCat.
+      Dans l'ordre, pour chacun des 4 abonnements de `src/services/iapService.ts` :
+      1. métadonnées complètes (prix, au moins une localisation, et pour les
+         abonnements l'appartenance au groupe « Strive ») ;
+      2. **capture d'écran App Review** — obligatoire, 640 × 920 px minimum, une
+         par produit ; la même capture de l'écran Abonnement / Boutique fait
+         l'affaire pour tous. Sans elle le produit reste bloqué en
+         « Missing Metadata » et ne peut pas être soumis ;
+      3. état « Ready to Submit », puis la version de l'app →
+         **In-App Purchases and Subscriptions** → ajouter les 4 abonnements.
+      Vérifier avant d'envoyer : chaque produit doit afficher
+      « Waiting for Review », pas « Ready to Submit ».
 
 - [ ] **L'appareil du reviewer n'est pas bloqué à l'inscription.** Le plafond est
       de 5 identités par appareil sur 60 jours glissants, et l'appareil d'Apple a
@@ -192,7 +279,21 @@ Ce fichier a deux moitiés :
       bloqué là, c'est un rejet sans appel. En cas de doute, purger les lignes de
       `device_signups` correspondantes avant la soumission.
 
+- [ ] **Territoires : la Chine continentale reste décochée.** Le binaire
+      contient `import CallKit` (`CXCallObserver`, lecture seule, dans
+      `AnalyzeRideIntent.swift`), et le MIIT interdit CallKit sur l'App Store
+      chinois : CallKit + Chine disponible = rejet automatique, quel que soit
+      l'usage réel. Rouvrir la Chine imposerait de retirer `CXCallObserver`
+      d'abord. Idem si un jour une dépendance tire CallKit ou PushKit —
+      `grep -rn "CallKit\|PushKit" ios/` doit ne remonter que ce fichier.
+
 ### Fonctionnalités en sommeil
+
+- [ ] **La Boutique (`ShopScreen`) n'est toujours atteignable par aucune route.**
+      Rien ne l'importe : les 4 packs de scans ne sont donc pas vendus dans le
+      binaire, et il ne faut PAS soumettre leurs SKU (cf. plus haut). Le jour où
+      l'écran est branché, l'ordre est : brancher la route, builder, PUIS
+      soumettre les 4 consommables avec ce build — et pas l'inverse.
 
 - [ ] **`RIDE_NETWORK_ENABLED` est toujours à `false`.** S'il passe à `true`,
       l'app diffuse du contenu d'un chauffeur à d'autres : la Guideline 1.2

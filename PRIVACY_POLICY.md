@@ -2,7 +2,7 @@
 
 🇫🇷 Français · [🇬🇧 English](./PRIVACY_POLICY.en.md)
 
-**Dernière mise à jour : 13 juin 2026**
+**Dernière mise à jour : 22 septembre 2026**
 
 ---
 
@@ -58,11 +58,9 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 
 **3.1 — Une lecture volontaire et ponctuelle.** L'OCR n'est déclenché que par une **action délibérée de l'Utilisateur** (le Scan). L'Application ne lit pas l'écran en continu et ne surveille pas votre activité en arrière-plan. La lecture vise uniquement à extraire les **métriques de la course** (prix, temps, distance, adresses de l'offre).
 
-**3.2 — Un traitement principalement local.** L'analyse OCR s'effectue **directement sur votre appareil** (technologies ML Kit sous Android et Vision sous iOS). **Aucune capture d'écran n'est conservée.**
+**3.2 — Un traitement local.** L'analyse OCR s'effectue **directement sur votre appareil** (technologies ML Kit sous Android et Vision sous iOS). L'image de l'offre n'est transmise à aucun service d'analyse externe. **Aucune capture d'écran n'est conservée.**
 
-**3.3 — Traitement cloud de secours.** Lorsque la lecture locale échoue sur une image complexe, l'image de l'offre peut être transmise de manière sécurisée, **le temps de l'analyse uniquement**, à notre prestataire d'analyse d'image (API Google Gemini), afin d'en extraire les informations utiles.
-
-**3.4 — Non-exploitation des données des passagers.** Les éventuelles **données personnelles de tiers** (par exemple le prénom ou l'adresse exacte d'un passager) susceptibles d'apparaître à l'écran **ne sont ni exploitées à des fins commerciales, ni revendues, ni utilisées à d'autres fins que le calcul de rentabilité demandé par l'Utilisateur**. Elles ne sont jamais incluses dans la télémétrie non nominative.
+**3.3 — Non-exploitation des données des passagers.** Les éventuelles **données personnelles de tiers** (par exemple le prénom ou l'adresse exacte d'un passager) susceptibles d'apparaître à l'écran **ne sont ni exploitées à des fins commerciales, ni revendues, ni utilisées à d'autres fins que le calcul de rentabilité demandé par l'Utilisateur**. Elles ne sont jamais incluses dans la télémétrie non nominative.
 
 ## 4. Finalités et bases légales
 
@@ -78,7 +76,6 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 Nous **ne vendons aucune donnée** et n'affichons **aucune publicité**. Nous recourons à des prestataires techniques (sous-traitants au sens de l'art. 28 RGPD), strictement nécessaires au Service :
 
 - **Supabase** — hébergement, base de données et authentification ;
-- **Google (API Gemini)** — traitement d'image cloud de secours ;
 - **Google (Firebase, Google Sign-In, Play)** — notifications, connexion, distribution ;
 - **TomTom** — géolocalisation, géocodage et calcul d'itinéraire (les adresses textuelles peuvent y être transmises pour le calcul de distance/durée) ;
 - **RevenueCat** — gestion technique des abonnements (via les stores) ;

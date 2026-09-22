@@ -2,7 +2,7 @@
 
 [🇫🇷 Français](./PRIVACY_POLICY.md) · 🇬🇧 English
 
-**Last updated: June 13, 2026**
+**Last updated: September 22, 2026**
 
 ---
 
@@ -45,8 +45,7 @@ We apply the principle of minimisation: we only process data necessary for the S
 ## 3. OCR technology: how it works and our safeguards
 
 - **Voluntary, one-off reading**: OCR is only triggered by a deliberate action (the Scan). The Application does not read the screen continuously and does not monitor your activity in the background.
-- **Mainly local processing**: analysis runs on your device (ML Kit on Android, Vision on iOS). **No screenshot is stored.**
-- **Cloud fallback**: where local reading fails, the offer image may be securely transmitted, for the duration of the analysis only, to our image-analysis provider (Google Gemini API).
+- **Local processing**: analysis runs on your device (ML Kit on Android, Vision on iOS). The offer image is not sent to any external analysis service. **No screenshot is stored.**
 - **No exploitation of passenger data**: any third-party data visible on screen (a passenger's first name or exact address) is **neither exploited nor resold**, and is used only for the profitability calculation you request. It is never included in telemetry.
 
 ## 4. Purposes and legal bases
@@ -63,7 +62,6 @@ We apply the principle of minimisation: we only process data necessary for the S
 We **sell no data** and display **no advertising**. We use technical processors (Art. 28 GDPR) strictly necessary for the Service:
 
 - **Supabase** — hosting, database and authentication;
-- **Google (Gemini API)** — cloud image-analysis fallback;
 - **Google (Firebase, Sign-In, Play)** — notifications, sign-in, distribution;
 - **TomTom** — geolocation, geocoding and route calculation;
 - **RevenueCat** — technical subscription management (via the stores);

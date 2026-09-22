@@ -90,10 +90,10 @@
     "plus": "Membro Plus",
     "free": "Membro gratuito",
     "upgradeLink": "Passa a Plus →",
-    "subscriptionSub": "20 scansioni/giorno, {{cur}}/h in diretta…",
+    "subscriptionSub": "Scansioni illimitate, {{cur}}/h in diretta…",
     "subscriptionSubActive": "Disdire, cambiare piano…",
     "upgradeCardTitle": "Passa a Strive Plus",
-    "upgradeCardSub": "20 scansioni/giorno · {{cur}}/h in diretta · Senza vincoli",
+    "upgradeCardSub": "Scansioni illimitate · {{cur}}/h in diretta · Senza vincoli",
     "verified": "PARTNER VERIFICATO",
     "emailLabel": "E-MAIL",
     "phoneLabel": "TELEFONO",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Impostazioni → Accessibilità → Tocco → Tocca il retro → Tocco doppio: scegli il tuo comando.",
     "iosStep3Title": "Risultato nella Dynamic Island",
     "iosStep3Desc": "Da Uber/Bolt/Heetch, tocca due volte il retro dell'iPhone. Il verdetto appare in diretta nella Dynamic Island.",
-    "iosInfoText": "L'analisi gira localmente sul tuo iPhone (Vision, con Gemini come riserva). Nessun dato personale viene raccolto.",
+    "iosInfoText": "L'analisi gira localmente sul tuo iPhone (Vision). Nessun dato personale viene raccolto.",
     "iosActivate": "Ho capito",
     "iosOpenShortcuts": "Apri Comandi rapidi",
     "iosOpenAccessibility": "Apri Impostazioni"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Limite raggiunto",
       "exhaustedSub": "Acquista crediti o passa a Plus",
       "remaining": "{{count}} scansione/i rimasta/e oggi",
-      "upgradeSub": "Passa a Plus per 20 scansioni/giorno"
+      "upgradeSub": "Passa a Plus per scansioni illimitate"
     },
     "offline": "Sei offline",
     "goOnline": "ONLINE",
@@ -264,7 +264,7 @@
       "buy": "+ Crediti",
       "cardTitle": "Limite giornaliero raggiunto",
       "cardText": "Hai usato le tue {{count}} scansioni di oggi.",
-      "cardTextFree": "Strive Plus si ripaga già con la prima corsa non redditizia che rifiuti. 20 scansioni/giorno per non guidare più in perdita.",
+      "cardTextFree": "Strive Plus si ripaga già con la prima corsa non redditizia che rifiuti. Scansioni illimitate per non guidare più in perdita.",
       "upgrade": "Passa a Plus",
       "comeBackTomorrow": "Torna domani per scansionare di nuovo."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Smetti di guidare in perdita",
-      "sub": "Plus si ripaga con una sola corsa evitata",
-      "perk1": "20 scansioni/giorno",
+      "sub": "Plus si ripaga con una sola corsa",
+      "perk1": "Scansioni illimitate",
       "perk2": "{{rate}} in diretta",
       "perk3": "Cronologia"
     },
@@ -300,8 +300,8 @@
     "scans": "scansioni",
     "info1": "I crediti si usano automaticamente una volta raggiunto il limite giornaliero.",
     "info2": "I crediti non scadono mai.",
-    "info3": "Passa a Plus o Premium per un limite giornaliero più alto.",
-    "upgradeTitle": "Passa a Plus — 20 scansioni/giorno",
+    "info3": "Passa a Plus per scansioni illimitate.",
+    "upgradeTitle": "Passa a Plus — scansioni illimitate",
     "upgradeSubtitle": "Abbonamento mensile a partire da {{price}}",
     "purchaseSuccess": "Acquisto confermato!",
     "creditsAdded": "{{count}} scansione/i aggiunta/e al tuo account.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Accesso Plus",
       "premiumRequired": "L'analisi su più giorni o nel passato è riservata ai membri Plus.",
-      "limitText": "{{days}} giorni al massimo — la cronologia illimitata è riservata a Premium"
+      "limitText": "Cronologia limitata a {{days}} giorni"
     },
     "earningsBy": {
       "day": "Guadagni per giorno",
@@ -676,6 +676,8 @@
       "urgentPath": "Impostazioni › Notifiche › Strive › Notifiche urgenti",
       "shortcutT": "Il comando rapido",
       "shortcutS": "Tocca per aprire Comandi rapidi e verificare che ci sia.",
+      "shortcutS_install": "Non l'hai ancora aggiunto? Tocca per installarlo.",
+      "shortcutReinstall": "Reinstalla il comando rapido",
       "shortcutPath": "Comandi rapidi › I miei comandi › Analizza una corsa"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "Cos'è il punteggio di qualità delle corse?",
       "a9": "Un punteggio su 100 assegnato a ogni corsa confrontando i suoi {{cur}}/h e {{cur}}/{{unit}} con le tue soglie: verde sopra, arancione vicino, rosso sotto. Nelle Statistiche vedi anche la qualità media delle corse accettate.",
       "q10": "Quante scansioni al giorno?",
-      "a10": "3 scansioni al giorno con il piano gratuito, 20 al giorno con Strive Plus.",
+      "a10": "3 scansioni al giorno con il piano gratuito, illimitate con Strive Plus.",
       "q11": "Come contatto l'assistenza?",
       "a11": "Da Profilo → I miei ticket: apri un ticket e rispondiamo direttamente nell'app (ricevi una notifica a ogni risposta)."
     }
@@ -794,7 +796,7 @@
       "ocr_empty": "Nessun testo letto sullo schermo",
       "no_addresses": "Indirizzi illeggibili",
       "not_a_ride": "Nessuna offerta rilevata",
-      "gemini_ko": "L'analisi con IA non è riuscita",
+      "gemini_ko": "Impossibile leggere l'offerta",
       "la_start_failed": "Visualizzazione impossibile",
       "expired": "Analisi interrotta",
       "timeout": "Analisi troppo lunga",
@@ -835,7 +837,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Sappi.\nDecidi. Guadagna.",
+    "heroTitle": "Plus si ripaga con una corsa.",
     "heroSub": "Non tutte le corse valgono uguale. Con Strive Plus lo sai prima di accettare.",
     "values": {
       "scan": {
@@ -856,7 +858,7 @@
       }
     },
     "feat": {
-      "scan": "20 scansioni al giorno",
+      "scan": "Scansioni illimitate",
       "scanText": "invece di 3 — abbastanza per una giornata intera di servizio.",
       "threshold": "La tua soglia, non la nostra",
       "thresholdText": "sei tu a fissare il {{cur}}/h da cui una corsa vale la pena.",
@@ -927,7 +929,7 @@
       "scans": {
         "label": "Scansioni giornaliere",
         "free": "3 / giorno",
-        "plus": "20 / giorno"
+        "plus": "Illimitate"
       },
       "dashboard": {
         "label": "Pannello",
@@ -973,7 +975,7 @@
     "finePrintNoTrial": "{{price}} per {{period}}. Rinnovo automatico, disdicibile in qualsiasi momento.",
     "benefit": {
       "plus": {
-        "scans": "20 scansioni al giorno invece di 3",
+        "scans": "Scansioni illimitate invece di 3 al giorno",
         "thresholds": "Le tue soglie {{cur}}/h e {{cur}}/{{unit}}, non le nostre",
         "traffic": "Il {{cur}}/h calcolato sul traffico reale",
         "fuel": "Il carburante del tuo modello dedotto",
@@ -989,7 +991,7 @@
     },
     "saveAmount": "RISPARMIA {{amount}}",
     "heroTitleWelcomeEnd": "Le tue 30 scansioni\nin regalo sono finite.",
-    "heroSubWelcomeEnd": "Ora sai cosa cambia. Con Strive Plus sono 20 al giorno — tutti i giorni.",
+    "heroSubWelcomeEnd": "Ora sai cosa cambia. Con Strive Plus senza limiti — tutti i giorni.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1022,7 +1024,8 @@
     "quotaReached": {
       "title": "Limite raggiunto",
       "body": "Hai usato tutte le tue scansioni di oggi. Ricarica tra {{time}}.",
-      "bodyFree": "Hai usato le tue scansioni del giorno. Passa a Plus per {{scans}} scansioni al giorno — ricarica tra {{time}}."
+      "bodyFree": "Hai usato le tue scansioni del giorno. Passa a Plus per {{scans}} scansioni al giorno — ricarica tra {{time}}.",
+      "bodyFreeUnlimited": "Hai usato le tue scansioni del giorno. Passa a Plus per scansioni illimitate — ricarica tra {{time}}."
     },
     "rideRejected": {
       "title": "Corsa non registrata",

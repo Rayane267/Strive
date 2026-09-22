@@ -90,10 +90,10 @@
     "plus": "Membre Plus",
     "free": "Membre Gratuit",
     "upgradeLink": "Passer Plus →",
-    "subscriptionSub": "20 scans/jour, {{cur}}/h en direct...",
+    "subscriptionSub": "Scans illimités, {{cur}}/h en direct...",
     "subscriptionSubActive": "Annuler, changer de formule...",
     "upgradeCardTitle": "Passez à Strive Plus",
-    "upgradeCardSub": "20 scans/jour · {{cur}}/h en direct · Sans engagement",
+    "upgradeCardSub": "Scans illimités · {{cur}}/h en direct · Sans engagement",
     "verified": "PARTENAIRE VÉRIFIÉ",
     "emailLabel": "EMAIL",
     "phoneLabel": "TÉLÉPHONE",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Réglages → Accessibilité → Toucher → Toucher l'arrière → Toucher deux fois : choisissez votre raccourci.",
     "iosStep3Title": "Résultat dans la Dynamic Island",
     "iosStep3Desc": "Depuis Uber/Bolt/Heetch, tapez deux fois le dos de l'iPhone. Le verdict s'affiche en direct dans la Dynamic Island.",
-    "iosInfoText": "L'analyse tourne localement sur votre iPhone (Vision + Gemini en fallback). Aucune donnée personnelle n'est collectée.",
+    "iosInfoText": "L'analyse tourne localement sur votre iPhone (Vision). Aucune donnée personnelle n'est collectée.",
     "iosActivate": "J'ai compris",
     "iosOpenShortcuts": "Ouvrir Raccourcis",
     "iosOpenAccessibility": "Ouvrir Réglages"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Quota atteint",
       "exhaustedSub": "Achetez des crédits ou passez Plus",
       "remaining": "{{count}} scan(s) restant(s) aujourd'hui",
-      "upgradeSub": "Passez Plus pour 20 scans/jour"
+      "upgradeSub": "Passez Plus pour des scans illimités"
     },
     "offline": "Vous êtes hors ligne",
     "goOnline": "EN LIGNE",
@@ -264,7 +264,7 @@
       "buy": "+ Crédits",
       "cardTitle": "Quota journalier atteint",
       "cardText": "Vous avez utilisé vos {{count}} scans d'aujourd'hui.",
-      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. 20 scans/jour pour ne plus rouler à perte.",
+      "cardTextFree": "Strive Plus se rembourse dès la 1re course non rentable que vous refusez. Scans illimités pour ne plus rouler à perte.",
       "upgrade": "Passer Plus",
       "comeBackTomorrow": "Revenez demain pour scanner à nouveau."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Arrêtez de rouler à perte",
-      "sub": "Plus se rembourse en une seule course évitée",
-      "perk1": "20 scans/jour",
+      "sub": "Plus se rembourse en une seule course",
+      "perk1": "Scans illimités",
       "perk2": "{{rate}} en direct",
       "perk3": "Historique"
     },
@@ -300,8 +300,8 @@
     "scans": "scans",
     "info1": "Les crédits s'utilisent automatiquement une fois votre quota journalier atteint.",
     "info2": "Les crédits n'expirent jamais.",
-    "info3": "Passez Plus ou Premium pour un quota journalier plus élevé.",
-    "upgradeTitle": "Passez Plus — 20 scans/jour",
+    "info3": "Passez Plus pour des scans illimités.",
+    "upgradeTitle": "Passez Plus — scans illimités",
     "upgradeSubtitle": "Abonnement mensuel à partir de {{price}}",
     "purchaseSuccess": "Achat confirmé !",
     "creditsAdded": "{{count}} scan(s) ajouté(s) à votre compte.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Accès Plus",
       "premiumRequired": "L'analyse sur plusieurs jours ou dans le passé est réservée aux membres Plus.",
-      "limitText": "{{days}} jours maximum — l'historique illimité est réservé à Premium"
+      "limitText": "Historique limité à {{days}} jours"
     },
     "earningsBy": {
       "day": "Gains par jour",
@@ -676,6 +676,8 @@
       "urgentPath": "Réglages › Notifications › Strive › Notifications urgentes",
       "shortcutT": "Le raccourci",
       "shortcutS": "Touchez pour ouvrir Raccourcis et vérifier qu'il y est.",
+      "shortcutS_install": "Pas encore ajouté ? Touchez pour l'installer.",
+      "shortcutReinstall": "Réinstaller le raccourci",
       "shortcutPath": "Raccourcis › Mes raccourcis › Analyser une course"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "C'est quoi le score qualité des courses ?",
       "a9": "Un score sur 100 attribué à chaque course en comparant ses {{cur}}/h et {{cur}}/{{unit}} à vos seuils : vert au-dessus, orange proche, rouge en dessous. Dans les Stats, vous voyez aussi la qualité moyenne de vos courses acceptées.",
       "q10": "Combien de scans par jour ?",
-      "a10": "3 scans par jour avec le plan gratuit, 20 par jour avec Strive Plus.",
+      "a10": "3 scans par jour avec le plan gratuit, illimités avec Strive Plus.",
       "q11": "Comment contacter le support ?",
       "a11": "Depuis Profil → Mes tickets : ouvrez un ticket et on vous répond directement dans l'app (vous recevez une notification à chaque réponse)."
     }
@@ -786,7 +788,7 @@
       "ocr_empty": "Aucun texte lu à l'écran",
       "no_addresses": "Adresses illisibles",
       "not_a_ride": "Aucune offre détectée",
-      "gemini_ko": "L'analyse IA a échoué",
+      "gemini_ko": "L'offre n'a pas pu être lue",
       "la_start_failed": "Affichage impossible",
       "expired": "Analyse interrompue",
       "timeout": "Analyse trop longue",
@@ -827,7 +829,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Sachez.\nDécidez. Gagnez.",
+    "heroTitle": "Plus se rembourse en une course.",
     "heroSub": "Toutes les courses ne se valent pas. Avec Strive Plus, vous savez avant d'accepter.",
     "values": {
       "scan": {
@@ -848,7 +850,7 @@
       }
     },
     "feat": {
-      "scan": "20 scans par jour",
+      "scan": "Scans illimités",
       "scanText": "au lieu de 3 — de quoi tenir une journée complète de service.",
       "threshold": "Votre seuil, pas le nôtre",
       "thresholdText": "vous fixez le {{cur}}/h à partir duquel une course vaut le coup.",
@@ -919,7 +921,7 @@
       "scans": {
         "label": "Scans journaliers",
         "free": "3 / jour",
-        "plus": "20 / jour"
+        "plus": "Illimités"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -965,7 +967,7 @@
     "finePrintNoTrial": "{{price}} par {{period}}. Renouvellement automatique, annulable à tout moment.",
     "benefit": {
       "plus": {
-        "scans": "20 scans par jour au lieu de 3",
+        "scans": "Scans illimités au lieu de 3 par jour",
         "thresholds": "Vos seuils {{cur}}/h et {{cur}}/{{unit}}, pas les nôtres",
         "traffic": "Le {{cur}}/h calculé sur le trafic réel",
         "fuel": "Le carburant de votre modèle déduit",
@@ -981,7 +983,7 @@
     },
     "saveAmount": "ÉCONOMISEZ {{amount}}",
     "heroTitleWelcomeEnd": "Vos 30 scans\nofferts sont finis.",
-    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est 20 par jour — tous les jours.",
+    "heroSubWelcomeEnd": "Vous savez maintenant ce que ça change. Avec Strive Plus, c'est sans limite — tous les jours.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1014,7 +1016,8 @@
     "quotaReached": {
       "title": "Quota atteint",
       "body": "Vous avez utilisé tous vos scans aujourd'hui. Rechargement dans {{time}}.",
-      "bodyFree": "Vous avez utilisé vos scans du jour. Passez à Plus pour {{scans}} scans par jour — rechargement dans {{time}}."
+      "bodyFree": "Vous avez utilisé vos scans du jour. Passez à Plus pour {{scans}} scans par jour — rechargement dans {{time}}.",
+      "bodyFreeUnlimited": "Vous avez utilisé vos scans du jour. Passez à Plus pour des scans illimités — rechargement dans {{time}}."
     },
     "rideRejected": {
       "title": "Course non enregistrée",

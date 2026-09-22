@@ -90,10 +90,10 @@
     "plus": "Miembro Plus",
     "free": "Miembro gratuito",
     "upgradeLink": "Pasar a Plus →",
-    "subscriptionSub": "20 escaneos/día, {{cur}}/h en directo…",
+    "subscriptionSub": "Escaneos ilimitados, {{cur}}/h en directo…",
     "subscriptionSubActive": "Cancelar, cambiar de plan…",
     "upgradeCardTitle": "Pásate a Strive Plus",
-    "upgradeCardSub": "20 escaneos/día · {{cur}}/h en directo · Sin permanencia",
+    "upgradeCardSub": "Escaneos ilimitados · {{cur}}/h en directo · Sin permanencia",
     "verified": "SOCIO VERIFICADO",
     "emailLabel": "CORREO",
     "phoneLabel": "TELÉFONO",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Ajustes → Accesibilidad → Tocar → Tocar la parte trasera → Tocar dos veces: elige tu atajo.",
     "iosStep3Title": "Resultado en la Dynamic Island",
     "iosStep3Desc": "Desde Uber/Bolt/Heetch, toca dos veces la parte trasera del iPhone. El veredicto aparece en directo en la Dynamic Island.",
-    "iosInfoText": "El análisis se ejecuta localmente en tu iPhone (Vision, con Gemini como respaldo). No se recoge ningún dato personal.",
+    "iosInfoText": "El análisis se ejecuta localmente en tu iPhone (Vision). No se recoge ningún dato personal.",
     "iosActivate": "Entendido",
     "iosOpenShortcuts": "Abrir Atajos",
     "iosOpenAccessibility": "Abrir Ajustes"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Cuota alcanzada",
       "exhaustedSub": "Compra créditos o pásate a Plus",
       "remaining": "{{count}} escaneo(s) restante(s) hoy",
-      "upgradeSub": "Pásate a Plus para 20 escaneos/día"
+      "upgradeSub": "Pásate a Plus para escaneos ilimitados"
     },
     "offline": "Estás sin conexión",
     "goOnline": "EN LÍNEA",
@@ -264,7 +264,7 @@
       "buy": "+ Créditos",
       "cardTitle": "Cuota diaria alcanzada",
       "cardText": "Has usado tus {{count}} escaneos de hoy.",
-      "cardTextFree": "Strive Plus se paga solo con el primer viaje no rentable que rechaces. 20 escaneos/día para dejar de conducir a pérdida.",
+      "cardTextFree": "Strive Plus se paga solo con el primer viaje no rentable que rechaces. Escaneos ilimitados para dejar de conducir a pérdida.",
       "upgrade": "Pasar a Plus",
       "comeBackTomorrow": "Vuelve mañana para escanear de nuevo."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Deja de conducir a pérdida",
-      "sub": "Plus se paga solo con un único viaje evitado",
-      "perk1": "20 escaneos/día",
+      "sub": "Plus se paga solo con un único viaje",
+      "perk1": "Escaneos ilimitados",
       "perk2": "{{rate}} en directo",
       "perk3": "Historial"
     },
@@ -300,8 +300,8 @@
     "scans": "escaneos",
     "info1": "Los créditos se usan automáticamente cuando se agota tu cuota diaria.",
     "info2": "Los créditos nunca caducan.",
-    "info3": "Pásate a Plus o Premium para tener una cuota diaria mayor.",
-    "upgradeTitle": "Pásate a Plus — 20 escaneos/día",
+    "info3": "Pásate a Plus para escaneos ilimitados.",
+    "upgradeTitle": "Pásate a Plus — escaneos ilimitados",
     "upgradeSubtitle": "Suscripción mensual desde {{price}}",
     "purchaseSuccess": "¡Compra confirmada!",
     "creditsAdded": "{{count}} escaneo(s) añadido(s) a tu cuenta.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Acceso Plus",
       "premiumRequired": "El análisis de varios días o del pasado está reservado a los miembros Plus.",
-      "limitText": "{{days}} días como máximo — el historial ilimitado está reservado a Premium"
+      "limitText": "Historial limitado a {{days}} días"
     },
     "earningsBy": {
       "day": "Ganancias por día",
@@ -676,6 +676,8 @@
       "urgentPath": "Ajustes › Notificaciones › Strive › Notificaciones urgentes",
       "shortcutT": "El atajo",
       "shortcutS": "Toca para abrir Atajos y comprobar que está ahí.",
+      "shortcutS_install": "¿Aún no lo has añadido? Toca para instalarlo.",
+      "shortcutReinstall": "Reinstalar el atajo",
       "shortcutPath": "Atajos › Mis atajos › Analizar un viaje"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "¿Qué es la puntuación de calidad de los viajes?",
       "a9": "Una puntuación sobre 100 que se asigna a cada viaje comparando sus {{cur}}/h y {{cur}}/{{unit}} con tus umbrales: verde por encima, naranja cerca, rojo por debajo. En Estadísticas también ves la calidad media de tus viajes aceptados.",
       "q10": "¿Cuántos escaneos al día?",
-      "a10": "3 escaneos al día con el plan gratuito, 20 al día con Strive Plus.",
+      "a10": "3 escaneos al día con el plan gratuito, ilimitados con Strive Plus.",
       "q11": "¿Cómo contacto con el soporte?",
       "a11": "Desde Perfil → Mis tickets: abre un ticket y te respondemos directamente en la app (recibes una notificación con cada respuesta)."
     }
@@ -794,7 +796,7 @@
       "ocr_empty": "No se ha leído texto en pantalla",
       "no_addresses": "Direcciones ilegibles",
       "not_a_ride": "Ninguna oferta detectada",
-      "gemini_ko": "El análisis con IA ha fallado",
+      "gemini_ko": "No se pudo leer la oferta",
       "la_start_failed": "No se ha podido mostrar",
       "expired": "Análisis interrumpido",
       "timeout": "Análisis demasiado largo",
@@ -835,7 +837,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Sabe.\nDecide. Gana.",
+    "heroTitle": "Plus se paga solo con un viaje.",
     "heroSub": "No todos los viajes valen lo mismo. Con Strive Plus, lo sabes antes de aceptar.",
     "values": {
       "scan": {
@@ -856,7 +858,7 @@
       }
     },
     "feat": {
-      "scan": "20 escaneos al día",
+      "scan": "Escaneos ilimitados",
       "scanText": "en lugar de 3 — suficiente para aguantar una jornada completa.",
       "threshold": "Tu umbral, no el nuestro",
       "thresholdText": "tú fijas el {{cur}}/h a partir del cual un viaje merece la pena.",
@@ -927,7 +929,7 @@
       "scans": {
         "label": "Escaneos diarios",
         "free": "3 / día",
-        "plus": "20 / día"
+        "plus": "Ilimitados"
       },
       "dashboard": {
         "label": "Panel",
@@ -973,7 +975,7 @@
     "finePrintNoTrial": "{{price}} por {{period}}. Renovación automática, cancelable en cualquier momento.",
     "benefit": {
       "plus": {
-        "scans": "20 escaneos al día en lugar de 3",
+        "scans": "Escaneos ilimitados en lugar de 3 al día",
         "thresholds": "Tus umbrales {{cur}}/h y {{cur}}/{{unit}}, no los nuestros",
         "traffic": "El {{cur}}/h calculado con el tráfico real",
         "fuel": "El combustible de tu modelo descontado",
@@ -989,7 +991,7 @@
     },
     "saveAmount": "AHORRA {{amount}}",
     "heroTitleWelcomeEnd": "Tus 30 escaneos\nde regalo se han acabado.",
-    "heroSubWelcomeEnd": "Ya sabes lo que cambia. Con Strive Plus son 20 al día — todos los días.",
+    "heroSubWelcomeEnd": "Ya sabes lo que cambia. Con Strive Plus no hay límite — todos los días.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1022,7 +1024,8 @@
     "quotaReached": {
       "title": "Cuota alcanzada",
       "body": "Has usado todos tus escaneos de hoy. Se recargan en {{time}}.",
-      "bodyFree": "Has usado tus escaneos del día. Pásate a Plus para {{scans}} escaneos al día — se recargan en {{time}}."
+      "bodyFree": "Has usado tus escaneos del día. Pásate a Plus para {{scans}} escaneos al día — se recargan en {{time}}.",
+      "bodyFreeUnlimited": "Has usado tus escaneos del día. Pásate a Plus para escaneos ilimitados — se recargan en {{time}}."
     },
     "rideRejected": {
       "title": "Viaje no registrado",

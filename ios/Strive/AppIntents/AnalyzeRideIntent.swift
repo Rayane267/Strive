@@ -288,10 +288,11 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         }
         let sem = DispatchSemaphore(value: 0)
         ScanProcessor.shared.process(image: image) { finalResult in
-          // Adresses présentes → on présente directement. Sinon (ou aucun
-          // résultat) → fallback Gemini (récupère les 2 adresses → TomTom →
-          // vraie distance/durée). Si Gemini échoue aussi → « scan échoué »
-          // affiché DANS la Live Activity, et RIEN n'est enregistré.
+          // Adresses présentes → on présente. Sinon (ou aucun résultat) →
+          // « scan échoué » affiché DANS la Live Activity, et RIEN n'est
+          // enregistré : sans les deux adresses, pas de géocodage TomTom, et le
+          // Dashboard refuse de toute façon la course (métriques non fiables).
+          // Il n'y a plus de repli Gemini pour les rattraper.
           if let result = finalResult, self.hasBothAddresses(result) {
             // La continuation n'est reprise qu'une fois la course écrite en base :
             // `perform` rendu, iOS suspend le process et tuerait la requête en vol.
@@ -301,18 +302,9 @@ struct AnalyzeRideIntent: LiveActivityIntent {
             }
             return
           }
-          self.geminiFallback(image: image) { recovered in
-            if let recovered = recovered {
-              self.presentResult(recovered, geminiUsed: true) { value in
-                once.resume(value)
-                sem.signal()
-              }
-            } else {
-              self.presentFailure()
-              once.resume("no_ride")
-              sem.signal()
-            }
-          }
+          self.presentFailure()
+          once.resume("no_ride")
+          sem.signal()
         }
         // Borne l'attente (watchdog interne ScanProcessor = 20 s ; on laisse une
         // marge). Évite de tenir l'assertion de fond indéfiniment si un callback
@@ -329,7 +321,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     }
   }
 
-  // MARK: - Présentation résultat / échec / fallback Gemini
+  // MARK: - Présentation résultat / échec
 
   private func hasBothAddresses(_ result: ScanProcessor.FinalResult) -> Bool {
     let p = result.scan.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -610,57 +602,6 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       // n'a de valeur que tout de suite.
       level: .timeSensitive
     )
-  }
-
-  /// Fallback Gemini (Niveau 2) — le chemin AssistiveTouch n'a pas d'OCR-fallback
-  /// comme la Share Extension. Gemini récupère les 2 adresses → TomTom → vraie
-  /// distance/durée. completion(nil) si ce n'est pas une offre / Gemini KO /
-  /// adresses introuvables (→ scan échoué dans la Live Activity).
-  private func geminiFallback(image: UIImage, completion: @escaping (ScanProcessor.FinalResult?) -> Void) {
-    guard ScanProcessor.shared.lastScanMayBeRide else { completion(nil); return }
-    let d = UserDefaults(suiteName: appGroupId)
-    GeminiVisionService.shared.edgeFunctionUrl = d?.string(forKey: "geminiEdgeUrl")
-    GeminiVisionService.shared.supabaseAnonKey = d?.string(forKey: "geminiSupabaseKey")
-    GeminiVisionService.shared.apiKey = d?.string(forKey: "geminiApiKey")
-    GeminiVisionService.shared.supabaseUserJwt = d?.string(forKey: "supabaseUserJwt")
-    GeminiVisionService.shared.analyze(image: image) { gem in
-      guard let gem = gem,
-            let pickup = gem.pickupAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !pickup.isEmpty,
-            let dest = gem.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !dest.isEmpty
-      else { completion(nil); return }
-      let base = ScanResultModel(
-        platform: ScanPlatform(rawValue: gem.platform) ?? .UNKNOWN,
-        fare: gem.fare, distanceKm: gem.distanceKm, durationMin: gem.durationMin,
-        pickupAddress: pickup, destinationAddress: dest,
-        pickupDurationMin: gem.pickupDurationMin, pickupDistanceKm: gem.pickupDistanceKm
-      )
-      guard TomTomService.shared.isReady else {
-        completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .noKey)); return
-      }
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
-        switch outcome {
-        case .noKey:
-          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .noKey))
-        case .unreachable:
-          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unreachable))
-        case .unusable:
-          completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable))
-        case .ok(let route):
-          guard route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 else {
-            completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable)); return
-          }
-          let r = gem.fare / route.distanceKm
-          guard r >= 0.2, r <= 12.0 else {
-            completion(ScanProcessor.shared.computeFinal(scan: base, routeStatus: .unusable)); return
-          }
-          let refined = base.copy(
-            distanceKm: route.distanceKm, durationMin: route.durationMin,
-            pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
-          )
-          completion(ScanProcessor.shared.computeFinal(scan: refined, routeStatus: .ok))
-        }
-      }
-    }
   }
 
   // MARK: - Preference

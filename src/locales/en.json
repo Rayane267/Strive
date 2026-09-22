@@ -90,10 +90,10 @@
     "plus": "Plus Member",
     "free": "Free Member",
     "upgradeLink": "Upgrade to Plus →",
-    "subscriptionSub": "20 scans/day, live {{cur}}/h...",
+    "subscriptionSub": "Unlimited scans, live {{cur}}/h...",
     "subscriptionSubActive": "Cancel, change plan...",
     "upgradeCardTitle": "Upgrade to Strive Plus",
-    "upgradeCardSub": "20 scans/day · Live {{cur}}/h · No commitment",
+    "upgradeCardSub": "Unlimited scans · Live {{cur}}/h · No commitment",
     "verified": "VERIFIED PARTNER",
     "emailLabel": "EMAIL",
     "phoneLabel": "PHONE NUMBER",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Settings → Accessibility → Touch → Back Tap → Double Tap: pick your shortcut.",
     "iosStep3Title": "Result in the Dynamic Island",
     "iosStep3Desc": "From Uber/Bolt/Heetch, double-tap the back of your iPhone. The verdict appears live in the Dynamic Island.",
-    "iosInfoText": "Analysis runs locally on your iPhone (Vision + Gemini fallback). No personal data is collected.",
+    "iosInfoText": "Analysis runs locally on your iPhone (Vision). No personal data is collected.",
     "iosActivate": "Got it",
     "iosOpenShortcuts": "Open Shortcuts",
     "iosOpenAccessibility": "Open Settings"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Daily limit reached",
       "exhaustedSub": "Buy credits or upgrade to Plus",
       "remaining": "{{count}} scan(s) left today",
-      "upgradeSub": "Go Plus for 20 scans/day"
+      "upgradeSub": "Go Plus for unlimited scans"
     },
     "offline": "You are Offline",
     "goOffline": "Go Offline",
@@ -264,7 +264,7 @@
       "buy": "+ Credits",
       "cardTitle": "Daily quota reached",
       "cardText": "You've used all {{count}} of today's scans.",
-      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. 20 scans/day so you stop driving at a loss.",
+      "cardTextFree": "Strive Plus pays for itself the first unprofitable ride you turn down. Unlimited scans so you stop driving at a loss.",
       "upgrade": "Go Plus",
       "comeBackTomorrow": "Come back tomorrow to scan again."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Stop driving at a loss",
-      "sub": "Plus pays for itself in a single ride avoided",
-      "perk1": "20 scans/day",
+      "sub": "Plus pays for itself in a single ride",
+      "perk1": "Unlimited scans",
       "perk2": "Live {{rate}}",
       "perk3": "History"
     },
@@ -300,8 +300,8 @@
     "scans": "scans",
     "info1": "Credits are used automatically once your daily quota is reached.",
     "info2": "Credits never expire.",
-    "info3": "Upgrade to Plus or Premium for a higher daily quota.",
-    "upgradeTitle": "Go Plus — 20 scans/day",
+    "info3": "Upgrade to Plus for unlimited scans.",
+    "upgradeTitle": "Go Plus — unlimited scans",
     "upgradeSubtitle": "Monthly plan from {{price}}",
     "purchaseSuccess": "Purchase confirmed!",
     "creditsAdded": "{{count}} scan(s) added to your account.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Plus Access",
       "premiumRequired": "Historical and multi-day analysis is reserved for Plus members.",
-      "limitText": "{{days}} days maximum — unlimited history is a Premium feature"
+      "limitText": "History limited to {{days}} days"
     },
     "earningsBy": {
       "day": "Earnings per day",
@@ -676,6 +676,8 @@
       "urgentPath": "Settings › Notifications › Strive › Time Sensitive",
       "shortcutT": "The shortcut",
       "shortcutS": "Tap to open Shortcuts and check it's there.",
+      "shortcutS_install": "Not added yet? Tap to install it.",
+      "shortcutReinstall": "Reinstall the shortcut",
       "shortcutPath": "Shortcuts › My Shortcuts › Analyse a ride"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "What is the ride quality score?",
       "a9": "A score out of 100 given to each ride by comparing its {{cur}}/h and {{cur}}/{{unit}} to your thresholds: green above, orange close, red below. In Stats you also see the average quality of your accepted rides.",
       "q10": "How many scans per day?",
-      "a10": "3 scans per day on the free plan, 20 per day with Strive Plus.",
+      "a10": "3 scans per day on the free plan, unlimited with Strive Plus.",
       "q11": "How do I contact support?",
       "a11": "From Profile → My tickets: open a ticket and we reply right inside the app (you get a notification for every reply)."
     }
@@ -786,7 +788,7 @@
       "ocr_empty": "No text read on screen",
       "no_addresses": "Addresses unreadable",
       "not_a_ride": "No ride offer detected",
-      "gemini_ko": "AI analysis failed",
+      "gemini_ko": "The offer could not be read",
       "la_start_failed": "Could not display",
       "expired": "Analysis interrupted",
       "timeout": "Analysis timed out",
@@ -827,7 +829,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Know.\nDecide. Earn.",
+    "heroTitle": "Plus pays for itself in one ride.",
     "heroSub": "Not all rides are equal. With Strive Plus, know before you accept.",
     "values": {
       "scan": {
@@ -848,7 +850,7 @@
       }
     },
     "feat": {
-      "scan": "20 scans a day",
+      "scan": "Unlimited scans",
       "scanText": "instead of 3 — enough to cover a full day's shift.",
       "threshold": "Your floor, not ours",
       "thresholdText": "you set the {{cur}}/h at which a ride is worth taking.",
@@ -919,7 +921,7 @@
       "scans": {
         "label": "Daily scans",
         "free": "3 / day",
-        "plus": "20 / day"
+        "plus": "Unlimited"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -965,7 +967,7 @@
     "finePrintNoTrial": "{{price}} per {{period}}. Renews automatically, cancel anytime.",
     "benefit": {
       "plus": {
-        "scans": "20 scans a day instead of 3",
+        "scans": "Unlimited scans instead of 3 a day",
         "thresholds": "Your own {{cur}}/h and {{cur}}/{{unit}} thresholds",
         "traffic": "{{cur}}/h based on real traffic, not straight-line",
         "fuel": "Your model's fuel cost deducted",
@@ -981,7 +983,7 @@
     },
     "saveAmount": "SAVE {{amount}}",
     "heroTitleWelcomeEnd": "Your 30 free\nscans are gone.",
-    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus it's 20 a day — every day.",
+    "heroSubWelcomeEnd": "You know what they change now. With Strive Plus there's no limit — every day.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1014,7 +1016,8 @@
     "quotaReached": {
       "title": "Quota reached",
       "body": "You've used all your scans today. Resets in {{time}}.",
-      "bodyFree": "You've used today's scans. Go Plus for {{scans}} scans a day — resets in {{time}}."
+      "bodyFree": "You've used today's scans. Go Plus for {{scans}} scans a day — resets in {{time}}.",
+      "bodyFreeUnlimited": "You've used today's scans. Go Plus for unlimited scans — resets in {{time}}."
     },
     "rideRejected": {
       "title": "Ride not saved",

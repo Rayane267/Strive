@@ -90,10 +90,10 @@
     "plus": "Plus-lid",
     "free": "Gratis lid",
     "upgradeLink": "Naar Plus →",
-    "subscriptionSub": "20 scans/dag, {{cur}}/u live…",
+    "subscriptionSub": "Onbeperkt scannen, {{cur}}/u live…",
     "subscriptionSubActive": "Opzeggen, van formule wisselen…",
     "upgradeCardTitle": "Stap over op Strive Plus",
-    "upgradeCardSub": "20 scans/dag · {{cur}}/u live · Geen verplichting",
+    "upgradeCardSub": "Onbeperkt scannen · {{cur}}/u live · Geen verplichting",
     "verified": "GEVERIFIEERDE PARTNER",
     "emailLabel": "E-MAIL",
     "phoneLabel": "TELEFOON",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Instellingen → Toegankelijkheid → Aanraken → Tik op achterkant → Dubbele tik: kies je opdracht.",
     "iosStep3Title": "Resultaat in de Dynamic Island",
     "iosStep3Desc": "Tik vanuit Uber/Bolt/Heetch twee keer op de achterkant van je iPhone. Het oordeel verschijnt live in de Dynamic Island.",
-    "iosInfoText": "De analyse draait lokaal op je iPhone (Vision, met Gemini als terugval). Er worden geen persoonsgegevens verzameld.",
+    "iosInfoText": "De analyse draait lokaal op je iPhone (Vision). Er worden geen persoonsgegevens verzameld.",
     "iosActivate": "Begrepen",
     "iosOpenShortcuts": "Opdrachten openen",
     "iosOpenAccessibility": "Instellingen openen"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Limiet bereikt",
       "exhaustedSub": "Koop credits of stap over op Plus",
       "remaining": "Nog {{count}} scan(s) vandaag",
-      "upgradeSub": "Stap over op Plus voor 20 scans/dag"
+      "upgradeSub": "Stap over op Plus voor onbeperkt scannen"
     },
     "offline": "Je bent offline",
     "goOnline": "ONLINE",
@@ -264,7 +264,7 @@
       "buy": "+ Credits",
       "cardTitle": "Daglimiet bereikt",
       "cardText": "Je hebt je {{count}} scans van vandaag gebruikt.",
-      "cardTextFree": "Strive Plus verdient zichzelf terug bij de eerste onrendabele rit die je weigert. 20 scans/dag om niet langer met verlies te rijden.",
+      "cardTextFree": "Strive Plus verdient zichzelf terug bij de eerste onrendabele rit die je weigert. Onbeperkt scannen om niet langer met verlies te rijden.",
       "upgrade": "Naar Plus",
       "comeBackTomorrow": "Kom morgen terug om opnieuw te scannen."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Stop met rijden met verlies",
-      "sub": "Plus verdient zichzelf terug met één vermeden rit",
-      "perk1": "20 scans/dag",
+      "sub": "Plus verdient zichzelf terug met één rit",
+      "perk1": "Onbeperkt scannen",
       "perk2": "{{rate}} live",
       "perk3": "Geschiedenis"
     },
@@ -300,8 +300,8 @@
     "scans": "scans",
     "info1": "De credits worden automatisch gebruikt zodra je daglimiet bereikt is.",
     "info2": "Credits vervallen nooit.",
-    "info3": "Stap over op Plus of Premium voor een hogere daglimiet.",
-    "upgradeTitle": "Naar Plus — 20 scans/dag",
+    "info3": "Stap over op Plus voor onbeperkt scannen.",
+    "upgradeTitle": "Naar Plus — onbeperkt scannen",
     "upgradeSubtitle": "Maandabonnement vanaf {{price}}",
     "purchaseSuccess": "Aankoop bevestigd!",
     "creditsAdded": "{{count}} scan(s) toegevoegd aan je account.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Plus-toegang",
       "premiumRequired": "De analyse over meerdere dagen of in het verleden is voorbehouden aan Plus-leden.",
-      "limitText": "Maximaal {{days}} dagen — onbeperkte geschiedenis is voorbehouden aan Premium"
+      "limitText": "Geschiedenis beperkt tot {{days}} dagen"
     },
     "earningsBy": {
       "day": "Inkomsten per dag",
@@ -676,6 +676,8 @@
       "urgentPath": "Instellingen › Meldingen › Strive › Urgente meldingen",
       "shortcutT": "De opdracht",
       "shortcutS": "Tik om Opdrachten te openen en te controleren of ze er staat.",
+      "shortcutS_install": "Nog niet toegevoegd? Tik om de opdracht te installeren.",
+      "shortcutReinstall": "Opdracht opnieuw installeren",
       "shortcutPath": "Opdrachten › Mijn opdrachten › Een rit analyseren"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "Wat is de kwaliteitsscore van de ritten?",
       "a9": "Een score op 100 die aan elke rit wordt toegekend door de {{cur}}/u en {{cur}}/{{unit}} te vergelijken met je drempels: groen erboven, oranje dichtbij, rood eronder. In de Statistieken zie je ook de gemiddelde kwaliteit van je aanvaarde ritten.",
       "q10": "Hoeveel scans per dag?",
-      "a10": "3 scans per dag met het gratis plan, 20 per dag met Strive Plus.",
+      "a10": "3 scans per dag met het gratis plan, onbeperkt met Strive Plus.",
       "q11": "Hoe neem ik contact op met support?",
       "a11": "Via Profiel → Mijn tickets: open een ticket en we antwoorden rechtstreeks in de app (je krijgt een melding bij elk antwoord)."
     }
@@ -794,7 +796,7 @@
       "ocr_empty": "Geen tekst gelezen op het scherm",
       "no_addresses": "Onleesbare adressen",
       "not_a_ride": "Geen aanbieding gedetecteerd",
-      "gemini_ko": "De AI-analyse is mislukt",
+      "gemini_ko": "Het aanbod kon niet worden gelezen",
       "la_start_failed": "Weergave onmogelijk",
       "expired": "Analyse onderbroken",
       "timeout": "Analyse duurde te lang",
@@ -835,7 +837,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Weet het.\nBeslis. Verdien.",
+    "heroTitle": "Plus verdient zich terug met één rit.",
     "heroSub": "Niet elke rit is evenveel waard. Met Strive Plus weet je het vóór je aanvaardt.",
     "values": {
       "scan": {
@@ -856,7 +858,7 @@
       }
     },
     "feat": {
-      "scan": "20 scans per dag",
+      "scan": "Onbeperkt scannen",
       "scanText": "in plaats van 3 — genoeg voor een volledige werkdag.",
       "threshold": "Jouw drempel, niet de onze",
       "thresholdText": "jij bepaalt vanaf welke {{cur}}/u een rit de moeite waard is.",
@@ -927,7 +929,7 @@
       "scans": {
         "label": "Dagelijkse scans",
         "free": "3 / dag",
-        "plus": "20 / dag"
+        "plus": "Onbeperkt"
       },
       "dashboard": {
         "label": "Dashboard",
@@ -973,7 +975,7 @@
     "finePrintNoTrial": "{{price}} per {{period}}. Automatische verlenging, op elk moment opzegbaar.",
     "benefit": {
       "plus": {
-        "scans": "20 scans per dag in plaats van 3",
+        "scans": "Onbeperkt scannen in plaats van 3 per dag",
         "thresholds": "Jouw drempels {{cur}}/u en {{cur}}/{{unit}}, niet de onze",
         "traffic": "De {{cur}}/u berekend met het echte verkeer",
         "fuel": "De brandstof van jouw model afgetrokken",
@@ -989,7 +991,7 @@
     },
     "saveAmount": "BESPAAR {{amount}}",
     "heroTitleWelcomeEnd": "Je 30 gratis\nscans zijn op.",
-    "heroSubWelcomeEnd": "Nu weet je wat het verandert. Met Strive Plus zijn het er 20 per dag — elke dag.",
+    "heroSubWelcomeEnd": "Nu weet je wat het verandert. Met Strive Plus zonder limiet — elke dag.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1022,7 +1024,8 @@
     "quotaReached": {
       "title": "Limiet bereikt",
       "body": "Je hebt al je scans van vandaag gebruikt. Opnieuw beschikbaar over {{time}}.",
-      "bodyFree": "Je hebt je scans van de dag gebruikt. Stap over op Plus voor {{scans}} scans per dag — opnieuw beschikbaar over {{time}}."
+      "bodyFree": "Je hebt je scans van de dag gebruikt. Stap over op Plus voor {{scans}} scans per dag — opnieuw beschikbaar over {{time}}.",
+      "bodyFreeUnlimited": "Je hebt je scans van de dag gebruikt. Stap over op Plus voor onbeperkt scannen — opnieuw beschikbaar over {{time}}."
     },
     "rideRejected": {
       "title": "Rit niet geregistreerd",

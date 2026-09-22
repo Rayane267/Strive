@@ -20,7 +20,7 @@ import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
 import { useAuth } from '../context/AuthContext';
-import { SCAN_PACKS, getEffectivePlanTier } from '../services/subscriptionService';
+import { SCAN_PACKS, SHOP_ENABLED, getEffectivePlanTier } from '../services/subscriptionService';
 import { buyScanPack, restorePurchases, getStorePrices, isIAPAvailable } from '../services/iapService';
 import { waitForProfileUpdate } from '../services/profileService';
 import { FIELD_TOP } from '../theme/field';
@@ -28,17 +28,13 @@ import ScreenField from '../components/ScreenField';
 import { useMarket } from '../hooks/useMarket';
 import { formatMoney } from '../utils/market';
 
-// Flip à `true` quand la boutique sera prête. Tant que false, l'onglet reste
-// visible mais affiche un placeholder "Bientôt disponible".
-const SHOP_AVAILABLE = false;
-
 /// Le prix d'appel affiché sous le bandeau « Passer à Plus ».
 ///
 /// Il vivait dans les sept fichiers de traduction, libellé « 4,99€ » : une
 /// devise écrite en dur dans une phrase, là où c'est un montant. Le store
 /// reste la source de vérité côté abonnement ; ici c'est une accroche, et
 /// elle suit la devise du marché.
-const ENTRY_PRICE = 4.99;
+const ENTRY_PRICE = 8.99;
 
 const ShopScreen = () => {
   const navigation = useNavigation<any>();
@@ -110,7 +106,11 @@ const ShopScreen = () => {
     }
   };
 
-  if (!SHOP_AVAILABLE) {
+  // Filet, pas l'interrupteur : le vrai verrou est l'onglet non enregistré
+  // dans `TabNavigator`. Si l'écran est un jour ouvert par un autre chemin —
+  // route de pile, deep link — alors que `SHOP_ENABLED` est à `false`, il ne
+  // doit surtout pas proposer des packs qu'Apple n'a pas approuvés.
+  if (!SHOP_ENABLED) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Pose en premier, donc derriere tout le reste. Il remplit la zone SOUS

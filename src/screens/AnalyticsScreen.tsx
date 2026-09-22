@@ -31,7 +31,7 @@ import { stroke, strokeWidth } from '../theme/stroke';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
 import { hapticSelection } from '../utils/haptics';
-import { getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
+import { PREMIUM_ENABLED, getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
 import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
@@ -607,8 +607,11 @@ const AnalyticsScreen = () => {
             c'est lui qui a le plus besoin de savoir quand travailler.
 
             Visible pour tous, free compris : l'écran porte son propre mur
-            Premium et montre ce qu'on achète. Le cacher ne vendrait rien. */}
-        {!loading && (
+            Premium et montre ce qu'on achète. Le cacher ne vendrait rien.
+
+            Sauf tant que Premium est en suspens (`PREMIUM_ENABLED`) : le mur
+            renverrait vers un paywall qui ne le vend plus. */}
+        {!loading && PREMIUM_ENABLED && (
           <AnimatedEntrance step={4} slideFrom="bottom">
             <TouchableOpacity
               style={styles.slotsCard}

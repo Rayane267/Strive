@@ -90,10 +90,10 @@
     "plus": "Membro Plus",
     "free": "Membro gratuito",
     "upgradeLink": "Passar a Plus →",
-    "subscriptionSub": "20 análises/dia, {{cur}}/h em direto…",
+    "subscriptionSub": "Análises ilimitadas, {{cur}}/h em direto…",
     "subscriptionSubActive": "Cancelar, mudar de plano…",
     "upgradeCardTitle": "Passe ao Strive Plus",
-    "upgradeCardSub": "20 análises/dia · {{cur}}/h em direto · Sem fidelização",
+    "upgradeCardSub": "Análises ilimitadas · {{cur}}/h em direto · Sem fidelização",
     "verified": "PARCEIRO VERIFICADO",
     "emailLabel": "E-MAIL",
     "phoneLabel": "TELEMÓVEL",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Definições → Acessibilidade → Toque → Tocar atrás → Tocar duas vezes: escolha o seu atalho.",
     "iosStep3Title": "Resultado na Dynamic Island",
     "iosStep3Desc": "A partir do Uber/Bolt/Heetch, toque duas vezes nas costas do iPhone. O veredicto aparece em direto na Dynamic Island.",
-    "iosInfoText": "A análise corre localmente no seu iPhone (Vision, com o Gemini como alternativa). Nenhum dado pessoal é recolhido.",
+    "iosInfoText": "A análise corre localmente no seu iPhone (Vision). Nenhum dado pessoal é recolhido.",
     "iosActivate": "Percebi",
     "iosOpenShortcuts": "Abrir Atalhos",
     "iosOpenAccessibility": "Abrir Definições"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Limite atingido",
       "exhaustedSub": "Compre créditos ou passe a Plus",
       "remaining": "{{count}} análise(s) restante(s) hoje",
-      "upgradeSub": "Passe a Plus para 20 análises/dia"
+      "upgradeSub": "Passe a Plus para análises ilimitadas"
     },
     "offline": "Está offline",
     "goOnline": "ONLINE",
@@ -264,7 +264,7 @@
       "buy": "+ Créditos",
       "cardTitle": "Limite diário atingido",
       "cardText": "Já usou as suas {{count}} análises de hoje.",
-      "cardTextFree": "O Strive Plus paga-se logo na primeira viagem não rentável que recusar. 20 análises/dia para deixar de conduzir a perder.",
+      "cardTextFree": "O Strive Plus paga-se logo na primeira viagem não rentável que recusar. Análises ilimitadas para deixar de conduzir a perder.",
       "upgrade": "Passar a Plus",
       "comeBackTomorrow": "Volte amanhã para analisar de novo."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Pare de conduzir a perder",
-      "sub": "O Plus paga-se com uma única viagem evitada",
-      "perk1": "20 análises/dia",
+      "sub": "O Plus paga-se com uma única viagem",
+      "perk1": "Análises ilimitadas",
       "perk2": "{{rate}} em direto",
       "perk3": "Histórico"
     },
@@ -300,8 +300,8 @@
     "scans": "análises",
     "info1": "Os créditos são usados automaticamente quando esgota o seu limite diário.",
     "info2": "Os créditos nunca expiram.",
-    "info3": "Passe a Plus ou Premium para ter um limite diário maior.",
-    "upgradeTitle": "Passe a Plus — 20 análises/dia",
+    "info3": "Passe a Plus para análises ilimitadas.",
+    "upgradeTitle": "Passe a Plus — análises ilimitadas",
     "upgradeSubtitle": "Subscrição mensal a partir de {{price}}",
     "purchaseSuccess": "Compra confirmada!",
     "creditsAdded": "{{count}} análise(s) adicionada(s) à sua conta.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Acesso Plus",
       "premiumRequired": "A análise em vários dias ou no passado é reservada aos membros Plus.",
-      "limitText": "{{days}} dias no máximo — o histórico ilimitado é reservado ao Premium"
+      "limitText": "Histórico limitado a {{days}} dias"
     },
     "earningsBy": {
       "day": "Ganhos por dia",
@@ -676,6 +676,8 @@
       "urgentPath": "Definições › Notificações › Strive › Notificações urgentes",
       "shortcutT": "O atalho",
       "shortcutS": "Toque para abrir Atalhos e confirmar que lá está.",
+      "shortcutS_install": "Ainda não o adicionou? Toque para o instalar.",
+      "shortcutReinstall": "Reinstalar o atalho",
       "shortcutPath": "Atalhos › Os meus atalhos › Analisar uma viagem"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "O que é a pontuação de qualidade das viagens?",
       "a9": "Uma pontuação em 100 atribuída a cada viagem comparando os seus {{cur}}/h e {{cur}}/{{unit}} com os seus limiares: verde acima, laranja perto, vermelho abaixo. Nas Estatísticas vê também a qualidade média das viagens aceites.",
       "q10": "Quantas análises por dia?",
-      "a10": "3 análises por dia no plano gratuito, 20 por dia com o Strive Plus.",
+      "a10": "3 análises por dia no plano gratuito, ilimitadas com o Strive Plus.",
       "q11": "Como contacto o apoio?",
       "a11": "Em Perfil → Os meus tickets: abra um ticket e respondemos diretamente na app (recebe uma notificação a cada resposta)."
     }
@@ -794,7 +796,7 @@
       "ocr_empty": "Nenhum texto lido no ecrã",
       "no_addresses": "Moradas ilegíveis",
       "not_a_ride": "Nenhuma oferta detetada",
-      "gemini_ko": "A análise por IA falhou",
+      "gemini_ko": "Não foi possível ler a oferta",
       "la_start_failed": "Não foi possível mostrar",
       "expired": "Análise interrompida",
       "timeout": "Análise demasiado longa",
@@ -835,7 +837,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Saiba.\nDecida. Ganhe.",
+    "heroTitle": "O Plus paga-se com uma viagem.",
     "heroSub": "Nem todas as viagens valem o mesmo. Com o Strive Plus, sabe antes de aceitar.",
     "values": {
       "scan": {
@@ -856,7 +858,7 @@
       }
     },
     "feat": {
-      "scan": "20 análises por dia",
+      "scan": "Análises ilimitadas",
       "scanText": "em vez de 3 — que chegam para um dia inteiro de serviço.",
       "threshold": "O seu limiar, não o nosso",
       "thresholdText": "é o senhor que fixa o {{cur}}/h a partir do qual uma viagem vale a pena.",
@@ -927,7 +929,7 @@
       "scans": {
         "label": "Análises diárias",
         "free": "3 / dia",
-        "plus": "20 / dia"
+        "plus": "Ilimitadas"
       },
       "dashboard": {
         "label": "Painel",
@@ -973,7 +975,7 @@
     "finePrintNoTrial": "{{price}} por {{period}}. Renovação automática, cancelável a qualquer momento.",
     "benefit": {
       "plus": {
-        "scans": "20 análises por dia em vez de 3",
+        "scans": "Análises ilimitadas em vez de 3 por dia",
         "thresholds": "Os seus limiares {{cur}}/h e {{cur}}/{{unit}}, não os nossos",
         "traffic": "O {{cur}}/h calculado com o trânsito real",
         "fuel": "O combustível do seu modelo descontado",
@@ -989,7 +991,7 @@
     },
     "saveAmount": "POUPE {{amount}}",
     "heroTitleWelcomeEnd": "As suas 30 análises\noferecidas acabaram.",
-    "heroSubWelcomeEnd": "Já sabe o que isso muda. Com o Strive Plus são 20 por dia — todos os dias.",
+    "heroSubWelcomeEnd": "Já sabe o que isso muda. Com o Strive Plus não há limite — todos os dias.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1022,7 +1024,8 @@
     "quotaReached": {
       "title": "Limite atingido",
       "body": "Usou todas as suas análises de hoje. Recarrega dentro de {{time}}.",
-      "bodyFree": "Usou as suas análises do dia. Passe a Plus para {{scans}} análises por dia — recarrega dentro de {{time}}."
+      "bodyFree": "Usou as suas análises do dia. Passe a Plus para {{scans}} análises por dia — recarrega dentro de {{time}}.",
+      "bodyFreeUnlimited": "Usou as suas análises do dia. Passe a Plus para análises ilimitadas — recarrega dentro de {{time}}."
     },
     "rideRejected": {
       "title": "Viagem não registada",

@@ -37,7 +37,7 @@ import {
 } from '../services/iapService';
 import { waitForProfileUpdate } from '../services/profileService';
 import { hapticSuccess, hapticError, hapticLight } from '../utils/haptics';
-import { getEffectivePlanTier } from '../services/subscriptionService';
+import { PREMIUM_ENABLED, getEffectivePlanTier } from '../services/subscriptionService';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { stroke, strokeWidth } from '../theme/stroke';
@@ -71,7 +71,7 @@ const TRIAL_DAYS = 7;
 /// Le store reste la source de vérité ; ces montants ne servent QUE quand il ne
 /// répond pas, et `money()` les habille alors de la devise du marché.
 const FALLBACK_AMOUNT: Record<SellTier, Record<Cycle, number>> = {
-  plus:    { monthly: 9.99,  yearly: 89.99 },
+  plus:    { monthly: 8.99,  yearly: 79.99 },
   premium: { monthly: 19.99, yearly: 179.99 },
 };
 
@@ -169,8 +169,8 @@ const SubscriptionScreen = () => {
   ///
   /// Le bandeau vert et la coche suivent la selection : le defaut decide donc
   /// de la carte que l'ecran met en avant. On garde le mensuel, dont le ticket
-  /// d'entree est bien plus facile a accepter pour un chauffeur — 9,99 EUR
-  /// contre 89,99 EUR d'un coup. La carte annuelle garde son economie affichee
+  /// d'entree est bien plus facile a accepter pour un chauffeur — 8,99 EUR
+  /// contre 79,99 EUR d'un coup. La carte annuelle garde son economie affichee
   /// pour ceux qui la cherchent, sans que l'ecran pousse dessus.
   const [cycle, setCycle] = useState<Cycle>('monthly');
   const [sellTier, setSellTier] = useState<SellTier>('plus');
@@ -187,7 +187,10 @@ const SubscriptionScreen = () => {
   /// C'est le seul cas où l'écran montre À LA FOIS la carte d'abonnement actif
   /// et des formules — les deux répondent à des questions différentes :
   /// « qu'est-ce que j'ai » et « qu'est-ce que je peux avoir en plus ».
-  const canUpgrade = tier === 'plus';
+  ///
+  /// Sans objet tant que Premium est en suspens (`PREMIUM_ENABLED`) : un abonné
+  /// Plus a alors le seul palier en vente, il ne voit que sa carte active.
+  const canUpgrade = PREMIUM_ENABLED && tier === 'plus';
 
   /// Un abonné qui monte n'a qu'une chose à acheter : le palier du dessus. La
   /// pastille reste masquée — elle n'offrirait aucun choix — mais les prix, les
@@ -308,15 +311,16 @@ const SubscriptionScreen = () => {
   const yearAnchor = rawOf('monthly') * 12;
   const savedAmount = Math.max(0, yearAnchor - rawOf('yearly'));
 
-  /// Ramène un prix à la semaine.
-  ///
-  /// C'est le plus petit dénominateur crédible d'un abonnement, et il rend
-  /// l'annuel lisible : « 89,99 € » se compare mal à « 9,99 € », « 1,73 € par
-  /// semaine » se compare tout seul. Calculé depuis `rawPrice` et formaté dans
-  /// la devise du store — donc juste hors zone euro aussi.
-  const weeklyText = (cy: Cycle): string => {
+  /// La ligne sous le prix : le mensuel ramené à la SEMAINE, l'annuel ramené
+  /// au MOIS. Chaque carte parle dans l'unité qui la rend petite et lisible —
+  /// « 2,07 € par semaine » sous 8,99 €, « 6,67 €/mois » sous 79,99 €, ce qui
+  /// se compare directement au mensuel d'à côté. Calculé depuis `rawPrice` et
+  /// formaté dans la devise du store — donc juste hors zone euro aussi.
+  const equivText = (cy: Cycle): string => {
     const raw = rawOf(cy);
-    return money(cy === 'yearly' ? raw / 52 : (raw * 12) / 52, currencyOf(cy));
+    return cy === 'yearly'
+      ? t('subscription.perMonthEquiv', { price: money(raw / 12, currencyOf(cy)) })
+      : t('subscription.perWeekEquiv', { price: money((raw * 12) / 52, currencyOf(cy)) });
   };
 
   const activeProductId = PRODUCT_ID[sellTier][cycle];
@@ -482,7 +486,7 @@ const SubscriptionScreen = () => {
   // Reprend la structure qui convertit : un bandeau au-dessus du prix, qui porte
   // l'essai à gauche et l'économie à droite, et se remplit quand la formule est
   // choisie. Le prix reste le seul gros chiffre de la carte ; l'équivalent
-  // hebdomadaire, juste dessous, sert de comparateur entre les deux.
+  // juste dessous (par semaine en mensuel, par mois en annuel) le rend lisible.
   const renderPlan = (cy: Cycle) => {
     const selected = cycle === cy;
     const trial = isTrial(cy);
@@ -504,7 +508,7 @@ const SubscriptionScreen = () => {
                 // Le bandeau annuel etait vide a gauche, avec l'economie collee
                 // a droite. Le libelle comble ce vide et donne son argument a la
                 // carte annuelle — en gris, puisque le vert reste au mensuel.
-                // Claim factuel, verifiable au prix hebdomadaire juste en
+                // Claim factuel, verifiable a l'equivalent mensuel juste en
                 // dessous : pas une preuve sociale inventee.
                 : t('subscription.bestValueStrip')}
           </Text>
@@ -535,7 +539,7 @@ const SubscriptionScreen = () => {
               </Text>
             </Text>
             <Text style={styles.planWeek}>
-              {t('subscription.perWeekEquiv', { price: weeklyText(cy) })}
+              {equivText(cy)}
             </Text>
           </View>
         </View>
@@ -624,8 +628,9 @@ const SubscriptionScreen = () => {
               Placée plus bas, entre les avantages et les cartes, elle se lirait
               comme un simple sélecteur de prix.
 
-              Elle ne s'affiche pas pour un abonné : il ne choisit plus. */}
-          {!isPlus && (
+              Elle ne s'affiche pas pour un abonné : il ne choisit plus. Ni tant
+              que Premium est en suspens : il n'y aurait qu'un segment. */}
+          {!isPlus && PREMIUM_ENABLED && (
             <View style={styles.tierPill}>
               {/* Le curseur, sous les libellés. Rendu seulement une fois les deux
                   segments mesurés : autrement il apparaîtrait à zéro puis

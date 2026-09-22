@@ -180,7 +180,7 @@ const ScannerPermissionScreen = () => {
           <View style={styles.infoBox}>
             <Feather name="info" size={13} color={colors.textDimmed} />
             <Text style={styles.infoText}>
-              {t('scanner.iosInfoText', 'L\'analyse tourne localement sur votre iPhone (Vision + Gemini en fallback). Aucune donnée personnelle n\'est collectée.')}
+              {t('scanner.iosInfoText', 'L\'analyse tourne localement sur votre iPhone (Vision). Aucune donnée personnelle n\'est collectée.')}
             </Text>
           </View>
         </View>

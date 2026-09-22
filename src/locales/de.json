@@ -90,10 +90,10 @@
     "plus": "Plus-Mitglied",
     "free": "Gratis-Mitglied",
     "upgradeLink": "Zu Plus wechseln →",
-    "subscriptionSub": "20 Scans/Tag, {{cur}}/Std. live…",
+    "subscriptionSub": "Unbegrenzte Scans, {{cur}}/Std. live…",
     "subscriptionSubActive": "Kündigen, Tarif wechseln…",
     "upgradeCardTitle": "Wechsle zu Strive Plus",
-    "upgradeCardSub": "20 Scans/Tag · {{cur}}/Std. live · Ohne Bindung",
+    "upgradeCardSub": "Unbegrenzte Scans · {{cur}}/Std. live · Ohne Bindung",
     "verified": "GEPRÜFTER PARTNER",
     "emailLabel": "E-MAIL",
     "phoneLabel": "TELEFON",
@@ -196,7 +196,7 @@
     "iosStep2Desc": "Einstellungen → Bedienungshilfen → Tippen → Auf Rückseite tippen → Doppeltippen: wähle deinen Kurzbefehl.",
     "iosStep3Title": "Ergebnis in der Dynamic Island",
     "iosStep3Desc": "Tippe aus Uber/Bolt/Heetch zweimal auf die Rückseite des iPhones. Das Urteil erscheint live in der Dynamic Island.",
-    "iosInfoText": "Die Auswertung läuft lokal auf deinem iPhone (Vision, mit Gemini als Rückfall). Es werden keine persönlichen Daten erfasst.",
+    "iosInfoText": "Die Auswertung läuft lokal auf deinem iPhone (Vision). Es werden keine persönlichen Daten erfasst.",
     "iosActivate": "Verstanden",
     "iosOpenShortcuts": "Kurzbefehle öffnen",
     "iosOpenAccessibility": "Einstellungen öffnen"
@@ -210,7 +210,7 @@
       "exhaustedTitle": "Limit erreicht",
       "exhaustedSub": "Kaufe Credits oder wechsle zu Plus",
       "remaining": "Noch {{count}} Scan(s) heute",
-      "upgradeSub": "Wechsle zu Plus für 20 Scans/Tag"
+      "upgradeSub": "Wechsle zu Plus für unbegrenzte Scans"
     },
     "offline": "Du bist offline",
     "goOnline": "ONLINE",
@@ -264,7 +264,7 @@
       "buy": "+ Credits",
       "cardTitle": "Tageslimit erreicht",
       "cardText": "Du hast deine {{count}} Scans von heute verbraucht.",
-      "cardTextFree": "Strive Plus rechnet sich schon bei der ersten unrentablen Fahrt, die du ablehnst. 20 Scans/Tag, um nicht mehr mit Verlust zu fahren.",
+      "cardTextFree": "Strive Plus rechnet sich schon bei der ersten unrentablen Fahrt, die du ablehnst. Unbegrenzte Scans, um nicht mehr mit Verlust zu fahren.",
       "upgrade": "Zu Plus wechseln",
       "comeBackTomorrow": "Komm morgen wieder, um erneut zu scannen."
     },
@@ -278,8 +278,8 @@
     },
     "upgradeCard": {
       "title": "Hör auf, mit Verlust zu fahren",
-      "sub": "Plus rechnet sich mit einer einzigen vermiedenen Fahrt",
-      "perk1": "20 Scans/Tag",
+      "sub": "Plus rechnet sich mit einer einzigen Fahrt",
+      "perk1": "Unbegrenzte Scans",
       "perk2": "{{rate}} live",
       "perk3": "Verlauf"
     },
@@ -300,8 +300,8 @@
     "scans": "Scans",
     "info1": "Die Credits werden automatisch genutzt, sobald dein Tageslimit erreicht ist.",
     "info2": "Credits verfallen nie.",
-    "info3": "Wechsle zu Plus oder Premium für ein höheres Tageslimit.",
-    "upgradeTitle": "Zu Plus wechseln — 20 Scans/Tag",
+    "info3": "Wechsle zu Plus für unbegrenzte Scans.",
+    "upgradeTitle": "Zu Plus wechseln — unbegrenzte Scans",
     "upgradeSubtitle": "Monatsabo ab {{price}}",
     "purchaseSuccess": "Kauf bestätigt!",
     "creditsAdded": "{{count}} Scan(s) deinem Konto hinzugefügt.",
@@ -355,7 +355,7 @@
     "alerts": {
       "premiumTitle": "Plus-Zugang",
       "premiumRequired": "Die Auswertung über mehrere Tage oder in der Vergangenheit ist Plus-Mitgliedern vorbehalten.",
-      "limitText": "Höchstens {{days}} Tage — der unbegrenzte Verlauf ist Premium vorbehalten"
+      "limitText": "Verlauf auf {{days}} Tage begrenzt"
     },
     "earningsBy": {
       "day": "Einnahmen pro Tag",
@@ -676,6 +676,8 @@
       "urgentPath": "Einstellungen › Mitteilungen › Strive › Dringende Mitteilungen",
       "shortcutT": "Der Kurzbefehl",
       "shortcutS": "Tippe, um Kurzbefehle zu öffnen und zu prüfen, ob er da ist.",
+      "shortcutS_install": "Noch nicht hinzugefügt? Tippe, um ihn zu installieren.",
+      "shortcutReinstall": "Kurzbefehl neu installieren",
       "shortcutPath": "Kurzbefehle › Meine Kurzbefehle › Eine Fahrt auswerten"
     },
     "notifStep": {
@@ -723,7 +725,7 @@
       "q9": "Was ist der Qualitätswert der Fahrten?",
       "a9": "Ein Wert von 100, der jeder Fahrt zugeteilt wird, indem ihre {{cur}}/Std. und {{cur}}/{{unit}} mit deinen Schwellen verglichen werden: grün darüber, orange knapp, rot darunter. In der Statistik siehst du auch die Durchschnittsqualität deiner angenommenen Fahrten.",
       "q10": "Wie viele Scans pro Tag?",
-      "a10": "3 Scans pro Tag im Gratis-Tarif, 20 pro Tag mit Strive Plus.",
+      "a10": "3 Scans pro Tag im Gratis-Tarif, unbegrenzt mit Strive Plus.",
       "q11": "Wie kontaktiere ich den Support?",
       "a11": "Über Profil → Meine Tickets: eröffne ein Ticket und wir antworten direkt in der App (du erhältst bei jeder Antwort eine Mitteilung)."
     }
@@ -794,7 +796,7 @@
       "ocr_empty": "Kein Text auf dem Bildschirm gelesen",
       "no_addresses": "Unlesbare Adressen",
       "not_a_ride": "Kein Angebot erkannt",
-      "gemini_ko": "Die KI-Auswertung ist fehlgeschlagen",
+      "gemini_ko": "Das Angebot konnte nicht gelesen werden",
       "la_start_failed": "Anzeige nicht möglich",
       "expired": "Auswertung unterbrochen",
       "timeout": "Auswertung zu lang",
@@ -835,7 +837,7 @@
   },
   "subscription": {
     "label": "STRIVE",
-    "heroTitle": "Wissen.\nEntscheiden. Verdienen.",
+    "heroTitle": "Plus rechnet sich schon mit einer Fahrt.",
     "heroSub": "Nicht jede Fahrt ist gleich viel wert. Mit Strive Plus weisst du es, bevor du annimmst.",
     "values": {
       "scan": {
@@ -856,7 +858,7 @@
       }
     },
     "feat": {
-      "scan": "20 Scans pro Tag",
+      "scan": "Unbegrenzte Scans",
       "scanText": "statt 3 – genug für einen ganzen Arbeitstag.",
       "threshold": "Deine Schwelle, nicht unsere",
       "thresholdText": "du legst fest, ab welchem {{cur}}/Std. sich eine Fahrt lohnt.",
@@ -927,7 +929,7 @@
       "scans": {
         "label": "Tägliche Scans",
         "free": "3 / Tag",
-        "plus": "20 / Tag"
+        "plus": "Unbegrenzt"
       },
       "dashboard": {
         "label": "Übersicht",
@@ -973,7 +975,7 @@
     "finePrintNoTrial": "{{price}} pro {{period}}. Automatische Verlängerung, jederzeit kündbar.",
     "benefit": {
       "plus": {
-        "scans": "20 Scans pro Tag statt 3",
+        "scans": "Unbegrenzte Scans statt 3 pro Tag",
         "thresholds": "Deine Schwellen {{cur}}/Std. und {{cur}}/{{unit}}, nicht unsere",
         "traffic": "Der {{cur}}/Std. mit echtem Verkehr berechnet",
         "fuel": "Der Treibstoff deines Modells abgezogen",
@@ -989,7 +991,7 @@
     },
     "saveAmount": "SPARE {{amount}}",
     "heroTitleWelcomeEnd": "Deine 30 geschenkten\nScans sind aufgebraucht.",
-    "heroSubWelcomeEnd": "Jetzt weisst du, was das ändert. Mit Strive Plus sind es 20 pro Tag – jeden Tag.",
+    "heroSubWelcomeEnd": "Jetzt weisst du, was das ändert. Mit Strive Plus ohne Limit – jeden Tag.",
     "tier": {
       "plus": "Plus",
       "premium": "Premium"
@@ -1022,7 +1024,8 @@
     "quotaReached": {
       "title": "Limit erreicht",
       "body": "Du hast alle deine Scans von heute verbraucht. Aufladung in {{time}}.",
-      "bodyFree": "Du hast deine Scans des Tages verbraucht. Wechsle zu Plus für {{scans}} Scans pro Tag – Aufladung in {{time}}."
+      "bodyFree": "Du hast deine Scans des Tages verbraucht. Wechsle zu Plus für {{scans}} Scans pro Tag – Aufladung in {{time}}.",
+      "bodyFreeUnlimited": "Du hast deine Scans des Tages verbraucht. Wechsle zu Plus für unbegrenzte Scans – Aufladung in {{time}}."
     },
     "rideRejected": {
       "title": "Fahrt nicht erfasst",
