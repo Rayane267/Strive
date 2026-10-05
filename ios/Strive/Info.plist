@@ -12,8 +12,27 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Strive a besoin d'accéder aux captures pour analyser vos offres de course.</string>
+	<!-- La langue de base du binaire. Elle était à `en` alors que toute
+	     l'interface, les chaînes d'autorisation ci-dessus et la fiche App Store
+	     sont en français. -->
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>fr</string>
+	<!-- Les langues que l'App Store annonce sur la fiche produit. Elles ne se
+	     déduisent PAS des traductions i18next (invisibles pour Apple, qui ne lit
+	     que le bundle) : sans cette clé et sans dossier `.lproj`, le binaire ne
+	     déclarait aucune localisation et la fiche affichait « Anglais » seul,
+	     alors que `src/i18n.ts` sert ces sept langues selon la langue du
+	     téléphone. À garder synchro avec `SUPPORTED` de `src/i18n.ts`. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+		<string>es</string>
+		<string>pt</string>
+		<string>nl</string>
+		<string>de</string>
+		<string>it</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Strive</string>
 	<!-- Noms alternatifs pour Siri : « Strive » est souvent mal reconnu (surtout
