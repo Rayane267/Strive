@@ -66,6 +66,7 @@ import {
 import { inCurrency, countConverted } from '../services/fxService';
 import { useFxRates } from '../hooks/useFxRates';
 import ScreenField from '../components/ScreenField';
+import CityPulseCard from '../components/CityPulseCard';
 import AnimatedEntrance from '../components/AnimatedEntrance';
 
 /**
@@ -660,6 +661,9 @@ const HistoryScreen = () => {
           <Feather name="chevron-right" size={14} color={colors.primary} />
         </TouchableOpacity>
       )}
+
+      {/* ── ÉVÉNEMENTS ET PERTURBATIONS ── */}
+      <CityPulseCard />
 
       {/* ── ERROR STATE ── */}
       {fetchError && (

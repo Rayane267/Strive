@@ -123,8 +123,11 @@ export function sncfWave(
     starts_local: navitiaToLocal(first),
     ends_local: navitiaToLocal(last),
     intensity,
-    items: wave.map(t => ({
+    // Toutes les arrivées grandes lignes des 3 h, la vague marquée : le
+    // chauffeur voit aussi le train isolé de 21 h, pas seulement le pic.
+    items: trains.map((t, i) => ({
       at: hhmm(t.at), mode: t.mode, number: t.number, origin: t.origin, delay: t.delay, seats: t.seats,
+      wave: i >= best.from && i <= best.to,
     })),
   };
 }

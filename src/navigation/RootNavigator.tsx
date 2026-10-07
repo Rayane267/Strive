@@ -28,6 +28,7 @@ import TutorialScreenRaw from '../screens/TutorialScreen';
 import OnboardingScreenRaw from '../screens/OnboardingScreen';
 import HelpScreenRaw from '../screens/HelpScreen';
 import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
+import CityPulseScreenRaw from '../screens/CityPulseScreen';
 import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
 import BestHoursScreenRaw from '../screens/BestHoursScreen';
 import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
@@ -44,6 +45,7 @@ const ScannerPermissionScreen = withErrorBoundary(ScannerPermissionScreenRaw);
 const TutorialScreen = withErrorBoundary(TutorialScreenRaw);
 const HelpScreen = withErrorBoundary(HelpScreenRaw);
 const SupportTicketsScreen = withErrorBoundary(SupportTicketsScreenRaw);
+const CityPulseScreen = withErrorBoundary(CityPulseScreenRaw);
 const SupportTicketDetailScreen = withErrorBoundary(SupportTicketDetailScreenRaw);
 const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
 const BestHoursScreen = withErrorBoundary(BestHoursScreenRaw);
@@ -315,6 +317,12 @@ const RootNavigator = () => {
           <Stack.Screen
             name="Help"
             component={HelpScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+
+          <Stack.Screen
+            name="CityPulse"
+            component={CityPulseScreen}
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
 
