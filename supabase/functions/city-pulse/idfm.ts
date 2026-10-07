@@ -59,8 +59,23 @@ export const navitiaMs = (s: string) =>
 
 const DAY = 86_400_000;
 
+const ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", rsquo: "’", lsquo: "‘",
+  laquo: "«", raquo: "»", ndash: "–", mdash: "—", hellip: "…", euro: "€", deg: "°",
+  eacute: "é", egrave: "è", ecirc: "ê", euml: "ë", agrave: "à", acirc: "â", ccedil: "ç",
+  icirc: "î", iuml: "ï", ocirc: "ô", ucirc: "û", ugrave: "ù", uuml: "ü", oelig: "œ",
+  Eacute: "É", Egrave: "È", Agrave: "À", Ccedil: "Ç",
+};
+
+/** « Trafic perturb&#233; &agrave; … » → « Trafic perturbé à … ». Les sources
+ *  envoient du HTML : sans ce décodage, le chauffeur lisait `&#233;`. */
+export const decodeEntities = (s: string) =>
+  s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[name] ?? m);
+
 const stripHtml = (s: string) =>
-  s.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ")
+  decodeEntities(s.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, ""))
     .replace(/\s+/g, " ").trim();
 
 /** `now` au format Navitia, heure de Paris (« 20261007T183000 »). */
@@ -120,8 +135,8 @@ export function idfmSignals(
       id: d.id,
       city: "paris",
       kind: "transit_disruption",
-      title: d.title,
-      detail: d.message ? stripHtml(d.message).slice(0, 400) : (d.shortMessage ?? null),
+      title: decodeEntities(d.title),
+      detail: d.message ? stripHtml(d.message).slice(0, 400) : (d.shortMessage ? decodeEntities(d.shortMessage) : null),
       place: lines.map(l => l.label).join(", "),
       mode: main.mode,
       lat: null,

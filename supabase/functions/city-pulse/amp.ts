@@ -7,7 +7,7 @@
 // Module pur : il reçoit le flux déjà décodé (FeedMessage.toObject), le
 // décodage protobuf est dans index.ts.
 
-import type { SignalRow } from "./idfm.ts";
+import { decodeEntities, type SignalRow } from "./idfm.ts";
 
 export const AMP_URL = "https://api-mobilite.rbgl.fr/api/v1/mamp/getServiceAlerts";
 
@@ -34,8 +34,10 @@ type Alert = {
   descriptionText?: Translated;
 };
 
-const fr = (t?: Translated) =>
-  t?.translation?.find(x => x.language === "fr")?.text ?? t?.translation?.[0]?.text ?? null;
+const fr = (t?: Translated) => {
+  const v = t?.translation?.find(x => x.language === "fr")?.text ?? t?.translation?.[0]?.text;
+  return v ? decodeEntities(v) : null;
+};
 
 /** Epoch (s) → heure de Paris sans fuseau, « 2026-10-07T18:05:00 ». */
 export const parisLocal = (epoch: number) => {

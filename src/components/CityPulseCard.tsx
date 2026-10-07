@@ -68,7 +68,7 @@ export default function CityPulseCard() {
       onLayout={e => setW(e.nativeEvent.layout.width)}
       style={styles.card}
       accessibilityRole="button"
-      accessibilityLabel={t('cityPulse.title', 'Événements et perturbations')}
+      accessibilityLabel={t('cityPulse.title', 'Afflux et événements')}
     >
       {w > 0 && !reduce && (
         <Animated.View pointerEvents="none" style={[styles.sheen, {
@@ -77,10 +77,10 @@ export default function CityPulseCard() {
       )}
       <View style={styles.top}>
         <View style={styles.icon}>
-          <Feather name="zap" size={20} color="#FF8A8A" />
+          <Feather name="zap" size={20} color="#5CF2A6" />
         </View>
         <View style={styles.flex1}>
-          <Text style={styles.title}>{t('cityPulse.title', 'Événements et perturbations')}</Text>
+          <Text style={styles.title}>{t('cityPulse.title', 'Afflux et événements')}</Text>
           <Text style={styles.sub}>{LABEL[city]}</Text>
         </View>
         <Feather name="chevron-right" size={20} color={colors.textDimmed} />
@@ -88,7 +88,7 @@ export default function CityPulseCard() {
       {counts && (
         <View style={styles.pills}>
           {counts.transit > 0 && (
-            <Text style={[styles.pill, styles.pillRed]}>
+            <Text style={[styles.pill, styles.pillAmber]}>
               {t('cityPulse.countTransit', '{{count}} perturbation', { count: counts.transit })}
             </Text>
           )}
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   card: {
     // Pas de marge latérale : la liste d'Historique porte déjà la gouttière.
     marginBottom: space.md, padding: space.lg, gap: space.md,
-    borderRadius: radius.lg, overflow: 'hidden', backgroundColor: 'rgba(255,77,77,0.06)',
+    borderRadius: radius.lg, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: strokeWidth.surface, borderColor: stroke.edgeLit,
   },
   flex1: { flex: 1 },
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   icon: {
     width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,77,77,0.16)',
+    backgroundColor: 'rgba(0,230,118,0.12)',
   },
   title: { color: colors.textMain, fontSize: 16, fontWeight: '700' },
   sub: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: radius.full, overflow: 'hidden',
   },
-  pillRed: { backgroundColor: 'rgba(255,77,77,0.14)', color: '#FFB3B3' },
+  pillAmber: { backgroundColor: 'rgba(255,181,71,0.14)', color: '#FFD08A' },
   pillGreen: { backgroundColor: 'rgba(0,230,118,0.10)', color: '#5CF2A6' },
   pillGrey: { backgroundColor: 'rgba(255,255,255,0.07)', color: '#C9D1CD' },
 });

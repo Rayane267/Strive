@@ -606,18 +606,11 @@ const HistoryScreen = () => {
     [t, thresholds, market],
   );
 
-  const todayDate = new Date().toLocaleDateString(i18n.language, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-
   const listHeader = (
     <View>
-      {/* ── HEADER ── */}
+      {/* ── HEADER ── (la date est portée par le sélecteur juste dessous) */}
       <AnimatedEntrance step={0} style={styles.header}>
         <Text style={styles.headerTitle}>{t('history.title')}</Text>
-        <Text style={styles.headerSub}>{todayDate}</Text>
       </AnimatedEntrance>
 
       {/* ── DATE SELECTOR (Plus only) ── */}

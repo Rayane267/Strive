@@ -4,7 +4,7 @@
 //
 // Module pur : la récupération HTTP est dans index.ts.
 
-import type { SignalRow } from "./idfm.ts";
+import { decodeEntities, type SignalRow } from "./idfm.ts";
 import { parisLocal } from "./amp.ts";
 
 export const TCL_URL = "https://data.grandlyon.com/siri-lite/2.0/situation-exchange.json";
@@ -70,7 +70,7 @@ export function tclSignals(body: unknown, nowEpoch: number): SignalRow[] {
     if (end && end - start > 7 * DAY && nowEpoch - start >= DAY) continue;
 
     const texts = parts.flatMap(s => [...(s.Summary ?? []), ...(s.Description ?? [])])
-      .map(t => t.value?.trim()).filter((t): t is string => !!t)
+      .map(t => (t.value ? decodeEntities(t.value).trim() : '')).filter(t => !!t)
       .sort((a, b) => a.length - b.length);
     const main = lines.reduce((x, y) => (y.weight > x.weight ? y : x));
     const strong = texts.some(t => STRONG.test(t));

@@ -17,17 +17,35 @@ import { AMP_URL, ampSignals } from "./amp.ts";
 import { TCL_URL, tclSignals } from "./tcl.ts";
 import { footballEvents, footballUrl } from "./football.ts";
 import { curatedEvents } from "./curated.ts";
+import { adjustByPopularity } from "./popularity.ts";
 import GtfsRealtimeBindings from "https://esm.sh/gtfs-realtime-bindings@1.1.1";
 
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+/** Rôle déclaré dans un JWT (signature déjà vérifiée par la passerelle). */
+function jwtRole(token: string): string | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
+    return JSON.parse(atob(b64)).role ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 serve(async req => {
   // Seul le cron (service_role) déclenche un rafraîchissement : chaque appel
-  // consomme le quota PRIM (20 000 requêtes/jour).
-  if (req.headers.get("Authorization") !== `Bearer ${SERVICE_KEY}`) {
+  // consomme le quota PRIM (20 000 requêtes/jour). On lit le rôle du jeton
+  // plutôt que de le comparer à SUPABASE_SERVICE_ROLE_KEY : avec les nouvelles
+  // clés d'API, cette variable ne vaut plus le JWT que le cron envoie, et la
+  // comparaison refusait TOUS les appels. La passerelle (verify_jwt) a déjà
+  // vérifié la signature, le contenu est donc fiable.
+  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  if (token !== SERVICE_KEY && jwtRole(token) !== "service_role") {
     return json({ error: "forbidden" }, 403);
   }
 
@@ -35,6 +53,9 @@ serve(async req => {
   const report: Record<string, unknown> = {};
   const now = parisNow();
   const minute = +now.slice(11, 13);
+  // Appel manuel avec {"force": true} : toutes les sources tout de suite (sinon
+  // les événements attendent le passage de l'heure pile).
+  const force = (await req.json().catch(() => ({})))?.force === true;
 
   const refresh = async (source: string, load: () => Promise<SignalRow[]>) => {
     try {
@@ -48,7 +69,11 @@ serve(async req => {
   };
 
   await refresh("idfm", async () => {
-    const res = await fetch(IDFM_URL, { headers: { apikey: Deno.env.get("PRIM_API_KEY")! } });
+    // PRIM traduit ses messages selon Accept-Language ; Deno envoie « * » par
+    // défaut et PRIM répondait alors en anglais (« Social movement »…).
+    const res = await fetch(IDFM_URL, {
+      headers: { apikey: Deno.env.get("PRIM_API_KEY")!, "Accept-Language": "fr-FR,fr;q=0.9" },
+    });
     if (!res.ok) throw new Error(`PRIM ${res.status}`);
     return idfmSignals(await res.json(), now);
   });
@@ -74,19 +99,19 @@ serve(async req => {
   });
 
   // Calendrier de Ligue 1 : il bouge à la journée, une fois par heure suffit.
-  if (minute < 5) {
+  if (force || minute < 5) {
     await refresh("football", async () => {
       const res = await fetch(footballUrl());
       if (!res.ok) throw new Error(`openfootball ${res.status}`);
       return footballEvents(await res.json());
     });
-    await refresh("curated", async () => curatedEvents());
+    await refresh("curated", async () => adjustByPopularity(curatedEvents()));
   }
 
   // Gares : un passage sur trois (toutes les 15 min). 16 gares × 96 passages
   // ≈ 1 540 requêtes/jour, sous le quota gratuit de 5 000. Les horaires
   // bougent peu, et un retard se voit encore au passage suivant.
-  if (minute % 15 < 5) {
+  if (force || minute % 15 < 5) {
     await refresh("sncf", async () => {
       const auth = `Basic ${btoa(`${Deno.env.get("SNCF_API_KEY")}:`)}`;
       const waves = await Promise.all(STATIONS.map(async st => {

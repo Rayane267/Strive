@@ -48,7 +48,9 @@ import {
   saveCity,
 } from '../services/cityPulseService';
 
-const DANGER_SOFT = '#FF8A8A';
+// Ambre : une perturbation demande l'attention, pas l'alarme (le rouge reste
+// réservé aux vraies erreurs).
+const ALERT_TINT = '#FFB547';
 const CITY_LABEL: Record<City, string> = { paris: 'Paris', lyon: 'Lyon', marseille: 'Marseille', nice: 'Nice' };
 
 const hhmm = (iso: string) =>
@@ -161,7 +163,7 @@ function AlertBanner({ s }: { s: CitySignal }) {
     <View style={styles.alert}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.alertGlow, { opacity: v }]} />
       <View style={styles.alertIcon}>
-        <Feather name="alert-triangle" size={20} color={DANGER_SOFT} />
+        <Feather name="alert-triangle" size={20} color={ALERT_TINT} />
       </View>
       <View style={styles.flex1}>
         <View style={styles.rowCenter}>
@@ -182,7 +184,7 @@ function glyphFor(s: CitySignal): Glyph {
   if (s.kind === 'train_arrivals') return { name: 'train-variant', tint: '#5CF2A6' };
   if (s.kind === 'transit_disruption') {
     const name = s.mode === 'tram' ? 'tram' : s.mode === 'metro' ? 'subway-variant' : 'train';
-    return { name, tint: DANGER_SOFT };
+    return { name, tint: ALERT_TINT };
   }
   const title = s.title.toLowerCase();
   switch (s.mode) {
@@ -265,7 +267,7 @@ function DisruptionRow({ s, index, top }: { s: CitySignal; index: number; top: b
             <Text style={styles.rowPlace} numberOfLines={1}>{s.place ?? s.title}</Text>
             {when
               ? <Text style={styles.rowWhen}>{when}</Text>
-              : <View style={styles.rowCenter}><LiveDot color={DANGER_SOFT} /><Text style={[styles.rowWhen, styles.ongoing]}>{t('cityPulse.ongoing', 'En cours')}</Text></View>}
+              : <View style={styles.rowCenter}><LiveDot color={ALERT_TINT} /><Text style={[styles.rowWhen, styles.ongoing]}>{t('cityPulse.ongoing', 'En cours')}</Text></View>}
           </View>
           <View style={styles.rowLine}>
             <Text style={styles.rowSub} numberOfLines={1}>{train ? trainSummary(s) : s.title}</Text>
@@ -338,17 +340,58 @@ const EVENT_TAG: Record<string, string> = {
   match: 'MATCH', sport: 'SPORT', concert: 'CONCERT', festival: 'FESTIVAL', spectacle: 'SPECTACLE', salon: 'SALON',
 };
 
-const EventRow = React.memo(function EventRow({ s, index }: { s: CitySignal; index: number }) {
+type EventItem = CitySignal & { untilDay?: string };
+
+/** Intensité minimale affichée dans « Événements » : environ 5 000 personnes
+ *  attendues (affluence estimée côté serveur, salle × popularité Deezer). */
+const BIG_CROWD = 3;
+
+/**
+ * Un salon ou un festival de 4 jours faisait 4 cartes identiques. On les
+ * fusionne en une carte « jusqu'au … » quand les jours se suivent.
+ */
+function groupMultiDay(events: CitySignal[]): EventItem[] {
+  const DAY = 86_400_000;
+  const out: EventItem[] = [];
+  // Dernière carte ouverte par salon/festival : les jours d'un même salon sont
+  // entrecoupés d'autres événements dans la liste triée par date.
+  const open = new Map<string, EventItem>();
+  for (const e of events) {
+    const multi = e.mode === 'salon' || e.mode === 'festival';
+    const key = `${e.place}|${e.title}`;
+    const g = multi ? open.get(key) : undefined;
+    const last = g?.untilDay ?? g?.starts_at;
+    if (g && e.starts_at && last && parisDay(new Date(e.starts_at)) - parisDay(new Date(last)) <= DAY) {
+      g.untilDay = e.starts_at;
+      g.intensity = Math.max(g.intensity, e.intensity);
+      continue;
+    }
+    const item: EventItem = { ...e };
+    out.push(item);
+    if (multi) open.set(key, item);
+  }
+  return out;
+}
+
+const EventRow = React.memo(function EventRow({ s, index }: { s: EventItem; index: number }) {
   const { t, i18n } = useTranslation();
   const start = s.starts_at ? new Date(s.starts_at) : null;
   const days = start ? Math.round((parisDay(start) - parisDay(new Date())) / 86_400_000) : null;
   const dow = start?.toLocaleDateString(i18n.language, { weekday: 'short', timeZone: 'Europe/Paris' }).replace('.', '').toUpperCase();
   const day = start?.toLocaleDateString('fr-FR', { day: 'numeric', timeZone: 'Europe/Paris' });
-  const whenLabel = days == null ? '' : days <= 0 ? t('cityPulse.today', "aujourd'hui")
+  const until = s.untilDay
+    ? t('cityPulse.until', "jusqu'au {{date}}", { date: new Date(s.untilDay).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) })
+    : null;
+  const whenLabel = days == null ? '' : days <= 0 ? (until ?? t('cityPulse.today', "aujourd'hui"))
     : days === 1 ? t('cityPulse.tomorrow', 'demain') : t('cityPulse.inDays', 'dans {{n}} jours', { n: days });
-  const time = s.ends_at && s.starts_at ? hhmm(s.starts_at) : null;
+  // Plage en cours ou à venir : « dans 15 jours · jusqu'au 25 oct. ».
+  const whenFull = until && days != null && days > 0 ? `${whenLabel} · ${until}` : whenLabel;
+  const time = s.ends_at && s.starts_at && !s.untilDay ? hhmm(s.starts_at) : null;
   // Sans heure publiée, on n'affiche rien plutôt qu'un « à confirmer ».
-  const endLabel = s.ends_at ? t('cityPulse.endsAt', 'fin ≈ {{time}}', { time: hhmm(s.ends_at) }) : null;
+  // Affluence attendue plutôt que l'heure de fin : c'est elle qui dit si la
+  // sortie vaut le déplacement. Lue dans le détail serveur (« ≈ 20 300 places »).
+  const crowd = s.detail?.match(/≈\s*([\d\s  ]+)\s*(places|visiteurs|personnes)/)?.[1]?.trim();
+  const crowdLabel = crowd ? t('cityPulse.people', '≈ {{n}} personnes', { n: crowd }) : null;
   // Seul le premier écran s'anime : 100+ cartes animées d'un coup figeaient l'onglet.
   const animated = index < FIRST_SCREEN;
 
@@ -373,7 +416,7 @@ const EventRow = React.memo(function EventRow({ s, index }: { s: CitySignal; ind
             {s.place}{time ? ` · ${time}` : ''}
           </Text>
           <View style={styles.rowLine}>
-            <Text style={styles.eventWhen} numberOfLines={1}>{whenLabel}{endLabel ? ` · ${endLabel}` : ''}</Text>
+            <Text style={styles.eventWhen} numberOfLines={1}>{whenFull}{crowdLabel ? ` · ${crowdLabel}` : ''}</Text>
             <Meter level={s.intensity} delay={420 + index * 60} still={!animated} />
           </View>
         </View>
@@ -430,8 +473,8 @@ export default function CityPulseScreen() {
     const now = Date.now();
     const current = rows.filter(r => isCurrent(r, now));
     const d = current.filter(isDisruption).sort((a, b) => b.intensity - a.intensity);
-    const e = current.filter(r => r.kind === 'event')
-      .sort((a, b) => (a.starts_at ?? '').localeCompare(b.starts_at ?? ''));
+    const e = groupMultiDay(current.filter(r => r.kind === 'event')
+      .sort((a, b) => (a.starts_at ?? '').localeCompare(b.starts_at ?? '')));
     const strongest = d.find(r => r.kind === 'transit_disruption' && r.intensity >= 3) ?? null;
     const last = rows.reduce((m, r) => Math.max(m, Date.parse(r.updated_at)), 0);
     return {
@@ -442,7 +485,9 @@ export default function CityPulseScreen() {
     };
   }, [rows]);
 
-  const list = tab === 0 ? disruptions : events;
+  // Seuls les gros afflux : au-dessous, la sortie ne se voit pas dans la demande.
+  const bigEvents = useMemo(() => events.filter(e => e.intensity >= BIG_CROWD), [events]);
+  const list: EventItem[] = tab === 0 ? disruptions : bigEvents;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -452,7 +497,7 @@ export default function CityPulseScreen() {
           accessibilityLabel={t('common.back', 'Retour')}>
           <Feather name="chevron-left" size={30} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={2}>{t('cityPulse.title', 'Événements et perturbations')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={2}>{t('cityPulse.title', 'Afflux et événements')}</Text>
       </AnimatedEntrance>
 
       <AnimatedEntrance step={1}>
@@ -468,7 +513,7 @@ export default function CityPulseScreen() {
 
       <AnimatedEntrance step={2} style={{ paddingHorizontal: space.xl }}>
         <Tabs value={tab} onChange={setTab}
-          labels={[t('cityPulse.tabDisruptions', 'Perturbations'), t('cityPulse.tabEvents', 'Événements')]} />
+          labels={[t('cityPulse.tabDisruptions', 'Afflux'), t('cityPulse.tabEvents', 'Événements')]} />
       </AnimatedEntrance>
 
       {loading ? (
@@ -508,6 +553,7 @@ export default function CityPulseScreen() {
                 </Text>
               </AnimatedEntrance>
 
+
               {list.length === 0 && !failed ? (
                 <AnimatedEntrance step={4} style={styles.empty}>
                   <Feather name="clock" size={28} color={colors.textMuted} />
@@ -539,7 +585,7 @@ export default function CityPulseScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FIELD_TOP },
   flex1: { flex: 1 },
-  ongoing: { color: DANGER_SOFT, marginLeft: 6 },
+  ongoing: { color: ALERT_TINT, marginLeft: 6 },
   trainLate: { color: '#FFB547', fontWeight: '800' },
   eventBody: { flex: 1, gap: 4 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xl, paddingVertical: space.md },
@@ -582,12 +628,12 @@ const styles = StyleSheet.create({
 
   alert: {
     flexDirection: 'row', gap: space.md, padding: space.lg, borderRadius: radius.lg, overflow: 'hidden',
-    backgroundColor: 'rgba(255,77,77,0.10)', borderWidth: strokeWidth.control, borderColor: stroke.alert,
+    backgroundColor: 'rgba(255,181,71,0.08)', borderWidth: strokeWidth.control, borderColor: 'rgba(255,181,71,0.35)',
   },
-  alertGlow: { borderRadius: radius.lg, borderWidth: 1.5, borderColor: 'rgba(255,77,77,0.7)' },
+  alertGlow: { borderRadius: radius.lg, borderWidth: 1.5, borderColor: 'rgba(255,181,71,0.7)' },
   alertIcon: {
     width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,77,77,0.18)',
+    backgroundColor: 'rgba(255,181,71,0.16)',
   },
   alertTitle: { color: colors.textMain, fontSize: 16, fontWeight: '700', flexShrink: 1 },
   alertText: { color: '#C9D1CD', fontSize: 14, lineHeight: 20, marginTop: 4 },
