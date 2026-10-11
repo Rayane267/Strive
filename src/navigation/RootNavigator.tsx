@@ -58,7 +58,12 @@ const ONBOARDING_SEEN_KEY = '@strive_has_seen_onboarding';
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
   const { t } = useTranslation();
-  const [tutorialChecked, setTutorialChecked] = useState(false);
+  // Compte pour lequel les deux clés ont été lues. Un simple booléen ne suffit
+  // pas : posé à vrai dès l'écran de connexion, il laissait passer le premier
+  // rendu d'un compte tout juste créé AVANT la lecture d'AsyncStorage. La pile
+  // démarrait alors sur MainTabs, et l'onboarding / le tutoriel ajoutés juste
+  // après restaient enregistrés sans jamais être affichés.
+  const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
   const [showTutorialFirst, setShowTutorialFirst] = useState(false);
   // Le splash n'est retiré qu'une fois son animation jouée en entier.
   const [splashDone, setSplashDone] = useState(false);
@@ -68,25 +73,34 @@ const RootNavigator = () => {
   // depuis le Profil sans redemander les chiffres.
   const [showOnboardingFirst, setShowOnboardingFirst] = useState(false);
 
+  const userId = user?.id ?? null;
+  const hasFirstName = !!profile?.first_name;
+
   useEffect(() => {
-    if (!user || !profile?.first_name) {
-      setTutorialChecked(true);
-      return;
-    }
+    if (!userId || !hasFirstName) return;
+    let alive = true;
     Promise.all([
       AsyncStorage.getItem(ONBOARDING_SEEN_KEY),
       AsyncStorage.getItem(TUTORIAL_SEEN_KEY),
-    ]).then(([onb, tuto]) => {
-      if (onb !== '1') setShowOnboardingFirst(true);
-      if (tuto !== '1') setShowTutorialFirst(true);
-      setTutorialChecked(true);
-    });
-  }, [user, profile?.first_name]);
+    ])
+      .then(([onb, tuto]) => {
+        if (!alive) return;
+        setShowOnboardingFirst(onb !== '1');
+        setShowTutorialFirst(tuto !== '1');
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setCheckedUserId(userId);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId, hasFirstName]);
 
   const bootPending =
     loading ||
     (user && profile === null && !profileError) ||
-    (user && profile?.first_name && !tutorialChecked);
+    (user && hasFirstName && checkedUserId !== userId);
 
   if (!splashDone || bootPending) {
     return (
