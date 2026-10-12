@@ -1,0 +1,8 @@
+# Le projet Vercel a pour Root Directory "web" : seul ce dossier part au déploiement.
+/*
+!/web
+/web/node_modules
+/web/.next
+/web/.vercel
+/web/.env*
+/web/tsconfig.tsbuildinfo

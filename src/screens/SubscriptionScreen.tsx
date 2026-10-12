@@ -71,7 +71,7 @@ const TRIAL_DAYS = 7;
 /// Le store reste la source de vérité ; ces montants ne servent QUE quand il ne
 /// répond pas, et `money()` les habille alors de la devise du marché.
 const FALLBACK_AMOUNT: Record<SellTier, Record<Cycle, number>> = {
-  plus:    { monthly: 8.99,  yearly: 79.99 },
+  plus:    { monthly: 6.99,  yearly: 69.99 },
   premium: { monthly: 19.99, yearly: 179.99 },
 };
 
@@ -169,8 +169,8 @@ const SubscriptionScreen = () => {
   ///
   /// Le bandeau vert et la coche suivent la selection : le defaut decide donc
   /// de la carte que l'ecran met en avant. On garde le mensuel, dont le ticket
-  /// d'entree est bien plus facile a accepter pour un chauffeur — 8,99 EUR
-  /// contre 79,99 EUR d'un coup. La carte annuelle garde son economie affichee
+  /// d'entree est bien plus facile a accepter pour un chauffeur — 6,99 EUR
+  /// contre 69,99 EUR d'un coup. La carte annuelle garde son economie affichee
   /// pour ceux qui la cherchent, sans que l'ecran pousse dessus.
   const [cycle, setCycle] = useState<Cycle>('monthly');
   const [sellTier, setSellTier] = useState<SellTier>('plus');
@@ -313,7 +313,7 @@ const SubscriptionScreen = () => {
 
   /// La ligne sous le prix : le mensuel ramené à la SEMAINE, l'annuel ramené
   /// au MOIS. Chaque carte parle dans l'unité qui la rend petite et lisible —
-  /// « 2,07 € par semaine » sous 8,99 €, « 6,67 €/mois » sous 79,99 €, ce qui
+  /// « 1,61 € par semaine » sous 6,99 €, « 5,83 €/mois » sous 69,99 €, ce qui
   /// se compare directement au mensuel d'à côté. Calculé depuis `rawPrice` et
   /// formaté dans la devise du store — donc juste hors zone euro aussi.
   const equivText = (cy: Cycle): string => {

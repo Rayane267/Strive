@@ -48,6 +48,7 @@ import { hapticLight } from '../utils/haptics';
 import { resetSignupCounters, getOrCreateDeviceId } from '../utils/deviceId';
 import { fetchDeviceScanUsage } from '../services/subscriptionService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isHotZoneSimulationOn, setHotZoneSimulation } from '../services/simulatedZones';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
 import AnimatedEntrance from '../components/AnimatedEntrance';
@@ -166,6 +167,17 @@ const DiagnosticsScreen = () => {
     ]);
     Alert.alert(t('diagnostics.replayOnboarding'), t('diagnostics.replayDone'));
   }, [t]);
+
+  /** Zones chaudes inventées sur la carte en direct, sur cet appareil seulement. */
+  const [simZones, setSimZones] = useState(false);
+  useEffect(() => {
+    isHotZoneSimulationOn().then(setSimZones);
+  }, []);
+  const toggleSimZones = useCallback(async (on: boolean) => {
+    hapticLight();
+    setSimZones(on);
+    await setHotZoneSimulation(on);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -306,6 +318,22 @@ const DiagnosticsScreen = () => {
           {Platform.OS !== 'ios' && (
             <Text style={styles.note}>{t('diagnostics.androidNote')}</Text>
           )}
+        </View>
+
+        {/* ── Zones chaudes simulées ── */}
+        <View style={styles.card}>
+          <View style={styles.switchRow}>
+            <View style={styles.switchTexts}>
+              <Text style={styles.cardTitle}>{t('diagnostics.simZonesTitle')}</Text>
+              <Text style={styles.cardSub}>{t('diagnostics.simZonesSub')}</Text>
+            </View>
+            <Switch
+              value={simZones}
+              onValueChange={toggleSimZones}
+              trackColor={{ false: 'rgba(255,255,255,0.14)', true: 'rgba(0,230,118,0.4)' }}
+              thumbColor={simZones ? colors.primary : '#8F9B96'}
+            />
+          </View>
         </View>
 
         {/* ── Trace Live Activity ── */}

@@ -2,7 +2,7 @@
 
 🇫🇷 Français · [🇬🇧 English](./PRIVACY_POLICY.en.md)
 
-**Dernière mise à jour : 22 septembre 2026**
+**Dernière mise à jour : 5 octobre 2026**
 
 ---
 
@@ -41,7 +41,11 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 **2.3 — Données relatives aux courses scannées**
 - Plateforme, tarif proposé, distance, durée, statut (acceptée / refusée), horodatage ;
 - Adresses de prise en charge et de destination de la course, lorsqu'elles figurent dans l'offre, utilisées pour calculer la distance et la durée réelles et alimenter votre historique et vos statistiques ;
+- Coordonnées GPS approximatives (à ~100 m près) des points de départ et d'arrivée, déduites de ces adresses ;
 - Sessions de conduite (début, fin, durée).
+
+**2.3 bis — Carte communautaire (abonnés Plus)**
+- Vos courses scannées alimentent, **de façon anonyme et agrégée**, la carte de la demande en direct visible par les abonnés Plus : les courses scannées au cours des dernières minutes y apparaissent sous forme de **zones approximatives** dont l'intensité reflète leur nombre. **Aucune adresse, aucun identifiant, aucun horaire ni aucun chiffre n'est montré aux autres chauffeurs**, et une zone n'apparaît que lorsqu'elle regroupe plusieurs courses provenant de plusieurs chauffeurs différents. Ce traitement repose sur notre **intérêt légitime** (art. 6.1.f) ; **vous pouvez vous y opposer à tout moment** en écrivant à **contact@striveapp.fr**.
 
 **2.4 — Données d'abonnement**
 - Statut et type d'abonnement, crédits de Scans, identifiant technique transmis par notre prestataire de gestion d'abonnement. **Nous n'avons accès à aucune donnée bancaire** : les paiements sont gérés par l'App Store ou Google Play.
@@ -67,6 +71,7 @@ Nous appliquons le principe de **minimisation** : nous ne traitons que les donn�
 | Finalité | Base légale (RGPD) |
 |---|---|
 | Fournir le Service (scan, verdict, historique, statistiques, abonnement) | Exécution du contrat (art. 6.1.b) |
+| Carte communautaire anonyme et agrégée | Intérêt légitime (art. 6.1.f), avec droit d'opposition (art. 21) |
 | Améliorer la fiabilité de l'OCR (y compris la capture de diagnostic), prévenir la fraude et les abus, garantir la sécurité | Intérêt légitime (art. 6.1.f), avec droit d'opposition (art. 21) |
 | Notifications push | Consentement (art. 6.1.a), révocable à tout moment |
 | Respect de nos obligations légales (comptables, demandes légitimes) | Obligation légale (art. 6.1.c) |
@@ -93,6 +98,7 @@ Certains prestataires (notamment Google et Sentry) peuvent traiter des données 
 ## 7. Durées de conservation
 
 - **Compte, profil, courses (adresses incluses), sessions** : conservés tant que votre compte est actif, afin de vous fournir votre historique et vos statistiques ; supprimés lors de la suppression du compte ;
+- **Coordonnées GPS des courses** : effacées au bout de douze (12) mois ;
 - **Captures de diagnostic** : trente (30) jours maximum ;
 - **Télémétrie non nominative** : conservée sous forme agrégée à des fins de suivi qualité ;
 - **Rapports d'erreurs (Sentry)** : selon la durée de rétention du service (généralement quatre-vingt-dix (90) jours).

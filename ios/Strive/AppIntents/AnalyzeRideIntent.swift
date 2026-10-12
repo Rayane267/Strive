@@ -1000,6 +1000,8 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     ]
     if let pickup = result.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = result.scan.destinationAddress { body["destinationAddress"] = dest }
+    if let p = result.scan.pickupPoint { body["pickupLat"] = p.lat; body["pickupLon"] = p.lon }
+    if let d = result.scan.destPoint { body["destLat"] = d.lat; body["destLon"] = d.lon }
 
     // Diagnostic parser : blocs OCR joints quand le parsing local n'a pas suffi.
     //

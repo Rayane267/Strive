@@ -7,7 +7,7 @@
 // Module pur : il reçoit le flux déjà décodé (FeedMessage.toObject), le
 // décodage protobuf est dans index.ts.
 
-import { decodeEntities, type SignalRow } from "./idfm.ts";
+import { decodeEntities, isMajorDisruption, type SignalRow } from "./idfm.ts";
 
 export const AMP_URL = "https://api-mobilite.rbgl.fr/api/v1/mamp/getServiceAlerts";
 
@@ -61,6 +61,9 @@ export function ampSignals(
   for (const e of feed.entity ?? []) {
     const a = e.alert;
     if (!a || !EFFECTS.has(a.effect ?? "")) continue;
+    // Même règle qu'à Paris, sauf « plus de service » déclaré par l'opérateur.
+    if (a.effect !== "NO_SERVICE" && a.cause !== "STRIKE"
+        && !isMajorDisruption(fr(a.headerText), fr(a.descriptionText))) continue;
 
     const lines = [...new Map(
       (a.informedEntity ?? [])

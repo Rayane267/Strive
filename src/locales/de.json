@@ -37,6 +37,7 @@
     "dashboard": "Start",
     "history": "Verlauf",
     "analytics": "Statistik",
+    "map": "Karte",
     "shop": "Shop",
     "profile": "Profil"
   },
@@ -1193,7 +1194,9 @@
     "replayHint": "Öffnet den Geschenk-Bildschirm, ohne die Datenbank anzurühren, so oft wie nötig. Der zweite Knopf setzt Onboarding und Anleitung zurück – starte die App danach neu.",
     "replayGift": "Den Bildschirm der geschenkten Scans ansehen",
     "replayOnboarding": "Onboarding zurücksetzen",
-    "replayDone": "Erledigt. Schliess die App vollständig und öffne sie neu, um den Ablauf erneut zu sehen."
+    "replayDone": "Erledigt. Schliess die App vollständig und öffne sie neu, um den Ablauf erneut zu sehen.",
+    "simZonesTitle": "Hotspots simulieren",
+    "simZonesSub": "Ersetzt die Live-Karte durch erfundene Nachfrage rund um die Ansicht. Nur auf diesem Gerät: Es wird nichts gesendet, andere Fahrer sehen nichts."
   },
   "welcomeGift": {
     "body": "Innert {{days}} Tagen zu nutzen, zusätzlich zu deinen täglichen Scans.",
@@ -1203,36 +1206,32 @@
     "unit": "geschenkte Scans",
     "a11y": "{{n}} geschenkte Scans"
   },
-  "bestHours": {
-    "title": "Beste Zeitfenster",
-    "menuTitle": "Beste Zeitfenster",
-    "cardTitle": "Deine besten Zeitfenster",
-    "cardSub": "Die Stunden, in denen es klingelt, und jene, in denen es zahlt",
-    "lockTitle": "Premium vorbehalten",
-    "lockSub": "Das Raster deiner letzten 90 Tage, Stunde für Stunde: wann dein Telefon am meisten klingelt und wann deine Fahrten am besten zahlen. Es braucht Monate an Verlauf, um etwas auszusagen.",
-    "lockCta": "Premium entdecken",
-    "metric": {
-      "offers": "Es klingelt",
-      "hourlyRate": "Es zahlt"
-    },
-    "hint": {
-      "offers": "Die Stunden, in denen dein Telefon am meisten geklingelt hat. Abgelehnte Fahrten zählen mit: sie sagen, dass Arbeit da war.",
-      "hourlyRate": "Was deine angenommenen Fahrten wirklich gebracht haben, Treibstoff abgezogen, bezogen auf die Zeit in Fahrt."
-    },
-    "slot": "{{day}} {{hour}}–{{nextHour}} Uhr",
-    "detailOffers_one": "{{count}} Fahrt",
-    "detailOffers_other": "{{count}} Fahrten",
-    "perHour": "/Std.",
-    "noAccepted": "keine angenommene Fahrt",
-    "tapHint": "Tippe auf ein Feld, um das Detail des Zeitfensters zu sehen.",
-    "top": {
-      "offers": "Deine meistbeschäftigten Zeitfenster",
-      "hourlyRate": "Deine rentabelsten Zeitfenster"
-    },
-    "notEnoughSlots": "Noch kein Zeitfenster erreicht {{min}} Fahrten — darunter beruht eine Rangliste auf nichts.",
+  "zones": {
+    "title": "Karte deiner Fahrten",
+    "zoneFallback": "Ausgewählte Zone",
+    "perHour": "{{amount}}/Std.",
+    "perDistance": "{{amount}}/{{unit}}",
     "empty": "Noch nicht genug Daten",
-    "emptyHint": "Es braucht etwa {{min}} gescannte Fahrten, damit das Raster etwas aussagt. Du bist bei {{current}}.",
-    "footnote": "Über die letzten {{days}} Tage · {{rides}} gescannte Fahrten. Ablehnungen zählen beim Volumen, nie beim Stundensatz."
+    "emptyHint": "Scanne ein paar Fahrten: Jeder Abholort landet auf der Karte, und deine Zonen entstehen mit deinen Scans.",
+    "modeMine": "Meine Fahrten",
+    "lockedTitle": "Nachfrage live",
+    "lockedBody": "Sieh in Echtzeit, wo unsere Strive-Fahrer die meisten Fahrten scannen.",
+    "lockedCta": "Zu Plus wechseln",
+    "modeLive": "Live",
+    "sheetTitle": "Hohe Nachfrage",
+    "sheetSubtitle": "Gescannt von unseren Strive-Fahrern",
+    "sheetNavigate": "Navigation starten",
+    "sheetInfo": "Die Aktivitätskarte zeigt die Gebiete, in denen unsere Strive-Fahrer gerade die meisten Fahrten scannen. Je kräftiger die Farbe, desto mehr Fahrten wurden gescannt.",
+    "zoneSheetSubtitle": "Deine Fahrten · letzte {{days}} Tage",
+    "statRides": "Fahrten",
+    "statHourly": "Stundensatz",
+    "statKm": "Kilometersatz",
+    "simulated": "Simulation",
+    "sheetHourCount_one": "{{count}} Fahrt in der letzten Stunde gescannt",
+    "sheetHourCount_other": "{{count}} Fahrten in der letzten Stunde gescannt",
+    "verdictGood": "Lohnende Zone",
+    "verdictMid": "Durchschnittliche Zone",
+    "verdictBad": "Zone meiden"
   },
   "rideNetwork": {
     "title": "Netzwerk",

@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTabBarInset } from '../navigation/useTabBarInset';
 import {
   Animated,
   View,
@@ -281,7 +281,7 @@ const HistoryScreen = () => {
   const { t, i18n } = useTranslation();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { user, profile } = useAuth();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarInset();
   const navigation = useNavigation<any>();
 
   const planTier = getEffectivePlanTier(profile);

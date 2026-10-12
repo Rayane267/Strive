@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Toast, useToast } from '../components/Toast';
 import BrandLoader from '../components/BrandLoader';
 import { supabase } from '../services/supabase';
+import { setPendingAppleName } from '../services/appleName';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { sha256 } from 'js-sha256';
 import { colors } from '../theme/colors';
@@ -309,25 +310,25 @@ const AuthScreen = () => {
       });
       const { identityToken, fullName, nonce } = appleAuthRequestResponse;
       if (identityToken) {
+        setPendingAppleName({
+          givenName: fullName?.givenName ?? '',
+          familyName: fullName?.familyName ?? '',
+        });
         const { data, error } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
           token: identityToken,
           nonce: nonce ?? rawNonce,
         });
         if (error) throw error;
-        if (data.user) {
-          const isNewUser =
-            Date.now() - new Date(data.user.created_at).getTime() < 60_000;
-          if (isNewUser) {
-            const displayName = [fullName?.givenName, fullName?.familyName]
-              .filter(Boolean)
-              .join(' ');
-            if (displayName) {
-              await supabase.auth.updateUser({
-                data: { full_name: displayName },
-              });
-            }
-          }
+        // Apple ne livre le nom qu'à la première autorisation : s'il est là, on
+        // l'écrit, sans fenêtre de temps sur l'âge du compte.
+        const displayName = [fullName?.givenName, fullName?.familyName]
+          .filter(Boolean)
+          .join(' ');
+        if (data.user && displayName) {
+          await supabase.auth.updateUser({
+            data: { full_name: displayName },
+          });
         }
       }
     } catch (error: any) {

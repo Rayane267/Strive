@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Politique de Confidentialité</h1>
-      <p className="!text-faint text-sm">Dernière mise à jour : 22 septembre 2026</p>
+      <p className="!text-faint text-sm">Dernière mise à jour : 5 octobre 2026</p>
 
       <p>
         La présente Politique décrit comment l&apos;éditeur de l&apos;application Strive
@@ -58,7 +58,12 @@ export default function PrivacyPage() {
       <ul>
         <li>Plateforme, tarif, distance, durée, statut (acceptée / refusée), horodatage ;</li>
         <li>Adresses de prise en charge et de destination présentes dans l&apos;offre, pour calculer la distance/durée réelles et alimenter votre historique ;</li>
+        <li>Coordonnées GPS approximatives (à ~100 m près) des points de départ et d&apos;arrivée, déduites de ces adresses ;</li>
         <li>Sessions de conduite (début, fin, durée).</li>
+      </ul>
+      <h3>Carte communautaire (abonnés Plus)</h3>
+      <ul>
+        <li>Vos courses scannées alimentent, <strong>de façon anonyme et agrégée</strong>, la carte de la demande en direct visible par les abonnés Plus : les courses scannées au cours des dernières minutes y apparaissent sous forme de <strong>zones approximatives</strong> dont l&apos;intensité reflète leur nombre. <strong>Aucune adresse, aucun identifiant, aucun horaire ni aucun chiffre n&apos;est montré aux autres chauffeurs</strong>, et une zone n&apos;apparaît que lorsqu&apos;elle regroupe plusieurs courses provenant de plusieurs chauffeurs différents. Vous pouvez vous y opposer en écrivant à <strong>contact@striveapp.fr</strong>.</li>
       </ul>
       <h3>Abonnement</h3>
       <ul>
@@ -85,6 +90,7 @@ export default function PrivacyPage() {
       <h2>4. Finalités et bases légales</h2>
       <ul>
         <li><strong>Fournir le Service</strong> (scan, verdict, historique, statistiques, abonnement) — exécution du contrat.</li>
+        <li><strong>Carte communautaire anonyme et agrégée</strong> — intérêt légitime, avec droit d&apos;opposition.</li>
         <li><strong>Fiabiliser l&apos;OCR, prévenir la fraude et les abus, assurer la sécurité</strong> — intérêt légitime.</li>
         <li><strong>Notifications push et capture de diagnostic (bêta)</strong> — consentement, révocable à tout moment.</li>
         <li><strong>Obligations légales</strong> (comptables, demandes légitimes).</li>
@@ -113,6 +119,7 @@ export default function PrivacyPage() {
       <h2>7. Durées de conservation</h2>
       <ul>
         <li><strong>Compte, profil, courses (adresses incluses), sessions</strong> : tant que le compte est actif, pour vous fournir votre historique et vos statistiques ; supprimés à la suppression du compte ;</li>
+        <li><strong>Coordonnées GPS des courses</strong> : effacées au bout de 12 mois ;</li>
         <li><strong>Captures de diagnostic (bêta)</strong> : 30 jours maximum ;</li>
         <li><strong>Télémétrie non nominative</strong> : conservée sous forme agrégée ;</li>
         <li><strong>Rapports d&apos;erreurs (Sentry)</strong> : selon la rétention du service (généralement 90 jours).</li>

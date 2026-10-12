@@ -86,6 +86,9 @@ object TomTomService {
         // Adresses canoniques TomTom (affichage propre vs texte OCR bruité).
         val pickupFormatted: String? = null,
         val destFormatted: String? = null,
+        // Points géocodés, gardés pour la carte des zones (Stats).
+        val pickupCoords: Coords? = null,
+        val destCoords: Coords? = null,
     )
 
     // Seuil de confiance sous lequel on retente avec des variantes d'adresse
@@ -165,6 +168,8 @@ object TomTomService {
                             routeOutcome.route.copy(
                                 pickupFormatted = from.formatted,
                                 destFormatted = to.formatted,
+                                pickupCoords = from.coords,
+                                destCoords = to.coords,
                             )
                         )
                     )

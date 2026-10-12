@@ -8,10 +8,10 @@ export default function Footer() {
           <div className="max-w-xs">
             <Logo />
             <p className="mt-5 text-sm leading-relaxed text-muted">
-              L&apos;instrument du chauffeur VTC. Sache avant d&apos;accepter, décide vite, gagne plus.
+              L&apos;instrument du chauffeur VTC. Analyse avant d&apos;accepter, décide vite, gagne plus.
             </p>
             <p className="mt-6 font-mono text-[11px] uppercase tracking-widest text-faint">
-              Sache · Décide · Gagne
+              Analyse · Décide · Gagne
             </p>
           </div>
 

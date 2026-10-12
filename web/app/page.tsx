@@ -44,7 +44,7 @@ export default function Home() {
           <div className="load-up" style={{ animationDelay: '40ms' }}>
             <span className="glass inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-[12px] tracking-wide text-muted">
               <span className="live-dot" />
-              <span className="text-fg">Sache</span> · Décide · Gagne
+              <span className="text-fg">Analyse</span> · Décide · Gagne
             </span>
           </div>
 

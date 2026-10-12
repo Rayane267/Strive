@@ -22,8 +22,7 @@ export default function LegalNoticePage() {
         <li>Siège social : 5 allée de la Caravelle, 94430 Chennevières-sur-Marne, France ;</li>
         <li>SIREN : 988 905 394 ;</li>
         <li>
-          Contact : <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a>
-          {' '}(téléphone : À COMPLÉTER) ;
+          Contact : <a href="mailto:contact@striveapp.fr">contact@striveapp.fr</a> ;
         </li>
         <li>TVA non applicable, article 293 B du Code général des impôts.</li>
       </ul>

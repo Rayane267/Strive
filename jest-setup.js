@@ -77,6 +77,12 @@ jest.mock('@react-native-community/blur', () => ({
 
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
+jest.mock('react-native-maps', () => ({
+  __esModule: true,
+  default: 'MapView',
+  Polygon: 'Polygon',
+}));
+
 // react-native-device-info : mock officiel fourni par la lib (valeurs synchrones
 // déterministes pour getVersion/getBuildNumber utilisés par src/config/appInfo).
 jest.mock('react-native-device-info', () =>
@@ -109,3 +115,13 @@ NativeModules.ScanBridge = {
   addListener: jest.fn(),
   removeListeners: jest.fn(),
 };
+
+// Barre d'onglets native iOS (Liquid Glass) : pas de vue native sous Jest.
+// Le navigateur JS de React Navigation la remplace, avec la même API.
+jest.mock('@bottom-tabs/react-navigation', () => ({
+  createNativeBottomTabNavigator:
+    jest.requireActual('@react-navigation/bottom-tabs').createBottomTabNavigator,
+}));
+jest.mock('react-native-bottom-tabs', () => ({
+  useBottomTabBarHeight: () => 0,
+}));

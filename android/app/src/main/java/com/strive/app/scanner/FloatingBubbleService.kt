@@ -694,6 +694,10 @@ class FloatingBubbleService : Service() {
                 // bruité (ex: "All AV. … Çueue") — fallback OCR si absentes.
                 pickupAddress = route.pickupFormatted ?: ocr.pickupAddress,
                 destinationAddress = route.destFormatted ?: ocr.destinationAddress,
+                pickupLat = route.pickupCoords?.lat?.let(OcrParser::roundedPoint),
+                pickupLon = route.pickupCoords?.lon?.let(OcrParser::roundedPoint),
+                destLat = route.destCoords?.lat?.let(OcrParser::roundedPoint),
+                destLon = route.destCoords?.lon?.let(OcrParser::roundedPoint),
             )
             mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
             ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)

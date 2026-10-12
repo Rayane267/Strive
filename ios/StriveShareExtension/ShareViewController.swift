@@ -646,7 +646,9 @@ class ShareViewController: UIViewController {
         }
         let refined = result.copy(
           distanceKm: route.distanceKm, durationMin: route.durationMin,
-          pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted
+          pickupAddress: route.pickupFormatted, destinationAddress: route.destFormatted,
+          pickupPoint: route.pickupCoords.map { GeoPoint(lat: $0.lat, lon: $0.lon) },
+          destPoint: route.destCoords.map { GeoPoint(lat: $0.lat, lon: $0.lon) }
         )
         let final = ScanProcessor.shared.computeFinal(scan: refined, routeStatus: .ok)
         self.incrementScanCount()
@@ -755,6 +757,8 @@ class ShareViewController: UIViewController {
     #endif
     if let pickup = final.scan.pickupAddress { body["pickupAddress"] = pickup }
     if let dest = final.scan.destinationAddress { body["destinationAddress"] = dest }
+    if let p = final.scan.pickupPoint { body["pickupLat"] = p.lat; body["pickupLon"] = p.lon }
+    if let d = final.scan.destPoint { body["destLat"] = d.lat; body["destLon"] = d.lon }
 
     // Diagnostic parser : blocs OCR joints UNIQUEMENT quand une adresse manque —
     // seul cas exploitable pour corriger l'heuristique, et seul cas où le JS

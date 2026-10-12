@@ -194,7 +194,9 @@ final class ScanProcessor {
             distanceKm: route.distanceKm,
             durationMin: route.durationMin,
             pickupAddress: route.pickupFormatted,
-            destinationAddress: route.destFormatted
+            destinationAddress: route.destFormatted,
+            pickupPoint: route.pickupCoords.map { GeoPoint(lat: $0.lat, lon: $0.lon) },
+            destPoint: route.destCoords.map { GeoPoint(lat: $0.lat, lon: $0.lon) }
           )
           gate.fire(self.computeFinal(scan: updated, routeStatus: .ok))
         }
@@ -583,6 +585,14 @@ enum RideUploader {
     }
     if let d = final.scan.destinationAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
       body["destination_address"] = d
+    }
+    if let p = final.scan.pickupPoint {
+      body["pickup_lat"] = p.lat
+      body["pickup_lon"] = p.lon
+    }
+    if let d = final.scan.destPoint {
+      body["dest_lat"] = d.lat
+      body["dest_lon"] = d.lon
     }
 
     guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return }

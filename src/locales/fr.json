@@ -37,6 +37,7 @@
     "dashboard": "Accueil",
     "history": "Historique",
     "analytics": "Stats",
+    "map": "Carte",
     "shop": "Boutique",
     "profile": "Profil"
   },
@@ -1185,7 +1186,9 @@
     "replayHint": "Ouvre l'écran du cadeau sans toucher à la base, autant de fois que nécessaire. Le second bouton réarme l'onboarding et le tutoriel — redémarre l'app ensuite.",
     "replayGift": "Voir l’écran des scans offerts",
     "replayOnboarding": "Réarmer l'onboarding",
-    "replayDone": "C'est fait. Ferme complètement l'app et relance-la pour revoir le parcours."
+    "replayDone": "C'est fait. Ferme complètement l'app et relance-la pour revoir le parcours.",
+    "simZonesTitle": "Simuler des zones chaudes",
+    "simZonesSub": "Remplace le direct de la carte par une demande inventée autour de la vue. Sur cet appareil seulement : rien n'est envoyé, les autres chauffeurs ne voient rien."
   },
   "welcomeGift": {
     "body": "À utiliser dans les {{days}} jours, en plus de vos scans quotidiens.",
@@ -1195,36 +1198,32 @@
     "unit": "scans offerts",
     "a11y": "{{n}} scans offerts"
   },
-  "bestHours": {
-    "title": "Meilleurs créneaux",
-    "menuTitle": "Meilleurs créneaux",
-    "cardTitle": "Vos meilleurs créneaux",
-    "cardSub": "Les heures où ça sonne, et celles où ça paie",
-    "lockTitle": "Réservé à Premium",
-    "lockSub": "La grille de vos 90 derniers jours, heure par heure : quand votre téléphone sonne le plus, et quand vos courses rapportent le mieux. Elle demande des mois d'historique pour dire quelque chose.",
-    "lockCta": "Découvrir Premium",
-    "metric": {
-      "offers": "Ça sonne",
-      "hourlyRate": "Ça paie"
-    },
-    "hint": {
-      "offers": "Les heures où votre téléphone a le plus sonné. Les courses refusées comptent : elles disent que le travail était là.",
-      "hourlyRate": "Ce que vos courses acceptées ont réellement rapporté, carburant déduit, ramené au temps passé en course."
-    },
-    "slot": "{{day}} {{hour}}h–{{nextHour}}h",
-    "detailOffers_one": "{{count}} course",
-    "detailOffers_other": "{{count}} courses",
-    "perHour": "/h",
-    "noAccepted": "aucune course acceptée",
-    "tapHint": "Touchez une case pour voir le détail du créneau.",
-    "top": {
-      "offers": "Vos créneaux les plus chargés",
-      "hourlyRate": "Vos créneaux les plus rentables"
-    },
-    "notEnoughSlots": "Aucun créneau n'atteint encore {{min}} courses — en dessous, un classement ne repose sur rien.",
+  "zones": {
+    "title": "Carte de vos courses",
+    "zoneFallback": "Zone sélectionnée",
+    "perHour": "{{amount}}/h",
+    "perDistance": "{{amount}}/{{unit}}",
     "empty": "Pas encore assez de données",
-    "emptyHint": "Il faut environ {{min}} courses scannées pour que la grille veuille dire quelque chose. Vous en êtes à {{current}}.",
-    "footnote": "Sur les {{days}} derniers jours · {{rides}} courses scannées. Les refus comptent dans le volume, jamais dans le taux horaire."
+    "emptyHint": "Scannez quelques courses : chaque point de départ se place sur la carte et vos zones se dessinent au fil des scans.",
+    "modeMine": "Mes courses",
+    "lockedTitle": "La demande en direct",
+    "lockedBody": "Voyez en temps réel où nos chauffeurs Strive scannent le plus de courses.",
+    "lockedCta": "Passer à Plus",
+    "modeLive": "En direct",
+    "sheetTitle": "Forte demande",
+    "sheetSubtitle": "Scannée par nos chauffeurs Strive",
+    "sheetNavigate": "Lancer la navigation",
+    "sheetInfo": "La carte d'activité met en évidence les zones où nos chauffeurs Strive scannent le plus de courses en ce moment. Plus la couleur est intense, plus il y a de courses scannées.",
+    "zoneSheetSubtitle": "Vos courses · {{days}} derniers jours",
+    "statRides": "Courses",
+    "statHourly": "Taux horaire",
+    "statKm": "Taux km",
+    "simulated": "Simulation",
+    "sheetHourCount_one": "{{count}} course scannée dans l'heure",
+    "sheetHourCount_other": "{{count}} courses scannées dans l'heure",
+    "verdictGood": "Zone rentable",
+    "verdictMid": "Zone moyenne",
+    "verdictBad": "Zone à éviter"
   },
   "rideNetwork": {
     "title": "Réseau",
@@ -1367,12 +1366,6 @@
     "calmDisruptions": "Aucune perturbation ni vague de trains notable à {{city}}.",
     "calmEvents": "Aucun grand événement prévu à {{city}} dans les 2 mois.",
     "updated": "Mis à jour il y a {{n}} min",
-    "countTransit_one": "{{count}} perturbation",
-    "countTransit_other": "{{count}} perturbations",
-    "countTrains_one": "{{count}} vague de trains",
-    "countTrains_other": "{{count}} vagues de trains",
-    "countEvents_one": "{{count}} événement à venir",
-    "countEvents_other": "{{count}} événements à venir",
     "allArrivals": "Arrivées grandes lignes · 3 prochaines heures",
     "period": "Du {{from}} au {{to}}",
     "since": "Depuis {{from}}",

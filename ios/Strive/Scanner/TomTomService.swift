@@ -105,6 +105,9 @@ final class TomTomService {
     /// Adresses canoniques renvoyées par TomTom (affichage propre vs texte OCR bruité).
     let pickupFormatted: String?
     let destFormatted: String?
+    /// Points géocodés, gardés pour la carte des zones (Stats).
+    var pickupCoords: Coords? = nil
+    var destCoords: Coords? = nil
   }
 
   /// Calcule le trajet entre 2 adresses texte. L'issue dit POURQUOI quand il
@@ -156,7 +159,8 @@ final class TomTomService {
         // Enrichit avec les adresses canoniques TomTom → affichage propre.
         let enriched = RouteResult(
           distanceKm: route.distanceKm, durationMin: route.durationMin,
-          pickupFormatted: from.formatted, destFormatted: to.formatted
+          pickupFormatted: from.formatted, destFormatted: to.formatted,
+          pickupCoords: from.coords, destCoords: to.coords
         )
         DispatchQueue.main.async { completion(.ok(enriched)) }
       case let other:

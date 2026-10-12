@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { Toast, useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import { claimSignupSlot } from '../utils/deviceId';
+import { getPendingAppleName, setPendingAppleName } from '../services/appleName';
 import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
@@ -79,6 +80,10 @@ export default function ProfileSetupScreen() {
   const [dobMonth, setDobMonth]       = useState('');
   const [dobYear, setDobYear]         = useState('');
   const [avatarUrl, setAvatarUrl]     = useState('');
+  // Compte Sign in with Apple : le nom ne se redemande jamais (Guideline 4).
+  // Apple ne le livre qu'à la première autorisation ; sans lui, le profil
+  // prend un nom neutre, modifiable ensuite dans les infos du compte.
+  const [isApple, setIsApple]         = useState(false);
   const [loading, setLoading]         = useState(false);
   // Plafond d'appareil atteint : cet écran refuse au lieu de saisir. C'est ICI
   // que le refus doit tomber — le compte existe déjà dans `auth.users` (Supabase
@@ -136,9 +141,16 @@ export default function ProfileSetupScreen() {
       });
 
       const meta = user.user_metadata ?? {};
-      const given  = meta.given_name  || meta.full_name?.givenName
+      const appleUser = user.app_metadata?.provider === 'apple'
+        || (user.app_metadata?.providers ?? []).includes('apple');
+      // Lu une seule fois : un nom resté en mémoire ne doit pas coller au
+      // compte suivant ouvert dans la même session.
+      const apple = appleUser ? getPendingAppleName() : null;
+      setPendingAppleName(null);
+      setIsApple(appleUser);
+      const given  = apple?.givenName || meta.given_name  || meta.full_name?.givenName
         || (meta.name ?? meta.full_name ?? '').split(' ')[0] || '';
-      const family = meta.family_name || meta.full_name?.familyName
+      const family = apple?.familyName || meta.family_name || meta.full_name?.familyName
         || (meta.name ?? meta.full_name ?? '').split(' ').slice(1).join(' ') || '';
       if (given)  setFirstName(given);
       if (family) setLastName(family);
@@ -153,8 +165,8 @@ export default function ProfileSetupScreen() {
     const phoneKey = validateNationalKey(phoneNumber, dialCode);
     const dobKey   = validateDobKey(dobDay, dobMonth, dobYear);
     const next = {
-      firstName: firstName.trim() ? '' : t('profile.setup.errors.firstNameRequired'),
-      lastName:  lastName.trim()  ? '' : t('profile.setup.errors.lastNameRequired'),
+      firstName: isApple || firstName.trim() ? '' : t('profile.setup.errors.firstNameRequired'),
+      lastName:  isApple || lastName.trim()  ? '' : t('profile.setup.errors.lastNameRequired'),
       // Le message de longueur annonce le nombre de chiffres attendu pour
       // l'indicatif choisi — « invalide » seul ne dit pas quoi corriger.
       phone:     phoneKey
@@ -181,7 +193,8 @@ export default function ProfileSetupScreen() {
       const { error } = await supabase.from('profiles').upsert({
         id:         user.id,
         email:      user.email,
-        first_name: firstName.trim(),
+        // `RootNavigator` garde cet écran tant que `first_name` est vide.
+        first_name: firstName.trim() || t('accountInfo.driverDefault'),
         last_name:  lastName.trim(),
         phone:      fullPhone,
         birth_date: birthDate,
@@ -254,6 +267,7 @@ export default function ProfileSetupScreen() {
           <Text style={styles.title}>{t('profile.setup.title')}</Text>
           <Text style={styles.subtitle}>{t('profile.setup.subtitle')}</Text>
 
+          {!isApple && (<>
           {/* ── Prénom ── */}
           <FieldLabel text={t('profile.setup.firstName')} />
           <Pressable
@@ -297,6 +311,7 @@ export default function ProfileSetupScreen() {
             />
           </Pressable>
           <FieldError msg={errors.lastName} />
+          </>)}
 
           {/* ── Téléphone ── */}
           <FieldLabel text={t('profile.setup.phone')} />

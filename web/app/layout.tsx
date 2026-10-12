@@ -30,7 +30,7 @@ const fontVars = [display, body, serif, mono].map((f) => f.variable).join(' ');
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   alternates: { canonical: '/' },
-  title: 'Strive — Sache. Décide. Gagne.',
+  title: 'Strive — Analyse. Décide. Gagne.',
   description:
     'L\'assistant des chauffeurs VTC. Scanne chaque offre Uber, Bolt et Heetch en 2 secondes et n\'accepte plus jamais une course non rentable.',
   keywords: ['VTC', 'Uber', 'Bolt', 'Heetch', 'chauffeur', 'scanner course', 'taux horaire', 'Strive'],
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Strive — Sache. Décide. Gagne.',
+    title: 'Strive — Analyse. Décide. Gagne.',
     description:
       'Scanne chaque offre VTC en 2 secondes et vois ton €/h réel avant d\'accepter.',
     url: '/',
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Strive — Sache. Décide. Gagne.',
+    title: 'Strive — Analyse. Décide. Gagne.',
     description: 'Scanne chaque offre VTC en 2 secondes et vois ton €/h réel.',
   },
 };

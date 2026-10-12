@@ -37,6 +37,7 @@
     "dashboard": "Home",
     "history": "History",
     "analytics": "Analytics",
+    "map": "Map",
     "shop": "Shop",
     "profile": "Profile"
   },
@@ -1185,7 +1186,9 @@
     "replayHint": "Opens the gift screen without touching the database, as many times as needed. The second button re-arms onboarding and the tutorial — restart the app afterwards.",
     "replayGift": "Show the free-scans screen",
     "replayOnboarding": "Re-arm onboarding",
-    "replayDone": "Done. Fully close the app and relaunch it to see the flow again."
+    "replayDone": "Done. Fully close the app and relaunch it to see the flow again.",
+    "simZonesTitle": "Simulate hot zones",
+    "simZonesSub": "Replaces the live map with made-up demand around the current view. This device only: nothing is sent, other drivers see nothing."
   },
   "welcomeGift": {
     "body": "Use them within {{days}} days, on top of your daily scans.",
@@ -1195,36 +1198,32 @@
     "unit": "free scans",
     "a11y": "{{n}} free scans"
   },
-  "bestHours": {
-    "title": "Best time slots",
-    "menuTitle": "Best time slots",
-    "cardTitle": "Your best time slots",
-    "cardSub": "When it rings, and when it pays",
-    "lockTitle": "Premium only",
-    "lockSub": "A grid of your last 90 days, hour by hour: when your phone rings most, and when your rides actually pay. It needs months of history to mean anything.",
-    "lockCta": "See Premium",
-    "metric": {
-      "offers": "It rings",
-      "hourlyRate": "It pays"
-    },
-    "hint": {
-      "offers": "The hours your phone rang most. Declined rides count: they show the work was there.",
-      "hourlyRate": "What your accepted rides really earned, fuel deducted, over the time actually spent driving."
-    },
-    "slot": "{{day}} {{hour}}:00–{{nextHour}}:00",
-    "detailOffers_one": "{{count}} ride",
-    "detailOffers_other": "{{count}} rides",
-    "perHour": "/h",
-    "noAccepted": "no accepted ride",
-    "tapHint": "Tap a cell to see that slot in detail.",
-    "top": {
-      "offers": "Your busiest slots",
-      "hourlyRate": "Your best paying slots"
-    },
-    "notEnoughSlots": "No slot reaches {{min}} rides yet — below that, a ranking rests on nothing.",
+  "zones": {
+    "title": "Your rides map",
+    "zoneFallback": "Selected zone",
+    "perHour": "{{amount}}/h",
+    "perDistance": "{{amount}}/{{unit}}",
     "empty": "Not enough data yet",
-    "emptyHint": "The grid needs around {{min}} scanned rides to mean anything. You are at {{current}}.",
-    "footnote": "Over the last {{days}} days · {{rides}} scanned rides. Declines count towards volume, never towards the hourly rate."
+    "emptyHint": "Scan a few rides: each pickup point lands on the map and your zones build up as you scan.",
+    "modeMine": "My rides",
+    "lockedTitle": "Live demand",
+    "lockedBody": "See in real time where our Strive drivers are scanning the most rides.",
+    "lockedCta": "Upgrade to Plus",
+    "modeLive": "Live",
+    "sheetTitle": "High demand",
+    "sheetSubtitle": "Scanned by our Strive drivers",
+    "sheetNavigate": "Start navigation",
+    "sheetInfo": "The activity map highlights the areas where our Strive drivers are scanning the most rides right now. The deeper the colour, the more rides scanned.",
+    "zoneSheetSubtitle": "Your rides · last {{days}} days",
+    "statRides": "Rides",
+    "statHourly": "Hourly rate",
+    "statKm": "Distance rate",
+    "simulated": "Simulation",
+    "sheetHourCount_one": "{{count}} ride scanned in the last hour",
+    "sheetHourCount_other": "{{count}} rides scanned in the last hour",
+    "verdictGood": "Profitable zone",
+    "verdictMid": "Average zone",
+    "verdictBad": "Zone to avoid"
   },
   "rideNetwork": {
     "title": "Network",
@@ -1367,12 +1366,6 @@
     "calmDisruptions": "No notable disruption or train wave in {{city}}.",
     "calmEvents": "No major event planned in {{city}} in the next 2 months.",
     "updated": "Updated {{n}} min ago",
-    "countTransit_one": "{{count}} disruption",
-    "countTransit_other": "{{count}} disruptions",
-    "countTrains_one": "{{count}} train wave",
-    "countTrains_other": "{{count}} train waves",
-    "countEvents_one": "{{count}} upcoming event",
-    "countEvents_other": "{{count}} upcoming events",
     "allArrivals": "Long-distance arrivals · next 3 hours",
     "period": "From {{from}} to {{to}}",
     "since": "Since {{from}}",

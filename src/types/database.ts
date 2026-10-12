@@ -106,6 +106,12 @@ export interface Ride {
   net_profit?: number | null;   // tarif − fuel_cost (net réel daté)
   pickup_address?: string | null;
   destination_address?: string | null;
+  /** Points arrondis à ~100 m, effacés avec les adresses après 12 mois.
+   *  null = course antérieure ou itinéraire non calculé. */
+  pickup_lat?: number | null;
+  pickup_lon?: number | null;
+  dest_lat?: number | null;
+  dest_lon?: number | null;
   /**
    * Horodatage du SCAN (epoch secondes), clé de corrélation avec les décisions
    * « Prise / Refusée » tapées hors de l'app (Live Activity, notification, Siri).

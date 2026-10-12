@@ -37,6 +37,7 @@
     "dashboard": "Home",
     "history": "Cronologia",
     "analytics": "Statistiche",
+    "map": "Mappa",
     "shop": "Negozio",
     "profile": "Profilo"
   },
@@ -1193,7 +1194,9 @@
     "replayHint": "Apre la schermata del regalo senza toccare il database, tutte le volte che serve. Il secondo pulsante riarma l'onboarding e la guida — riavvia l'app dopo.",
     "replayGift": "Vedi la schermata delle scansioni in regalo",
     "replayOnboarding": "Riarma l'onboarding",
-    "replayDone": "Fatto. Chiudi completamente l'app e riaprila per rivedere il percorso."
+    "replayDone": "Fatto. Chiudi completamente l'app e riaprila per rivedere il percorso.",
+    "simZonesTitle": "Simulare zone calde",
+    "simZonesSub": "Sostituisce la mappa in diretta con una domanda inventata intorno alla vista. Solo su questo dispositivo: non viene inviato nulla, gli altri autisti non vedono niente."
   },
   "welcomeGift": {
     "body": "Da usare entro {{days}} giorni, in aggiunta alle tue scansioni quotidiane.",
@@ -1203,36 +1206,32 @@
     "unit": "scansioni in regalo",
     "a11y": "{{n}} scansioni in regalo"
   },
-  "bestHours": {
-    "title": "Fasce migliori",
-    "menuTitle": "Fasce migliori",
-    "cardTitle": "Le tue fasce migliori",
-    "cardSub": "Le ore in cui squilla, e quelle in cui paga",
-    "lockTitle": "Riservato a Premium",
-    "lockSub": "La griglia dei tuoi ultimi 90 giorni, ora per ora: quando il tuo telefono squilla di più e quando le tue corse rendono meglio. Serve qualche mese di cronologia perché dica qualcosa.",
-    "lockCta": "Scopri Premium",
-    "metric": {
-      "offers": "Squilla",
-      "hourlyRate": "Paga"
-    },
-    "hint": {
-      "offers": "Le ore in cui il tuo telefono ha squillato di più. Le corse rifiutate contano: dicono che il lavoro c'era.",
-      "hourlyRate": "Quanto hanno reso davvero le tue corse accettate, dedotto il carburante, rapportato al tempo passato in corsa."
-    },
-    "slot": "{{day}} {{hour}}–{{nextHour}}",
-    "detailOffers_one": "{{count}} corsa",
-    "detailOffers_other": "{{count}} corse",
-    "perHour": "/h",
-    "noAccepted": "nessuna corsa accettata",
-    "tapHint": "Tocca una casella per vedere il dettaglio della fascia.",
-    "top": {
-      "offers": "Le tue fasce più cariche",
-      "hourlyRate": "Le tue fasce più redditizie"
-    },
-    "notEnoughSlots": "Nessuna fascia raggiunge ancora {{min}} corse — al di sotto, una classifica non poggia su nulla.",
-    "empty": "Non ci sono ancora abbastanza dati",
-    "emptyHint": "Servono circa {{min}} corse scansionate perché la griglia significhi qualcosa. Sei a {{current}}.",
-    "footnote": "Sugli ultimi {{days}} giorni · {{rides}} corse scansionate. I rifiuti contano nel volume, mai nella tariffa oraria."
+  "zones": {
+    "title": "Mappa delle tue corse",
+    "zoneFallback": "Zona selezionata",
+    "perHour": "{{amount}}/h",
+    "perDistance": "{{amount}}/{{unit}}",
+    "empty": "Dati ancora insufficienti",
+    "emptyHint": "Scansiona qualche corsa: ogni punto di partenza compare sulla mappa e le tue zone si formano man mano che scansioni.",
+    "modeMine": "Le mie corse",
+    "lockedTitle": "La domanda in diretta",
+    "lockedBody": "Guarda in tempo reale dove i nostri autisti Strive scansionano più corse.",
+    "lockedCta": "Passa a Plus",
+    "modeLive": "In diretta",
+    "sheetTitle": "Domanda alta",
+    "sheetSubtitle": "Scansionata dai nostri autisti Strive",
+    "sheetNavigate": "Avvia navigazione",
+    "sheetInfo": "La mappa delle attività evidenzia le zone in cui i nostri autisti Strive scansionano più corse in questo momento. Più il colore è intenso, più corse scansionate.",
+    "zoneSheetSubtitle": "Le tue corse · ultimi {{days}} giorni",
+    "statRides": "Corse",
+    "statHourly": "Tariffa oraria",
+    "statKm": "Tariffa al km",
+    "simulated": "Simulazione",
+    "sheetHourCount_one": "{{count}} corsa scansionata nell'ultima ora",
+    "sheetHourCount_other": "{{count}} corse scansionate nell'ultima ora",
+    "verdictGood": "Zona redditizia",
+    "verdictMid": "Zona nella media",
+    "verdictBad": "Zona da evitare"
   },
   "rideNetwork": {
     "title": "Rete",

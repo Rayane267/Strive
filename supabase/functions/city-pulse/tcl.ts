@@ -4,7 +4,7 @@
 //
 // Module pur : la récupération HTTP est dans index.ts.
 
-import { decodeEntities, type SignalRow } from "./idfm.ts";
+import { decodeEntities, isMajorDisruption, type SignalRow } from "./idfm.ts";
 import { parisLocal } from "./amp.ts";
 
 export const TCL_URL = "https://data.grandlyon.com/siri-lite/2.0/situation-exchange.json";
@@ -73,6 +73,8 @@ export function tclSignals(body: unknown, nowEpoch: number): SignalRow[] {
       .map(t => (t.value ? decodeEntities(t.value).trim() : '')).filter(t => !!t)
       .sort((a, b) => a.length - b.length);
     const main = lines.reduce((x, y) => (y.weight > x.weight ? y : x));
+    // Même règle qu'à Paris : ligne coupée ou grève seulement.
+    if (!isMajorDisruption(...texts)) continue;
     const strong = texts.some(t => STRONG.test(t));
     const place = lines.map(l => l.label).join(", ");
 

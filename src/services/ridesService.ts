@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Ride } from '../types/database';
+import type { LiveSpot, LiveZone } from '../utils/zones';
 
 // Projection explicite (même discipline que PROFILE_COLUMNS) : évite de tirer
 // d'éventuelles colonnes serveur hors-type et fige le payload réseau.
@@ -71,6 +72,101 @@ export async function fetchRidesInRange(
   return out;
 }
 
+/** Une course réduite à ce que la carte des zones en lit. */
+export type RidePoint = {
+  pickup_lat: number;
+  pickup_lon: number;
+  pickup_address: string | null;
+  fare_estimated: number;
+  fare_final: number | null;
+  distance_km: number;
+  duration_min: number;
+  currency?: string | null;
+  fx_rate_eur?: number | null;
+};
+
+/**
+ * Les départs géolocalisés d'une période, pour la carte.
+ *
+ * Requête à part plutôt qu'une colonne de plus dans `RIDE_COLUMNS` : si la
+ * migration 20261001_ride_coords n'est pas encore passée, seule la carte
+ * échoue — l'Historique et les Stats continuent de charger.
+ *
+ * Toutes les offres scannées comptent, refusées comprises : la carte dit ce
+ * qu'une zone PROPOSE, pas seulement ce que le chauffeur y a pris.
+ */
+export async function fetchRidePoints(
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<RidePoint[]> {
+  const out: RidePoint[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await supabase
+      .from('rides')
+      .select(
+        'pickup_lat, pickup_lon, pickup_address, fare_estimated, fare_final, ' +
+          'distance_km, duration_min, currency, fx_rate_eur',
+      )
+      .eq('user_id', userId)
+      .not('pickup_lat', 'is', null)
+      .gte('created_at', start.toISOString())
+      .lt('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as RidePoint[];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
+export type CommunityLive = {
+  spots: LiveSpot[];
+  /** Une entrée par zone : l'éclair et les offres de la dernière heure. */
+  zones: LiveZone[];
+  /** Offres comptées dans les taches renvoyées. */
+  rides: number;
+  /** Réglages serveur (table `live_map_settings`), modifiables sans release. */
+  minutes: number;
+  minRides: number;
+  hotRides: number;
+};
+
+/**
+ * Demande en direct de tous les chauffeurs, en cellules H3 (Edge Function
+ * `community-live`, plan Plus vérifié côté serveur). `simulate` : zones
+ * inventées autour de la vue, refusé par le serveur hors compte admin.
+ */
+export async function fetchCommunityLive(
+  bounds: { minLat: number; minLon: number; maxLat: number; maxLon: number },
+  opts: { simulate?: boolean } = {},
+): Promise<CommunityLive> {
+  const { data, error } = await supabase.functions.invoke('community-live', {
+    body: { ...bounds, simulate: opts.simulate === true },
+  });
+  if (error) throw error;
+  const out = (data ?? {}) as {
+    spots?: LiveSpot[];
+    zones?: LiveZone[];
+    rides?: number;
+    minutes?: number;
+    min_rides?: number;
+    hot_rides?: number;
+  };
+  return {
+    spots: out.spots ?? [],
+    zones: out.zones ?? [],
+    rides: out.rides ?? 0,
+    minutes: out.minutes ?? 30,
+    minRides: out.min_rides ?? 3,
+    hotRides: out.hot_rides ?? 10,
+  };
+}
+
 /**
  * Ramene une adresse sur une seule ligne.
  *
@@ -83,6 +179,22 @@ function oneLineAddress(addr?: string | null): string | null {
   if (!addr) return null;
   const flat = addr.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
   return flat.length > 0 ? flat : null;
+}
+
+/**
+ * Colonnes d'un point, ou rien. Les deux valeurs ou aucune : une paire
+ * incomplète ferait refuser l'insertion entière par `rides_coords_check`.
+ * Rien plutôt que null : un payload sans ces clés reste valide sur une base
+ * où la migration 20261001_ride_coords n'est pas encore passée.
+ */
+function point(
+  prefix: 'pickup' | 'dest',
+  lat?: number | null,
+  lon?: number | null,
+): Record<string, number> {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return {};
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return {};
+  return { [`${prefix}_lat`]: lat, [`${prefix}_lon`]: lon };
 }
 
 export async function createRide(params: {
@@ -111,6 +223,12 @@ export async function createRide(params: {
   netProfit?: number | null;
   pickupAddress?: string | null;
   destinationAddress?: string | null;
+  /** Points déjà arrondis à ~100 m par le natif. Une paire incomplète est
+   *  écartée : la contrainte `rides_coords_check` refuserait toute la course. */
+  pickupLat?: number | null;
+  pickupLon?: number | null;
+  destLat?: number | null;
+  destLon?: number | null;
   /** Horodatage du scan (epoch secondes). Date la course — jour d'affectation
    *  et registre de quota (`scan_ledger`). N'identifie plus rien. */
   scanTs?: number | null;
@@ -165,6 +283,8 @@ export async function createRide(params: {
       // geocodage refuse — le texte brut arrivait ici avec ses retours ligne.
       pickup_address: oneLineAddress(params.pickupAddress),
       destination_address: oneLineAddress(params.destinationAddress),
+      ...point('pickup', params.pickupLat, params.pickupLon),
+      ...point('dest', params.destLat, params.destLon),
       // 0 = payload sans scanTs (ancien build encore en file) → on n'écrit pas
       // une clé qui ne corrélera rien.
       scan_ts: params.scanTs ? params.scanTs : null,

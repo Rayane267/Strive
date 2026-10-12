@@ -16,6 +16,12 @@ export interface ScanResult {
   pickupDurationMin?: number;
   /** Distance d'approche (km) extraite par l'OCR */
   pickupDistanceKm?: number;
+  /** Points géocodés par TomTom, déjà arrondis à ~100 m par le natif. Absents
+   *  (ou null) hors chemin TomTom et sur un binaire antérieur. Carte des zones. */
+  pickupLat?: number | null;
+  pickupLon?: number | null;
+  destLat?: number | null;
+  destLon?: number | null;
   /** Image JPEG compressée en base64 — servie par le natif pour alimenter le fallback LLM JS */
   imageBase64?: string;
   /** Dump JSON des blocs ML Kit/Vision pour diagnostic — émis en release pour

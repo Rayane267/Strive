@@ -1,0 +1,19 @@
+diff --git a/node_modules/react-native-maps/ios/AirMaps/AIRMap.mm b/node_modules/react-native-maps/ios/AirMaps/AIRMap.mm
+index d3b0723..f287c45 100644
+--- a/node_modules/react-native-maps/ios/AirMaps/AIRMap.mm
++++ b/node_modules/react-native-maps/ios/AirMaps/AIRMap.mm
+@@ -879,6 +879,14 @@ const NSInteger AIRMapMaxZoomLevel = 20;
+                 frame.origin.y = self->_legalLabelInsets.top;
+             } else if (self->_legalLabelInsets.bottom) {
+                 frame.origin.y = self.frame.size.height - self->_legalLabelInsets.bottom - frame.size.height;
++                // Strive : même marge basse que le logo Plans → on centre le
++                // libellé sur le logo, plus haut que lui, au lieu d'aligner leurs
++                // bas (le texte tombait sous le milieu du logo).
++                if (self->_appleLogo && self->_appleLogoInsets.bottom == self->_legalLabelInsets.bottom) {
++                    CGFloat logoH = self->_appleLogo.frame.size.height;
++                    CGFloat logoMid = self.frame.size.height - self->_appleLogoInsets.bottom - logoH / 2;
++                    frame.origin.y = logoMid - frame.size.height / 2;
++                }
+             }
+             self->_legalLabel.frame = frame;
+         });

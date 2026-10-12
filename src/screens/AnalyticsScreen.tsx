@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTabBarInset } from '../navigation/useTabBarInset';
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ import { stroke, strokeWidth } from '../theme/stroke';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
 import { hapticSelection } from '../utils/haptics';
-import { PREMIUM_ENABLED, getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
+import { getEffectivePlanTier, getMaxRangeSpanDays, type PlanTier } from '../services/subscriptionService';
 import { fetchRides, fetchRidesInRange } from '../services/ridesService';
 import { computeWeeklyBilan } from '../utils/weeklyTease';
 import { effectiveFare } from '../services/ridesService';
@@ -82,7 +82,7 @@ const AnalyticsScreen = () => {
   const money2 = (n: number) => formatMoney(n, market, { decimals: 2 });
   const { t, i18n } = useMarketT();
   const { user } = useAuth();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarInset();
   const navigation = useNavigation<any>();
 
   const [resetHour, setResetHour] = useState(0);
@@ -597,39 +597,6 @@ const AnalyticsScreen = () => {
           </View>
         )}
 
-        {/* ── MEILLEURS CRÉNEAUX ── */}
-        {/* HORS des trois branches ci-dessus, et c'est le point.
-            Placée dans la branche « il y a des courses », la carte disparaissait
-            dès que la PÉRIODE AFFICHÉE était vide — typiquement le défaut, qui
-            montre la journée en cours. Un chauffeur qui n'a rien fait
-            aujourd'hui ne voyait donc jamais l'entrée d'un écran qui analyse ses
-            90 DERNIERS JOURS : exactement l'inverse de ce qu'il faut, puisque
-            c'est lui qui a le plus besoin de savoir quand travailler.
-
-            Visible pour tous, free compris : l'écran porte son propre mur
-            Premium et montre ce qu'on achète. Le cacher ne vendrait rien.
-
-            Sauf tant que Premium est en suspens (`PREMIUM_ENABLED`) : le mur
-            renverrait vers un paywall qui ne le vend plus. */}
-        {!loading && PREMIUM_ENABLED && (
-          <AnimatedEntrance step={4} slideFrom="bottom">
-            <TouchableOpacity
-              style={styles.slotsCard}
-              onPress={() => navigation.navigate('BestHours')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.slotsIcon}>
-                <Feather name="clock" size={18} color={colors.textMuted} />
-              </View>
-              <View style={styles.slotsText}>
-                <Text style={styles.slotsTitle}>{t('bestHours.cardTitle')}</Text>
-                <Text style={styles.slotsSub}>{t('bestHours.cardSub')}</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.textDimmed} />
-            </TouchableOpacity>
-          </AnimatedEntrance>
-        )}
-
         {loading ? (
           <View style={styles.skeletonWrap}>
             <Skeleton width="100%" height={180} radius={24} />
@@ -1059,33 +1026,6 @@ const styles = StyleSheet.create({
   bilanTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: space.sm },
   bilanLoss: { color: colors.textMain, fontSize: 16, fontWeight: '800', marginBottom: space.xs },
   bilanAvoided: { color: colors.primary, fontSize: 14, fontWeight: '700' },
-
-  // Carte d'entrée vers les meilleurs créneaux. Volontairement plus sobre que
-  // bilanCard : c'est une porte, pas un insight — elle ne doit pas disputer
-  // l'attention aux chiffres de la période affichée.
-  slotsCard: {
-    backgroundColor: colors.surface,
-    borderWidth: strokeWidth.control,
-    borderColor: stroke.edge,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    borderRadius: radius.md,
-    padding: space.md,
-    marginBottom: space.md,
-    overflow: 'hidden',
-  },
-  slotsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,230,118,0.10)',
-  },
-  slotsText: { flex: 1 },
-  slotsTitle: { color: colors.textMain, fontSize: 15, fontWeight: '800' },
-  slotsSub: { color: colors.textDimmed, fontSize: 12, marginTop: space.tight },
 
   // Date button
   // Pilule et non carte : le selecteur de date est un CONTROLE, pas une surface

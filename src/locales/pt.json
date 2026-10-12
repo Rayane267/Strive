@@ -37,6 +37,7 @@
     "dashboard": "Início",
     "history": "Histórico",
     "analytics": "Estatísticas",
+    "map": "Mapa",
     "shop": "Loja",
     "profile": "Perfil"
   },
@@ -1193,7 +1194,9 @@
     "replayHint": "Abre o ecrã da oferta sem tocar na base de dados, tantas vezes quantas forem precisas. O segundo botão rearma o onboarding e o tutorial — reinicie a app a seguir.",
     "replayGift": "Ver o ecrã das análises oferecidas",
     "replayOnboarding": "Rearmar o onboarding",
-    "replayDone": "Está feito. Feche a app por completo e abra-a de novo para rever o percurso."
+    "replayDone": "Está feito. Feche a app por completo e abra-a de novo para rever o percurso.",
+    "simZonesTitle": "Simular zonas quentes",
+    "simZonesSub": "Substitui o direto do mapa por uma procura inventada à volta da vista. Só neste dispositivo: nada é enviado, os outros motoristas não veem nada."
   },
   "welcomeGift": {
     "body": "Para usar em {{days}} dias, além das suas análises diárias.",
@@ -1203,36 +1206,32 @@
     "unit": "análises oferecidas",
     "a11y": "{{n}} análises oferecidas"
   },
-  "bestHours": {
-    "title": "Melhores períodos",
-    "menuTitle": "Melhores períodos",
-    "cardTitle": "Os seus melhores períodos",
-    "cardSub": "As horas em que toca, e aquelas em que paga",
-    "lockTitle": "Reservado ao Premium",
-    "lockSub": "A grelha dos seus últimos 90 dias, hora a hora: quando o seu telemóvel toca mais e quando as suas viagens rendem melhor. Precisa de meses de histórico para dizer alguma coisa.",
-    "lockCta": "Descobrir o Premium",
-    "metric": {
-      "offers": "Toca",
-      "hourlyRate": "Paga"
-    },
-    "hint": {
-      "offers": "As horas em que o seu telemóvel mais tocou. As viagens recusadas contam: dizem que havia trabalho.",
-      "hourlyRate": "O que as suas viagens aceites renderam de facto, descontado o combustível, face ao tempo passado em viagem."
-    },
-    "slot": "{{day}} {{hour}}h–{{nextHour}}h",
-    "detailOffers_one": "{{count}} viagem",
-    "detailOffers_other": "{{count}} viagens",
-    "perHour": "/h",
-    "noAccepted": "nenhuma viagem aceite",
-    "tapHint": "Toque numa célula para ver o detalhe do período.",
-    "top": {
-      "offers": "Os seus períodos mais carregados",
-      "hourlyRate": "Os seus períodos mais rentáveis"
-    },
-    "notEnoughSlots": "Nenhum período atinge ainda {{min}} viagens — abaixo disso, uma classificação não assenta em nada.",
+  "zones": {
+    "title": "Mapa das suas corridas",
+    "zoneFallback": "Zona selecionada",
+    "perHour": "{{amount}}/h",
+    "perDistance": "{{amount}}/{{unit}}",
     "empty": "Ainda não há dados suficientes",
-    "emptyHint": "São precisas cerca de {{min}} viagens analisadas para que a grelha queira dizer alguma coisa. Vai em {{current}}.",
-    "footnote": "Nos últimos {{days}} dias · {{rides}} viagens analisadas. As recusas contam no volume, nunca no valor por hora."
+    "emptyHint": "Analise algumas viagens: cada ponto de recolha aparece no mapa e as suas zonas desenham-se à medida que analisa.",
+    "modeMine": "As minhas viagens",
+    "lockedTitle": "A procura em direto",
+    "lockedBody": "Veja em tempo real onde os nossos motoristas Strive digitalizam mais viagens.",
+    "lockedCta": "Mudar para Plus",
+    "modeLive": "Em direto",
+    "sheetTitle": "Procura elevada",
+    "sheetSubtitle": "Digitalizada pelos nossos motoristas Strive",
+    "sheetNavigate": "Iniciar navegação",
+    "sheetInfo": "O mapa de atividade destaca as zonas onde os nossos motoristas Strive digitalizam mais viagens neste momento. Quanto mais intensa a cor, mais viagens digitalizadas.",
+    "zoneSheetSubtitle": "As suas viagens · últimos {{days}} dias",
+    "statRides": "Viagens",
+    "statHourly": "Taxa horária",
+    "statKm": "Taxa por km",
+    "simulated": "Simulação",
+    "sheetHourCount_one": "{{count}} viagem analisada na última hora",
+    "sheetHourCount_other": "{{count}} viagens analisadas na última hora",
+    "verdictGood": "Zona rentável",
+    "verdictMid": "Zona média",
+    "verdictBad": "Zona a evitar"
   },
   "rideNetwork": {
     "title": "Rede",

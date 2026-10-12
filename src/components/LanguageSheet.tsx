@@ -5,8 +5,6 @@ import {
   Dimensions,
   Easing,
   Modal,
-  NativeModules,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -34,7 +32,7 @@ import {
   type CountryCode,
   type Currency,
 } from '../utils/market';
-import { SUPPORTED } from '../i18n';
+import { SUPPORTED, STORE_LANGUAGE_KEY, deviceLanguage } from '../i18n';
 
 /**
  * Choix de la langue, en feuille montant du bas.
@@ -61,7 +59,6 @@ import { SUPPORTED } from '../i18n';
  * voit la devise qu'il va lire partout ensuite.
  */
 
-const STORE_LANGUAGE_KEY = 'user_language';
 const DURATION = 260;
 
 const LanguageSheet = ({
@@ -109,21 +106,11 @@ const LanguageSheet = ({
   const apply = async (lang: string | null) => {
     hapticLight();
     if (lang === null) {
-      // Effacer la clé AVANT de changer de langue : `cacheUserLanguage` la
-      // réécrirait aussitôt, et le choix « suivre l'appareil » ne survivrait pas
-      // au prochain démarrage.
       await AsyncStorage.removeItem(STORE_LANGUAGE_KEY);
-      const device = (NativeModules.SettingsManager?.settings?.AppleLocale
-        || NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
-        || NativeModules.I18nManager?.localeIdentifier
-        || 'en').slice(0, 2);
-      const next = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
-      await i18n.changeLanguage(next);
-      await AsyncStorage.removeItem(STORE_LANGUAGE_KEY);
-      pushToNative(next);
-    } else if (lang !== i18n.language) {
-      await i18n.changeLanguage(lang);
-      pushToNative(lang);
+      await i18n.changeLanguage(deviceLanguage());
+    } else {
+      await AsyncStorage.setItem(STORE_LANGUAGE_KEY, lang);
+      if (lang !== i18n.language) await i18n.changeLanguage(lang);
     }
     setStep('market');
   };
@@ -248,14 +235,6 @@ const LanguageSheet = ({
     } finally {
       setSavingCountry(false);
       onClose();
-    }
-  };
-
-  // Le natif doit suivre : sans ça, les libellés de la Share Extension et de la
-  // bulle Android restent dans l'ancienne langue.
-  const pushToNative = (lang: string) => {
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      NativeModules.ScanBridge?.setAppLanguage?.(lang);
     }
   };
 

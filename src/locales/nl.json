@@ -37,6 +37,7 @@
     "dashboard": "Start",
     "history": "Geschiedenis",
     "analytics": "Statistieken",
+    "map": "Kaart",
     "shop": "Winkel",
     "profile": "Profiel"
   },
@@ -1193,7 +1194,9 @@
     "replayHint": "Opent het geschenkscherm zonder de database aan te raken, zo vaak als nodig. De tweede knop herlaadt de onboarding en de handleiding — start de app daarna opnieuw op.",
     "replayGift": "Het scherm met gratis scans bekijken",
     "replayOnboarding": "Onboarding herladen",
-    "replayDone": "Klaar. Sluit de app volledig af en open ze opnieuw om het traject te herbekijken."
+    "replayDone": "Klaar. Sluit de app volledig af en open ze opnieuw om het traject te herbekijken.",
+    "simZonesTitle": "Hotspots simuleren",
+    "simZonesSub": "Vervangt de live kaart door verzonnen vraag rond het huidige beeld. Alleen op dit toestel: er wordt niets verstuurd, andere chauffeurs zien niets."
   },
   "welcomeGift": {
     "body": "Te gebruiken binnen {{days}} dagen, bovenop je dagelijkse scans.",
@@ -1203,36 +1206,32 @@
     "unit": "gratis scans",
     "a11y": "{{n}} gratis scans"
   },
-  "bestHours": {
-    "title": "Beste tijdvakken",
-    "menuTitle": "Beste tijdvakken",
-    "cardTitle": "Je beste tijdvakken",
-    "cardSub": "De uren waarop het rinkelt, en die waarop het betaalt",
-    "lockTitle": "Voorbehouden aan Premium",
-    "lockSub": "Het raster van je laatste 90 dagen, uur per uur: wanneer je telefoon het meest rinkelt en wanneer je ritten het best opbrengen. Het heeft maanden geschiedenis nodig om iets te zeggen.",
-    "lockCta": "Premium ontdekken",
-    "metric": {
-      "offers": "Het rinkelt",
-      "hourlyRate": "Het betaalt"
-    },
-    "hint": {
-      "offers": "De uren waarop je telefoon het meest heeft gerinkeld. Geweigerde ritten tellen mee: ze zeggen dat er werk was.",
-      "hourlyRate": "Wat je aanvaarde ritten echt hebben opgebracht, brandstof afgetrokken, afgezet tegen de tijd in rit."
-    },
-    "slot": "{{day}} {{hour}}u–{{nextHour}}u",
-    "detailOffers_one": "{{count}} rit",
-    "detailOffers_other": "{{count}} ritten",
-    "perHour": "/u",
-    "noAccepted": "geen aanvaarde rit",
-    "tapHint": "Tik op een vakje om het detail van het tijdvak te zien.",
-    "top": {
-      "offers": "Je drukste tijdvakken",
-      "hourlyRate": "Je meest rendabele tijdvakken"
-    },
-    "notEnoughSlots": "Nog geen enkel tijdvak haalt {{min}} ritten — daaronder berust een klassement nergens op.",
+  "zones": {
+    "title": "Kaart van je ritten",
+    "zoneFallback": "Gekozen zone",
+    "perHour": "{{amount}}/u",
+    "perDistance": "{{amount}}/{{unit}}",
     "empty": "Nog niet genoeg gegevens",
-    "emptyHint": "Er zijn ongeveer {{min}} gescande ritten nodig voor het raster iets betekent. Je zit aan {{current}}.",
-    "footnote": "Over de laatste {{days}} dagen · {{rides}} gescande ritten. Weigeringen tellen mee in het volume, nooit in het uurtarief."
+    "emptyHint": "Scan een paar ritten: elk ophaalpunt komt op de kaart en je zones vullen zich naarmate je scant.",
+    "modeMine": "Mijn ritten",
+    "lockedTitle": "Live vraag",
+    "lockedBody": "Zie in realtime waar onze Strive-chauffeurs de meeste ritten scannen.",
+    "lockedCta": "Overstappen naar Plus",
+    "modeLive": "Live",
+    "sheetTitle": "Hoge vraag",
+    "sheetSubtitle": "Gescand door onze Strive-chauffeurs",
+    "sheetNavigate": "Navigatie starten",
+    "sheetInfo": "De activiteitenkaart toont de zones waar onze Strive-chauffeurs op dit moment de meeste ritten scannen. Hoe dieper de kleur, hoe meer ritten gescand.",
+    "zoneSheetSubtitle": "Jouw ritten · laatste {{days}} dagen",
+    "statRides": "Ritten",
+    "statHourly": "Uurtarief",
+    "statKm": "Kilometertarief",
+    "simulated": "Simulatie",
+    "sheetHourCount_one": "{{count}} rit gescand in het afgelopen uur",
+    "sheetHourCount_other": "{{count}} ritten gescand in het afgelopen uur",
+    "verdictGood": "Rendabele zone",
+    "verdictMid": "Gemiddelde zone",
+    "verdictBad": "Zone om te vermijden"
   },
   "rideNetwork": {
     "title": "Netwerk",

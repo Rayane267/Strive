@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTabBarInset } from '../navigation/useTabBarInset';
 import {
   View,
   Text,
@@ -222,7 +222,7 @@ const DashboardScreen = () => {
   const fxRates = useFxRates();
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarInset();
   const navigation = useNavigation<any>();
 
   const [rides, setRides] = useState<Ride[]>([]);
@@ -987,6 +987,10 @@ const DashboardScreen = () => {
           netProfit,
           pickupAddress: result.pickupAddress,
           destinationAddress: result.destinationAddress,
+          pickupLat: result.pickupLat,
+          pickupLon: result.pickupLon,
+          destLat: result.destLat,
+          destLon: result.destLon,
           // Date la course (jour d'affectation + registre de quota). Elle
           // n'identifie plus rien : c'est `rideId` qui le fait.
           scanTs: scanTs || null,

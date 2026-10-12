@@ -64,6 +64,7 @@ alter table public.preferences
   drop constraint if exists preferences_social_rate_range;
 alter table public.preferences
   add constraint preferences_social_rate_range
+  
   check (social_rate is null or (social_rate >= 0 and social_rate < 0.95));
 
 alter table public.preferences

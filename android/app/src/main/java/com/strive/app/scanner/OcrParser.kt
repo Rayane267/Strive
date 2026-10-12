@@ -18,7 +18,17 @@ object OcrParser {
         val destinationAddress: String? = null, // adresse destination
         val pickupDurationMin: Int? = null,     // temps d'approche — ligne "X min • X.X km"
         val pickupDistanceKm: Double? = null,   // distance d'approche
+        // Points géocodés par TomTom (null hors chemin TomTom), arrondis à ~100 m
+        // par [roundedPoint]. Servent la carte des zones, jamais le calcul.
+        val pickupLat: Double? = null,
+        val pickupLon: Double? = null,
+        val destLat: Double? = null,
+        val destLon: Double? = null,
     )
+
+    /** 3 décimales (~100 m) : la carte dessine des zones de 250 m au plus fin,
+     *  il n'y a rien à garder en dessous (cf. 20261001_ride_coords.sql). */
+    fun roundedPoint(v: Double): Double = Math.round(v * 1000.0) / 1000.0
 
     enum class Platform { UBER, BOLT, HEETCH, UNKNOWN }
 

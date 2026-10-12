@@ -37,6 +37,7 @@
     "dashboard": "Inicio",
     "history": "Historial",
     "analytics": "Estadísticas",
+    "map": "Mapa",
     "shop": "Tienda",
     "profile": "Perfil"
   },
@@ -1193,7 +1194,9 @@
     "replayHint": "Abre la pantalla del regalo sin tocar la base de datos, tantas veces como haga falta. El segundo botón rearma el onboarding y el tutorial — reinicia la app después.",
     "replayGift": "Ver la pantalla de escaneos de regalo",
     "replayOnboarding": "Rearmar el onboarding",
-    "replayDone": "Hecho. Cierra la app por completo y vuelve a abrirla para repetir el recorrido."
+    "replayDone": "Hecho. Cierra la app por completo y vuelve a abrirla para repetir el recorrido.",
+    "simZonesTitle": "Simular zonas calientes",
+    "simZonesSub": "Sustituye el directo del mapa por una demanda inventada alrededor de la vista. Solo en este dispositivo: no se envía nada, los demás conductores no ven nada."
   },
   "welcomeGift": {
     "body": "Para usar en {{days}} días, además de tus escaneos diarios.",
@@ -1203,36 +1206,32 @@
     "unit": "escaneos de regalo",
     "a11y": "{{n}} escaneos de regalo"
   },
-  "bestHours": {
-    "title": "Mejores franjas",
-    "menuTitle": "Mejores franjas",
-    "cardTitle": "Tus mejores franjas",
-    "cardSub": "Las horas en las que suena, y aquellas en las que paga",
-    "lockTitle": "Reservado a Premium",
-    "lockSub": "La cuadrícula de tus últimos 90 días, hora por hora: cuándo suena más tu teléfono y cuándo tus viajes rinden mejor. Necesita meses de historial para decir algo.",
-    "lockCta": "Descubrir Premium",
-    "metric": {
-      "offers": "Suena",
-      "hourlyRate": "Paga"
-    },
-    "hint": {
-      "offers": "Las horas en las que más ha sonado tu teléfono. Los viajes rechazados cuentan: dicen que había trabajo.",
-      "hourlyRate": "Lo que tus viajes aceptados han rendido de verdad, descontado el combustible, sobre el tiempo pasado en viaje."
-    },
-    "slot": "{{day}} {{hour}}h–{{nextHour}}h",
-    "detailOffers_one": "{{count}} viaje",
-    "detailOffers_other": "{{count}} viajes",
-    "perHour": "/h",
-    "noAccepted": "ningún viaje aceptado",
-    "tapHint": "Toca una casilla para ver el detalle de la franja.",
-    "top": {
-      "offers": "Tus franjas con más carga",
-      "hourlyRate": "Tus franjas más rentables"
-    },
-    "notEnoughSlots": "Ninguna franja llega todavía a {{min}} viajes — por debajo, una clasificación no se sostiene.",
-    "empty": "Todavía no hay datos suficientes",
-    "emptyHint": "Hacen falta unos {{min}} viajes escaneados para que la cuadrícula signifique algo. Vas por {{current}}.",
-    "footnote": "Sobre los últimos {{days}} días · {{rides}} viajes escaneados. Los rechazos cuentan en el volumen, nunca en la tarifa por hora."
+  "zones": {
+    "title": "Mapa de tus viajes",
+    "zoneFallback": "Zona seleccionada",
+    "perHour": "{{amount}}/h",
+    "perDistance": "{{amount}}/{{unit}}",
+    "empty": "Aún no hay suficientes datos",
+    "emptyHint": "Escanea algunos viajes: cada punto de recogida aparece en el mapa y tus zonas se dibujan a medida que escaneas.",
+    "modeMine": "Mis viajes",
+    "lockedTitle": "La demanda en directo",
+    "lockedBody": "Mira en tiempo real dónde escanean más viajes nuestros conductores Strive.",
+    "lockedCta": "Pasar a Plus",
+    "modeLive": "En directo",
+    "sheetTitle": "Alta demanda",
+    "sheetSubtitle": "Escaneada por nuestros conductores Strive",
+    "sheetNavigate": "Iniciar navegación",
+    "sheetInfo": "El mapa de actividad destaca las zonas donde nuestros conductores Strive escanean más viajes ahora mismo. Cuanto más intenso el color, más viajes escaneados.",
+    "zoneSheetSubtitle": "Tus viajes · últimos {{days}} días",
+    "statRides": "Viajes",
+    "statHourly": "Tarifa por hora",
+    "statKm": "Tarifa por km",
+    "simulated": "Simulación",
+    "sheetHourCount_one": "{{count}} viaje escaneado en la última hora",
+    "sheetHourCount_other": "{{count}} viajes escaneados en la última hora",
+    "verdictGood": "Zona rentable",
+    "verdictMid": "Zona media",
+    "verdictBad": "Zona a evitar"
   },
   "rideNetwork": {
     "title": "Red",

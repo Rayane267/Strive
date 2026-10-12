@@ -233,7 +233,7 @@ de secours pendant un appel, sans contrepartie.
       pas atteindre fait rejeter le build. Ne pas les supprimer — un ID supprimé
       n'est pas réutilisable.
 
-- [ ] **Plus est à 8,99 €/mois et 79,99 €/an dans App Store Connect.** Les
+- [ ] **Plus est à 6,99 €/mois et 69,99 €/an dans App Store Connect.** Les
       montants du code (`FALLBACK_AMOUNT`) ne servent que si le store ne répond
       pas ; le prix facturé est celui du store.
 

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTabBarInset } from '../navigation/useTabBarInset';
 import { useMarketT } from '../hooks/useMarketT';
 import { colors } from '../theme/colors';
 import { radius } from '../theme/radius';
@@ -34,13 +34,13 @@ import { formatMoney } from '../utils/market';
 /// devise écrite en dur dans une phrase, là où c'est un montant. Le store
 /// reste la source de vérité côté abonnement ; ici c'est une accroche, et
 /// elle suit la devise du marché.
-const ENTRY_PRICE = 8.99;
+const ENTRY_PRICE = 6.99;
 
 const ShopScreen = () => {
   const navigation = useNavigation<any>();
   const { t } = useMarketT();
   const market = useMarket();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarInset();
   const { user, profile, refreshProfile } = useAuth();
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);

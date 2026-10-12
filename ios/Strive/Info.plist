@@ -12,8 +12,24 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Strive a besoin d'accéder aux captures pour analyser vos offres de course.</string>
+	<!-- Jamais demandée : la carte des zones n'affiche pas la position de
+	     l'appareil. Requise quand même parce que react-native-maps référence
+	     CLLocationManager, et qu'App Store Connect refuse un binaire qui
+	     référence une API de localisation sans phrase d'usage. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Strive affiche sur la carte les zones où vos courses rapportent le plus. Votre position n'est ni demandée ni enregistrée.</string>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>fr</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+		<string>es</string>
+		<string>pt</string>
+		<string>nl</string>
+		<string>de</string>
+		<string>it</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Strive</string>
 	<!-- Noms alternatifs pour Siri : « Strive » est souvent mal reconnu (surtout

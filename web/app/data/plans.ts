@@ -26,15 +26,15 @@ export type Plan = {
 // qui va sous le prix. Les deux se calculent ici, à partir des seuls montants :
 // les chaînes écrites à la main (« soit 7,49 € par mois », « 3 mois offerts »)
 // ont survécu à un changement de grille de trop. Avec la grille App Store
-// actuelle, Plus fait payer ~9 mois sur 12 (79,99 ÷ 8,99) : 3 mois offerts.
+// actuelle, Plus fait payer ~10 mois sur 12 (69,99 ÷ 6,99) : 2 mois offerts.
 const eur = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
 
 /** Équivalent mensuel d'un tarif annuel, arrondi au centime. */
 export const monthlyEquivalent = (p: Plan) => eur(p.amount.yearly / 12);
 
 /**
- * Douze mensualités, barrées à côté du tarif annuel. Sans ce repère, « 79,99 € »
- * se lit comme neuf fois plus cher que « 8,99 € » au lieu de trois mois de
+ * Douze mensualités, barrées à côté du tarif annuel. Sans ce repère, « 69,99 € »
+ * se lit comme dix fois plus cher que « 6,99 € » au lieu de deux mois de
  * moins — c'est le repère que l'app pose déjà sur sa carte annuelle
  * (`src/screens/SubscriptionScreen.tsx:527`). Rendu `null` quand l'annuel
  * n'économise rien : un prix barré qui vaut le prix affiché est un faux rabais.
@@ -71,8 +71,8 @@ const RAW_PLANS: Plan[] = [
     id: 'plus',
     name: 'Strive Plus',
     tagline: 'Se rembourse en une seule course.',
-    price: { monthly: '8,99 €', yearly: '79,99 €' },
-    amount: { monthly: 8.99, yearly: 79.99 },
+    price: { monthly: '6,99 €', yearly: '69,99 €' },
+    amount: { monthly: 6.99, yearly: 69.99 },
     suffix: { monthly: '/mois', yearly: '/an' },
     note: { monthly: 'Sans engagement', yearly: '' },
     points: [
@@ -84,8 +84,8 @@ const RAW_PLANS: Plan[] = [
     ],
     cta: 'Commencer mes 7 jours gratuits',
     footnote: {
-      monthly: 'Puis 8,99 €/mois. Annulable avant la fin, en 1 clic.',
-      yearly: 'Puis 79,99 €/an. Annulable avant la fin, en 1 clic.',
+      monthly: 'Puis 6,99 €/mois. Annulable avant la fin, en 1 clic.',
+      yearly: 'Puis 69,99 €/an. Annulable avant la fin, en 1 clic.',
     },
     featured: true,
     tag: 'Populaire',

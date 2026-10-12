@@ -19,6 +19,7 @@ import { hapticSelection } from '../utils/haptics';
 import { HAS_NATIVE_SCROLL_EDGE, applySoftScrollEdges } from '../utils/scrollEdge';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
+import { PILL_HEIGHT, tabBarBottom } from './tabBarMetrics';
 
 import DashboardScreenRaw from '../screens/DashboardScreen';
 import HistoryScreenRaw from '../screens/HistoryScreen';
@@ -36,7 +37,37 @@ const AnalyticsScreen = withErrorBoundary(AnalyticsScreenRaw);
 const ProfileScreen = withErrorBoundary(ProfileScreenRaw);
 const ShopScreen = withErrorBoundary(ShopScreenRaw);
 
+// La carte est sur iOS seulement pour l'instant : sur Android, react-native-maps
+// passe par Google Maps, qui demande une clé que l'app n'a pas encore. Le module
+// n'y est ni lié (react-native.config.js) ni chargé, et l'onglet n'y est pas
+// ENREGISTRÉ — même raisonnement que `SHOP_ENABLED` plus bas.
+const MapScreen: React.ComponentType<any> | null =
+  Platform.OS === 'ios'
+    ? withErrorBoundary(require('../screens/MapScreen').default)
+    : null;
+
 const Tab = createBottomTabNavigator();
+
+// iOS : la barre d'onglets NATIVE d'iOS (react-native-bottom-tabs). Sur iOS 26
+// c'est le Liquid Glass du système — la lentille qui déforme ce qui passe
+// dessous, la teinte qui s'adapte au fond, le liseré lumineux — et ses
+// comportements : la barre se réduit quand on fait défiler vers le bas, les
+// SF Symbols s'animent, un retour haptique au toucher. Aucun flou dessiné à la
+// main ne reproduit la lentille. Android garde la barre JS ci-dessous ; le
+// module natif n'y est pas lié (react-native.config.js).
+const NativeTab = Platform.OS === 'ios'
+  ? require('@bottom-tabs/react-navigation').createNativeBottomTabNavigator()
+  : null;
+
+/** Les mêmes icônes, en SF Symbols : le système les anime et les ajuste. */
+const SF_SYMBOLS: Record<string, string> = {
+  Dashboard: 'house.fill',
+  History:   'clock.arrow.circlepath',
+  Analytics: 'chart.bar.fill',
+  Map:       'map.fill',
+  Shop:      'storefront.fill',
+  Profile:   'person.crop.circle.fill',
+};
 
 // Une seule famille d'icônes, toutes en version pleine. Le profil tirait son
 // glyphe de FontAwesome5, dont la variante par défaut est un contour : à côté de
@@ -45,6 +76,7 @@ const TAB_ICONS: Record<string, (color: string, size: number) => React.ReactNode
   Dashboard: (c, s) => <MaterialCommunityIcons name="home"              size={s} color={c} />,
   History:   (c, s) => <MaterialCommunityIcons name="history"           size={s} color={c} />,
   Analytics: (c, s) => <MaterialCommunityIcons name="google-analytics"  size={s} color={c} />,
+  Map:       (c, s) => <MaterialCommunityIcons name="map"               size={s} color={c} />,
   Shop:      (c, s) => <MaterialCommunityIcons name="storefront"        size={s} color={c} />,
   Profile:   (c, s) => <MaterialCommunityIcons name="account"           size={s} color={c} />,
 };
@@ -62,7 +94,6 @@ const INACTIVE_TINT = 'rgba(255,255,255,0.42)';
 const TAB_ITEM_HEIGHT = 40;
 const ICON_LIFT = 7;
 
-const PILL_HEIGHT = 62;
 // Retrait latéral de la capsule flottante.
 const BAR_INSET_H = 20;
 // Course du fondu au-dessus de la capsule : la hauteur sur laquelle le contenu
@@ -281,7 +312,7 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
     extrapolate: 'clamp',
   });
 
-  const barBottom = Math.max(insets.bottom, 16) + 8;
+  const barBottom = tabBarBottom(insets.bottom);
 
   return (
     <View style={[styles.wrapper, { bottom: barBottom }]} pointerEvents="box-none">
@@ -460,9 +491,44 @@ const TabNavigator = () => {
     Dashboard: t('nav.dashboard'),
     History:   t('nav.history'),
     Analytics: t('nav.analytics'),
+    ...(MapScreen ? { Map: t('nav.map') } : {}),
     ...(SHOP_ENABLED ? { Shop: t('nav.shop') } : {}),
     Profile:   t('nav.profile'),
   };
+
+  const screens: Record<string, React.ComponentType<any>> = {
+    Dashboard: DashboardScreen,
+    History:   HistoryScreen,
+    Analytics: AnalyticsScreen,
+    ...(MapScreen ? { Map: MapScreen } : {}),
+    Shop:      ShopScreen,
+    Profile:   ProfileScreen,
+  };
+
+  if (NativeTab) {
+    return (
+      <NativeTab.Navigator
+        // iOS 26 : la barre se replie en défilant vers le bas, comme dans les
+        // apps d'Apple, et revient en remontant.
+        minimizeBehavior="onScrollDown"
+        hapticFeedbackEnabled
+        tabBarActiveTintColor={colors.primary}
+        translucent
+      >
+        {Object.keys(labels).map((name) => (
+          <NativeTab.Screen
+            key={name}
+            name={name}
+            component={screens[name]}
+            options={{
+              tabBarLabel: labels[name],
+              tabBarIcon: () => ({ sfSymbol: SF_SYMBOLS[name] }),
+            }}
+          />
+        ))}
+      </NativeTab.Navigator>
+    );
+  }
 
   return (
     <Tab.Navigator
@@ -473,13 +539,6 @@ const TabNavigator = () => {
       }}
     >
       {Object.keys(labels).map((name) => {
-        const screens: Record<string, React.ComponentType<any>> = {
-          Dashboard: DashboardScreen,
-          History:   HistoryScreen,
-          Analytics: AnalyticsScreen,
-          Shop:      ShopScreen,
-          Profile:   ProfileScreen,
-        };
         return (
           <Tab.Screen
             key={name}

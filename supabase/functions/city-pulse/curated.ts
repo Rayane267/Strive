@@ -304,7 +304,8 @@ export function curatedEvents(now = new Date()): SignalRow[] {
   for (const it of CURATED) {
     // Spectacles (humour, ballets, spectacles sur glace…) retirés : public
     // familial, sortie étalée, ils ne font pas la file de VTC d'un concert.
-    if (it.type === "SPECTACLE") continue;
+    // Salons retirés aussi : visiteurs étalés sur la journée, pas de sortie en masse.
+    if (it.type === "SPECTACLE" || it.type === "SALON") continue;
     const v = V[it.venue];
     const seats = it.seats ?? v.seats;
     for (const date of it.dates) {

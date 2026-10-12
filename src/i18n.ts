@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules, Platform } from 'react-native';
+import { AppState, NativeModules, Platform } from 'react-native';
 
 import en from './locales/en.json';
 import fr from './locales/fr.json';
@@ -11,7 +11,11 @@ import nl from './locales/nl.json';
 import de from './locales/de.json';
 import it from './locales/it.json';
 
-const STORE_LANGUAGE_KEY = 'user_language';
+// v2 : l'ancienne clé contenait aussi des langues auto-détectées, indiscernables d'un vrai choix.
+export const STORE_LANGUAGE_KEY = 'user_language_v2';
+
+/** Langue par défaut : celle de l'app quand le téléphone parle une langue non traduite. */
+export const DEFAULT_LANGUAGE = 'fr';
 
 function getDeviceLanguage(): string {
   try {
@@ -27,11 +31,11 @@ function getDeviceLanguage(): string {
         ? NativeModules.SettingsManager?.settings?.AppleLocale ||
           NativeModules.SettingsManager?.settings?.AppleLanguages?.[0]
         : NativeModules.I18nManager?.localeIdentifier;
-    if (typeof raw !== 'string') return 'en';
+    if (typeof raw !== 'string') return DEFAULT_LANGUAGE;
     const lang = raw.toLowerCase().split(/[-_]/)[0];
-    return lang || 'en';
+    return lang || DEFAULT_LANGUAGE;
   } catch {
-    return 'en';
+    return DEFAULT_LANGUAGE;
   }
 }
 
@@ -50,31 +54,33 @@ function getDeviceLanguage(): string {
  */
 export const SUPPORTED = ['fr', 'en', 'es', 'pt', 'nl', 'de', 'it'] as const;
 
+/** Langue du téléphone si elle est traduite, sinon le français. */
+export function deviceLanguage(): string {
+  const device = getDeviceLanguage();
+  return (SUPPORTED as readonly string[]).includes(device) ? device : DEFAULT_LANGUAGE;
+}
+
+/**
+ * Seul un choix explicite dans `LanguageSheet` écrit `STORE_LANGUAGE_KEY`.
+ * Pas de `cacheUserLanguage` : i18next l'appelle aussi après la détection
+ * initiale, ce qui figeait la langue du premier lancement comme un « choix ».
+ */
 const languageDetectorPlugin = {
   type: 'languageDetector' as const,
   async: true,
   init: () => {},
   detect: async function (callback: (lang: string) => void) {
     try {
-      // 1. Toujours prioriser la langue du téléphone
-      const device = getDeviceLanguage();
-      const detected = (SUPPORTED as readonly string[]).includes(device) ? device : 'en';
-
-      // 2. Choix utilisateur explicite uniquement s'il diffère de la langue device
       const stored = await AsyncStorage.getItem(STORE_LANGUAGE_KEY);
       if (stored && (SUPPORTED as readonly string[]).includes(stored)) {
         return callback(stored);
       }
-      return callback(detected);
+      return callback(deviceLanguage());
     } catch {
-      return callback('en');
+      return callback(DEFAULT_LANGUAGE);
     }
   },
-  cacheUserLanguage: async function (language: string) {
-    try {
-      await AsyncStorage.setItem(STORE_LANGUAGE_KEY, language);
-    } catch {}
-  },
+  cacheUserLanguage: () => {},
 };
 
 const resources = {
@@ -92,9 +98,25 @@ i18n
   .use(languageDetectorPlugin)
   .init({
     resources,
-    fallbackLng: 'en',
+    fallbackLng: DEFAULT_LANGUAGE,
     compatibilityJSON: 'v4',
     interpolation: { escapeValue: false },
   });
+
+// Le natif (Share Extension, bulle Android) suit chaque changement de langue.
+i18n.on('languageChanged', lang => {
+  NativeModules.ScanBridge?.setAppLanguage?.(lang);
+});
+
+// Changer la langue du téléphone s'applique au retour dans l'app, sans
+// redémarrage — sauf si le chauffeur a choisi une langue lui-même.
+AppState.addEventListener('change', async state => {
+  if (state !== 'active') return;
+  try {
+    if (await AsyncStorage.getItem(STORE_LANGUAGE_KEY)) return;
+  } catch {}
+  const next = deviceLanguage();
+  if (next !== i18n.language) i18n.changeLanguage(next);
+});
 
 export default i18n;

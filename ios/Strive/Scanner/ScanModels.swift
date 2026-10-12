@@ -121,6 +121,10 @@ public struct ScanResultModel {
   public let destinationAddress: String?
   public let pickupDurationMin: Int?
   public let pickupDistanceKm: Double?
+  /// Points géocodés par TomTom — nil hors chemin TomTom. Servent la carte des
+  /// zones (Stats), jamais le calcul.
+  public let pickupPoint: GeoPoint?
+  public let destPoint: GeoPoint?
 
   public init(
     platform: ScanPlatform,
@@ -130,7 +134,9 @@ public struct ScanResultModel {
     pickupAddress: String? = nil,
     destinationAddress: String? = nil,
     pickupDurationMin: Int? = nil,
-    pickupDistanceKm: Double? = nil
+    pickupDistanceKm: Double? = nil,
+    pickupPoint: GeoPoint? = nil,
+    destPoint: GeoPoint? = nil
   ) {
     self.platform = platform
     self.fare = fare
@@ -140,13 +146,17 @@ public struct ScanResultModel {
     self.destinationAddress = destinationAddress
     self.pickupDurationMin = pickupDurationMin
     self.pickupDistanceKm = pickupDistanceKm
+    self.pickupPoint = pickupPoint
+    self.destPoint = destPoint
   }
 
   func copy(
     distanceKm: Double? = nil,
     durationMin: Int? = nil,
     pickupAddress: String? = nil,
-    destinationAddress: String? = nil
+    destinationAddress: String? = nil,
+    pickupPoint: GeoPoint? = nil,
+    destPoint: GeoPoint? = nil
   ) -> ScanResultModel {
     return ScanResultModel(
       platform: self.platform,
@@ -156,8 +166,23 @@ public struct ScanResultModel {
       pickupAddress: pickupAddress ?? self.pickupAddress,
       destinationAddress: destinationAddress ?? self.destinationAddress,
       pickupDurationMin: self.pickupDurationMin,
-      pickupDistanceKm: self.pickupDistanceKm
+      pickupDistanceKm: self.pickupDistanceKm,
+      pickupPoint: pickupPoint ?? self.pickupPoint,
+      destPoint: destPoint ?? self.destPoint
     )
+  }
+}
+
+/// Un point arrondi à 3 décimales (~100 m) dès sa construction : la carte
+/// dessine des zones de 250 m au plus fin, il n'y a rien à garder en dessous
+/// (cf. 20261001_ride_coords.sql).
+public struct GeoPoint {
+  public let lat: Double
+  public let lon: Double
+
+  public init(lat: Double, lon: Double) {
+    self.lat = (lat * 1000).rounded() / 1000
+    self.lon = (lon * 1000).rounded() / 1000
   }
 }
 

@@ -30,7 +30,6 @@ import HelpScreenRaw from '../screens/HelpScreen';
 import SupportTicketsScreenRaw from '../screens/SupportTicketsScreen';
 import CityPulseScreenRaw from '../screens/CityPulseScreen';
 import SupportTicketDetailScreenRaw from '../screens/SupportTicketDetailScreen';
-import BestHoursScreenRaw from '../screens/BestHoursScreen';
 import ResetPasswordScreenRaw from '../screens/ResetPasswordScreen';
 import NetworkOfferScreenRaw from '../screens/NetworkOfferScreen';
 import NetworkReceiveScreenRaw from '../screens/NetworkReceiveScreen';
@@ -48,7 +47,6 @@ const SupportTicketsScreen = withErrorBoundary(SupportTicketsScreenRaw);
 const CityPulseScreen = withErrorBoundary(CityPulseScreenRaw);
 const SupportTicketDetailScreen = withErrorBoundary(SupportTicketDetailScreenRaw);
 const ResetPasswordScreen = withErrorBoundary(ResetPasswordScreenRaw);
-const BestHoursScreen = withErrorBoundary(BestHoursScreenRaw);
 const NetworkOfferScreen = withErrorBoundary(NetworkOfferScreenRaw);
 const NetworkReceiveScreen = withErrorBoundary(NetworkReceiveScreenRaw);
 
@@ -60,7 +58,14 @@ const ONBOARDING_SEEN_KEY = '@strive_has_seen_onboarding';
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
   const { t } = useTranslation();
-  const [tutorialChecked, setTutorialChecked] = useState(false);
+  // Pour QUEL compte la vérification a été faite, et non un simple booléen. Le
+  // booléen passait à vrai dès l'écran de connexion (aucun compte à vérifier) et
+  // le restait après la connexion : le navigateur montait alors sur MainTabs
+  // avant que la vérification ne réponde, et l'onboarding comme le tutoriel,
+  // ajoutés ensuite au stack, n'étaient jamais affichés à un nouveau compte.
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
+  const checkKey = user && profile?.first_name ? user.id : null;
+  const tutorialChecked = checkKey === null || checkedFor === checkKey;
   const [showTutorialFirst, setShowTutorialFirst] = useState(false);
   // Le splash n'est retiré qu'une fois son animation jouée en entier.
   const [splashDone, setSplashDone] = useState(false);
@@ -71,10 +76,7 @@ const RootNavigator = () => {
   const [showOnboardingFirst, setShowOnboardingFirst] = useState(false);
 
   useEffect(() => {
-    if (!user || !profile?.first_name) {
-      setTutorialChecked(true);
-      return;
-    }
+    if (!user || !checkKey) return;
     Promise.all([
       AsyncStorage.getItem(ONBOARDING_SEEN_KEY),
       AsyncStorage.getItem(TUTORIAL_SEEN_KEY),
@@ -82,10 +84,11 @@ const RootNavigator = () => {
       // LE TUTORIEL EST LOCAL, ET C'EST VOULU. Il fait installer le raccourci,
       // qui vit sur l'APPAREIL : une réinstallation a pu le casser, et le
       // rejouer est alors la bonne réponse. Un drapeau local dit exactement ça.
-      if (tuto !== '1') setShowTutorialFirst(true);
+      setShowTutorialFirst(tuto !== '1');
 
       if (onb === '1') {
-        setTutorialChecked(true);
+        setShowOnboardingFirst(false);
+        setCheckedFor(checkKey);
         return;
       }
 
@@ -122,12 +125,11 @@ const RootNavigator = () => {
       if (alreadyAnswered) {
         // On note localement, pour ne pas redemander au compte à chaque lancement.
         AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1').catch(() => {});
-      } else {
-        setShowOnboardingFirst(true);
       }
-      setTutorialChecked(true);
+      setShowOnboardingFirst(!alreadyAnswered);
+      setCheckedFor(checkKey);
     });
-  }, [user, profile?.first_name]);
+  }, [user, checkKey]);
 
   const bootPending =
     loading ||
@@ -335,12 +337,6 @@ const RootNavigator = () => {
           <Stack.Screen
             name="SupportTicketDetail"
             component={SupportTicketDetailScreen}
-            options={{ headerShown: false, animation: 'slide_from_right' }}
-          />
-
-          <Stack.Screen
-            name="BestHours"
-            component={BestHoursScreen}
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
 

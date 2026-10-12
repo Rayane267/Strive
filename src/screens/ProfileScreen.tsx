@@ -21,7 +21,7 @@ import SafeGradient from '../components/SafeGradient';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTabBarInset } from '../navigation/useTabBarInset';
 import PlusBadge from '../components/PlusBadge';
 import PlanBadge from '../components/PlanBadge';
 import Toggle from '../components/Toggle';
@@ -106,7 +106,7 @@ const ProfileScreen = () => {
   const market = useMarket();
   const navigation = useNavigation<any>();
   const { t, i18n } = useMarketT();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarInset();
   const { profile, user, refreshProfile } = useAuth();
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);

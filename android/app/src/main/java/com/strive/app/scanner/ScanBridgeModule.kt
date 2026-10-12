@@ -416,6 +416,10 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 if (o.isNull("destinationAddress")) putNull("destinationAddress") else putString("destinationAddress", o.optString("destinationAddress"))
                 if (o.isNull("pickupDurationMin")) putNull("pickupDurationMin") else putInt("pickupDurationMin", o.optInt("pickupDurationMin"))
                 if (o.isNull("pickupDistanceKm")) putNull("pickupDistanceKm") else putDouble("pickupDistanceKm", o.optDouble("pickupDistanceKm"))
+                // `isNull` vaut aussi pour une clé absente (entrée d'un build antérieur).
+                for (k in arrayOf("pickupLat", "pickupLon", "destLat", "destLon")) {
+                    if (o.isNull(k)) putNull(k) else putDouble(k, o.optDouble(k))
+                }
                 // Absents du buffer par conception (PII + poids) — cf. bufferScanResult.
                 putNull("imageBase64")
                 putNull("debugBlocks")
@@ -619,6 +623,10 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 else putNull("pickupDurationMin")
                 if (result.pickupDistanceKm != null) putDouble("pickupDistanceKm", result.pickupDistanceKm)
                 else putNull("pickupDistanceKm")
+                if (result.pickupLat != null) putDouble("pickupLat", result.pickupLat) else putNull("pickupLat")
+                if (result.pickupLon != null) putDouble("pickupLon", result.pickupLon) else putNull("pickupLon")
+                if (result.destLat != null) putDouble("destLat", result.destLat) else putNull("destLat")
+                if (result.destLon != null) putDouble("destLon", result.destLon) else putNull("destLon")
                 // Image (JPEG compressée, base64) pour fallback Gemini côté JS
                 if (imageBase64 != null) putString("imageBase64", imageBase64)
                 else putNull("imageBase64")
@@ -689,6 +697,10 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 put("destinationAddress", result.destinationAddress ?: JSONObject.NULL)
                 put("pickupDurationMin", result.pickupDurationMin ?: JSONObject.NULL)
                 put("pickupDistanceKm", result.pickupDistanceKm ?: JSONObject.NULL)
+                put("pickupLat", result.pickupLat ?: JSONObject.NULL)
+                put("pickupLon", result.pickupLon ?: JSONObject.NULL)
+                put("destLat", result.destLat ?: JSONObject.NULL)
+                put("destLon", result.destLon ?: JSONObject.NULL)
                 put("screenHeight", screenHeight)
                 put("scanTs", if (scanTs > 0) scanTs else JSONObject.NULL)
                 // Un booléen : ni PII ni poids, contrairement au screenshot et aux

@@ -3,7 +3,7 @@ import { ImageResponse } from 'next/og';
 // Pas de `runtime = 'edge'` : sur Next 16 il desactive la generation statique
 // de l'image, qui repasse alors par une fonction a chaque crawler. Rendue au
 // build, elle est servie depuis le CDN et ne peut plus echouer en ligne.
-export const alt = 'Strive — Sache. Décide. Gagne.';
+export const alt = 'Strive — Analyse. Décide. Gagne.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -55,7 +55,7 @@ export default function TwitterImage() {
               flexWrap: 'wrap',
             }}
           >
-            Sache. Décide.&nbsp;<span style={{ color: '#00E676' }}>Gagne.</span>
+            Analyse. Décide.&nbsp;<span style={{ color: '#00E676' }}>Gagne.</span>
           </div>
           <div style={{ marginTop: '28px', fontSize: '34px', color: '#8F9B96', maxWidth: '900px' }}>
             Scanne chaque offre VTC en 2 secondes et vois ton €/h réel avant d&apos;accepter.

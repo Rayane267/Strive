@@ -74,6 +74,20 @@ export const decodeEntities = (s: string) =>
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[name] ?? m);
 
+// ── Seules les FORTES perturbations comptent ──────────────────────────────
+// Un malaise voyageur ou un colis suspect arrêtent une ligne un quart d'heure :
+// pas de vague de clients. Ce qui en crée une, c'est une ligne coupée ou une
+// grève. On garde donc uniquement ces deux cas, et on écarte explicitement les
+// incidents courts même quand ils disent « interrompu » quelques minutes.
+const MAJOR = /interromp|interruption|ne circule pas|aucun (train|métro|tram|rer)|trafic (arrêté|coupé)|ligne fermée|fermeture de la ligne|grève|mouvement social/i;
+const MINOR = /malaise|voyageur (malade|souffrant)|colis|bagage|objet (suspect|oublié|abandonné)|incident (technique|d'exploitation)|stationnent?\b|régulation|ralenti|train supprimé|suppression\b|ascenseur|escalier/i;
+
+/** Ligne coupée ou grève, et pas un incident de quelques minutes. */
+export const isMajorDisruption = (...texts: (string | null | undefined)[]) => {
+  const all = texts.filter(Boolean).join(" ");
+  return MAJOR.test(all) && !MINOR.test(all);
+};
+
 const stripHtml = (s: string) =>
   decodeEntities(s.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, ""))
     .replace(/\s+/g, " ").trim();
@@ -117,6 +131,7 @@ export function idfmSignals(
     if (d.severity === "INFORMATION" || d.cause === "INFORMATION") continue;
     // Des travaux qui ne coupent rien (quai fermé, ascenseur) ne changent pas la demande.
     if (d.cause === "TRAVAUX" && d.severity !== "BLOQUANTE") continue;
+    if (!isMajorDisruption(d.title, d.message ? stripHtml(d.message) : null)) continue;
     const period = d.applicationPeriods.find(p => p.begin <= now && now <= p.end);
     if (!period) continue;
     // Une station fermée depuis trois mois n'est plus une info : les voyageurs

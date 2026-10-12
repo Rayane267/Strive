@@ -2,7 +2,7 @@
 
 [🇫🇷 Français](./PRIVACY_POLICY.md) · 🇬🇧 English
 
-**Last updated: September 22, 2026**
+**Last updated: October 5, 2026**
 
 ---
 
@@ -32,7 +32,9 @@ We apply the principle of minimisation: we only process data necessary for the S
 
 **2.2 — Profile & vehicle**: make, model, year, fuel type and average consumption of your vehicle; device language and time zone; preferences (minimum €/h and €/km thresholds, day-reset time, display options).
 
-**2.3 — Scanned rides**: platform, proposed fare, distance, duration, status (accepted / declined), timestamp; pickup and drop-off addresses present in the offer (used to compute real distance/duration and feed your history); driving sessions (start, end, duration).
+**2.3 — Scanned rides**: platform, proposed fare, distance, duration, status (accepted / declined), timestamp; pickup and drop-off addresses present in the offer (used to compute real distance/duration and feed your history); approximate GPS coordinates (to ~100 m) of the pickup and drop-off points, derived from those addresses; driving sessions (start, end, duration).
+
+**2.3 bis — Community map (Plus subscribers)**: your scanned rides feed, **anonymously and in aggregate**, the live demand map shown to Plus subscribers: rides scanned in the last few minutes appear there as **approximate zones** whose intensity reflects how many there are. **No address, identifier, time or figure is shown to other drivers**, and a zone only appears once it groups several rides from several different drivers. This processing is based on our **legitimate interest** (Art. 6.1.f); **you may object at any time** by writing to **contact@striveapp.fr**.
 
 **2.4 — Subscription data**: subscription status and type, Scan credits, technical identifier from our subscription-management provider. **We have no access to any banking data**: payments are handled by the App Store or Google Play.
 
@@ -53,6 +55,7 @@ We apply the principle of minimisation: we only process data necessary for the S
 | Purpose | Legal basis (GDPR) |
 |---|---|
 | Provide the Service (scan, verdict, history, statistics, subscription) | Performance of the contract (Art. 6.1.b) |
+| Anonymous, aggregated community map | Legitimate interest (Art. 6.1.f), with right to object (Art. 21) |
 | Improve OCR reliability (including diagnostic capture), prevent fraud and abuse, ensure security | Legitimate interest (Art. 6.1.f), with right to object (Art. 21) |
 | Push notifications | Consent (Art. 6.1.a), revocable at any time |
 | Comply with legal obligations | Legal obligation (Art. 6.1.c) |
@@ -75,6 +78,7 @@ Your data is hosted by **Supabase** in the **`eu-west-1` (Ireland)** region, i.e
 ## 7. Retention periods
 
 - **Account, profile, rides (including addresses), sessions**: kept while your account is active, to provide your history and statistics; deleted upon account deletion;
+- **Ride GPS coordinates**: erased after 12 months;
 - **Diagnostic captures**: 30 days maximum;
 - **Non-identifying telemetry**: kept in aggregated form;
 - **Error reports (Sentry)**: per the service's retention (typically 90 days).
