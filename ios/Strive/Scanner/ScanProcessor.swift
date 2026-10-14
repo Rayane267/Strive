@@ -227,11 +227,28 @@ final class ScanProcessor {
       // EN
       "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
     ].contains { text.contains($0) }
-    let hasPrice = text.range(of: #"\d{1,3}[.,]\d{2}\s*€"#, options: .regularExpression) != nil
-      || text.range(of: #"€\s*\d"#, options: .regularExpression) != nil
-    let hasKm = text.range(of: #"\d[\d.,]*\s*km"#, options: .regularExpression) != nil
-    let hasMin = text.range(of: #"\d+\s*min"#, options: .regularExpression) != nil
+    let hasPrice = offerHas(text, offerPriceRegex) || offerHas(text, offerPriceLeadingRegex)
+    let hasKm = offerHas(text, offerKmRegex)
+    let hasMin = offerHas(text, offerMinRegex)
     return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
+  }
+
+  // ⚠️ PAS de `String.range(of:options: .regularExpression)` dans le scanner.
+  //
+  // Depuis iOS 26.7.1, Foundation exécute cette option sur le moteur Regex de
+  // Swift, qui compile le motif avec un `try!` interne : `[\d.,]` y est rejeté
+  // (« invalid bound for character class range ») et le process meurt —
+  // « Strive a quitté inopinément » dans Raccourcis, à chaque scan. Aucun
+  // `catch` ne rattrape une erreur fatale. `NSRegularExpression` reste sur ICU,
+  // comme tout OcrParser, et un motif refusé y donne `nil`, pas un crash.
+  private static let offerPriceRegex = try? NSRegularExpression(pattern: #"\d{1,3}[.,]\d{2}\s*€"#)
+  private static let offerPriceLeadingRegex = try? NSRegularExpression(pattern: #"€\s*\d"#)
+  private static let offerKmRegex = try? NSRegularExpression(pattern: #"\d[\d.,]*\s*km"#)
+  private static let offerMinRegex = try? NSRegularExpression(pattern: #"\d+\s*min"#)
+
+  private static func offerHas(_ text: String, _ regex: NSRegularExpression?) -> Bool {
+    guard let regex = regex else { return false }
+    return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
   }
 
   /// Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.
