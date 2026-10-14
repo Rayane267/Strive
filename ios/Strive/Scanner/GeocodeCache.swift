@@ -89,9 +89,12 @@ final class GeocodeCache {
   private func normalize(_ s: String) -> String {
     let folded = s.folding(options: .diacriticInsensitive, locale: nil)
     let lowered = folded.lowercased()
-    let collapsed = lowered.replacingOccurrences(
-      of: "\\s+", with: " ", options: .regularExpression
-    )
-    return collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Découpe sur les blancs plutôt que `.regularExpression`, qu'iOS 26 confie
+    // au moteur Regex de Swift (cf. `ScanProcessor.amountRegex`). Les morceaux
+    // vides tombent, ce qui fait aussi le trim.
+    return lowered
+      .components(separatedBy: .whitespacesAndNewlines)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
   }
 }

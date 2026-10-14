@@ -79,6 +79,7 @@ const ANDROID = {
   app_name: 'appName',
   accessibility_service_description: 'accessibilityDescription',
   scanner_not_a_ride: 'noOffer',
+  scanner_unsupported_language: 'unsupportedLanguage',
   scanner_session_required_bubble: 'bubbleGoOnline',
   scanner_session_required_title: 'sessionRequired',
   scanner_session_required_body: 'bubbleSessionBody',

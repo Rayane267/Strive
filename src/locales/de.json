@@ -803,7 +803,8 @@
       "timeout": "Auswertung zu lang",
       "route_unreachable": "Routendienst nicht erreichbar",
       "route_unusable": "Route nicht berechenbar",
-      "route_no_key": "Messung auf diesem Gerät nicht verfügbar"
+      "route_no_key": "Messung auf diesem Gerät nicht verfügbar",
+      "unsupported_language": "Sprache nicht erkannt"
     }
   },
   "iap": {
@@ -1195,6 +1196,10 @@
     "replayGift": "Den Bildschirm der geschenkten Scans ansehen",
     "replayOnboarding": "Onboarding zurücksetzen",
     "replayDone": "Erledigt. Schliess die App vollständig und öffne sie neu, um den Ablauf erneut zu sehen.",
+    "freshReset": "Wie ein neues Gerät neu beginnen",
+    "freshConfirm": "Meldet dieses Konto ab (ohne es zu löschen), erzeugt eine neue Geräte-ID und löscht alle lokalen Daten von Strive, wie bei einer Erstinstallation.",
+    "freshGo": "Zurücksetzen",
+    "freshDone": "Erledigt. Registriere ein anderes Konto mit Google und einer anderen Adresse – mit Apple meldet dich dieses Gerät immer wieder beim selben Konto an. Um auch die Berechtigungsabfragen erneut zu sehen, lösche die App und installiere sie neu.",
     "simZonesTitle": "Hotspots simulieren",
     "simZonesSub": "Ersetzt die Live-Karte durch erfundene Nachfrage rund um die Ansicht. Nur auf diesem Gerät: Es wird nichts gesendet, andere Fahrer sehen nichts."
   },
@@ -1336,6 +1341,7 @@
     "unsupportedFormat": "Nicht unterstütztes Bildformat",
     "noImageInShare": "Kein Bild in der Freigabe gefunden",
     "noOffer": "Kein Fahrtangebot erkannt",
+    "unsupportedLanguage": "Sprache nicht erkannt. Stell deine Fahrer-App auf Englisch um.",
     "aiAnalysis": "KI-Analyse läuft…",
     "cannotAnalyze": "Dieses Bild konnte nicht analysiert werden",
     "addressesUnreadable": "Scan fehlgeschlagen — Adressen unlesbar, versuch es erneut",

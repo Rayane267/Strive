@@ -244,9 +244,10 @@ final class OcrParser {
       pattern: #"(\d{1,3}(?:\s*[.,]\s*\d{1,2})?)\s*(?:miles?|mi)(?![a-zà-ü-])"#,
       options: [.caseInsensitive]
     ) { match in
-      let raw = match.replacingOccurrences(
-        of: #"[^0-9.,]"#, with: "", options: .regularExpression
-      ).replacingOccurrences(of: ",", with: ".")
+      // Filtre de caractères plutôt que `.regularExpression`, qu'iOS 26 confie
+      // au moteur Regex de Swift (cf. `ScanProcessor.amountRegex`).
+      let raw = match.filter { "0123456789.,".contains($0) }
+        .replacingOccurrences(of: ",", with: ".")
       guard let value = Double(raw) else { return match }
       return String(format: "%.1f km", value * 1.609344)
     }

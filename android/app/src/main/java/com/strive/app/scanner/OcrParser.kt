@@ -96,27 +96,41 @@ object OcrParser {
     )
 
     /**
-     * Heuristique légère : le texte OCR ressemble-t-il à une offre VTC ?
-     * Permet de court-circuiter le fallback Gemini (coût) quand l'utilisateur
-     * scanne une pub / un écran quelconque. Bilingue FR + EN.
-     * Mirror de `ScanProcessor.looksLikeRideOffer` (iOS).
-     * Permissive volontairement : un faux positif coûte 1 appel Gemini, un faux
-     * négatif fait rater une course → on privilégie de laisser passer.
+     * L'écran ressemble-t-il à une offre VTC ? Ne sert plus qu'une fois le
+     * parser en échec : décide du motif (`gemini_ko` / `not_a_ride`) et surtout
+     * si le texte de l'écran part dans `scan_debug`.
+     *
+     * STRUCTUREL, et non plus lexical. Le nom d'une plateforme ou un mot comme
+     * « course » suffisait : c'était fait pour laisser passer large vers Gemini,
+     * un faux positif ne coûtant qu'un appel. Gemini parti, un faux positif
+     * envoie en base le texte d'un écran PERSONNEL — l'écran d'accueil d'un
+     * chauffeur, apps bancaires comprises, passait sur la seule étiquette
+     * « Uber Driver ». Une offre, dans toutes les langues, c'est un montant ET
+     * une distance ou une durée. Le montant peut être nu : l'OCR perd souvent
+     * le symbole de devise. Mirror de `ScanProcessor.looksLikeRideOffer` (iOS).
      */
     fun looksLikeRideOffer(rawText: String): Boolean {
         val text = rawText.lowercase()
-        val hasPlatform = text.contains("uber") || text.contains("bolt") || text.contains("heetch")
-        val hasRideWords = listOf(
-            // FR
-            "course", "trajet", "prise en charge", "dépose", "gains", "accepter", "min de marche",
-            // EN
-            "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
-        ).any { text.contains(it) }
-        val hasPrice = Regex("""\d{1,3}[.,]\d{2}\s*(?:€|£|CHF)""", RegexOption.IGNORE_CASE).containsMatchIn(text)
-            || Regex("""(?:€|£|CHF)\s*\d""", RegexOption.IGNORE_CASE).containsMatchIn(text)
-        val hasKm = Regex("""\d[\d.,]*\s*km""").containsMatchIn(text)
-        val hasMin = Regex("""\d+\s*min""").containsMatchIn(text)
-        return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
+        val hasAmount = Regex("""\d{1,3}[.,]\d{2}(?![.,]?\d)""").containsMatchIn(text)
+            || Regex("""(?:€|£|chf)\s*\d|\d\s*(?:€|£|chf)""").containsMatchIn(text)
+        val hasDistance = Regex("""\d[\d.,]*\s*(?:km|mi)\b""").containsMatchIn(text)
+        val hasDuration = Regex("""\d+\s*min""").containsMatchIn(text)
+        return hasAmount && (hasDistance || hasDuration)
+    }
+
+    /**
+     * L'écran est-il dans une langue que l'app ne parle pas ? Repéré par des
+     * lettres qu'aucune des sept langues de Strive (fr, en, es, pt, nl, de, it)
+     * n'emploie : roumain (ă ș ț), polonais, tchèque, turc, hongrois, baltes…,
+     * et les écritures non latines. Deux lignes au moins : un nom de lieu
+     * étranger seul ne fait pas une langue.
+     * Mirror de `ScanProcessor.isUnsupportedLanguage` (iOS).
+     */
+    fun isUnsupportedLanguage(lines: List<String>): Boolean {
+        val foreign = Regex(
+            """[ășşțţąęłńśźżćřěůňťďľĺŕčšžğıőűāēīūķļņģėįųđþð\x{0370}-\x{03FF}\x{0400}-\x{052F}\x{0530}-\x{058F}\x{0590}-\x{05FF}\x{0600}-\x{06FF}\x{0900}-\x{097F}\x{0E00}-\x{0E7F}\x{10A0}-\x{10FF}\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}]"""
+        )
+        return lines.count { foreign.containsMatchIn(it.lowercase()) } >= 2
     }
 
     // Mots-clés de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs

@@ -795,7 +795,8 @@
       "timeout": "Analysis timed out",
       "route_unreachable": "Routing service unreachable",
       "route_unusable": "Route could not be computed",
-      "route_no_key": "Measurement unavailable on this device"
+      "route_no_key": "Measurement unavailable on this device",
+      "unsupported_language": "Language not recognised"
     }
   },
   "iap": {
@@ -1187,6 +1188,10 @@
     "replayGift": "Show the free-scans screen",
     "replayOnboarding": "Re-arm onboarding",
     "replayDone": "Done. Fully close the app and relaunch it to see the flow again.",
+    "freshReset": "Start over as a fresh phone",
+    "freshConfirm": "Signs this account out (without deleting it), regenerates the device ID and erases all of Strive's local data, like a first install.",
+    "freshGo": "Reset",
+    "freshDone": "Done. Sign up with another account using Google and another address — with Apple, this phone always signs you back into the same account. To see the permission prompts again too, delete and reinstall the app.",
     "simZonesTitle": "Simulate hot zones",
     "simZonesSub": "Replaces the live map with made-up demand around the current view. This device only: nothing is sent, other drivers see nothing."
   },
@@ -1328,6 +1333,7 @@
     "unsupportedFormat": "Unsupported image format",
     "noImageInShare": "No image found in the share",
     "noOffer": "No ride offer detected",
+    "unsupportedLanguage": "Language not recognised. Please switch your driver app to English.",
     "aiAnalysis": "AI analysis in progress…",
     "cannotAnalyze": "Could not analyze this image",
     "addressesUnreadable": "Scan failed — addresses unreadable, try again",

@@ -345,7 +345,8 @@
       "PowerShell(npx react-native start --port 8081)",
       "Bash(MSYS_NO_PATHCONV=1 adb shell screencap //sdcard/premium.png)",
       "Bash(MSYS_NO_PATHCONV=1 adb pull //sdcard/premium.png '__TRACKED_VAR__\\\\premium.png')",
-      "Bash(env)"
+      "Bash(env)",
+      "Bash(grep -o -i \"coordonnées gps[^<]\\\\{0,60\\\\}\\\\|carte communautaire[^<]\\\\{0,40\\\\}\")"
     ]
   },
   "enableAllProjectMcpServers": true,

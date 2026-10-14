@@ -803,7 +803,8 @@
       "timeout": "Analyse duurde te lang",
       "route_unreachable": "Routeservice onbereikbaar",
       "route_unusable": "Route kon niet worden berekend",
-      "route_no_key": "Meting niet beschikbaar op dit toestel"
+      "route_no_key": "Meting niet beschikbaar op dit toestel",
+      "unsupported_language": "Taal niet herkend"
     }
   },
   "iap": {
@@ -1195,6 +1196,10 @@
     "replayGift": "Het scherm met gratis scans bekijken",
     "replayOnboarding": "Onboarding herladen",
     "replayDone": "Klaar. Sluit de app volledig af en open ze opnieuw om het traject te herbekijken.",
+    "freshReset": "Opnieuw beginnen als nieuw toestel",
+    "freshConfirm": "Meldt dit account af (zonder het te verwijderen), maakt een nieuwe toestel-ID aan en wist alle lokale gegevens van Strive, zoals bij een eerste installatie.",
+    "freshGo": "Resetten",
+    "freshDone": "Klaar. Registreer een ander account met Google en een ander adres — met Apple meldt dit toestel je altijd weer aan bij hetzelfde account. Om ook de toestemmingsvragen opnieuw te zien, verwijder je de app en installeer je ze opnieuw.",
     "simZonesTitle": "Hotspots simuleren",
     "simZonesSub": "Vervangt de live kaart door verzonnen vraag rond het huidige beeld. Alleen op dit toestel: er wordt niets verstuurd, andere chauffeurs zien niets."
   },
@@ -1336,6 +1341,7 @@
     "unsupportedFormat": "Niet-ondersteund afbeeldingsformaat",
     "noImageInShare": "Geen afbeelding gevonden in het gedeelde item",
     "noOffer": "Geen ritaanbod gevonden",
+    "unsupportedLanguage": "Taal niet herkend. Zet je chauffeursapp in het Engels.",
     "aiAnalysis": "AI-analyse bezig…",
     "cannotAnalyze": "Deze afbeelding kon niet worden geanalyseerd",
     "addressesUnreadable": "Scan mislukt — adressen onleesbaar, probeer opnieuw",

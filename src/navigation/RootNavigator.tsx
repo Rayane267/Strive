@@ -53,7 +53,14 @@ const NetworkReceiveScreen = withErrorBoundary(NetworkReceiveScreenRaw);
 const Stack = createNativeStackNavigator();
 
 const TUTORIAL_SEEN_KEY = '@strive_has_seen_tutorial';
-const ONBOARDING_SEEN_KEY = '@strive_has_seen_onboarding';
+// Par COMPTE. Le drapeau était global : sur un téléphone où un compte avait
+// fini l'onboarding, un second compte — ou le même, supprimé puis recréé — le
+// sautait sans que rien ne soit demandé au serveur.
+const onboardingSeenKey = (userId: string) => `@strive_has_seen_onboarding:${userId}`;
+// Posé par Diagnostics › « Rejouer l'onboarding » (même littéral là-bas) :
+// force le parcours sur un compte qui y a déjà répondu, le temps d'un passage.
+// Sans lui, le contrôle du compte le sautait et seul le tutoriel était rejoué.
+const ONBOARDING_REPLAY_KEY = '@strive_onboarding_replay';
 
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
@@ -76,15 +83,27 @@ const RootNavigator = () => {
   const [showOnboardingFirst, setShowOnboardingFirst] = useState(false);
 
   useEffect(() => {
-    if (!user || !checkKey) return;
+    // Sur `checkKey` (l'id du compte) et non sur l'objet `user` : AuthContext en
+    // recrée un à chaque événement d'authentification, rafraîchissement horaire
+    // du jeton compris. Le contrôle repartait alors en plein onboarding, trouvait
+    // `monthly_goal` que l'étape de calcul vient d'écrire, et retirait l'écran
+    // sous les doigts du chauffeur.
+    if (!checkKey) return;
     Promise.all([
-      AsyncStorage.getItem(ONBOARDING_SEEN_KEY),
+      AsyncStorage.getItem(onboardingSeenKey(checkKey)),
       AsyncStorage.getItem(TUTORIAL_SEEN_KEY),
-    ]).then(async ([onb, tuto]) => {
+      AsyncStorage.getItem(ONBOARDING_REPLAY_KEY),
+    ]).then(async ([onb, tuto, replay]) => {
       // LE TUTORIEL EST LOCAL, ET C'EST VOULU. Il fait installer le raccourci,
       // qui vit sur l'APPAREIL : une réinstallation a pu le casser, et le
       // rejouer est alors la bonne réponse. Un drapeau local dit exactement ça.
       setShowTutorialFirst(tuto !== '1');
+
+      if (replay === '1') {
+        setShowOnboardingFirst(true);
+        setCheckedFor(checkKey);
+        return;
+      }
 
       if (onb === '1') {
         setShowOnboardingFirst(false);
@@ -103,19 +122,25 @@ const RootNavigator = () => {
       // perdait sans rien demander, et ne le voyait qu'à ses verdicts, qui
       // changeaient de couleur.
       //
-      // `monthly_goal` n'a pas de valeur par défaut et n'est écrit que par
-      // l'onboarding : sa présence signe un parcours déjà fait. `min_hourly_rate`
-      // couvre le cas du chauffeur qui l'avait passé puis réglé ses seuils
-      // lui-même — lui non plus n'a rien à refaire.
+      // `monthly_goal` SEUL fait foi : l'onboarding est le seul à l'écrire, on
+      // ne peut pas le finir sans (l'étape « objectif » bloque), et la colonne
+      // n'a pas de valeur par défaut (20260807_income_goal).
+      //
+      // `min_hourly_rate` en faisait partie, pour le chauffeur qui avait réglé
+      // ses seuils à la main sans passer par l'onboarding. Mauvais signal : les
+      // Préférences et le changement de devise l'écrivent aussi, et rien dans le
+      // dépôt ne dit que la table `preferences`, créée hors des migrations, ne
+      // lui donne pas une valeur par défaut — auquel cas tout compte neuf
+      // passait pour un compte qui avait répondu, et ne voyait jamais
+      // l'onboarding. Le prix : ce chauffeur-là le verra une fois.
       let alreadyAnswered = false;
       try {
         const { data } = await supabase
           .from('preferences')
-          .select('monthly_goal, min_hourly_rate')
-          .eq('id', user.id)
+          .select('monthly_goal')
+          .eq('id', checkKey)
           .maybeSingle();
-        alreadyAnswered =
-          !!data && (data.monthly_goal != null || data.min_hourly_rate != null);
+        alreadyAnswered = data?.monthly_goal != null;
       } catch {
         // Réseau coupé : on ne sait pas. Poser les questions à quelqu'un qui y a
         // déjà répondu est désagréable ; les sauter à un nouveau chauffeur le
@@ -124,12 +149,12 @@ const RootNavigator = () => {
 
       if (alreadyAnswered) {
         // On note localement, pour ne pas redemander au compte à chaque lancement.
-        AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1').catch(() => {});
+        AsyncStorage.setItem(onboardingSeenKey(checkKey), '1').catch(() => {});
       }
       setShowOnboardingFirst(!alreadyAnswered);
       setCheckedFor(checkKey);
     });
-  }, [user, checkKey]);
+  }, [checkKey]);
 
   const bootPending =
     loading ||
@@ -219,7 +244,8 @@ const RootNavigator = () => {
                 <OnboardingScreenRaw
                   {...props}
                   onFinish={(opts?: { openPaywall?: boolean }) => {
-                    AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+                    if (user) AsyncStorage.setItem(onboardingSeenKey(user.id), '1');
+                    AsyncStorage.removeItem(ONBOARDING_REPLAY_KEY);
                     setShowOnboardingFirst(false);
                     // Les seuils viennent d'être écrits en base : on rafraîchit le
                     // profil pour que le Dashboard et le natif les voient tout de suite.

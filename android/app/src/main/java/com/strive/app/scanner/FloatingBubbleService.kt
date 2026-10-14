@@ -471,6 +471,22 @@ class FloatingBubbleService : Service() {
         recognizer.process(InputImage.fromBitmap(bitmapForOcr, 0))
             .addOnSuccessListener { visionText ->
                 ocrBitmap?.recycle()
+                // Offre dans une langue que l'app ne parle pas : refusée AVANT le
+                // parse, même s'il aurait abouti — mêmes raisons qu'iOS (cf.
+                // ScanProcessor.process). Les blocs ne partent pas en base ;
+                // `detail` porte la langue du téléphone.
+                val lines = visionText.textBlocks.flatMap { b -> b.lines.map { it.text } }
+                if (OcrParser.looksLikeRideOffer(visionText.text) && OcrParser.isUnsupportedLanguage(lines)) {
+                    fullBitmap.recycle()
+                    onUnsupportedLanguage()
+                    ScanBridgeModule.emitScanFailure(
+                        this, "unsupported_language",
+                        android.content.res.Resources.getSystem().configuration.locales[0].toLanguageTag(),
+                    )
+                    ScanBridgeModule.emitScanFailed()
+                    scanInProgress = false
+                    return@addOnSuccessListener
+                }
                 val result = OcrParser.parse(visionText, w, h, fullBitmap)
                 val debugBlocks = OcrParser.dumpBlocks(visionText)
                 if (result != null) {
@@ -491,8 +507,8 @@ class FloatingBubbleService : Service() {
                     // local n'a pas su lire, donc exactement la fixture qui manque.
                     failUnreadable(fullBitmap, debugBlocks, h)
                 } else {
-                    // Pré-filtre anti-pub : du texte a été lu mais aucun signal VTC
-                    // (prix €, km/min, plateforme) → « pas une offre » plutôt qu'un échec.
+                    // Pré-filtre anti-pub : du texte a été lu mais pas d'offre (un
+                    // montant ET une distance ou une durée) → « pas une offre ».
                     // Mirror iOS (ScanProcessor.lastScanMayBeRide).
                     fullBitmap.recycle()
                     onNotARide()
@@ -541,6 +557,13 @@ class FloatingBubbleService : Service() {
     private fun onNotARide() {
         mainHandler.post { showNotARideState() }
         mainHandler.postDelayed({ showIdleState() }, 2500)
+    }
+
+    /** Offre dans une langue que l'app ne lit pas. Reste plus longtemps : c'est
+     *  une consigne à lire, pas un simple constat. */
+    private fun onUnsupportedLanguage() {
+        mainHandler.post { showNotARideState(com.strive.R.string.scanner_unsupported_language) }
+        mainHandler.postDelayed({ showIdleState() }, 5000)
     }
 
     /**
@@ -1244,7 +1267,7 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
-    private fun showNotARideState() {
+    private fun showNotARideState(textRes: Int = com.strive.R.string.scanner_not_a_ride) {
         clearTransientState()
         bubbleContainer.removeAllViews()
 
@@ -1264,9 +1287,12 @@ class FloatingBubbleService : Service() {
         })
         pill.addView(TextView(this).apply {
             // Localisé via strings.xml (fr) / values-en (en) — suit la locale appareil.
-            text = str(com.strive.R.string.scanner_not_a_ride)
+            text = str(textRes)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
+            // La consigne de langue tient sur deux lignes : sans borne, la pastille
+            // déborderait de l'écran.
+            maxWidth = dpToPx(260)
         })
 
         bubbleContainer.addView(pill, FrameLayout.LayoutParams(

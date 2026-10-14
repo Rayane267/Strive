@@ -254,8 +254,10 @@ export interface Failure {
   email: string | null;
 }
 
-/** Les treize motifs normalisés par le RPC d'écriture (20260908_scan_failures).
- *  Tout le reste tombe sur `other`, le brut étant conservé dans `detail`.
+/** Les motifs normalisés par le RPC d'écriture (dernier état :
+ *  20261012_scan_failures_unsupported_language). Tout le reste tombe sur
+ *  `other`, le brut étant conservé dans `detail`. Un motif absent d'ici
+ *  s'affiche brut : en ajouter un au RPC, c'est l'ajouter ici.
  *  `blame` dit qui est en cause : ce qui vient de l'app se corrige, ce qui
  *  vient du chauffeur ou de la capture ne se corrige pas de la même façon. */
 export const FAILURE: Record<string, { label: string; blame: 'app' | 'user' | 'source' }> = {
@@ -266,11 +268,19 @@ export const FAILURE: Record<string, { label: string; blame: 'app' | 'user' | 's
   throttled:       { label: 'Double appui',             blame: 'user' },
   ocr_empty:       { label: 'OCR vide',                 blame: 'app' },
   not_a_ride:      { label: 'Pas une offre',            blame: 'source' },
-  gemini_ko:       { label: 'Gemini indisponible',      blame: 'app' },
+  // Le motif s'appelle encore `gemini_ko` (vocabulaire fermé, code support
+  // figé), mais Gemini n'est plus appelé : c'est une offre que le parser n'a
+  // pas su lire.
+  gemini_ko:       { label: 'Offre illisible',          blame: 'app' },
   no_addresses:    { label: 'Aucune adresse lue',       blame: 'app' },
   la_start_failed: { label: 'Live Activity refusée',    blame: 'app' },
   expired:         { label: 'Reprise par le système',   blame: 'app' },
   timeout:         { label: 'Délai dépassé',            blame: 'app' },
+  route_unreachable: { label: 'Itinéraire : pas de réseau', blame: 'app' },
+  route_unusable:  { label: 'Adresse introuvable',      blame: 'app' },
+  route_no_key:    { label: 'Clé TomTom absente',       blame: 'app' },
+  // `detail` = langue du téléphone : elle dit quelles langues apprendre.
+  unsupported_language: { label: 'Langue non prise en charge', blame: 'user' },
   other:           { label: 'Autre',                    blame: 'app' },
 };
 

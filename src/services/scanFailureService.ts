@@ -33,7 +33,8 @@ export type ScanFailureReason =
   | 'timeout'
   | 'route_unreachable'
   | 'route_unusable'
-  | 'route_no_key';
+  | 'route_no_key'
+  | 'unsupported_language';
 
 /** Où le scan a été déclenché. */
 export type ScanSurface = 'shortcut' | 'share_ext' | 'bubble';
@@ -72,6 +73,7 @@ export const SCAN_ERROR_CODES: Record<ScanFailureReason, string> = {
   route_unreachable: '0xC0FE0D6E',
   route_unusable:    '0xC0FE0E42',
   route_no_key:      '0xC0FE0F17',
+  unsupported_language: '0xC0FE1029',
 };
 
 /**

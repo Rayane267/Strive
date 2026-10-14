@@ -803,7 +803,8 @@
       "timeout": "Análisis demasiado largo",
       "route_unreachable": "Servicio de rutas inaccesible",
       "route_unusable": "No se pudo calcular la ruta",
-      "route_no_key": "Medición no disponible en este dispositivo"
+      "route_no_key": "Medición no disponible en este dispositivo",
+      "unsupported_language": "Idioma no reconocido"
     }
   },
   "iap": {
@@ -1195,6 +1196,10 @@
     "replayGift": "Ver la pantalla de escaneos de regalo",
     "replayOnboarding": "Rearmar el onboarding",
     "replayDone": "Hecho. Cierra la app por completo y vuelve a abrirla para repetir el recorrido.",
+    "freshReset": "Empezar como un teléfono nuevo",
+    "freshConfirm": "Cierra la sesión de esta cuenta (sin eliminarla), regenera el identificador del dispositivo y borra todos los datos locales de Strive, como en una primera instalación.",
+    "freshGo": "Restablecer",
+    "freshDone": "Hecho. Regístrate con otra cuenta usando Google y otra dirección: con Apple, este teléfono siempre te vuelve a conectar a la misma cuenta. Para ver también las solicitudes de permisos, elimina la app y reinstálala.",
     "simZonesTitle": "Simular zonas calientes",
     "simZonesSub": "Sustituye el directo del mapa por una demanda inventada alrededor de la vista. Solo en este dispositivo: no se envía nada, los demás conductores no ven nada."
   },
@@ -1336,6 +1341,7 @@
     "unsupportedFormat": "Formato de imagen no compatible",
     "noImageInShare": "No se encontró ninguna imagen en lo compartido",
     "noOffer": "Ninguna oferta de viaje detectada",
+    "unsupportedLanguage": "Idioma no reconocido. Pon tu app de conductor en inglés.",
     "aiAnalysis": "Análisis IA en curso…",
     "cannotAnalyze": "No se pudo analizar esta imagen",
     "addressesUnreadable": "Escaneo fallido — direcciones ilegibles, inténtalo otra vez",

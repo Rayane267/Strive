@@ -48,6 +48,8 @@ public enum ScanErrorCode: String {
   case routeUnusable    = "0xC0FE0E42"
   /// Aucune clé TomTom sur cette installation : rien n'est mesurable.
   case routeNoKey       = "0xC0FE0F17"
+  /// L'app VTC s'affiche dans une langue que Strive ne lit pas.
+  case unsupportedLanguage = "0xC0FE1029"
 
   /// Motif correspondant côté `scan_failures.reason` — garde le lien explicite
   /// entre ce que voit l'utilisateur et ce que mesure la télémétrie.
@@ -68,6 +70,7 @@ public enum ScanErrorCode: String {
     case .routeUnreachable: return "route_unreachable"
     case .routeUnusable:    return "route_unusable"
     case .routeNoKey:       return "route_no_key"
+    case .unsupportedLanguage: return "unsupported_language"
     }
   }
 }

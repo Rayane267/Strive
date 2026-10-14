@@ -31,7 +31,9 @@ import {
   Platform,
   Share,
   Alert,
+  NativeModules,
 } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -62,6 +64,41 @@ type Failure = {
   detail: string | null;
   created_at: string;
 };
+
+/**
+ * Rend l'appareil neuf aux yeux du serveur : compteur d'inscriptions du
+ * Keychain vidé, device_id régénéré, compteur de scans de l'appareil à zéro.
+ * Partagé par « Réinitialiser l'appareil » et « Repartir d'un téléphone neuf ».
+ */
+async function renewDevice(): Promise<void> {
+  await resetSignupCounters(true);
+
+  // LE NOUVEL IDENTIFIANT DOIT ENTRER EN VIGUEUR TOUT DE SUITE.
+  //
+  // `resetSignupCounters` l'écrit dans le Keychain, mais l'en-tête
+  // `x-device-id` des requêtes REST garde l'ancien EN MÉMOIRE jusqu'au
+  // prochain démarrage. Le registre de scans et les RPC continuaient donc de
+  // voir le téléphone d'avant : l'« appareil neuf » annoncé par cet écran
+  // n'était vrai qu'après avoir tué l'app — exactement le genre de demi-vérité
+  // qui fait conclure à un bug pendant un test.
+  await getOrCreateDeviceId();
+
+  // Le compteur de scans NATIF vit dans l'App Group / les SharedPreferences,
+  // que le changement d'identifiant ne touche pas. Sans cette relecture, le
+  // pré-contrôle refusait encore « quota d'appareil atteint » sur un appareil
+  // que le serveur voit vierge. La lecture porte déjà le nouvel en-tête, donc
+  // elle rend 0.
+  // L'EFFACEMENT D'ABORD. `setDeviceScanCount` garde le MAXIMUM entre le
+  // compteur local et la valeur du serveur — volontairement : des scans faits
+  // app fermée ont monté le local sans que la base le sache. Conséquence, il
+  // ne redescend jamais dans la journée : envoyer 0 sur un local à 3 laissait
+  // 3, et « Réinitialiser l'appareil » ne réinitialisait rien du tout.
+  scannerService.resetDeviceScanCount?.();
+  try {
+    const used = await fetchDeviceScanUsage();
+    scannerService.setDeviceScanCount?.(used);
+  } catch {}
+}
 
 const DiagnosticsScreen = () => {
   const navigation = useNavigation<any>();
@@ -101,39 +138,79 @@ const DiagnosticsScreen = () => {
     hapticLight();
     setResetting(true);
     try {
-      await resetSignupCounters(true);
-
-      // LE NOUVEL IDENTIFIANT DOIT ENTRER EN VIGUEUR TOUT DE SUITE.
-      //
-      // `resetSignupCounters` l'écrit dans le Keychain, mais l'en-tête
-      // `x-device-id` des requêtes REST garde l'ancien EN MÉMOIRE jusqu'au
-      // prochain démarrage. Le registre de scans et les RPC continuaient donc de
-      // voir le téléphone d'avant : l'« appareil neuf » annoncé par cet écran
-      // n'était vrai qu'après avoir tué l'app — exactement le genre de demi-vérité
-      // qui fait conclure à un bug pendant un test.
-      await getOrCreateDeviceId();
-
-      // Le compteur de scans NATIF vit dans l'App Group / les SharedPreferences,
-      // que le changement d'identifiant ne touche pas. Sans cette relecture, le
-      // pré-contrôle refusait encore « quota d'appareil atteint » sur un appareil
-      // que le serveur voit vierge. La lecture porte déjà le nouvel en-tête, donc
-      // elle rend 0.
-      // L'EFFACEMENT D'ABORD. `setDeviceScanCount` garde le MAXIMUM entre le
-      // compteur local et la valeur du serveur — volontairement : des scans faits
-      // app fermée ont monté le local sans que la base le sache. Conséquence, il
-      // ne redescend jamais dans la journée : envoyer 0 sur un local à 3 laissait
-      // 3, et « Réinitialiser l'appareil » ne réinitialisait rien du tout.
-      scannerService.resetDeviceScanCount?.();
-      try {
-        const used = await fetchDeviceScanUsage();
-        scannerService.setDeviceScanCount?.(used);
-      } catch {}
-
+      await renewDevice();
       Alert.alert(t('diagnostics.countersReset'), t('diagnostics.countersDone'));
     } finally {
       setResetting(false);
     }
   }, [t]);
+
+  /**
+   * Téléphone neuf, pour dérouler l'inscription comme à une première
+   * installation, avec un AUTRE compte : celui-ci est déconnecté, pas supprimé.
+   *
+   * Appareil renouvelé (cf. `renewDevice`) → cadeau de bienvenue et quota
+   * d'inscription libres. AsyncStorage vidé → onboarding, tutoriel, paywall vu,
+   * raccourci déclaré et langue choisie oubliés. La session, elle, vit dans le
+   * Keychain : `signOut` l'efface. Les autorisations iOS (notifications, photos)
+   * ne tombent qu'avec une désinstallation.
+   */
+  const resetPhone = useCallback(() => {
+    Alert.alert(t('diagnostics.freshReset'), t('diagnostics.freshConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('diagnostics.freshGo'),
+        style: 'destructive',
+        onPress: async () => {
+          hapticLight();
+          // Tant que la session vit : la relecture du compteur de scans et la
+          // fermeture de la session de travail passent par le serveur.
+          await renewDevice();
+
+          // Même déconnexion que le Profil (`confirmLogout`) : session de travail
+          // fermée, sinon le compte quitté retrouverait un €/h effondré ; drapeau
+          // natif, Live Activity et file de décisions effacés, sinon le compte
+          // suivant hériterait de ceux du précédent.
+          if (user?.id) {
+            try {
+              const now = new Date();
+              const { data: open } = await supabase
+                .from('online_sessions')
+                .select('id, start_at')
+                .eq('user_id', user.id)
+                .is('end_at', null);
+              for (const s of open ?? []) {
+                const elapsed = Math.max(
+                  0,
+                  Math.floor((now.getTime() - new Date(s.start_at).getTime()) / 1000),
+                );
+                await supabase
+                  .from('online_sessions')
+                  .update({ end_at: now.toISOString(), duration_seconds: elapsed })
+                  .eq('id', s.id);
+              }
+              await supabase.from('profiles').update({ is_online: false }).eq('id', user.id);
+            } catch {}
+          }
+          try {
+            const { ScanBridge } = NativeModules;
+            ScanBridge?.setSessionOnline?.(false);
+            if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+          } catch {}
+          try { scannerService.clearRideDecisions?.(); } catch {}
+          // Google oublie le dernier compte choisi : son sélecteur revient, et
+          // on peut prendre une autre adresse.
+          try { await GoogleSignin.signOut(); } catch {}
+          await supabase.auth.signOut();
+
+          // En dernier : cet écran est déjà démonté (retour à la connexion),
+          // mais la fonction va au bout.
+          try { await AsyncStorage.clear(); } catch {}
+          Alert.alert(t('diagnostics.freshReset'), t('diagnostics.freshDone'));
+        },
+      },
+    ]);
+  }, [t, user?.id]);
 
   /**
    * Ouvre l'écran du cadeau avec des valeurs d'exemple, sans toucher à la base.
@@ -150,14 +227,18 @@ const DiagnosticsScreen = () => {
   }, [navigation]);
 
   /**
-   * Réarme l'onboarding sans `pm clear` : seul le drapeau local tombe, la
-   * session et le profil restent. Un redémarrage de l'app suffit ensuite —
-   * `RootNavigator` relit la clé au montage, pas en continu.
+   * Réarme l'onboarding sans `pm clear` : la session et le profil restent. Un
+   * redémarrage de l'app suffit ensuite — `RootNavigator` relit les clés au
+   * montage, pas en continu.
+   *
+   * Effacer le drapeau « vu » ne suffit plus : l'onboarding appartient au
+   * compte, et un compte qui y a répondu le saute. `@strive_onboarding_replay`
+   * (même littéral dans RootNavigator) force un passage, et tombe à sa fin.
    */
   const rearmOnboarding = useCallback(async () => {
     hapticLight();
+    await AsyncStorage.setItem('@strive_onboarding_replay', '1');
     await AsyncStorage.multiRemove([
-      '@strive_has_seen_onboarding',
       '@strive_has_seen_tutorial',
       // Le paywall de fin de cadeau ne se montre aussi qu'une fois.
       '@strive_welcome_paywall_seen',
@@ -453,6 +534,10 @@ const DiagnosticsScreen = () => {
         <TouchableOpacity style={styles.reload} onPress={rearmOnboarding}>
           <Feather name="rotate-ccw" size={14} color={colors.primary} />
           <Text style={styles.reloadTxt}>{t('diagnostics.replayOnboarding')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.reload} onPress={resetPhone}>
+          <Feather name="smartphone" size={14} color={colors.primary} />
+          <Text style={styles.reloadTxt}>{t('diagnostics.freshReset')}</Text>
         </TouchableOpacity>
 
         {/* ── Compteurs anti-abus ── */}

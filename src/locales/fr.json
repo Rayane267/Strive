@@ -795,7 +795,8 @@
       "timeout": "Analyse trop longue",
       "route_unreachable": "Service d'itinéraire injoignable",
       "route_unusable": "Trajet impossible à calculer",
-      "route_no_key": "Mesure indisponible sur cet appareil"
+      "route_no_key": "Mesure indisponible sur cet appareil",
+      "unsupported_language": "Langue non reconnue"
     }
   },
   "iap": {
@@ -1187,6 +1188,10 @@
     "replayGift": "Voir l’écran des scans offerts",
     "replayOnboarding": "Réarmer l'onboarding",
     "replayDone": "C'est fait. Ferme complètement l'app et relance-la pour revoir le parcours.",
+    "freshReset": "Repartir d'un téléphone neuf",
+    "freshConfirm": "Déconnecte ce compte (sans le supprimer), régénère l'identifiant d'appareil et efface toutes les données locales de Strive, comme une première installation.",
+    "freshGo": "Remettre à neuf",
+    "freshDone": "C'est fait. Inscris un autre compte avec Google et une autre adresse — avec Apple, ce téléphone te reconnecte toujours au même compte. Pour revoir aussi les demandes d'autorisation, supprime l'app et réinstalle-la.",
     "simZonesTitle": "Simuler des zones chaudes",
     "simZonesSub": "Remplace le direct de la carte par une demande inventée autour de la vue. Sur cet appareil seulement : rien n'est envoyé, les autres chauffeurs ne voient rien."
   },
@@ -1328,6 +1333,7 @@
     "unsupportedFormat": "Format d'image non supporté",
     "noImageInShare": "Aucune image trouvée dans le partage",
     "noOffer": "Aucune offre de course détectée",
+    "unsupportedLanguage": "Langue non reconnue. Veuillez passer votre app VTC en anglais.",
     "aiAnalysis": "Analyse IA en cours…",
     "cannotAnalyze": "Impossible d'analyser cette image",
     "addressesUnreadable": "Scan échoué — adresses illisibles, réessaie",

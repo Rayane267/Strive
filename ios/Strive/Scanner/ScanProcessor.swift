@@ -58,11 +58,13 @@ final class ScanProcessor {
     UserDefaults(suiteName: appGroupId)?.removeObject(forKey: "scanInProgressSince")
   }
 
-  /// Vrai si le dernier OCR justifie un appel Gemini (signaux d'offre de course
-  /// détectés, OU aucun texte lu = bénéfice du doute). Faux uniquement quand
-  /// l'OCR a lu du texte mais sans aucun signal VTC (pub / écran quelconque) →
-  /// les callers évitent alors un appel Gemini payant inutile.
+  /// Vrai si le dernier écran ressemble à une offre (cf. `looksLikeRideOffer`),
+  /// ou si l'OCR n'a rien lu. Décide du motif d'échec et de l'envoi des blocs.
   private(set) var lastScanMayBeRide = true
+
+  /// Vrai si le dernier écran est une offre affichée dans une langue que Strive
+  /// ne lit pas (cf. `isUnsupportedLanguage`). Le scan est alors refusé.
+  private(set) var lastScanUnsupportedLanguage = false
 
   /// Blocs OCR du dernier scan, sérialisés (cf. `OcrParser.dumpBlocks`) — matière
   /// de diagnostic pour reproduire en fixture les captures où le parser rate une
@@ -113,6 +115,7 @@ final class ScanProcessor {
     // scan précédent et les enverrait avec le mauvais résultat.
     lastBlocksJson = nil
     lastScreenHeight = 0
+    lastScanUnsupportedLanguage = false
 
     // Garde-fou anti-deadlock : `gate` garantit (1) un seul appel à onFinal,
     // (2) le reset systématique de scanInProgress, (3) un watchdog qui libère
@@ -135,9 +138,18 @@ final class ScanProcessor {
       }
 
       // Pré-filtre anti-pub : du texte a été lu — ressemble-t-il à une course ?
-      self.lastScanMayBeRide = Self.looksLikeRideOffer(
-        blocks.map { $0.text }.joined(separator: "\n")
-      )
+      let lines = blocks.map { $0.text }
+      self.lastScanMayBeRide = Self.looksLikeRideOffer(lines.joined(separator: "\n"))
+
+      // Une offre dans une langue que l'app ne parle pas : refusée AVANT le
+      // parse, même s'il aurait abouti. Ses repères (« Course de », « à X min »)
+      // n'y existent pas, et c'est par eux que le parser sépare la course de
+      // l'approche : il pourrait les inverser sans échouer, et le verdict serait
+      // faux sans que rien ne le dise. Les blocs ne partent pas en base.
+      if self.lastScanMayBeRide && Self.isUnsupportedLanguage(lines) {
+        self.lastScanUnsupportedLanguage = true
+        gate.fire(nil); return
+      }
 
       // Matière de diagnostic (cf. lastBlocksJson) — capturée AVANT le parse pour
       // être disponible même si celui-ci échoue.
@@ -229,26 +241,62 @@ final class ScanProcessor {
     OcrParser.shared.updateConfig(json)
   }
 
-  /// Heuristique légère exécutée sur le texte OCR brut : l'écran ressemble-t-il
-  /// à une offre VTC ? Sert à court-circuiter le fallback Gemini (coût) quand
-  /// l'utilisateur scanne une pub ou un écran sans rapport.
-  /// Permissive volontairement : un faux positif coûte un appel Gemini, un faux
-  /// négatif fait rater une course → on privilégie de laisser passer.
+  /// L'écran ressemble-t-il à une offre VTC ? Ne sert plus qu'une fois le
+  /// parser en échec : décide du motif (`gemini_ko` / `not_a_ride`) et surtout
+  /// si le texte de l'écran part dans `scan_debug`.
+  ///
+  /// STRUCTUREL, et non plus lexical. Le nom d'une plateforme ou un mot comme
+  /// « course » suffisait : c'était fait pour laisser passer large vers Gemini,
+  /// un faux positif ne coûtant qu'un appel. Gemini parti, un faux positif
+  /// envoie en base le texte d'un écran PERSONNEL — l'écran d'accueil d'un
+  /// chauffeur, apps bancaires comprises, passait sur la seule étiquette
+  /// « Uber Driver » ; les réglages de Strive, sur le « course » d'une bannière
+  /// Heetch. Une offre, dans toutes les langues, c'est un montant ET une
+  /// distance ou une durée. Le montant peut être nu : l'OCR perd souvent le
+  /// symbole de devise. Miroir de `OcrParser.looksLikeRideOffer` (Android).
   static func looksLikeRideOffer(_ rawText: String) -> Bool {
     let text = rawText.lowercased()
-    let hasPlatform = text.contains("uber") || text.contains("bolt") || text.contains("heetch")
-    // Mots-clés FR + EN (l'app et les apps VTC peuvent être dans les 2 langues).
-    let hasRideWords = [
-      // FR
-      "course", "trajet", "prise en charge", "dépose", "gains", "accepter", "min de marche",
-      // EN
-      "trip", "ride", "pickup", "pick-up", "drop-off", "dropoff", "earnings", "accept", "min walk",
-    ].contains { text.contains($0) }
-    let hasPrice = text.range(of: #"\d{1,3}[.,]\d{2}\s*€"#, options: .regularExpression) != nil
-      || text.range(of: #"€\s*\d"#, options: .regularExpression) != nil
-    let hasKm = text.range(of: #"\d[\d.,]*\s*km"#, options: .regularExpression) != nil
-    let hasMin = text.range(of: #"\d+\s*min"#, options: .regularExpression) != nil
-    return hasPlatform || hasRideWords || (hasPrice && (hasKm || hasMin))
+    let hasAmount = hasMatch(amountRegex, in: text) || hasMatch(currencyRegex, in: text)
+    let hasDistance = hasMatch(distanceRegex, in: text)
+    let hasDuration = hasMatch(durationRegex, in: text)
+    return hasAmount && (hasDistance || hasDuration)
+  }
+
+  /// L'écran est-il dans une langue que l'app ne parle pas ? Repéré par des
+  /// lettres qu'aucune des sept langues de Strive (fr, en, es, pt, nl, de, it)
+  /// n'emploie : roumain (ă ș ț), polonais, tchèque, turc, hongrois, baltes…,
+  /// et les écritures non latines. Une liste de mots des sept langues aurait
+  /// refusé un chauffeur espagnol pour un mot qu'on n'y a pas mis ; un détecteur
+  /// de langue aurait conclu « français » sur une offre roumaine, dont le texte
+  /// est surtout fait d'adresses et de noms de rues parisiens.
+  ///
+  /// Deux lignes au moins : un nom de lieu étranger seul (« Żubrówka Bar » en
+  /// destination) ne fait pas une langue. Ne détecte pas une langue en latin
+  /// sans lettre propre — aucune n'a été vue sur une offre jusqu'ici.
+  /// Miroir de `OcrParser.isUnsupportedLanguage` (Android).
+  static func isUnsupportedLanguage(_ lines: [String]) -> Bool {
+    let foreign = lines.filter { hasMatch(foreignLetterRegex, in: $0.lowercased()) }
+    return foreign.count >= 2
+  }
+
+  // ⚠️ PAS de `.regularExpression` dans le natif. Sur iOS 26.7.1 au
+  // moins, Foundation exécute cette option sur le moteur Regex de Swift, qui
+  // compile le motif avec un `try!` et fusionne les scalaires voisins d'une
+  // classe en un seul caractère : U+06FF suivi de U+0900 (marque combinante)
+  // devenait la borne « ۿऀ », refusée — la 1.0.4 mourait sur chaque offre
+  // scannée (« Strive a quitté inopinément »). ICU, comme tout OcrParser, lit
+  // des scalaires, et un motif qu'il refuse donne `nil`, pas un crash.
+  private static let amountRegex = try? NSRegularExpression(pattern: #"\d{1,3}[.,]\d{2}(?![.,]?\d)"#)
+  private static let currencyRegex = try? NSRegularExpression(pattern: #"(?:€|£|chf)\s*\d|\d\s*(?:€|£|chf)"#)
+  private static let distanceRegex = try? NSRegularExpression(pattern: #"\d[\d.,]*\s*(?:km|mi)\b"#)
+  private static let durationRegex = try? NSRegularExpression(pattern: #"\d+\s*min"#)
+  private static let foreignLetterRegex = try? NSRegularExpression(
+    pattern: #"[ășşțţąęłńśźżćřěůňťďľĺŕčšžğıőűāēīūķļņģėįųđþð\x{0370}-\x{03FF}\x{0400}-\x{052F}\x{0530}-\x{058F}\x{0590}-\x{05FF}\x{0600}-\x{06FF}\x{0900}-\x{097F}\x{0E00}-\x{0E7F}\x{10A0}-\x{10FF}\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}]"#
+  )
+
+  private static func hasMatch(_ regex: NSRegularExpression?, in text: String) -> Bool {
+    guard let regex = regex else { return false }
+    return regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
   }
 
   /// Fallback durée quand l'OCR n'a pas pu lire le `min` de la course.

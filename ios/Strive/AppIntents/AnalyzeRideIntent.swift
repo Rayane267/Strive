@@ -499,11 +499,16 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// Rien n'est enregistré → l'app ne reçoit aucun résultat à rejeter.
   private func presentFailure() {
     ScanProcessor.markScanFinished()
-    // `lastScanMayBeRide` distingue les deux causes : écran sans signal VTC
-    // (on n'a même pas appelé Gemini) vs Gemini appelé mais sans réponse
-    // exploitable. Sans ça les deux se confondent dans les agrégats.
-    // `gemini_ko` = les règles ont calé ET Gemini n'a pas rattrapé. C'est l'écran
-    // le plus précieux du parc : celui qu'aucun des deux lecteurs n'a su lire.
+    if ScanProcessor.shared.lastScanUnsupportedLanguage {
+      presentUnsupportedLanguage()
+      return
+    }
+    // `lastScanMayBeRide` distingue les deux causes : écran sans signal VTC vs
+    // écran d'offre que le parser n'a pas su lire. Sans ça les deux se
+    // confondent dans les agrégats. `gemini_ko` est ce second cas : le nom date
+    // du repli Gemini, retiré depuis, et reste parce que le vocabulaire du RPC
+    // est fermé et que son code support ne se réaffecte pas. C'est l'écran le
+    // plus précieux du parc : celui que le parser n'a pas su lire.
     logFailure(
       ScanProcessor.shared.lastScanMayBeRide ? "gemini_ko" : "not_a_ride",
       blocks: ScanProcessor.shared.lastScanMayBeRide ? ScanProcessor.shared.lastBlocksJson : nil,
@@ -536,6 +541,31 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         level: .timeSensitive
       )
     }
+    markPresented()
+  }
+
+  /// Offre dans une langue que Strive ne lit pas : refusée, et on dit quoi faire.
+  ///
+  /// La notification part TOUJOURS, même quand la carte affiche l'erreur : la
+  /// carte n'a qu'un « Erreur » générique, et c'est la consigne qui compte — sans
+  /// elle, le chauffeur rescanne la même offre et échoue de la même façon.
+  /// `detail` porte la langue du téléphone : c'est elle qui dira, dans l'admin,
+  /// quelles langues reviennent assez pour être apprises.
+  private func presentUnsupportedLanguage() {
+    logFailure("unsupported_language", detail: Locale.preferredLanguages.first)
+    if liveActivityReady {
+      _ = LiveActivityManager.shared.showError()
+    }
+    sendLocalNotification(
+      title: "Strive",
+      body: localizedString(
+        "notif.unsupportedLanguage",
+        fr: "Langue non reconnue. Veuillez passer votre app VTC en anglais.",
+        en: "Language not recognised. Please switch your driver app to English."
+      ),
+      code: .unsupportedLanguage,
+      level: .timeSensitive
+    )
     markPresented()
   }
 

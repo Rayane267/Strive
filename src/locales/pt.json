@@ -803,7 +803,8 @@
       "timeout": "Análise demasiado longa",
       "route_unreachable": "Serviço de rotas inacessível",
       "route_unusable": "Não foi possível calcular o trajeto",
-      "route_no_key": "Medição indisponível neste dispositivo"
+      "route_no_key": "Medição indisponível neste dispositivo",
+      "unsupported_language": "Idioma não reconhecido"
     }
   },
   "iap": {
@@ -1195,6 +1196,10 @@
     "replayGift": "Ver o ecrã das análises oferecidas",
     "replayOnboarding": "Rearmar o onboarding",
     "replayDone": "Está feito. Feche a app por completo e abra-a de novo para rever o percurso.",
+    "freshReset": "Recomeçar como um telemóvel novo",
+    "freshConfirm": "Termina a sessão desta conta (sem a eliminar), gera um novo identificador do dispositivo e apaga todos os dados locais do Strive, como numa primeira instalação.",
+    "freshGo": "Repor",
+    "freshDone": "Está feito. Registe outra conta com o Google e outro endereço — com a Apple, este telemóvel volta sempre a ligar-se à mesma conta. Para rever também os pedidos de autorização, elimine a app e reinstale-a.",
     "simZonesTitle": "Simular zonas quentes",
     "simZonesSub": "Substitui o direto do mapa por uma procura inventada à volta da vista. Só neste dispositivo: nada é enviado, os outros motoristas não veem nada."
   },
@@ -1336,6 +1341,7 @@
     "unsupportedFormat": "Formato de imagem não suportado",
     "noImageInShare": "Nenhuma imagem encontrada na partilha",
     "noOffer": "Nenhuma oferta de viagem detetada",
+    "unsupportedLanguage": "Idioma não reconhecido. Mude a sua app de motorista para inglês.",
     "aiAnalysis": "Análise IA em curso…",
     "cannotAnalyze": "Não foi possível analisar esta imagem",
     "addressesUnreadable": "Análise falhou — moradas ilegíveis, tente outra vez",

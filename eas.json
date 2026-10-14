@@ -11,14 +11,14 @@
       "ios": {
         "simulator": true,
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "channel": "preview",
       "environment": "preview"
@@ -27,7 +27,7 @@
       "autoIncrement": true,
       "ios": {
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "channel": "production",
       "environment": "production",
