@@ -797,7 +797,7 @@
       "ocr_empty": "Geen tekst gelezen op het scherm",
       "no_addresses": "Onleesbare adressen",
       "not_a_ride": "Geen aanbieding gedetecteerd",
-      "gemini_ko": "Het aanbod kon niet worden gelezen",
+      "offer_unreadable": "Het aanbod kon niet worden gelezen",
       "la_start_failed": "Weergave onmogelijk",
       "expired": "Analyse onderbroken",
       "timeout": "Analyse duurde te lang",
@@ -1238,6 +1238,41 @@
     "verdictMid": "Gemiddelde zone",
     "verdictBad": "Zone om te vermijden"
   },
+  "reports": {
+    "button": "Melden",
+    "locating": "Locatie zoeken…",
+    "pickTitle": "Wat is er aan de hand?",
+    "pickSubtitle": "Geplaatst op je huidige locatie.",
+    "kind": {
+      "police": "Politie",
+      "accident": "Ongeval",
+      "danger": "Gevaar",
+      "traffic": "File",
+      "roadworks": "Wegwerkzaamheden"
+    },
+    "stillThere": "Nog steeds daar?",
+    "yes": "Nog daar",
+    "no": "Niet meer daar",
+    "nearbyTitle": "{{kind}} op {{meters}} m",
+    "justNow": "Zojuist gemeld",
+    "minutesAgo_one": "{{count}} min geleden gemeld",
+    "minutesAgo_other": "{{count}} min geleden gemeld",
+    "hoursAgo_one": "{{count}} u geleden gemeld",
+    "hoursAgo_other": "{{count}} u geleden gemeld",
+    "confirmed_one": "{{count}} keer bevestigd",
+    "confirmed_other": "{{count}} keer bevestigd",
+    "mine": "Dit is jouw melding. Verwijder hem als hij niet meer klopt.",
+    "withdraw": "Mijn melding verwijderen",
+    "voted": "Bedankt, je hebt al gereageerd.",
+    "thanks": "Bedankt! Melding toegevoegd.",
+    "thanksVote": "Bedankt voor je reactie.",
+    "gone": "Deze melding is niet meer actief.",
+    "rateLimited": "Te veel meldingen achter elkaar. Probeer het straks opnieuw.",
+    "failed": "Versturen mislukt. Controleer je verbinding.",
+    "locationOffTitle": "Locatie staat uit",
+    "locationOffBody": "Sta Strive toe je locatie te gebruiken om een melding op de kaart te plaatsen.",
+    "openSettings": "Open Instellingen"
+  },
   "rideNetwork": {
     "title": "Netwerk",
     "menuTitle": "Netwerk",
@@ -1341,7 +1376,7 @@
     "unsupportedFormat": "Niet-ondersteund afbeeldingsformaat",
     "noImageInShare": "Geen afbeelding gevonden in het gedeelde item",
     "noOffer": "Geen ritaanbod gevonden",
-    "unsupportedLanguage": "Taal niet herkend. Zet je chauffeursapp in het Engels.",
+    "unsupportedLanguage": "Taal niet herkend. Zet je chauffeursapp in een taal die Strive ondersteunt.",
     "aiAnalysis": "AI-analyse bezig…",
     "cannotAnalyze": "Deze afbeelding kon niet worden geanalyseerd",
     "addressesUnreadable": "Scan mislukt — adressen onleesbaar, probeer opnieuw",
@@ -1360,5 +1395,12 @@
     "bubbleRideDeclined": "❌ Geweigerd",
     "bubbleQuota": "Limiet bereikt",
     "bubbleQuotaFree": "Limiet bereikt · Ga naar Plus"
+  },
+  "update": {
+    "title": "Update beschikbaar",
+    "body": "Strive {{version}} is beschikbaar. Installeer hem voor de nieuwste verbeteringen.",
+    "whatsNew": "Nieuw",
+    "cta": "Bijwerken",
+    "later": "Later"
   }
 }

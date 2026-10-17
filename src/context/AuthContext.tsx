@@ -6,6 +6,7 @@ import { fetchProfileResult } from '../services/profileService';
 import { fetchPlanLimits, getEffectivePlanTier } from '../services/subscriptionService';
 import { initPurchases, logoutPurchases, getStoreEntitlement, syncPurchasesWithStore } from '../services/iapService';
 import { registerPushToken, setupNotificationListeners } from '../services/notificationService';
+import { reportAppVersion } from '../services/appReleaseService';
 import { scannerService } from '../services/scanner';
 import { clearOfflineCache } from '../services/offlineService';
 import { getOrCreateDeviceId } from '../utils/deviceId';
@@ -195,6 +196,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           registerPushToken(initialSession.user.id, false).catch((e) =>
             Sentry.captureException(e, { tags: { flow: 'push_token_init' } }),
           );
+          reportAppVersion(initialSession.user.id);
           notifCleanupRef.current = setupNotificationListeners();
         }
       } catch (err) {
@@ -239,6 +241,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           registerPushToken(currentSession.user.id, false).catch((e) =>
             Sentry.captureException(e, { tags: { flow: 'push_token_refresh' } }),
           );
+          reportAppVersion(currentSession.user.id);
           if (!notifCleanupRef.current) {
             notifCleanupRef.current = setupNotificationListeners();
           }

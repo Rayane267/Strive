@@ -165,7 +165,7 @@ const UK_OUTWARD_REGEX = /\b[a-z]{1,2}\d[a-z\d]?\s*,\s*[a-z]/i;
  * expressions sont réglées au cas par cas sur des captures d'écran réelles, avec
  * leurs indices de groupe et leurs gardes contre les faux positifs ; y toucher
  * pour une unité coûterait bien plus cher que ce que ça règle. Et le reste de la
- * chaîne — `RATE_MIN`/`RATE_MAX`, `isSane`, la colonne `rides.distance_km` —
+ * chaîne — `RATE_MIN`, `isSane`, la colonne `rides.distance_km` —
  * raisonne en kilomètres : c'est à l'ENTRÉE qu'il faut convertir, pas à la
  * sortie. Le mile ne revient qu'à l'affichage, via `market.distanceUnit`.
  *
@@ -223,11 +223,28 @@ const NON_ADDRESS_WORDS = [
 // ─── Sanity bounds ────────────────────────────────────────────────────────────
 
 const FARE_MIN = 8;
+/** Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue par
+ *  l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €. */
 const FARE_MAX = 200;
+/** Plafond d'un montant écrit AVEC ses décimales. Ce n'était que FARE_MAX, et
+ *  toute course longue mourait au parse : 272,30 € pour Lisses → Lyon. Ici rien
+ *  n'est à reconstruire. */
+const FARE_CEILING = 2000;
 const DIST_MIN = 0.3;
-const DIST_MAX = 500;
+/** 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le plancher
+ *  €/km de `isSane` qui juge une distance aberrante. Mirror Swift/Kotlin. */
+const DIST_MAX = 2000;
+/** Plancher seulement, pas de plafond : le prix d'une plateforme est réel, et
+ *  une course Van/XL courte dépasse sans peine 12 €/km (12,79 € pour 1 km,
+ *  31,34 € pour 1,6 km). L'ancien plafond à 12 a rejeté 35 offres d'un même
+ *  chauffeur les 15-16/10/2026 sans écarter une seule erreur de lecture. */
 const RATE_MIN = 0.4;  // €/km
-const RATE_MAX = 12;   // €/km
+/** Haut d'écran jamais lu : barre d'état, bannières de notification (celle
+ *  d'Uber qui répète le prix, le verdict de Strive lui-même, la Live
+ *  Activity). Sur les captures réelles, ces bannières finissent avant 17 % de
+ *  la hauteur et les offres commencent après 35 %. Même bande que la « zone
+ *  prix/header » des adresses. Mirror Swift/Kotlin. */
+const TOP_CUT = 0.25;
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
@@ -245,6 +262,10 @@ export function parseBlocks(
   if (blocks.length === 0) return null;
   scanCountry = country;
 
+  // Strive se lisait lui-même : sa notification de verdict, restée à l'écran,
+  // devenait une fausse offre au scan suivant (scan_debug #110).
+  blocks = blocks.filter(b => b.y + b.height / 2 >= screenHeight * TOP_CUT);
+
   // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
   //
   // ⚠️ UNIQUEMENT AU ROYAUME-UNI. ML Kit découpe parfois « 11 min » en deux
@@ -258,13 +279,18 @@ export function parseBlocks(
   const fullText = blocks.map(b => b.text).join(' ').toLowerCase();
   const platform = detectPlatform(fullText);
 
-  const fare = extractFare(blocks, platform, screenHeight);
-  if (fare === null) return null;
-  const fareBlockY = locateFareBlockY(blocks, fare);
+  const fareHit = extractFare(blocks, platform, screenHeight);
+  if (fareHit === null) return null;
+  const fare = fareHit.value;
+  // La zone des adresses part du bloc de prix RETENU. Le chercher à nouveau par
+  // son texte prenait la première occurrence du montant — un bandeau ou l'overlay
+  // d'une autre app tout en haut — et écartait les deux vraies adresses.
+  const fareBlockY = fareHit.block.y + fareHit.block.height / 2;
+  const fareInButton = ACCEPT_REGEX.test(fareHit.block.text);
 
   // Invariant layout VTC : la pickup est toujours la 1ʳᵉ adresse (Y le + haut),
   // la destination la 2ᵉ. On s'en sert pour catégoriser les km/min ambigus.
-  const addressBlocks = findAddressBlocks(blocks, screenHeight, fareBlockY);
+  const addressBlocks = findAddressBlocks(blocks, screenHeight, fareBlockY, fareInButton);
   const pickupAddrBlock = addressBlocks[0];
   const destAddrBlock = addressBlocks[1];
 
@@ -294,23 +320,9 @@ export function parseBlocks(
  */
 function mergeAddressContinuation(addrBlock: TextBlock, allBlocks: TextBlock[]): string {
   const baseText = addrBlock.text.trim();
-  const addrBottom = addrBlock.y + addrBlock.height;
-  const addrRight = addrBlock.x + addrBlock.width;
-
-  const continuation = allBlocks.find(other => {
-    if (other === addrBlock) return false;
-    if (other.y <= addrBlock.y) return false;
-    if (other.y - addrBottom > addrBlock.height) return false;
-    const xOverlap = Math.min(addrRight, other.x + other.width) - Math.max(addrBlock.x, other.x);
-    const minWidth = Math.min(addrBlock.width, other.width);
-    if (xOverlap < minWidth * 0.5) return false;
-    const t = other.text.trim();
-    if (!t || t.length > 60) return false;
-    if (/\d\s*(?:km|min)\b/i.test(t)) return false;
-    if (/^\d{1,4}\s+[A-Za-zà-üÀ-Ü]/.test(t)) return false;
-    if (isAddressBlock(other)) return false;
-    return true;
-  });
+  const continuation = allBlocks.find(
+    other => other !== addrBlock && isContinuationLine(addrBlock, other),
+  );
 
   const merged = !continuation
     ? baseText
@@ -390,14 +402,19 @@ function detectPlatform(fullText: string): ScanPlatform {
 
 // ─── Extraction du prix — scoring sémantique ─────────────────────────────────
 
+/** Bouton d'acceptation (« Accept €272,30 », « Accepter 12,30 € »…). Un prix
+ *  écrit DANS ce bouton est celui que le chauffeur touche en acceptant ; les
+ *  autres montants de l'écran sont des contre-propositions. */
+const ACCEPT_REGEX = /accept|acept|accett|aceit|annehm|aanvaard/i;
+
 function extractFare(
   blocks: TextBlock[],
   platform: ScanPlatform,
   screenHeight: number,
-): number | null {
+): { value: number; block: TextBlock } | null {
   const anchors = PRICE_ANCHORS[platform] ?? PRICE_ANCHORS.UNKNOWN;
 
-  const candidates: { value: number; score: number }[] = [];
+  const candidates: { value: number; score: number; block: TextBlock }[] = [];
 
   blocks.forEach((block, idx) => {
     const normalizedText = normalizeOcrDigits(block.text);
@@ -410,9 +427,11 @@ function extractFare(
     const deRated = normalizedText.replace(/[★⭐✩✪✯*]\s*\d{1,2}\s*[.,]\s*\d{1,2}/g, ' ');
 
     let value: number | null = null;
+    let ceiling = FARE_MAX;
     const match = PRICE_REGEX.exec(deRated);
     if (match) {
       value = parseFloat(`${match[1].replace(/\s+/g, '')}.${match[2].replace(/\s+/g, '')}`);
+      ceiling = FARE_CEILING;
     } else {
       // Tarif "collé" à l'euro, virgule perdue par l'OCR ("17,43 €" → "1743€").
       // Les apps VTC affichent toujours 2 décimales : si l'entier dépasse le
@@ -427,7 +446,7 @@ function extractFare(
         value = raw > FARE_MAX ? raw / 100 : raw;
       }
     }
-    if (value === null || value < FARE_MIN || value > FARE_MAX) return;
+    if (value === null || value < FARE_MIN || value > ceiling) return;
 
     let score = 0;
 
@@ -447,11 +466,16 @@ function extractFare(
     // Bloc suivant contient un ancre (cas Uber : label sous le montant)
     if (idx < blocks.length - 1 && anchors.some(a => blocks[idx + 1].text.toLowerCase().includes(a))) score += 20;
 
-    candidates.push({ value, score });
+    // Le prix du bouton d'acceptation l'emporte sur les contre-propositions
+    // (Heetch : « Accept €272,30 » face à €345,10 et €326,90, plus gros).
+    if (ACCEPT_REGEX.test(block.text)) score += 60;
+
+    candidates.push({ value, score, block });
   });
 
   if (candidates.length === 0) return null;
-  return candidates.sort((a, b) => b.score - a.score)[0].value;
+  const best = candidates.sort((a, b) => b.score - a.score)[0];
+  return { value: best.value, block: best.block };
 }
 
 /**
@@ -737,6 +761,12 @@ function isAddressBlock(block: TextBlock): boolean {
   // Rejet par substring : "3 UberX Exclusivité", "5 BoltPlus" ne sont jamais
   // des adresses même s'ils matchent le pattern digit+mot en dessous.
   if (/\b(uber\w*|bolt\w*|heetch\w*)\b/.test(text)) return false;
+  // Ligne tarifaire (« 21,96 € (net, TTC) », « Accept €272,30 ») ou note
+  // passager (« Walid • 5.0 * ») : jamais une adresse. Indispensables avant les
+  // règles du code postal et de la virgule ci-dessous. Mirror Swift/Kotlin.
+  if (CURRENCY_REGEX.test(text)) return false;
+  if (/[★⭐]/.test(text) || /\b[0-5][.,]\d\b/.test(text)) return false;
+  if (text.includes('net de frais') || text.includes('montant net')) return false;
 
   // 1. Mot-clé de voie/POI matché comme mot entier (évite "via" → "aviation")
   if (
@@ -765,6 +795,12 @@ function isAddressBlock(block: TextBlock): boolean {
   if (/^\d{1,4}\s+[a-zà-ü]{5,}/i.test(text)) return true;
   // 5. Structure word-then-digit (DE/ES/IT) : "Hauptstraße 10", "Calle Alcalá, 10"
   if (/[a-zà-üß]{5,}[\s,]+\d{1,4}\s*$/i.test(text)) return true;
+  // 6. Code postal + lettres, sans mot de voie connu : « Raoul Dautry, Saclay
+  //    91400 ». Mirror Swift/Kotlin (règle 5), qui l'avaient seuls.
+  if (/\b\d{4,5}\b/.test(text) && /[a-zà-üß]{3,}/.test(text)) return true;
+  // 7. Virgule suivie d'une lettre + au moins 6 lettres : « Lyon, France »,
+  //    destination d'une course longue. Mirror Swift/Kotlin (règle 6).
+  if (/,\s*[a-zà-üß]/.test(text) && (text.match(/[a-zà-üß]/g) ?? []).length >= 6) return true;
   return false;
 }
 
@@ -778,6 +814,7 @@ function findAddressBlocks(
   blocks: TextBlock[],
   screenHeight: number,
   fareBlockY?: number | null,
+  fareInButton = false,
 ): TextBlock[] {
   let candidates = blocks
     .filter(b => b.y > screenHeight * 0.25)  // pas dans la zone prix/header
@@ -785,11 +822,17 @@ function findAddressBlocks(
     .sort((a, b) => a.y - b.y);
 
   // Filtre ancre-prix : les vraies adresses sont dans le card-trip qui englobe
-  // le prix. Fenêtre asymétrique (~5% au-dessus, ~35% en-dessous) — exclut les
+  // le prix. Fenêtre asymétrique (~5% au-dessus, ~50% en-dessous) — exclut les
   // labels de fond de carte Heetch/Bolt qui sont tous au-dessus du prix.
+  // Prix dans le bouton d'acceptation : le bouton est SOUS la carte, la fenêtre
+  // se retourne.
   if (fareBlockY != null) {
-    const yMin = fareBlockY - screenHeight * 0.05;
-    const yMax = fareBlockY + screenHeight * 0.5;
+    const yMin = fareInButton
+      ? fareBlockY - screenHeight * 0.5
+      : fareBlockY - screenHeight * 0.05;
+    const yMax = fareInButton
+      ? fareBlockY + screenHeight * 0.05
+      : fareBlockY + screenHeight * 0.5;
     candidates = candidates.filter(b => {
       const cy = b.y + b.height / 2;
       return cy >= yMin && cy <= yMax;
@@ -816,7 +859,38 @@ function findAddressBlocks(
     }
   }
 
+  // Retire les fins d'adresse coupées sur deux lignes (« Marne 94430 »,
+  // « Point, W2 1HB ») : elles n'occupent pas un slot, sinon la destination est
+  // évincée. Recollées à l'affichage par mergeAddressContinuation. Mirror Swift.
+  candidates = candidates.filter(
+    b => !candidates.some(head => head !== b && isContinuationLine(head, b)),
+  );
+
   return collapseUkOutwardPairs(dedupOverlappingAddresses(candidates));
+}
+
+/**
+ * Vrai si `tail` est la fin coupée de l'adresse `head` juste au-dessus : collée
+ * (≤ 1 ligne), alignée, sans mot de voie ni numéro de rue en tête — sinon c'est
+ * une nouvelle adresse. Mirror Swift/Kotlin `isContinuationLine`.
+ */
+function isContinuationLine(head: TextBlock, tail: TextBlock): boolean {
+  if (tail.y <= head.y) return false;
+  if (tail.y - (head.y + head.height) > head.height) return false;
+  const xOverlap =
+    Math.min(head.x + head.width, tail.x + tail.width) - Math.max(head.x, tail.x);
+  if (xOverlap < Math.min(head.width, tail.width) * 0.5) return false;
+  const t = tail.text.trim();
+  if (!t || t.length > 60) return false;
+  if (/\d\s*(?:km|min)\b/i.test(t)) return false;
+  if (/^\d{1,4}\s+[A-Za-zà-üÀ-Ü]/.test(t)) return false;
+  const keywords =
+    scanCountry === 'GB'
+      ? [...ADDRESS_STREET_KEYWORDS, ...UK_ONLY_STREET_KEYWORDS]
+      : ADDRESS_STREET_KEYWORDS;
+  return !keywords.some(k =>
+    new RegExp(`(?<![a-zà-üß])${escapeRegex(k)}(?![a-zà-üß])`, 'i').test(t),
+  );
 }
 
 /**
@@ -889,28 +963,11 @@ function dedupOverlappingAddresses(candidates: TextBlock[]): TextBlock[] {
   });
 }
 
-function locateFareBlockY(blocks: TextBlock[], fare: number): number | null {
-  const euros = Math.floor(fare);
-  const cents = Math.round((fare - euros) * 100);
-  const centsStr = cents.toString().padStart(2, '0');
-  const patterns = [`${euros},${centsStr}`, `${euros}.${centsStr}`];
-  let match = blocks.find(b => patterns.some(p => b.text.includes(p)));
-  // Repli : tarif collé sans virgule ("1743€") — on exige un symbole pour éviter de
-  // matcher un code postal ou une heure qui contiendrait la même suite.
-  if (!match) {
-    const glued = `${euros}${centsStr}`;
-    match = blocks.find(b => b.text.includes(glued) && CURRENCY_REGEX.test(b.text));
-  }
-  if (!match) return null;
-  return match.y + match.height / 2;
-}
-
 // ─── Sanity check ─────────────────────────────────────────────────────────────
 
 function isSane(fare: number, distanceKm: number): boolean {
-  if (fare < FARE_MIN || fare > FARE_MAX) return false;
+  if (fare < FARE_MIN || fare > FARE_CEILING) return false;
   if (distanceKm < DIST_MIN || distanceKm > DIST_MAX) return false;
-  const rate = fare / distanceKm;
-  if (rate < RATE_MIN || rate > RATE_MAX) return false;
+  if (fare / distanceKm < RATE_MIN) return false;
   return true;
 }

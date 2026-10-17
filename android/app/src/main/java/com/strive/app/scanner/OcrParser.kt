@@ -44,11 +44,35 @@ object OcrParser {
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
     private var fareMin = 8.0
+    /** Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue
+     *  par l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €. */
     private var fareMax = 200.0
+    /** Plafond d'un montant écrit AVEC ses décimales. Ce n'était que [fareMax],
+     *  et toute course longue mourait au parse (272,30 € pour Lisses → Lyon,
+     *  abonné perdu le 2026-10-15). Mirror iOS/TS. */
+    private var fareCeiling = 2000.0
     private var distMin = 0.3
-    private var distMax = 500.0
+    /** 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le
+     *  plancher €/km de [isSane] qui juge une distance aberrante. Mirror iOS/TS. */
+    private var distMax = 2000.0
+    /** Plancher seulement, pas de plafond : le prix d'une plateforme est réel, et
+     *  une course Van/XL courte dépasse sans peine 12 €/km (12,79 € pour 1 km,
+     *  31,34 € pour 1,6 km). L'ancien plafond à 12 a rejeté 35 offres d'un même
+     *  chauffeur les 15-16/10/2026 sans écarter une seule erreur de lecture. */
     private var rateMin = 0.4
-    private var rateMax = 12.0
+    /** Haut d'écran jamais lu : barre d'état, bannières de notification (celle
+     *  d'Uber qui répète le prix, le verdict de Strive lui-même). Sur les
+     *  captures réelles, ces bannières finissent avant 17 % de la hauteur et les
+     *  offres commencent après 35 %. Même bande que la « zone prix/header » des
+     *  adresses. Mirror iOS/TS. */
+    private const val TOP_CUT = 0.25
+
+    /** Blocs sous la bande ignorée : ce que lisent le parser ET le pré-filtre
+     *  « est-ce une offre ? ». Mirror iOS (`ScanProcessor.process`). */
+    fun belowTopCut(visionText: Text, screenHeight: Int): List<Text.TextBlock> =
+        visionText.textBlocks.filter {
+            (it.boundingBox?.centerY() ?: 0) >= screenHeight * TOP_CUT
+        }
 
     /**
      * Applique la remote config reçue depuis Supabase.
@@ -56,7 +80,7 @@ object OcrParser {
      * {
      *   "priceAnchors": { "UBER": [...], "BOLT": [...], "HEETCH": [...] },
      *   "distanceAnchors": [...],
-     *   "sanity": { "fareMin": 3.0, "fareMax": 200.0, "distMin": 0.3, "distMax": 1000.0, "rateMin": 0.4, "rateMax": 12.0 }
+     *   "sanity": { "fareMin": 3.0, "fareMax": 200.0, "distMin": 0.3, "distMax": 1000.0, "rateMin": 0.4 }
      * }
      */
     fun updateConfig(configJson: String) {
@@ -79,10 +103,10 @@ object OcrParser {
             root.optJSONObject("sanity")?.let { s ->
                 if (s.has("fareMin")) fareMin = s.getDouble("fareMin")
                 if (s.has("fareMax")) fareMax = s.getDouble("fareMax")
+                if (s.has("fareCeiling")) fareCeiling = s.getDouble("fareCeiling")
                 if (s.has("distMin")) distMin = s.getDouble("distMin")
                 if (s.has("distMax")) distMax = s.getDouble("distMax")
                 if (s.has("rateMin")) rateMin = s.getDouble("rateMin")
-                if (s.has("rateMax")) rateMax = s.getDouble("rateMax")
             }
         } catch (e: Exception) {
             // Garde les valeurs par défaut si le JSON est invalide
@@ -97,7 +121,7 @@ object OcrParser {
 
     /**
      * L'écran ressemble-t-il à une offre VTC ? Ne sert plus qu'une fois le
-     * parser en échec : décide du motif (`gemini_ko` / `not_a_ride`) et surtout
+     * parser en échec : décide du motif (`offer_unreadable` / `not_a_ride`) et surtout
      * si le texte de l'écran part dans `scan_debug`.
      *
      * STRUCTUREL, et non plus lexical. Le nom d'une plateforme ou un mot comme
@@ -126,12 +150,31 @@ object OcrParser {
      * étranger seul ne fait pas une langue.
      * Mirror de `ScanProcessor.isUnsupportedLanguage` (iOS).
      */
-    fun isUnsupportedLanguage(lines: List<String>): Boolean {
-        val foreign = Regex(
-            """[ășşțţąęłńśźżćřěůňťďľĺŕčšžğıőűāēīūķļņģėįųđþð\x{0370}-\x{03FF}\x{0400}-\x{052F}\x{0530}-\x{058F}\x{0590}-\x{05FF}\x{0600}-\x{06FF}\x{0900}-\x{097F}\x{0E00}-\x{0E7F}\x{10A0}-\x{10FF}\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}]"""
-        )
-        return lines.count { foreign.containsMatchIn(it.lowercase()) } >= 2
-    }
+    fun isUnsupportedLanguage(lines: List<String>): Boolean =
+        lines.count { foreignLetter.containsMatchIn(it.lowercase()) } >= 2
+
+    /**
+     * Les lettres qui ont fait refuser l'écran (« ă ș ț »), sans doublon et
+     * plafonnées. Seules elles disent la langue réellement affichée : celle du
+     * téléphone peut être une autre. Mirror de `ScanProcessor.foreignLetters` (iOS).
+     */
+    fun foreignLetters(lines: List<String>): String =
+        lines.asSequence()
+            .flatMap { foreignLetter.findAll(it.lowercase()).map { m -> m.value } }
+            .distinct()
+            .take(12)
+            .joinToString(" ")
+
+    private val foreignLetter = Regex(
+        """[ășşțţąęłńśźżćřěůňťďľĺŕčšžğıőűāēīūķļņģėįųđþð\x{0370}-\x{03FF}\x{0400}-\x{052F}\x{0530}-\x{058F}\x{0590}-\x{05FF}\x{0600}-\x{06FF}\x{0900}-\x{097F}\x{0E00}-\x{0E7F}\x{10A0}-\x{10FF}\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}]"""
+    )
+
+    /**
+     * Étape où le dernier [parse] a renoncé, avec ce qu'il avait déjà lu — null
+     * s'il a abouti. Part en `detail` de l'échec. Mirror iOS `OcrParser.lastFailure`.
+     */
+    var lastFailure: String? = null
+        private set
 
     // Mots-clés de voie à matcher comme MOT ENTIER (FR, EN, ES, IT, NL, PT) + POIs
     /**
@@ -233,6 +276,11 @@ object OcrParser {
     private val EV_CONTEXT_REGEX = Regex(
         """(autonomie|autonom[ií]a|autonomia|reichweite|actieradius|recharg|ricarica|carregar|cargando|opladen|laden|borne\s|batterie|bater[ií]a|bateria|batterij|batteria|akku|électrique|electrique|el[ée]ctrico|el[ée]trico|elettrico|elektrisch|kwh|\bev\b|charging|battery|\brange\b)""", RegexOption.IGNORE_CASE)
     private val DURATION_REGEX = Regex("""(\d{1,3})\s*min""", RegexOption.IGNORE_CASE)
+    // Durée en heures : « 4h 15min », « 1 h », « 2h05 ». Mirror iOS `durationHourRegex`,
+    // plus une garde : un chiffre collé à « € / $ / £ » ou à « / » est un taux,
+    // pas une durée — « 82 €/h » (le verdict de Strive resté à l'écran) que l'OCR
+    // lit « 82€1h » valait sinon une course d'une heure.
+    private val DURATION_HOUR_REGEX = Regex("""(?<![\d€$£/])(\d{1,2})\s*h\s*(\d{1,2})?\s*(?:min)?""", RegexOption.IGNORE_CASE)
     // Ligne combinée pickup : "4 min • 1,2 km" ou "1,2 km • 4 min"
     //
     // Le séparateur admet des LETTRES. Il excluait auparavant [a-zà-ü], ce qui
@@ -315,8 +363,11 @@ object OcrParser {
     // ─── Entry point ─────────────────────────────────────────────────────────────
 
     fun parse(visionText: Text, screenWidth: Int, screenHeight: Int, bitmap: Bitmap? = null): ScanResult? {
-        val blocks = visionText.textBlocks
-        if (blocks.isEmpty()) return null
+        lastFailure = null
+        if (visionText.textBlocks.isEmpty()) { lastFailure = "no_blocks"; return null }
+        // Strive se lisait lui-même : sa notification de verdict, restée à
+        // l'écran, devenait une fausse offre au scan suivant (scan_debug #110).
+        val blocks = belowTopCut(visionText, screenHeight)
 
         val fullText = blocks.joinToString(" ") { it.text }.lowercase()
         // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -327,8 +378,15 @@ object OcrParser {
             platform = detectPlatformByButtonColor(bitmap)
         }
 
-        val fare = extractFare(blocks, platform, screenHeight) ?: return null
-        val fareBlockY = locateFareBlockY(blocks, fare)
+        val (fare, fareBlock) = extractFare(blocks, platform, screenHeight)
+            ?: run { lastFailure = "no_fare platform=${platform.name}"; return null }
+        // La zone des adresses part du bloc de prix RETENU. Le chercher à nouveau
+        // par son texte prenait la première occurrence du montant — un bandeau ou
+        // l'overlay d'une autre app en haut — et écartait les deux vraies adresses.
+        // Le texte cherché était de surcroît faux une fois sur deux : `((18.54 - 18)
+        // * 100).toInt()` vaut 53. Mirror iOS/TS.
+        val fareBlockY = fareBlock.boundingBox?.centerY()
+        val fareInButton = ACCEPT_REGEX.containsMatchIn(fareBlock.text)
 
         // Invariant layout VTC : 1ʳᵉ adresse = pickup, 2ᵉ = destination. On s'en
         // sert pour catégoriser les km/min par zone verticale.
@@ -340,7 +398,7 @@ object OcrParser {
             Log.d("StriveScan", "platform=$platform fare=$fare fareY=$fareBlockY")
         }
 
-        val addressBlocks = findAddressBlocks(blocks, screenHeight, fareBlockY)
+        val addressBlocks = findAddressBlocks(blocks, screenHeight, fareBlockY, fareInButton)
         val pickupAddrBlock = addressBlocks.getOrNull(0)
         val destAddrBlock = addressBlocks.getOrNull(1)
 
@@ -349,9 +407,16 @@ object OcrParser {
             addressBlocks.forEachIndexed { i, b -> Log.d("StriveScan", "  [$i] ${b.text.replace("\n", " ⏎ ")}") }
         }
 
-        val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock) ?: return null
+        val distance = extractDistance(blocks, pickupAddrBlock, destAddrBlock)
+            ?: run {
+                lastFailure = String.format(java.util.Locale.ROOT, "no_distance fare=%.2f", fare)
+                return null
+            }
 
-        if (!isSane(fare, distance)) return null
+        if (!isSane(fare, distance)) {
+            lastFailure = String.format(java.util.Locale.ROOT, "out_of_bounds fare=%.2f km=%.1f", fare, distance)
+            return null
+        }
 
         // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
         // écarter le combo qui la porte, sinon les minutes d'approche deviennent
@@ -488,28 +553,6 @@ object OcrParser {
         return withUkOutwardPrefix(result, addrBlock, allBlocks)
     }
 
-    /**
-     * Trouve le centerY du bloc qui contient le prix extrait — utilisé comme
-     * ancre pour délimiter le card-trip (où se trouvent les vraies adresses)
-     * et exclure les labels de fond de carte (Heetch, Bolt).
-     */
-    private fun locateFareBlockY(blocks: List<Text.TextBlock>, fare: Double): Int? {
-        val euros = fare.toInt()
-        val cents = ((fare - euros) * 100).toInt()
-        val patterns = listOf(
-            "$euros,${"%02d".format(cents)}",
-            "$euros.${"%02d".format(cents)}",
-        )
-        blocks.firstOrNull { b ->
-            patterns.any { p -> b.text.contains(p) }
-        }?.boundingBox?.centerY()?.let { return it }
-        // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
-        // matcher un code postal ou une heure qui contiendrait la même suite.
-        val glued = "$euros${"%02d".format(cents)}"
-        return blocks.firstOrNull { it.text.contains(glued) && CURRENCY_REGEX.containsMatchIn(it.text) }
-            ?.boundingBox?.centerY()
-    }
-
     // ─── Platform detection ───────────────────────────────────────────────────────
 
     // Catégories de course propres à UNE seule plateforme — secours quand le nom
@@ -593,8 +636,8 @@ object OcrParser {
         blocks: List<Text.TextBlock>,
         platform: Platform,
         screenHeight: Int,
-    ): Double? {
-        data class Candidate(val value: Double, val score: Float)
+    ): Pair<Double, Text.TextBlock>? {
+        data class Candidate(val value: Double, val score: Float, val block: Text.TextBlock)
 
         val anchors = priceAnchors[platform] ?: priceAnchors[Platform.UNKNOWN]!!
         val candidates = mutableListOf<Candidate>()
@@ -613,6 +656,8 @@ object OcrParser {
             val deRated = normalizedText.replace(RATING_SEGMENT_REGEX, " ")
 
             val match = PRICE_REGEX.find(deRated)
+            // Avec décimales : rien à reconstruire, seul le plafond large s'applique.
+            val ceiling = if (match != null) fareCeiling else fareMax
             val value: Double = if (match != null) {
                 val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
                 val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
@@ -626,7 +671,7 @@ object OcrParser {
                 if (raw > fareMax) raw / 100 else raw
             }
 
-            if (value !in fareMin..fareMax) return@forEachIndexed
+            if (value !in fareMin..ceiling) return@forEachIndexed
 
             var score = 0f
             val box = block.boundingBox
@@ -649,11 +694,20 @@ object OcrParser {
 
             if (value in 1.0..5.0) score -= 40f
 
-            candidates.add(Candidate(value, score))
+            // Le prix du bouton d'acceptation l'emporte sur les contre-propositions
+            // (Heetch : « Accept €272,30 » face à €345,10 et €326,90, plus gros).
+            if (ACCEPT_REGEX.containsMatchIn(block.text)) score += 60f
+
+            candidates.add(Candidate(value, score, block))
         }
 
-        return candidates.maxByOrNull { it.score }?.value
+        return candidates.maxByOrNull { it.score }?.let { it.value to it.block }
     }
+
+    /** Bouton d'acceptation (« Accept €272,30 », « Accepter 12,30 € »…). Un prix
+     *  écrit DANS ce bouton est celui que le chauffeur touche en acceptant ; les
+     *  autres montants de l'écran sont des contre-propositions. Mirror iOS/TS. */
+    private val ACCEPT_REGEX = Regex("accept|acept|accett|aceit|annehm|aanvaard", RegexOption.IGNORE_CASE)
 
     /**
      * ML Kit fragmente parfois un décimal en deux blocs autour du point.
@@ -844,18 +898,31 @@ object OcrParser {
             val hasMin = lower.contains("min")
             val isPickupCombo = hasKm && hasMin
 
-            if (hasKm && !hasMin) continue
+            if (hasKm && !hasMin && !lower.contains("h")) continue
             val normalizedText = normalizeOcrDigits(block.text)
-            val match = DURATION_REGEX.find(normalizedText) ?: continue
-            val value = match.groupValues[1].toIntOrNull() ?: continue
-            if (value !in 1..180) continue
             // Pour un combo "X min • Y km", on capte aussi le km : il permet de
             // distinguer l'approche (petit km) de la course (grand km) quand les
             // DEUX lignes sont au format combo (cas Bolt).
             val km = if (isPickupCombo) DISTANCE_REGEX.find(normalizedText)?.let {
                 cleanNum(it.groupValues[1]).toDoubleOrNull()
             } else null
-            candidates.add(Cand(value, km, block.boundingBox?.centerY() ?: 0, isPickupCombo))
+            val y = block.boundingBox?.centerY() ?: 0
+
+            // Les heures d'abord : « 4h 15min » n'est pas une course de 15 min
+            // (Lisses → Lyon, 272,30 € : ~1 000 €/h affichés). Jusqu'à 24 h. Mirror iOS.
+            val hourMatch = DURATION_HOUR_REGEX.find(normalizedText)
+            if (hourMatch != null) {
+                val total = hourMatch.groupValues[1].toInt() * 60 + (hourMatch.groupValues[2].toIntOrNull() ?: 0)
+                if (total in 1..1440) {
+                    candidates.add(Cand(total, km, y, isPickupCombo))
+                    continue
+                }
+            }
+
+            val match = DURATION_REGEX.find(normalizedText) ?: continue
+            val value = match.groupValues[1].toIntOrNull() ?: continue
+            if (value !in 1..180) continue
+            candidates.add(Cand(value, km, y, isPickupCombo))
         }
 
         if (candidates.isEmpty()) return null
@@ -1053,6 +1120,7 @@ object OcrParser {
         blocks: List<Text.TextBlock>,
         screenHeight: Int,
         fareBlockY: Int? = null,
+        fareInButton: Boolean = false,
     ): List<Text.TextBlock> {
         var candidates = blocks
             .filter { (it.boundingBox?.centerY() ?: 0) > screenHeight * 0.25 }
@@ -1067,8 +1135,10 @@ object OcrParser {
         if (fareBlockY != null) {
             val slackAbove = (screenHeight * 0.05).toInt()
             val depthBelow = (screenHeight * 0.5).toInt()
-            val yMin = fareBlockY - slackAbove
-            val yMax = fareBlockY + depthBelow
+            // Prix dans le bouton d'acceptation : le bouton est SOUS la carte de
+            // la course, la fenêtre se retourne (adresses au-dessus du prix).
+            val yMin = if (fareInButton) fareBlockY - depthBelow else fareBlockY - slackAbove
+            val yMax = if (fareInButton) fareBlockY + slackAbove else fareBlockY + depthBelow
             candidates = candidates.filter { b ->
                 val y = b.boundingBox?.centerY() ?: return@filter false
                 y in yMin..yMax
@@ -1192,10 +1262,9 @@ object OcrParser {
     // ─── Sanity check ────────────────────────────────────────────────────────────
 
     private fun isSane(fare: Double, distanceKm: Double): Boolean {
-        if (fare !in fareMin..fareMax) return false
+        if (fare !in fareMin..fareCeiling) return false
         if (distanceKm !in distMin..distMax) return false
-        val rate = fare / distanceKm
-        if (rate !in rateMin..rateMax) return false
+        if (fare / distanceKm < rateMin) return false
         return true
     }
 }

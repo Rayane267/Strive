@@ -4,6 +4,7 @@ import {
   Linking,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -128,7 +129,8 @@ const MapSheet = ({
   );
 };
 
-/** Bouton « Lancer la navigation » : ouvre Plans vers la zone. */
+/** Bouton « Lancer la navigation » : ouvre Plans vers la zone sur iOS, Google
+ *  Maps sur Android (l'appli, ou le navigateur à défaut). */
 export const SheetNavButton = ({ to }: { to: LatLng }) => {
   const { t } = useMarketT();
   return (
@@ -136,7 +138,11 @@ export const SheetNavButton = ({ to }: { to: LatLng }) => {
       style={styles.navButton}
       onPress={() => {
         hapticLight();
-        Linking.openURL(`maps://?daddr=${to.latitude},${to.longitude}&dirflg=d`).catch(() => {});
+        const url =
+          Platform.OS === 'ios'
+            ? `maps://?daddr=${to.latitude},${to.longitude}&dirflg=d`
+            : `https://www.google.com/maps/dir/?api=1&destination=${to.latitude},${to.longitude}&travelmode=driving`;
+        Linking.openURL(url).catch(() => {});
       }}
       accessibilityRole="button"
     >

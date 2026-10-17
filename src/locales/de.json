@@ -797,7 +797,7 @@
       "ocr_empty": "Kein Text auf dem Bildschirm gelesen",
       "no_addresses": "Unlesbare Adressen",
       "not_a_ride": "Kein Angebot erkannt",
-      "gemini_ko": "Das Angebot konnte nicht gelesen werden",
+      "offer_unreadable": "Das Angebot konnte nicht gelesen werden",
       "la_start_failed": "Anzeige nicht möglich",
       "expired": "Auswertung unterbrochen",
       "timeout": "Auswertung zu lang",
@@ -1238,6 +1238,41 @@
     "verdictMid": "Durchschnittliche Zone",
     "verdictBad": "Zone meiden"
   },
+  "reports": {
+    "button": "Melden",
+    "locating": "Ortung…",
+    "pickTitle": "Was ist los?",
+    "pickSubtitle": "Wird an deinem aktuellen Standort gesetzt.",
+    "kind": {
+      "police": "Polizei",
+      "accident": "Unfall",
+      "danger": "Gefahr",
+      "traffic": "Stau",
+      "roadworks": "Baustelle"
+    },
+    "stillThere": "Noch da?",
+    "yes": "Noch da",
+    "no": "Nicht mehr da",
+    "nearbyTitle": "{{kind}} in {{meters}} m",
+    "justNow": "Gerade gemeldet",
+    "minutesAgo_one": "Vor {{count}} Min. gemeldet",
+    "minutesAgo_other": "Vor {{count}} Min. gemeldet",
+    "hoursAgo_one": "Vor {{count}} Std. gemeldet",
+    "hoursAgo_other": "Vor {{count}} Std. gemeldet",
+    "confirmed_one": "{{count}}-mal bestätigt",
+    "confirmed_other": "{{count}}-mal bestätigt",
+    "mine": "Das ist deine Meldung. Entferne sie, wenn sie nicht mehr stimmt.",
+    "withdraw": "Meine Meldung entfernen",
+    "voted": "Danke, du hast schon abgestimmt.",
+    "thanks": "Danke! Meldung hinzugefügt.",
+    "thanksVote": "Danke für deine Rückmeldung.",
+    "gone": "Diese Meldung ist nicht mehr aktiv.",
+    "rateLimited": "Zu viele Meldungen hintereinander. Versuch es gleich noch mal.",
+    "failed": "Senden fehlgeschlagen. Prüf deine Verbindung.",
+    "locationOffTitle": "Ortung ist aus",
+    "locationOffBody": "Erlaube Strive, deinen Standort zu nutzen, um eine Meldung auf der Karte zu setzen.",
+    "openSettings": "Einstellungen öffnen"
+  },
   "rideNetwork": {
     "title": "Netzwerk",
     "menuTitle": "Netzwerk",
@@ -1341,7 +1376,7 @@
     "unsupportedFormat": "Nicht unterstütztes Bildformat",
     "noImageInShare": "Kein Bild in der Freigabe gefunden",
     "noOffer": "Kein Fahrtangebot erkannt",
-    "unsupportedLanguage": "Sprache nicht erkannt. Stell deine Fahrer-App auf Englisch um.",
+    "unsupportedLanguage": "Sprache nicht erkannt. Stell deine Fahrer-App auf eine Sprache um, die Strive unterstützt.",
     "aiAnalysis": "KI-Analyse läuft…",
     "cannotAnalyze": "Dieses Bild konnte nicht analysiert werden",
     "addressesUnreadable": "Scan fehlgeschlagen — Adressen unlesbar, versuch es erneut",
@@ -1360,5 +1395,12 @@
     "bubbleRideDeclined": "❌ Abgelehnt",
     "bubbleQuota": "Limit erreicht",
     "bubbleQuotaFree": "Limit erreicht · Hol dir Plus"
+  },
+  "update": {
+    "title": "Update verfügbar",
+    "body": "Strive {{version}} ist verfügbar. Installiere es für die neuesten Korrekturen.",
+    "whatsNew": "Neu",
+    "cta": "Aktualisieren",
+    "later": "Später"
   }
 }

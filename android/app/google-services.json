@@ -7,14 +7,22 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:397785965149:android:53675ee936f1ecd809a3b4",
+        "mobilesdk_app_id": "1:397785965149:android:b4f7b99f357ba4c909a3b4",
         "android_client_info": {
-          "package_name": "com.strive"
+          "package_name": "com.striveapp.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "397785965149-4gq72k418u7cd5rhf4mmkbvof2nclqsl.apps.googleusercontent.com",
+          "client_id": "397785965149-ahchom1u9fl487l36osvr877327pr0gb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.striveapp.app",
+            "certificate_hash": "5bebcfafd31252eace1548fb5c9c09db53acfe54"
+          }
+        },
+        {
+          "client_id": "397785965149-2kk6fcb39rfjupqf69eh1mjktc8nvq9v.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -27,8 +35,15 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "397785965149-4gq72k418u7cd5rhf4mmkbvof2nclqsl.apps.googleusercontent.com",
+              "client_id": "397785965149-2kk6fcb39rfjupqf69eh1mjktc8nvq9v.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "397785965149-7at5j010btil8a2vfbq6i3s7snu1ob15.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.strive"
+              }
             }
           ]
         }

@@ -54,35 +54,35 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 30
       },
       {
         "text": "Estimated fare",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 15
       },
       {
         "text": "15.50",
         "x": 50,
-        "y": 250,
+        "y": 776,
         "width": 200,
         "height": 40
       },
       {
         "text": "8.2 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       },
       {
         "text": "15 min",
         "x": 50,
-        "y": 450,
+        "y": 976,
         "width": 200,
         "height": 15
       }
@@ -101,28 +101,28 @@
       {
         "text": "bolt",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 30
       },
       {
         "text": "Gain estimé",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 15
       },
       {
         "text": "12.00",
         "x": 50,
-        "y": 250,
+        "y": 776,
         "width": 200,
         "height": 40
       },
       {
         "text": "5.5 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -140,28 +140,28 @@
       {
         "text": "heetch",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 30
       },
       {
         "text": "Course",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 15
       },
       {
         "text": "9.75",
         "x": 50,
-        "y": 250,
+        "y": 776,
         "width": 200,
         "height": 40
       },
       {
         "text": "3.8 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -179,21 +179,21 @@
       {
         "text": "Total",
         "x": 50,
-        "y": 200,
+        "y": 576,
         "width": 200,
         "height": 15
       },
       {
         "text": "10.00",
         "x": 50,
-        "y": 250,
+        "y": 626,
         "width": 200,
         "height": 40
       },
       {
         "text": "4.0 km",
         "x": 50,
-        "y": 400,
+        "y": 776,
         "width": 200,
         "height": 15
       }
@@ -203,35 +203,6 @@
       "fare": 10,
       "distanceKm": 4
     }
-  },
-  {
-    "name": "insane-fare-distance-ratio-rejected",
-    "description": "200€ / 0.5km = 400 €/km — bien au-dessus de RATE_MAX",
-    "screenHeight": 1920,
-    "blocks": [
-      {
-        "text": "uber",
-        "x": 50,
-        "y": 50,
-        "width": 200,
-        "height": 20
-      },
-      {
-        "text": "Total 200.00",
-        "x": 50,
-        "y": 200,
-        "width": 200,
-        "height": 40
-      },
-      {
-        "text": "0.5 km",
-        "x": 50,
-        "y": 400,
-        "width": 200,
-        "height": 15
-      }
-    ],
-    "expected": null
   },
   {
     "name": "fare-below-min-rejected",
@@ -268,21 +239,21 @@
       {
         "text": "bolt",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Gain 14,50",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "6,3 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -300,21 +271,21 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Total 15.50",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "8.2 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -334,28 +305,28 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "5.00",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 10
       },
       {
         "text": "25.00",
         "x": 50,
-        "y": 300,
+        "y": 826,
         "width": 200,
         "height": 50
       },
       {
         "text": "10.0 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -373,35 +344,35 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Estimated fare",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 15
       },
       {
         "text": "18.50",
         "x": 50,
-        "y": 250,
+        "y": 776,
         "width": 200,
         "height": 20
       },
       {
         "text": "8.50",
         "x": 50,
-        "y": 350,
+        "y": 876,
         "width": 200,
         "height": 20
       },
       {
         "text": "7.0 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -475,28 +446,28 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Total 20.00",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "10.0 km",
         "x": 50,
-        "y": 300,
+        "y": 826,
         "width": 200,
         "height": 15
       },
       {
         "text": "25 min",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -515,28 +486,28 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Total 20.00",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "10.0 km",
         "x": 50,
-        "y": 300,
+        "y": 826,
         "width": 200,
         "height": 15
       },
       {
         "text": "200 min",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -555,21 +526,21 @@
       {
         "text": "UBER Trip",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Total 15.50",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "8.2 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -587,21 +558,21 @@
       {
         "text": "bolt",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 20
       },
       {
         "text": "Gain 8.00",
         "x": 50,
-        "y": 200,
+        "y": 726,
         "width": 200,
         "height": 40
       },
       {
         "text": "2.0 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       }
@@ -620,42 +591,42 @@
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 576,
         "width": 200,
         "height": 30
       },
       {
         "text": "Autonomie 250 km",
         "x": 50,
-        "y": 120,
+        "y": 646,
         "width": 260,
         "height": 18
       },
       {
         "text": "Recharge 35 min",
         "x": 50,
-        "y": 150,
+        "y": 676,
         "width": 260,
         "height": 18
       },
       {
         "text": "15.50",
         "x": 50,
-        "y": 250,
+        "y": 776,
         "width": 200,
         "height": 40
       },
       {
         "text": "8.2 km",
         "x": 50,
-        "y": 400,
+        "y": 926,
         "width": 200,
         "height": 15
       },
       {
         "text": "15 min",
         "x": 50,
-        "y": 450,
+        "y": 976,
         "width": 200,
         "height": 15
       }

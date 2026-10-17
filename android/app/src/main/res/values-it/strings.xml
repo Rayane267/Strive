@@ -4,7 +4,7 @@
   <string name="app_name">Strive</string>
   <string name="accessibility_service_description">Strive è uno strumento professionale per autisti NCC. Questo servizio di accessibilità è usato esclusivamente per catturare lo schermo delle app Uber, Bolt e Heetch quando l\'utente tocca il pulsante di scansione, per estrarre automaticamente i dati della corsa (tariffa, distanza, indirizzi) tramite OCR locale. Nessun dato personale viene letto o raccolto. L\'analisi avviene sul dispositivo e si attiva solo su richiesta esplicita dell\'autista.</string>
   <string name="scanner_not_a_ride">Nessuna offerta di corsa rilevata</string>
-  <string name="scanner_unsupported_language">Lingua non riconosciuta. Imposta in inglese la tua app per autisti.</string>
+  <string name="scanner_unsupported_language">Lingua non riconosciuta. Imposta la tua app per autisti in una lingua disponibile su Strive.</string>
   <string name="scanner_session_required_bubble">Vai online per scansionare</string>
   <string name="scanner_session_required_title">Sessione richiesta</string>
   <string name="scanner_session_required_body">Avvia la tua sessione su Strive per scansionare le corse.</string>

@@ -26,7 +26,7 @@ export type ScanFailureReason =
   | 'throttled'
   | 'ocr_empty'
   | 'not_a_ride'
-  | 'gemini_ko'
+  | 'offer_unreadable'
   | 'no_addresses'
   | 'la_start_failed'
   | 'expired'
@@ -66,7 +66,7 @@ export const SCAN_ERROR_CODES: Record<ScanFailureReason, string> = {
   ocr_empty:       '0xC0FE0631',
   no_addresses:    '0xC0FE074B',
   not_a_ride:      '0xC0FE0859',
-  gemini_ko:       '0xC0FE0962',
+  offer_unreadable: '0xC0FE0962', // ex-gemini_ko : code inchangé
   la_start_failed: '0xC0FE0A7D',
   expired:         '0xC0FE0B34',
   timeout:         '0xC0FE0C55',

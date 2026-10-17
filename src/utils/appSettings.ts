@@ -19,7 +19,7 @@ const { ScanBridge } = NativeModules;
 /** Le paquet Android, en dur : `APP_NOTIFICATION_SETTINGS` exige de nommer
  *  l'application et rien côté JS ne l'expose. Aligné sur `applicationId`
  *  (android/app/build.gradle). */
-const ANDROID_PACKAGE = 'com.strive';
+const ANDROID_PACKAGE = 'com.striveapp.app';
 
 export type SettingsTarget =
   /** Notifications de l'app : canaux sur Android, autorisations sur iOS. */

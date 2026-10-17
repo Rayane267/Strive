@@ -797,7 +797,7 @@
       "ocr_empty": "Nessun testo letto sullo schermo",
       "no_addresses": "Indirizzi illeggibili",
       "not_a_ride": "Nessuna offerta rilevata",
-      "gemini_ko": "Impossibile leggere l'offerta",
+      "offer_unreadable": "Impossibile leggere l'offerta",
       "la_start_failed": "Visualizzazione impossibile",
       "expired": "Analisi interrotta",
       "timeout": "Analisi troppo lunga",
@@ -1238,6 +1238,41 @@
     "verdictMid": "Zona nella media",
     "verdictBad": "Zona da evitare"
   },
+  "reports": {
+    "button": "Segnala",
+    "locating": "Localizzazione…",
+    "pickTitle": "Cosa succede?",
+    "pickSubtitle": "Posizionata dove ti trovi ora.",
+    "kind": {
+      "police": "Polizia",
+      "accident": "Incidente",
+      "danger": "Pericolo",
+      "traffic": "Traffico",
+      "roadworks": "Lavori"
+    },
+    "stillThere": "C'è ancora?",
+    "yes": "C'è ancora",
+    "no": "Non c'è più",
+    "nearbyTitle": "{{kind}} a {{meters}} m",
+    "justNow": "Segnalato ora",
+    "minutesAgo_one": "Segnalato {{count}} min fa",
+    "minutesAgo_other": "Segnalato {{count}} min fa",
+    "hoursAgo_one": "Segnalato {{count}} h fa",
+    "hoursAgo_other": "Segnalato {{count}} h fa",
+    "confirmed_one": "confermato {{count}} volta",
+    "confirmed_other": "confermato {{count}} volte",
+    "mine": "È la tua segnalazione. Rimuovila se non è più attuale.",
+    "withdraw": "Rimuovi la mia segnalazione",
+    "voted": "Grazie, hai già dato il tuo parere.",
+    "thanks": "Grazie! Segnalazione aggiunta.",
+    "thanksVote": "Grazie per il tuo riscontro.",
+    "gone": "Questa segnalazione non è più attiva.",
+    "rateLimited": "Troppe segnalazioni di seguito. Riprova tra poco.",
+    "failed": "Invio non riuscito. Controlla la connessione.",
+    "locationOffTitle": "Localizzazione disattivata",
+    "locationOffBody": "Consenti a Strive di usare la tua posizione per aggiungere una segnalazione sulla mappa.",
+    "openSettings": "Apri Impostazioni"
+  },
   "rideNetwork": {
     "title": "Rete",
     "menuTitle": "Rete",
@@ -1341,7 +1376,7 @@
     "unsupportedFormat": "Formato immagine non supportato",
     "noImageInShare": "Nessuna immagine trovata nella condivisione",
     "noOffer": "Nessuna offerta di corsa rilevata",
-    "unsupportedLanguage": "Lingua non riconosciuta. Imposta in inglese la tua app per autisti.",
+    "unsupportedLanguage": "Lingua non riconosciuta. Imposta la tua app per autisti in una lingua disponibile su Strive.",
     "aiAnalysis": "Analisi IA in corso…",
     "cannotAnalyze": "Impossibile analizzare questa immagine",
     "addressesUnreadable": "Scansione fallita — indirizzi illeggibili, riprova",
@@ -1360,5 +1395,12 @@
     "bubbleRideDeclined": "❌ Rifiutata",
     "bubbleQuota": "Quota raggiunta",
     "bubbleQuotaFree": "Quota raggiunta · Passa a Plus"
+  },
+  "update": {
+    "title": "Aggiornamento disponibile",
+    "body": "Strive {{version}} è disponibile. Installala per avere le ultime correzioni.",
+    "whatsNew": "Novità",
+    "cta": "Aggiorna",
+    "later": "Più tardi"
   }
 }

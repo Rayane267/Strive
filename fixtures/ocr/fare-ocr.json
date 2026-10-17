@@ -4,10 +4,10 @@
     "description": "'* 5,00 Montant net de frais' : la note précédée d'une étoile/astérisque n'est jamais un tarif, même boostée par l'ancre 'net'",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "17,43 €", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "* 5,00 Montant net de frais", "x": 50, "y": 260, "width": 200, "height": 15 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      { "text": "uber", "x": 50, "y": 576, "width": 200, "height": 30 },
+      { "text": "17,43 €", "x": 50, "y": 726, "width": 200, "height": 40 },
+      { "text": "* 5,00 Montant net de frais", "x": 50, "y": 786, "width": 200, "height": 15 },
+      { "text": "8.2 km", "x": 50, "y": 926, "width": 200, "height": 15 }
     ],
     "expected": { "platform": "UBER", "fare": 17.43, "distanceKm": 8.2 }
   },
@@ -16,9 +16,9 @@
     "description": "'17,43 €' lu '1743€' : au-delà du plafond plausible, les 2 derniers chiffres sont des centimes",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "1743€", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      { "text": "uber", "x": 50, "y": 576, "width": 200, "height": 30 },
+      { "text": "1743€", "x": 50, "y": 726, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 926, "width": 200, "height": 15 }
     ],
     "expected": { "platform": "UBER", "fare": 17.43, "distanceKm": 8.2 }
   },
@@ -27,9 +27,9 @@
     "description": "'17 €' sans décimales : accepté tel quel (sous le plafond)",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "17 €", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      { "text": "uber", "x": 50, "y": 576, "width": 200, "height": 30 },
+      { "text": "17 €", "x": 50, "y": 726, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 926, "width": 200, "height": 15 }
     ],
     "expected": { "platform": "UBER", "fare": 17, "distanceKm": 8.2 }
   },
@@ -49,9 +49,9 @@
     "description": "'9 €' sec EST un tarif plausible (course au minimum VTC). Écarté, il ne faisait pas échouer le scan : priceRegex n'exige pas le symbole € et la distance '8.2 km' devenait candidate au-dessus du plancher fareMin=8 — le scan affichait donc 8,2 € au lieu de 9 €. Cette fixture verrouille les deux à la fois : le chiffre seul accepté, et le tarif qui l'emporte sur la distance au scoring.",
     "screenHeight": 1920,
     "blocks": [
-      { "text": "uber", "x": 50, "y": 50, "width": 200, "height": 30 },
-      { "text": "9 €", "x": 50, "y": 200, "width": 200, "height": 40 },
-      { "text": "8.2 km", "x": 50, "y": 400, "width": 200, "height": 15 }
+      { "text": "uber", "x": 50, "y": 576, "width": 200, "height": 30 },
+      { "text": "9 €", "x": 50, "y": 726, "width": 200, "height": 40 },
+      { "text": "8.2 km", "x": 50, "y": 926, "width": 200, "height": 15 }
     ],
     "expected": { "platform": "UBER", "fare": 9, "distanceKm": 8.2 }
   }

@@ -789,7 +789,7 @@
       "ocr_empty": "Aucun texte lu à l'écran",
       "no_addresses": "Adresses illisibles",
       "not_a_ride": "Aucune offre détectée",
-      "gemini_ko": "L'offre n'a pas pu être lue",
+      "offer_unreadable": "L'offre n'a pas pu être lue",
       "la_start_failed": "Affichage impossible",
       "expired": "Analyse interrompue",
       "timeout": "Analyse trop longue",
@@ -1230,6 +1230,41 @@
     "verdictMid": "Zone moyenne",
     "verdictBad": "Zone à éviter"
   },
+  "reports": {
+    "button": "Signaler",
+    "locating": "Position…",
+    "pickTitle": "Que se passe-t-il ?",
+    "pickSubtitle": "Placé à votre position actuelle.",
+    "kind": {
+      "police": "Police",
+      "accident": "Accident",
+      "danger": "Danger",
+      "traffic": "Bouchon",
+      "roadworks": "Travaux"
+    },
+    "stillThere": "Toujours là ?",
+    "yes": "Toujours là",
+    "no": "Plus là",
+    "nearbyTitle": "{{kind}} à {{meters}} m",
+    "justNow": "Signalé à l'instant",
+    "minutesAgo_one": "Signalé il y a {{count}} min",
+    "minutesAgo_other": "Signalé il y a {{count}} min",
+    "hoursAgo_one": "Signalé il y a {{count}} h",
+    "hoursAgo_other": "Signalé il y a {{count}} h",
+    "confirmed_one": "confirmé {{count}} fois",
+    "confirmed_other": "confirmé {{count}} fois",
+    "mine": "C'est votre signalement. Retirez-le s'il n'est plus d'actualité.",
+    "withdraw": "Retirer mon signalement",
+    "voted": "Merci, vous avez déjà donné votre avis.",
+    "thanks": "Merci ! Signalement ajouté.",
+    "thanksVote": "Merci pour votre retour.",
+    "gone": "Ce signalement n'est plus actif.",
+    "rateLimited": "Trop de signalements d'affilée. Réessayez dans un moment.",
+    "failed": "Envoi impossible. Vérifiez votre connexion.",
+    "locationOffTitle": "Localisation désactivée",
+    "locationOffBody": "Autorisez Strive à utiliser votre position pour placer un signalement sur la carte.",
+    "openSettings": "Ouvrir les réglages"
+  },
   "rideNetwork": {
     "title": "Réseau",
     "menuTitle": "Réseau",
@@ -1333,7 +1368,7 @@
     "unsupportedFormat": "Format d'image non supporté",
     "noImageInShare": "Aucune image trouvée dans le partage",
     "noOffer": "Aucune offre de course détectée",
-    "unsupportedLanguage": "Langue non reconnue. Veuillez passer votre app VTC en anglais.",
+    "unsupportedLanguage": "Langue non reconnue. Passez votre app VTC dans une langue disponible sur Strive.",
     "aiAnalysis": "Analyse IA en cours…",
     "cannotAnalyze": "Impossible d'analyser cette image",
     "addressesUnreadable": "Scan échoué — adresses illisibles, réessaie",
@@ -1377,5 +1412,12 @@
     "since": "Depuis {{from}}",
     "people": "≈ {{n}} personnes",
     "until": "jusqu'au {{date}}"
+  },
+  "update": {
+    "title": "Mise à jour disponible",
+    "body": "La version {{version}} de Strive est disponible. Installez-la pour profiter des dernières corrections.",
+    "whatsNew": "Nouveautés",
+    "cta": "Mettre à jour",
+    "later": "Plus tard"
   }
 }

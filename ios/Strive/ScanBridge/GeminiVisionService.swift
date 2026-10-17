@@ -256,7 +256,7 @@ final class GeminiVisionService {
     // hallucinée minuscule → €/km démentiel. Mirror JS / Android.
     let ratio = distanceKm > 0 ? fare / distanceKm : .infinity
     guard fare >= 8, fare <= 200,
-          distanceKm >= 0.3, distanceKm <= 500,
+          distanceKm >= 0.3, distanceKm <= 2000,
           ratio >= 0.2, ratio <= 15
     else { return nil }
 

@@ -11,4 +11,5 @@ module.exports = {
   SENTRY_DSN: '',
   GOOGLE_WEB_CLIENT_ID: 'test-google-web',
   GOOGLE_IOS_CLIENT_ID: 'test-google-ios',
+  MAPBOX_APIKEY: '',
 };

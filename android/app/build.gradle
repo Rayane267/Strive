@@ -81,11 +81,11 @@ android {
 
     namespace "com.strive"
     defaultConfig {
-        applicationId "com.strive"
+        applicationId "com.striveapp.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.4"
+        versionName "1.0.7"
     }
     signingConfigs {
         debug {

@@ -797,7 +797,7 @@
       "ocr_empty": "Nenhum texto lido no ecrã",
       "no_addresses": "Moradas ilegíveis",
       "not_a_ride": "Nenhuma oferta detetada",
-      "gemini_ko": "Não foi possível ler a oferta",
+      "offer_unreadable": "Não foi possível ler a oferta",
       "la_start_failed": "Não foi possível mostrar",
       "expired": "Análise interrompida",
       "timeout": "Análise demasiado longa",
@@ -1238,6 +1238,41 @@
     "verdictMid": "Zona média",
     "verdictBad": "Zona a evitar"
   },
+  "reports": {
+    "button": "Reportar",
+    "locating": "A localizar…",
+    "pickTitle": "O que se passa?",
+    "pickSubtitle": "Colocado na sua posição atual.",
+    "kind": {
+      "police": "Polícia",
+      "accident": "Acidente",
+      "danger": "Perigo",
+      "traffic": "Trânsito",
+      "roadworks": "Obras"
+    },
+    "stillThere": "Ainda lá está?",
+    "yes": "Ainda lá está",
+    "no": "Já não está",
+    "nearbyTitle": "{{kind}} a {{meters}} m",
+    "justNow": "Reportado agora mesmo",
+    "minutesAgo_one": "Reportado há {{count}} min",
+    "minutesAgo_other": "Reportado há {{count}} min",
+    "hoursAgo_one": "Reportado há {{count}} h",
+    "hoursAgo_other": "Reportado há {{count}} h",
+    "confirmed_one": "confirmado {{count}} vez",
+    "confirmed_other": "confirmado {{count}} vezes",
+    "mine": "Este alerta é seu. Retire-o se já não for atual.",
+    "withdraw": "Retirar o meu alerta",
+    "voted": "Obrigado, já deu a sua opinião.",
+    "thanks": "Obrigado! Alerta adicionado.",
+    "thanksVote": "Obrigado pela sua resposta.",
+    "gone": "Este alerta já não está ativo.",
+    "rateLimited": "Demasiados alertas seguidos. Tente daqui a pouco.",
+    "failed": "Não foi possível enviar. Verifique a sua ligação.",
+    "locationOffTitle": "Localização desativada",
+    "locationOffBody": "Permita que o Strive use a sua localização para colocar um alerta no mapa.",
+    "openSettings": "Abrir Definições"
+  },
   "rideNetwork": {
     "title": "Rede",
     "menuTitle": "Rede",
@@ -1341,7 +1376,7 @@
     "unsupportedFormat": "Formato de imagem não suportado",
     "noImageInShare": "Nenhuma imagem encontrada na partilha",
     "noOffer": "Nenhuma oferta de viagem detetada",
-    "unsupportedLanguage": "Idioma não reconhecido. Mude a sua app de motorista para inglês.",
+    "unsupportedLanguage": "Idioma não reconhecido. Mude a sua app de motorista para um idioma disponível no Strive.",
     "aiAnalysis": "Análise IA em curso…",
     "cannotAnalyze": "Não foi possível analisar esta imagem",
     "addressesUnreadable": "Análise falhou — moradas ilegíveis, tente outra vez",
@@ -1360,5 +1395,12 @@
     "bubbleRideDeclined": "❌ Recusada",
     "bubbleQuota": "Quota atingida",
     "bubbleQuotaFree": "Quota atingida · Passe a Plus"
+  },
+  "update": {
+    "title": "Atualização disponível",
+    "body": "O Strive {{version}} já está disponível. Instale-o para ter as últimas correções.",
+    "whatsNew": "Novidades",
+    "cta": "Atualizar",
+    "later": "Mais tarde"
   }
 }

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import { MAPBOX_APIKEY } from '@env';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -37,14 +38,13 @@ const AnalyticsScreen = withErrorBoundary(AnalyticsScreenRaw);
 const ProfileScreen = withErrorBoundary(ProfileScreenRaw);
 const ShopScreen = withErrorBoundary(ShopScreenRaw);
 
-// La carte est sur iOS seulement pour l'instant : sur Android, react-native-maps
-// passe par Google Maps, qui demande une clé que l'app n'a pas encore. Le module
-// n'y est ni lié (react-native.config.js) ni chargé, et l'onglet n'y est pas
+// La carte : toujours sur iOS (Plans), et sur Android dès que le jeton Mapbox
+// est dans le `.env` du build. Sans lui, l'onglet n'est ni chargé ni
 // ENREGISTRÉ — même raisonnement que `SHOP_ENABLED` plus bas.
-const MapScreen: React.ComponentType<any> | null =
-  Platform.OS === 'ios'
-    ? withErrorBoundary(require('../screens/MapScreen').default)
-    : null;
+const MAPS_AVAILABLE = Platform.OS === 'ios' || Boolean(MAPBOX_APIKEY);
+const MapScreen: React.ComponentType<any> | null = MAPS_AVAILABLE
+  ? withErrorBoundary(require('../screens/MapScreen').default)
+  : null;
 
 const Tab = createBottomTabNavigator();
 

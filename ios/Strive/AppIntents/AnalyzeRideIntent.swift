@@ -75,6 +75,8 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// bloc avec `expired = true` pendant que le pipeline peut encore aboutir.
   /// Les scans sont sérialisés par `ScanProcessor` → un seul run vivant à la fois.
   private let runId = UUID()
+  /// Notifications de CE scan, suivies jusqu'à leur enregistrement par iOS.
+  private let outbox = NotificationOutbox()
   private static let presentedLock = NSLock()
   private static var lastPresentedRun: UUID?
 
@@ -91,6 +93,19 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   }
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let value = await performScan()
+    // Rien ne rend la main au raccourci tant qu'une notification partie pendant
+    // ce scan n'est pas enregistrée par iOS (cf. `NotificationOutbox`).
+    await outbox.flush()
+    return .result(value: value)
+  }
+
+  /// Le scan proprement dit. Chaque refus en tête prévient le chauffeur en
+  /// `.timeSensitive`, comme les échecs du pipeline : il vient de déclencher un
+  /// scan et attend une réponse. En `.active`, une Concentration (« Conduite »
+  /// s'allume seule en voiture) rangeait « Session requise » sans bannière ni
+  /// son — le chauffeur ne savait pas pourquoi rien ne se passait.
+  private func performScan() async -> String {
     // Déconnecté : on n'engage RIEN — ni Vision, ni TomTom, ni Gemini, ni Live
     // Activity. Sans compte il n'y a pas de destinataire pour la course : elle
     // ne peut pas être écrite (aucun credential), et afficher un verdict
@@ -107,9 +122,10 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     guard isSignedIn else {
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.signedOut", fr: "Connectez-vous à Strive pour analyser vos courses.", en: "Sign in to Strive to analyse your rides.")
+        body: localizedString("notif.signedOut", fr: "Connectez-vous à Strive pour analyser vos courses.", en: "Sign in to Strive to analyse your rides."),
+        level: .timeSensitive
       )
-      return .result(value: "signed_out")
+      return "signed_out"
     }
 
     // Jeton présent mais périmé. Le scan aurait tourné puis échoué à l'appel de
@@ -132,27 +148,30 @@ struct AnalyzeRideIntent: LiveActivityIntent {
           "notif.sessionStale",
           fr: "Ouvrez Strive pour réactiver le scan.",
           en: "Open Strive to reactivate scanning."
-        )
+        ),
+        level: .timeSensitive
       )
       logFailure("session_off")
-      return .result(value: "session_stale")
+      return "session_stale"
     }
 
     guard isScannerEnabled else {
       sendLocalNotification(
         title: "Strive",
-        body: localizedString("notif.scannerOff", fr: "Scanner désactivé — activez-le dans Strive › Préférences.", en: "Scanner disabled — enable it in Strive › Preferences.")
+        body: localizedString("notif.scannerOff", fr: "Scanner désactivé — activez-le dans Strive › Préférences.", en: "Scanner disabled — enable it in Strive › Preferences."),
+        level: .timeSensitive
       )
       logFailure("scanner_off")
-      return .result(value: "scanner_off")
+      return "scanner_off"
     }
     guard isSessionOnline else {
       sendLocalNotification(
         title: localizedString("notif.session.title", fr: "Session requise", en: "Session required"),
-        body: localizedString("notif.session.body", fr: "Veuillez démarrer votre session dans Strive pour commencer à scanner.", en: "Please start your session in Strive to begin scanning.")
+        body: localizedString("notif.session.body", fr: "Veuillez démarrer votre session dans Strive pour commencer à scanner.", en: "Please start your session in Strive to begin scanning."),
+        level: .timeSensitive
       )
       logFailure("session_off")
-      return .result(value: "session_off")
+      return "session_off"
     }
 
     // AVANT le plafond du compte, et surtout avant le décodage de l'image : un
@@ -168,10 +187,11 @@ struct AnalyzeRideIntent: LiveActivityIntent {
           "notif.quotaDevice",
           fr: "Ce téléphone a déjà utilisé ses scans gratuits du jour, avec un autre compte. Revenez demain ou passez à Plus.",
           en: "This phone has already used today's free scans, on another account. Come back tomorrow or go Plus."
-        )
+        ),
+        level: .timeSensitive
       )
       logFailure("quota_reached")
-      return .result(value: "device_quota_reached")
+      return "device_quota_reached"
     }
 
     guard !isQuotaReached else {
@@ -201,20 +221,22 @@ struct AnalyzeRideIntent: LiveActivityIntent {
               "notif.quota",
               fr: "Quota journalier atteint — revenez demain.",
               en: "Daily quota reached — come back tomorrow."
-            )
+            ),
+        level: .timeSensitive
       )
       logFailure("quota_reached")
-      return .result(value: "quota_reached")
+      return "quota_reached"
     }
 
     guard let image = UIImage(data: screenshot.data) else {
       sendLocalNotification(
         title: "Strive",
         body: localizedString("notif.invalidImage", fr: "Image invalide — réessayez avec une capture d'écran.", en: "Invalid image — try again with a screenshot."),
-        code: .invalidImage
+        code: .invalidImage,
+        level: .timeSensitive
       )
       logFailure("invalid_image")
-      return .result(value: "invalid_image")
+      return "invalid_image"
     }
 
     // Anti double-tap (AssistiveTouch tapé 2-3 fois) : un scan déclenché < 3 s
@@ -231,7 +253,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
           en: "Analysis already running — hold on a second.")
       )
       logFailure("throttled")
-      return .result(value: "too_soon")
+      return "too_soon"
     }
 
     // Préchauffe ActivityKit MAINTENANT, pas au moment d'afficher.
@@ -250,7 +272,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       LiveActivityManager.shared.prewarm()
     }
 
-    return .result(value: await runPipeline(image: image))
+    return await runPipeline(image: image)
   }
 
   /// Exécute le pipeline (OCR → TomTom → fallback Gemini) et NE REND LA MAIN
@@ -446,13 +468,23 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       // carte n'est pas si anodine — c'est la signature du process relancé à
       // froid, que `waitForLiveActivity` vient couvrir. Sans cette trace, ce cas
       // n'apparaissait nulle part : ni carte, ni ligne en base.
+      //
+      // `update_refused` mélangeait deux choses : une carte encore listée mais
+      // morte (« ended » : terminée, souvent par la limite de 8 h d'iOS, et
+      // encore visible sur l'écran verrouillé ; « dismissed » : retirée, balayée
+      // ou après sa fin) et une carte vivante dont la mise à jour a échoué ou
+      // dépassé 3 s. On écrit désormais lequel.
       if liveActivityReady {
-        logFailure(
-          "la_start_failed",
-          detail: Activity<StriveActivityAttributes>.activities.isEmpty
-            ? "no_card_session_online"
-            : "update_refused"
-        )
+        let cards = Activity<StriveActivityAttributes>.activities
+        let detail: String
+        if cards.isEmpty {
+          detail = "no_card_session_online"
+        } else if cards.contains(where: { $0.activityState == .active }) {
+          detail = "update_failed"
+        } else {
+          detail = "card_\(cards[0].activityState)"
+        }
+        logFailure("la_start_failed", detail: detail)
       }
       let verdict = result.verdictLevel == 2 ? "✅" : result.verdictLevel == 1 ? "⚠️" : "❌"
       var body = [
@@ -499,20 +531,25 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// Rien n'est enregistré → l'app ne reçoit aucun résultat à rejeter.
   private func presentFailure() {
     ScanProcessor.markScanFinished()
-    if ScanProcessor.shared.lastScanUnsupportedLanguage {
-      presentUnsupportedLanguage()
+    // La cause posée par le pipeline : OCR vide, étape du parser, adresse
+    // manquante, watchdog… Toute sortie sans course en pose une ; son absence
+    // se verrait donc comme telle (« no_cause ») plutôt que sous un faux motif.
+    let failure = ScanProcessor.shared.lastFailure
+      ?? ScanProcessor.Failure(reason: "offer_unreadable", detail: "no_cause")
+    if failure.reason == "unsupported_language" {
+      presentUnsupportedLanguage(failure)
       return
     }
-    // `lastScanMayBeRide` distingue les deux causes : écran sans signal VTC vs
-    // écran d'offre que le parser n'a pas su lire. Sans ça les deux se
-    // confondent dans les agrégats. `gemini_ko` est ce second cas : le nom date
-    // du repli Gemini, retiré depuis, et reste parce que le vocabulaire du RPC
-    // est fermé et que son code support ne se réaffecte pas. C'est l'écran le
-    // plus précieux du parc : celui que le parser n'a pas su lire.
+    // Les blocs partent quand l'écran est une offre que l'app a mal lue : c'est
+    // la fixture qui manque au parser. Jamais pour `not_a_ride` — un écran sans
+    // offre peut être un écran personnel.
+    let keepsTrace = failure.reason == "offer_unreadable" || failure.reason == "no_addresses"
     logFailure(
-      ScanProcessor.shared.lastScanMayBeRide ? "gemini_ko" : "not_a_ride",
-      blocks: ScanProcessor.shared.lastScanMayBeRide ? ScanProcessor.shared.lastBlocksJson : nil,
-      screenHeight: ScanProcessor.shared.lastScreenHeight
+      failure.reason,
+      detail: failure.detail,
+      blocks: keepsTrace ? ScanProcessor.shared.lastBlocksJson : nil,
+      screenHeight: ScanProcessor.shared.lastScreenHeight,
+      parsed: ScanProcessor.shared.lastParsed
     )
     // Même règle que presentResult : sans activité en cours, showError() ne
     // montre rien du tout — on notifie alors, plutôt que d'échouer en silence.
@@ -534,7 +571,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
         title: "Strive",
         body: body,
         // « pas une course » est un résultat légitime, pas une panne : pas de code.
-        code: ScanProcessor.shared.lastScanMayBeRide ? .geminiKo : nil,
+        code: failure.reason == "not_a_ride" ? nil : ScanErrorCode(reason: failure.reason),
         // Réponse directe à un scan déclenché il y a quelques secondes : doit
         // traverser la Concentration, sinon le chauffeur attend un verdict qui
         // ne viendra jamais et rescanne.
@@ -549,10 +586,16 @@ struct AnalyzeRideIntent: LiveActivityIntent {
   /// La notification part TOUJOURS, même quand la carte affiche l'erreur : la
   /// carte n'a qu'un « Erreur » générique, et c'est la consigne qui compte — sans
   /// elle, le chauffeur rescanne la même offre et échoue de la même façon.
-  /// `detail` porte la langue du téléphone : c'est elle qui dira, dans l'admin,
-  /// quelles langues reviennent assez pour être apprises.
-  private func presentUnsupportedLanguage() {
-    logFailure("unsupported_language", detail: Locale.preferredLanguages.first)
+  /// `detail` porte la langue du téléphone puis les lettres qui ont fait refuser
+  /// l'écran : les deux diront, dans l'admin, quelles langues apprendre. Les
+  /// blocs partent aussi — sans eux, personne ne sait à quoi ressemble l'offre.
+  private func presentUnsupportedLanguage(_ failure: ScanProcessor.Failure) {
+    logFailure(
+      "unsupported_language",
+      detail: failure.detail,
+      blocks: ScanProcessor.shared.lastBlocksJson,
+      screenHeight: ScanProcessor.shared.lastScreenHeight
+    )
     if liveActivityReady {
       _ = LiveActivityManager.shared.showError()
     }
@@ -560,8 +603,8 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       title: "Strive",
       body: localizedString(
         "notif.unsupportedLanguage",
-        fr: "Langue non reconnue. Veuillez passer votre app VTC en anglais.",
-        en: "Language not recognised. Please switch your driver app to English."
+        fr: "Langue non reconnue. Passez votre app VTC dans une langue disponible sur Strive.",
+        en: "Language not recognised. Switch your driver app to a language Strive supports."
       ),
       code: .unsupportedLanguage,
       level: .timeSensitive
@@ -583,10 +626,15 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     // L'écran a été lu (on a des adresses), c'est l'itinéraire qui manque — la
     // capture reste utile : elle dit quelles adresses le parser a produites, donc
     // ce que le géocodeur a refusé.
+    // Le détail dit laquelle des causes : adresse refusée par le géocodeur (et
+    // son score), trajet hors bornes, rapport prix/km aberrant…
+    let failure = ScanProcessor.shared.lastFailure
     logFailure(
-      status.errorCode?.reason ?? "route_ko",
+      failure?.reason ?? status.errorCode?.reason ?? "route_ko",
+      detail: failure?.detail,
       blocks: status == .unusable ? ScanProcessor.shared.lastBlocksJson : nil,
-      screenHeight: ScanProcessor.shared.lastScreenHeight
+      screenHeight: ScanProcessor.shared.lastScreenHeight,
+      parsed: ScanProcessor.shared.lastParsed
     )
 
     let body = status.isNetwork
@@ -892,7 +940,7 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     if let category = category { content.categoryIdentifier = category }
     if let rideId = rideId { content.userInfo = ["rideId": rideId] }
     let request = UNNotificationRequest(identifier: "strive-scan-\(UUID().uuidString)", content: content, trigger: nil)
-    UNUserNotificationCenter.current().add(request)
+    outbox.send(request)
   }
 
   // MARK: - App Group
@@ -914,7 +962,8 @@ struct AnalyzeRideIntent: LiveActivityIntent {
     _ reason: String,
     detail: String? = nil,
     blocks: String? = nil,
-    screenHeight: Int? = nil
+    screenHeight: Int? = nil,
+    parsed: ScanResultModel? = nil
   ) {
     let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "StriveAppGroupId") as? String)
       ?? "group.com.striveapp.app"
@@ -930,12 +979,23 @@ struct AnalyzeRideIntent: LiveActivityIntent {
       "occurredAt": Date().timeIntervalSince1970,
     ]
     if let detail = detail { entry["detail"] = detail }
+    // La plateforme reconnue : sans elle, toute capture d'échec sortait en UNKNOWN.
+    if let parsed = parsed { entry["platform"] = parsed.platform.rawValue }
     // Plafond de taille : un dump OCR pèse quelques dizaines de Ko et cette file
     // vit dans l'App Group, relevée seulement au prochain passage de l'app. Mieux
     // vaut une capture perdue qu'un `UserDefaults` obese.
     if let blocks = blocks, blocks.count <= 96_000 {
       entry["blocks"] = blocks
       if let h = screenHeight, h > 0 { entry["screenHeight"] = h }
+      // Ce que le parser en a tiré — les adresses telles qu'envoyées à TomTom.
+      // Seulement avec les blocs : même contenu personnel, même table
+      // (`scan_debug`), jamais `scan_failures`.
+      if let parsed = parsed {
+        if let p = parsed.pickupAddress { entry["pickup"] = p }
+        if let d = parsed.destinationAddress { entry["destination"] = d }
+        entry["fare"] = parsed.fare
+        entry["distanceKm"] = parsed.distanceKm
+      }
     }
     queue.append(entry)
     if queue.count > 50 { queue = Array(queue.suffix(50)) }
@@ -1191,5 +1251,28 @@ struct StriveAppShortcuts: AppShortcutsProvider {
       shortTitle: "Course refusée",
       systemImageName: "xmark.circle.fill"
     )
+  }
+}
+
+/// Les notifications parties pendant un scan, suivies jusqu'à leur
+/// enregistrement par iOS.
+///
+/// `UNUserNotificationCenter.add` est asynchrone, et il était appelé sans être
+/// attendu, juste avant que `perform` rende la main. Sur les refus en tête de
+/// scan (« Session requise »…), le retour était immédiat : iOS pouvait
+/// suspendre le process avant que la demande n'aboutisse, et la notification
+/// ne partait jamais. `perform` attend désormais `flush()` avant de rendre.
+private final class NotificationOutbox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var tasks: [Task<Void, Never>] = []
+
+  func send(_ request: UNNotificationRequest) {
+    let task = Task { _ = try? await UNUserNotificationCenter.current().add(request) }
+    lock.lock(); tasks.append(task); lock.unlock()
+  }
+
+  func flush() async {
+    lock.lock(); let pending = tasks; tasks.removeAll(); lock.unlock()
+    for task in pending { await task.value }
   }
 }

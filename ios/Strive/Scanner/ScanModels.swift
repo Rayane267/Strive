@@ -29,7 +29,7 @@ public enum ScanPlatform: String {
 /// au premier coup d'œil dans un ticket), puis 4 chiffres hexadécimaux propres à
 /// chaque motif. L'hexadécimal n'utilise que 0-9 et A-F : aucune confusion
 /// possible entre O et 0, ni entre I/L et 1, à la recopie.
-public enum ScanErrorCode: String {
+public enum ScanErrorCode: String, CaseIterable {
   case scannerOff     = "0xC0FE0113"
   case sessionOff     = "0xC0FE0207"
   case quotaReached   = "0xC0FE0342"
@@ -38,7 +38,9 @@ public enum ScanErrorCode: String {
   case ocrEmpty       = "0xC0FE0631"
   case noAddresses    = "0xC0FE074B"
   case notARide       = "0xC0FE0859"
-  case geminiKo       = "0xC0FE0962"
+  /// Écran d'offre que le parser n'a pas su lire. Ex-`geminiKo` : le code est
+  /// resté, il vit dans l'historique de support.
+  case offerUnreadable = "0xC0FE0962"
   case laStartFailed  = "0xC0FE0A7D"
   case expired        = "0xC0FE0B34"
   case timeout        = "0xC0FE0C55"
@@ -63,7 +65,7 @@ public enum ScanErrorCode: String {
     case .ocrEmpty:      return "ocr_empty"
     case .noAddresses:   return "no_addresses"
     case .notARide:      return "not_a_ride"
-    case .geminiKo:      return "gemini_ko"
+    case .offerUnreadable: return "offer_unreadable"
     case .laStartFailed: return "la_start_failed"
     case .expired:       return "expired"
     case .timeout:       return "timeout"
@@ -72,6 +74,13 @@ public enum ScanErrorCode: String {
     case .routeNoKey:       return "route_no_key"
     case .unsupportedLanguage: return "unsupported_language"
     }
+  }
+
+  /// Code d'un motif de `scan_failures` — le chemin inverse de `reason`, pour
+  /// que le code montré suive le motif réellement enregistré.
+  public init?(reason: String) {
+    guard let code = Self.allCases.first(where: { $0.reason == reason }) else { return nil }
+    self = code
   }
 }
 

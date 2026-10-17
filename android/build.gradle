@@ -19,4 +19,12 @@ buildscript {
     }
 }
 
+allprojects {
+    repositories {
+        // SDK Mapbox de la carte des zones (@rnmapbox/maps). Public : plus de
+        // jeton secret de téléchargement depuis que Mapbox l'a levé.
+        maven { url 'https://api.mapbox.com/downloads/v2/releases/maven' }
+    }
+}
+
 apply plugin: "com.facebook.react.rootproject"

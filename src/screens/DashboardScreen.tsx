@@ -1187,28 +1187,35 @@ const DashboardScreen = () => {
       // Une ligne ici devient un cas dans `fixtures/ocr/`, donc une non-régression
       // pour les trois parsers à la fois (TS, Swift, Kotlin).
       if (f.blocks && !preferences.scan_debug_opt_out) {
-        const nothingWasRead = f.reason === 'gemini_ko' || f.reason === 'ocr_empty';
+        const nothingWasRead =
+          f.reason === 'offer_unreadable' ||
+          f.reason === 'ocr_empty' ||
+          f.reason === 'unsupported_language';
+        const detail = f.detail ?? '';
         logScanDebug({
           platform: f.platform ?? 'UNKNOWN',
           screenHeight: f.screenHeight ?? null,
           blocksJson: f.blocks,
-          // L'échec ne transporte pas de valeurs : il n'y en a pas eu. Les
-          // colonnes restent à zéro, ce sont les drapeaux qui portent le sens.
-          nativePickup: null,
-          nativeDestination: null,
-          nativeFare: 0,
-          nativeDistanceKm: 0,
+          // Ce que le parser avait lu quand il a abouti avant l'échec (adresse
+          // manquante, itinéraire refusé) : les adresses envoyées à TomTom.
+          // Zéro / null quand il n'a rien produit.
+          nativePickup: f.pickup ?? null,
+          nativeDestination: f.destination ?? null,
+          nativeFare: f.fare ?? 0,
+          nativeDistanceKm: f.distanceKm ?? 0,
           nativeDurationMin: null,
           // Un échec d'itinéraire avait bien ses deux adresses — c'est le
           // géocodage qui les a refusées, pas la lecture qui les a manquées.
-          pickupMissing: nothingWasRead,
-          destMissing: nothingWasRead,
-          // Plus de repli Gemini : `gemini_ko` ne veut plus dire que « les
-          // règles ont calé sur un écran d'offre ».
+          pickupMissing: nothingWasRead || detail.includes('no_pickup'),
+          destMissing: nothingWasRead || detail.includes('no_dest'),
+          // Plus de repli Gemini : `offer_unreadable` veut dire « les règles
+          // ont calé sur un écran d'offre ».
           geminiUsed: false,
           geminiPickup: null,
           geminiDestination: null,
           appVersion: APP_VERSION_LABEL,
+          failureReason: f.reason,
+          failureDetail: f.detail ?? null,
         });
       }
     });

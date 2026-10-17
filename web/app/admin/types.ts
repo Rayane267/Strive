@@ -221,7 +221,12 @@ export interface Feed {
     status: string | null; expires_at: string;
   }[];
   failures_recent: Failure[];
+  /** Absent tant que 20261017_admin_feed_refusals n'est pas appliquée. */
+  refusals_recent?: Failure[];
   failures_by_reason: { reason: string; total: number }[];
+  /** offer_unreadable / no_addresses par classe de capture (null = aucune
+   *  capture retrouvée). Absent avant 20261017_admin_feed_capture_class. */
+  failures_by_capture?: { reason: string; capture: Capture | null; total: number }[];
   failures_by_version: { app_version: string; total: number; users: number }[];
   failures_daily: { day: string; failures: number; scans: number }[];
   /** Part des tentatives qui échouent, en %. Null si aucune tentative. */
@@ -252,37 +257,69 @@ export interface Failure {
   detail: string | null;
   app_version: string | null;
   email: string | null;
+  /** Classe de la capture OCR jointe (offer_unreadable, no_addresses).
+   *  Absente avant 20261017_admin_feed_capture_class. */
+  capture?: Capture | null;
 }
 
+export type Capture = 'offer' | 'expired' | 'not_offer';
+
+/** Ce que montre la capture d'une « offre illisible » : une vraie offre que
+ *  l'app a ratée (à corriger), ou un écran dont le chauffeur est seul en cause.
+ *  Rangé par `scan_capture_class` (20261017_admin_feed_capture_class). */
+export const CAPTURE: Record<Capture, { label: string; blame: 'app' | 'user' }> = {
+  offer:     { label: 'offre mal lue',  blame: 'app' },
+  expired:   { label: 'offre expirée',  blame: 'user' },
+  not_offer: { label: 'pas une offre',  blame: 'user' },
+};
+
 /** Les motifs normalisés par le RPC d'écriture (dernier état :
- *  20261012_scan_failures_unsupported_language). Tout le reste tombe sur
+ *  20261015_scan_failures_offer_unreadable). Tout le reste tombe sur
  *  `other`, le brut étant conservé dans `detail`. Un motif absent d'ici
  *  s'affiche brut : en ajouter un au RPC, c'est l'ajouter ici.
  *  `blame` dit qui est en cause : ce qui vient de l'app se corrige, ce qui
- *  vient du chauffeur ou de la capture ne se corrige pas de la même façon. */
-export const FAILURE: Record<string, { label: string; blame: 'app' | 'user' | 'source' }> = {
-  scanner_off:     { label: 'Scanner coupé',            blame: 'user' },
-  session_off:     { label: 'Pas de session',           blame: 'user' },
-  quota_reached:   { label: 'Quota atteint',            blame: 'user' },
+ *  vient du chauffeur ou de la capture ne se corrige pas de la même façon.
+ *  `display` n'est pas un échec : la course a été mesurée, seul l'affichage a
+ *  manqué. `refusal` non plus : une règle a bloqué le scan avant toute
+ *  lecture, et le chauffeur a reçu le message prévu. Les deux sont montrés à
+ *  part et ne comptent dans aucun total d'échecs. La liste des refus est
+ *  recopiée dans `admin_feed` (20261017_admin_feed_refusals). */
+export const FAILURE: Record<string, { label: string; blame: 'app' | 'user' | 'source' | 'display' | 'refusal' }> = {
+  scanner_off:     { label: 'Scanner coupé',            blame: 'refusal' },
+  session_off:     { label: 'Pas de session',           blame: 'refusal' },
+  quota_reached:   { label: 'Quota atteint',            blame: 'refusal' },
   invalid_image:   { label: 'Capture illisible',        blame: 'source' },
-  throttled:       { label: 'Double appui',             blame: 'user' },
+  throttled:       { label: 'Double appui',             blame: 'refusal' },
   ocr_empty:       { label: 'OCR vide',                 blame: 'app' },
   not_a_ride:      { label: 'Pas une offre',            blame: 'source' },
-  // Le motif s'appelle encore `gemini_ko` (vocabulaire fermé, code support
-  // figé), mais Gemini n'est plus appelé : c'est une offre que le parser n'a
-  // pas su lire.
-  gemini_ko:       { label: 'Offre illisible',          blame: 'app' },
+  // Ex-`gemini_ko` : le RPC traduit l'ancien nom et l'historique a été renommé.
+  offer_unreadable: { label: 'Offre illisible',         blame: 'app' },
   no_addresses:    { label: 'Aucune adresse lue',       blame: 'app' },
-  la_start_failed: { label: 'Live Activity refusée',    blame: 'app' },
+  // Course mesurée, verdict envoyé en notification : seule la Live Activity
+  // n'a rien montré. `detail` dit pourquoi (pas de carte, carte terminée…).
+  la_start_failed: { label: 'Carte non affichée',       blame: 'display' },
   expired:         { label: 'Reprise par le système',   blame: 'app' },
   timeout:         { label: 'Délai dépassé',            blame: 'app' },
   route_unreachable: { label: 'Itinéraire : pas de réseau', blame: 'app' },
   route_unusable:  { label: 'Adresse introuvable',      blame: 'app' },
   route_no_key:    { label: 'Clé TomTom absente',       blame: 'app' },
-  // `detail` = langue du téléphone : elle dit quelles langues apprendre.
+  // N'arrive plus qu'après un parse raté (l'offre étrangère lisible passe).
+  // `detail` = langue du téléphone, lettres vues à l'écran (la langue réelle de
+  // l'offre), puis l'étape où le parser a renoncé.
   unsupported_language: { label: 'Langue non prise en charge', blame: 'user' },
   other:           { label: 'Autre',                    blame: 'app' },
 };
+
+/** Vrai pour un vrai scan raté — faux pour un incident d'affichage ou un refus. */
+export function isScanFailure(reason: string): boolean {
+  const blame = FAILURE[reason]?.blame ?? 'app';
+  return blame !== 'display' && blame !== 'refusal';
+}
+
+/** Scan bloqué par une règle (session, quota, double appui, scanner coupé). */
+export function isRefusal(reason: string): boolean {
+  return FAILURE[reason]?.blame === 'refusal';
+}
 
 /** Libellés des événements RevenueCat. `tone` colore la lecture : une
  *  annulation n'est pas un incident, un problème de paiement si. */
@@ -306,7 +343,7 @@ export const SUB_EVENT: Record<string, { label: string; tone: 'good' | 'warn' | 
    sorte qu'on sait toujours d'où l'on vient.
    ────────────────────────────────────────────────────────────────────────── */
 
-export type View = 'home' | 'drivers' | 'tickets' | 'subs' | 'errors' | 'activity';
+export type View = 'home' | 'drivers' | 'tickets' | 'subs' | 'errors' | 'activity' | 'reports';
 
 export const VIEWS: Record<Exclude<View, 'home'>, { title: string; sub: string }> = {
   drivers:  { title: 'Chauffeurs',  sub: 'Le parc, palier par palier' },
@@ -314,4 +351,5 @@ export const VIEWS: Record<Exclude<View, 'home'>, { title: string; sub: string }
   errors:   { title: 'Erreurs',     sub: 'Ce que le scanner n’a pas réussi à lire' },
   subs:     { title: 'Abonnements', sub: 'Mouvements, échéances et revenu' },
   activity: { title: 'Activité',    sub: 'Scans, courses et heures en ligne' },
+  reports:  { title: 'Signalements', sub: 'Police, accidents, travaux — et masquage préfectoral' },
 };

@@ -62,9 +62,23 @@ final class ScanProcessor {
   /// ou si l'OCR n'a rien lu. Décide du motif d'échec et de l'envoi des blocs.
   private(set) var lastScanMayBeRide = true
 
-  /// Vrai si le dernier écran est une offre affichée dans une langue que Strive
-  /// ne lit pas (cf. `isUnsupportedLanguage`). Le scan est alors refusé.
-  private(set) var lastScanUnsupportedLanguage = false
+  /// Cause réelle d'un échec : le motif de `scan_failures` et ce qui l'a
+  /// déclenché (« no_fare platform=BOLT », « geocode dest=none »…).
+  struct Failure {
+    let reason: String
+    let detail: String?
+  }
+
+  /// Pourquoi le dernier scan n'a rien mesuré — nil s'il a abouti. Posé par la
+  /// sortie qui a gagné le `CompletionGuard`, donc jamais par un watchdog arrivé
+  /// après coup. Chaque sortie dit SA cause : un OCR vide, une langue, une étape
+  /// du parser ou un refus du géocodeur ne se confondent plus sous un seul motif.
+  private(set) var lastFailure: Failure?
+
+  /// Ce que le parser a tiré du dernier écran, quand il a abouti — même si
+  /// l'itinéraire a échoué ensuite. Joint à la trace de l'échec : plateforme,
+  /// prix, et surtout les adresses telles qu'envoyées à TomTom.
+  private(set) var lastParsed: ScanResultModel?
 
   /// Blocs OCR du dernier scan, sérialisés (cf. `OcrParser.dumpBlocks`) — matière
   /// de diagnostic pour reproduire en fixture les captures où le parser rate une
@@ -105,6 +119,7 @@ final class ScanProcessor {
   ) {
     guard !scanInProgress else {
       NSLog("[Strive:Scan] scan already in progress — skipped")
+      lastFailure = Failure(reason: "throttled", detail: "scan_in_progress")
       onFinal(nil)
       return
     }
@@ -115,44 +130,43 @@ final class ScanProcessor {
     // scan précédent et les enverrait avec le mauvais résultat.
     lastBlocksJson = nil
     lastScreenHeight = 0
-    lastScanUnsupportedLanguage = false
+    lastFailure = nil
+    lastParsed = nil
 
     // Garde-fou anti-deadlock : `gate` garantit (1) un seul appel à onFinal,
     // (2) le reset systématique de scanInProgress, (3) un watchdog qui libère
     // le scanner même si Vision/TomTom ne rend jamais la main (sinon le flag
     // restait `true` à vie → tous les scans suivants ignorés jusqu'au reboot).
-    let gate = CompletionGuard { [weak self] result in
+    let gate = CompletionGuard { [weak self] result, failure in
+      self?.lastFailure = failure
       self?.scanInProgress = false
       onFinal(result)
     }
-    let watchdog = DispatchWorkItem { gate.fire(nil) }
+    let watchdog = DispatchWorkItem {
+      gate.fire(nil, Failure(reason: "timeout", detail: "scan_watchdog_20s"))
+    }
     gate.watchdog = watchdog
     DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20, execute: watchdog)
 
     runOcr(image: image) { [weak self] blocks, screenW, screenH in
       guard let self = self else { gate.fire(nil); return }
       guard let blocks = blocks else {
-        // Aucun texte lu : on laisse Gemini tenter sur l'image (bénéfice du doute).
+        // Aucun texte lu. `lastScanMayBeRide` reste vrai : le Share Sheet laisse
+        // alors Gemini tenter sur l'image (bénéfice du doute).
         self.lastScanMayBeRide = true
-        gate.fire(nil); return
+        gate.fire(nil, Failure(reason: "ocr_empty", detail: nil)); return
       }
 
       // Pré-filtre anti-pub : du texte a été lu — ressemble-t-il à une course ?
-      let lines = blocks.map { $0.text }
+      // Sous la même bande que le parser : la Live Activity de Strive en haut
+      // (« 26 € · 18.9km ») faisait passer un journal d'appels pour une offre,
+      // et son OCR partait dans `scan_debug` (#66).
+      let cutY = Int(Double(screenH) * OcrParser.topCut)
+      let lines = blocks.filter { $0.box.centerY >= cutY }.map { $0.text }
       self.lastScanMayBeRide = Self.looksLikeRideOffer(lines.joined(separator: "\n"))
 
-      // Une offre dans une langue que l'app ne parle pas : refusée AVANT le
-      // parse, même s'il aurait abouti. Ses repères (« Course de », « à X min »)
-      // n'y existent pas, et c'est par eux que le parser sépare la course de
-      // l'approche : il pourrait les inverser sans échouer, et le verdict serait
-      // faux sans que rien ne le dise. Les blocs ne partent pas en base.
-      if self.lastScanMayBeRide && Self.isUnsupportedLanguage(lines) {
-        self.lastScanUnsupportedLanguage = true
-        gate.fire(nil); return
-      }
-
-      // Matière de diagnostic (cf. lastBlocksJson) — capturée AVANT le parse pour
-      // être disponible même si celui-ci échoue.
+      // Matière de diagnostic (cf. lastBlocksJson) — capturée AVANT le parse,
+      // pour être disponible même s'il échoue.
       self.lastBlocksJson = OcrParser.dumpBlocks(blocks)
       self.lastScreenHeight = screenH
 
@@ -160,8 +174,35 @@ final class ScanProcessor {
       guard let result = OcrParser.shared.parse(
         blocks: blocks, screenWidth: screenW, screenHeight: screenH, image: image
       ) else {
-        gate.fire(nil); return
+        // LA LANGUE N'EXPLIQUE QU'UN ÉCHEC, ELLE N'EN PROVOQUE AUCUN.
+        //
+        // L'offre en langue étrangère était refusée AVANT le parse (1.0.5). Or
+        // le parser ne lit pas les libellés : il lit les montants, les « km »,
+        // les « min » et la position des lignes, que le roumain, le polonais ou
+        // le tchèque gardent, et les adresses françaises ne sont jamais
+        // traduites. Le refus bloquait donc des offres lisibles — un chauffeur
+        // roumain n'a jamais réussi un scan. Désormais on lit d'abord, et
+        // seul un échec sur un écran aux lettres étrangères reçoit la consigne
+        // « passez votre app VTC dans une langue disponible sur Strive ».
+        //
+        // Le détail porte la langue du téléphone, les lettres vues, puis
+        // l'étape où le parser a renoncé.
+        if self.lastScanMayBeRide && Self.isUnsupportedLanguage(lines) {
+          let phone = Locale.preferredLanguages.first ?? "?"
+          let step = OcrParser.shared.lastFailure.map { " · \($0)" } ?? ""
+          gate.fire(nil, Failure(
+            reason: "unsupported_language",
+            detail: "\(phone) \(Self.foreignLetters(lines))\(step)"
+          ))
+          return
+        }
+        gate.fire(nil, Failure(
+          reason: self.lastScanMayBeRide ? "offer_unreadable" : "not_a_ride",
+          detail: OcrParser.shared.lastFailure
+        ))
+        return
       }
+      self.lastParsed = result
 
       // TomTom — uniquement si on a 2 adresses et la clé est configurée
       let pickup = result.pickupAddress?.replacingOccurrences(of: "\n", with: " ")
@@ -170,33 +211,68 @@ final class ScanProcessor {
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
       if pickup.isEmpty || dest.isEmpty {
-        gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+        // Une adresse manque : c'est la LECTURE qui a calé, pas l'itinéraire.
+        let missing = [pickup.isEmpty ? "no_pickup" : nil, dest.isEmpty ? "no_dest" : nil]
+          .compactMap { $0 }.joined(separator: " ")
+        gate.fire(
+          self.computeFinal(scan: result, routeStatus: .unusable),
+          Failure(reason: "no_addresses", detail: "\(missing) platform=\(result.platform.rawValue)")
+        )
         return
       }
       if !TomTomService.shared.isReady {
-        gate.fire(self.computeFinal(scan: result, routeStatus: .noKey))
+        gate.fire(
+          self.computeFinal(scan: result, routeStatus: .noKey),
+          Failure(reason: "route_no_key", detail: nil)
+        )
         return
       }
 
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
+      TomTomService.shared.calculateRoute(
+        pickupAddress: pickup, destinationAddress: dest, screenDistanceKm: result.distanceKm
+      ) { outcome in
         switch outcome {
         case .noKey:
-          gate.fire(self.computeFinal(scan: result, routeStatus: .noKey))
+          gate.fire(
+            self.computeFinal(scan: result, routeStatus: .noKey),
+            Failure(reason: "route_no_key", detail: nil)
+          )
         case .unreachable:
-          gate.fire(self.computeFinal(scan: result, routeStatus: .unreachable))
-        case .unusable:
-          gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+          gate.fire(
+            self.computeFinal(scan: result, routeStatus: .unreachable),
+            Failure(reason: "route_unreachable", detail: nil)
+          )
+        case .unusable(let why):
+          gate.fire(
+            self.computeFinal(scan: result, routeStatus: .unusable),
+            Failure(reason: "route_unusable", detail: why)
+          )
         case .ok(let route):
           guard route.distanceKm >= 0.3,
-                route.distanceKm <= 500,
-                route.durationMin <= 300 else {
-            gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+                // Plafonds larges : une course longue (Paris → Marseille) est
+                // une course comme une autre. Mirror Android / Share Sheet.
+                route.distanceKm <= 2000,
+                route.durationMin <= 1440 else {
+            gate.fire(
+              self.computeFinal(scan: result, routeStatus: .unusable),
+              Failure(reason: "route_unusable", detail: String(
+                format: "bounds km=%.1f min=%ld", route.distanceKm, route.durationMin
+              ))
+            )
             return
           }
 
+          // Plancher seul : un prix trop bas pour le trajet calculé trahit une
+          // destination géocodée ailleurs. Pas de plafond — une course Van/XL
+          // courte dépasse 12 €/km (cf. `OcrParser.rateMin`).
           let ratio = result.fare / route.distanceKm
-          guard ratio >= 0.2 && ratio <= 12.0 else {
-            gate.fire(self.computeFinal(scan: result, routeStatus: .unusable))
+          guard ratio >= 0.2 else {
+            gate.fire(
+              self.computeFinal(scan: result, routeStatus: .unusable),
+              Failure(reason: "route_unusable", detail: String(
+                format: "ratio fare=%.2f km=%.1f", result.fare, route.distanceKm
+              ))
+            )
             return
           }
 
@@ -242,7 +318,7 @@ final class ScanProcessor {
   }
 
   /// L'écran ressemble-t-il à une offre VTC ? Ne sert plus qu'une fois le
-  /// parser en échec : décide du motif (`gemini_ko` / `not_a_ride`) et surtout
+  /// parser en échec : décide du motif (`offer_unreadable` / `not_a_ride`) et surtout
   /// si le texte de l'écran part dans `scan_debug`.
   ///
   /// STRUCTUREL, et non plus lexical. Le nom d'une plateforme ou un mot comme
@@ -262,7 +338,9 @@ final class ScanProcessor {
     return hasAmount && (hasDistance || hasDuration)
   }
 
-  /// L'écran est-il dans une langue que l'app ne parle pas ? Repéré par des
+  /// L'écran est-il dans une langue que l'app ne parle pas ? Consulté SEULEMENT
+  /// quand le parse a échoué, pour expliquer l'échec — jamais pour refuser une
+  /// offre lisible. Repéré par des
   /// lettres qu'aucune des sept langues de Strive (fr, en, es, pt, nl, de, it)
   /// n'emploie : roumain (ă ș ț), polonais, tchèque, turc, hongrois, baltes…,
   /// et les écritures non latines. Une liste de mots des sept langues aurait
@@ -277,6 +355,23 @@ final class ScanProcessor {
   static func isUnsupportedLanguage(_ lines: [String]) -> Bool {
     let foreign = lines.filter { hasMatch(foreignLetterRegex, in: $0.lowercased()) }
     return foreign.count >= 2
+  }
+
+  /// Les lettres qui ont fait refuser l'écran (« ă ș ț »), sans doublon et
+  /// plafonnées. Seules elles disent la langue réellement affichée : celle du
+  /// téléphone peut être une autre. Miroir de `OcrParser.foreignLetters` (Android).
+  static func foreignLetters(_ lines: [String]) -> String {
+    guard let regex = foreignLetterRegex else { return "" }
+    var seen: [String] = []
+    for line in lines {
+      let lower = line.lowercased() as NSString
+      for m in regex.matches(in: lower as String, range: NSRange(location: 0, length: lower.length)) {
+        let letter = lower.substring(with: m.range)
+        if !seen.contains(letter) { seen.append(letter) }
+        if seen.count >= 12 { return seen.joined(separator: " ") }
+      }
+    }
+    return seen.joined(separator: " ")
   }
 
   // ⚠️ PAS de `.regularExpression` dans le natif. Sur iOS 26.7.1 au
@@ -672,19 +767,21 @@ enum RideUploader {
 private final class CompletionGuard {
   private var fired = false
   private let lock = NSLock()
-  private let body: (ScanProcessor.FinalResult?) -> Void
+  private let body: (ScanProcessor.FinalResult?, ScanProcessor.Failure?) -> Void
   var watchdog: DispatchWorkItem?
 
-  init(_ body: @escaping (ScanProcessor.FinalResult?) -> Void) {
+  init(_ body: @escaping (ScanProcessor.FinalResult?, ScanProcessor.Failure?) -> Void) {
     self.body = body
   }
 
-  func fire(_ result: ScanProcessor.FinalResult?) {
+  /// `failure` voyage avec le résultat : seule la sortie qui gagne pose la cause,
+  /// un watchdog perdant ne peut donc pas écraser celle du pipeline.
+  func fire(_ result: ScanProcessor.FinalResult?, _ failure: ScanProcessor.Failure? = nil) {
     lock.lock()
     if fired { lock.unlock(); return }
     fired = true
     lock.unlock()
     watchdog?.cancel()
-    body(result)
+    body(result, failure)
   }
 }

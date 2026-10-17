@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FAILURE, TIER, ago, dur, eur, type View } from './types';
+import { FAILURE, TIER, ago, dur, eur, isScanFailure, type View } from './types';
 import { mrrFrom, useAnalytics, useFeed, useLive } from './data';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -52,8 +52,11 @@ export default function Home({
   const online = live ? live.drivers.filter((d) => !d.stale) : [];
   const stale = live?.counts.stale ?? 0;
 
-  const failures = feed?.failures_by_reason.reduce((s, r) => s + r.total, 0) ?? null;
-  const topReason = feed?.failures_by_reason[0];
+  // Ni une carte non affichée ni un scan refusé (session, quota…) ne sont des
+  // scans ratés : hors du compte.
+  const scanFailures = feed?.failures_by_reason.filter((r) => isScanFailure(r.reason));
+  const failures = scanFailures?.reduce((s, r) => s + r.total, 0) ?? null;
+  const topReason = scanFailures?.[0];
   const { mrr, unknown } = feed ? mrrFrom(feed.subs_active_by_product) : { mrr: 0, unknown: 0 };
   const paying = stats ? stats.subscriptions.plus + stats.subscriptions.premium : null;
   const lastSub = feed?.subs_recent[0];

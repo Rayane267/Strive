@@ -10,6 +10,7 @@ import DriversView from './DriversView';
 import SubsView from './SubsView';
 import ErrorsView from './ErrorsView';
 import ActivityView from './ActivityView';
+import ReportsView from './ReportsView';
 
 
 export default function AdminPage() {
@@ -223,12 +224,13 @@ function Console({ email }: { email: string }) {
       <div className={view === 'drivers' ? 'flex min-h-0 flex-1' : 'hidden'}>
         {view === 'drivers' && <DriversView initialDriver={driver} />}
       </div>
-      {(view === 'activity' || view === 'subs' || view === 'errors') && (
+      {(view === 'activity' || view === 'subs' || view === 'errors' || view === 'reports') && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl p-5 sm:p-8">
             {view === 'activity' && <ActivityView days={days} />}
             {view === 'subs' && <SubsView days={days} />}
             {view === 'errors' && <ErrorsView days={days} />}
+            {view === 'reports' && <ReportsView />}
           </div>
         </div>
       )}

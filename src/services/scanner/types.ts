@@ -247,6 +247,12 @@ export interface ScannerService {
        *  et l'écran qui l'a causé est perdu. */
       blocks?: string | null;
       screenHeight?: number | null;
+      /** Ce que le parser avait lu avant l'échec — les adresses telles
+       *  qu'envoyées à TomTom. Présents seulement avec `blocks`. */
+      pickup?: string | null;
+      destination?: string | null;
+      fare?: number | null;
+      distanceKm?: number | null;
     }) => void,
   ): { remove: () => void } | undefined;
   /** Trace de diagnostic Live Activity, telle que stockée côté natif.

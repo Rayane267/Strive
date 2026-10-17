@@ -37,6 +37,10 @@ export type ScanDebugCapture = {
   geminiPickup: string | null;
   geminiDestination: string | null;
   appVersion: string;
+  /** Motif et détail de l'échec dont la capture est la trace — absents sur un
+   *  scan réussi. Sans eux, la capture ne se reliait à son échec que par l'heure. */
+  failureReason?: string | null;
+  failureDetail?: string | null;
 };
 
 export function logScanDebug(c: ScanDebugCapture): void {
@@ -64,6 +68,8 @@ export function logScanDebug(c: ScanDebugCapture): void {
         p_gemini_pickup: c.geminiPickup,
         p_gemini_destination: c.geminiDestination,
         p_app_version: c.appVersion,
+        p_failure_reason: c.failureReason ?? null,
+        p_failure_detail: c.failureDetail ?? null,
       })
       .then(undefined, () => {});
   } catch {

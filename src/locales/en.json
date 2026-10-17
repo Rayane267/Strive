@@ -789,7 +789,7 @@
       "ocr_empty": "No text read on screen",
       "no_addresses": "Addresses unreadable",
       "not_a_ride": "No ride offer detected",
-      "gemini_ko": "The offer could not be read",
+      "offer_unreadable": "The offer could not be read",
       "la_start_failed": "Could not display",
       "expired": "Analysis interrupted",
       "timeout": "Analysis timed out",
@@ -1230,6 +1230,41 @@
     "verdictMid": "Average zone",
     "verdictBad": "Zone to avoid"
   },
+  "reports": {
+    "button": "Report",
+    "locating": "Locating…",
+    "pickTitle": "What's happening?",
+    "pickSubtitle": "Placed at your current location.",
+    "kind": {
+      "police": "Police",
+      "accident": "Accident",
+      "danger": "Hazard",
+      "traffic": "Traffic jam",
+      "roadworks": "Roadworks"
+    },
+    "stillThere": "Still there?",
+    "yes": "Still there",
+    "no": "Not there",
+    "nearbyTitle": "{{kind}} {{meters}} m away",
+    "justNow": "Reported just now",
+    "minutesAgo_one": "Reported {{count}} min ago",
+    "minutesAgo_other": "Reported {{count}} min ago",
+    "hoursAgo_one": "Reported {{count}} h ago",
+    "hoursAgo_other": "Reported {{count}} h ago",
+    "confirmed_one": "confirmed once",
+    "confirmed_other": "confirmed {{count}} times",
+    "mine": "This is your report. Remove it if it no longer applies.",
+    "withdraw": "Remove my report",
+    "voted": "Thanks, you've already given your feedback.",
+    "thanks": "Thanks! Report added.",
+    "thanksVote": "Thanks for your feedback.",
+    "gone": "This report is no longer active.",
+    "rateLimited": "Too many reports in a row. Try again in a moment.",
+    "failed": "Couldn't send. Check your connection.",
+    "locationOffTitle": "Location is off",
+    "locationOffBody": "Allow Strive to use your location to place a report on the map.",
+    "openSettings": "Open Settings"
+  },
   "rideNetwork": {
     "title": "Network",
     "menuTitle": "Network",
@@ -1333,7 +1368,7 @@
     "unsupportedFormat": "Unsupported image format",
     "noImageInShare": "No image found in the share",
     "noOffer": "No ride offer detected",
-    "unsupportedLanguage": "Language not recognised. Please switch your driver app to English.",
+    "unsupportedLanguage": "Language not recognised. Switch your driver app to a language Strive supports.",
     "aiAnalysis": "AI analysis in progress…",
     "cannotAnalyze": "Could not analyze this image",
     "addressesUnreadable": "Scan failed — addresses unreadable, try again",
@@ -1377,5 +1412,12 @@
     "since": "Since {{from}}",
     "people": "≈ {{n}} people",
     "until": "until {{date}}"
+  },
+  "update": {
+    "title": "Update available",
+    "body": "Strive {{version}} is available. Install it to get the latest fixes.",
+    "whatsNew": "What's new",
+    "cta": "Update",
+    "later": "Later"
   }
 }

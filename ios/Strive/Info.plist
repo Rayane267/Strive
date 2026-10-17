@@ -15,7 +15,9 @@
 	<!-- Jamais demandée : la carte des zones n'affiche pas la position de
 	     l'appareil. Requise quand même parce que react-native-maps référence
 	     CLLocationManager, et qu'App Store Connect refuse un binaire qui
-	     référence une API de localisation sans phrase d'usage. -->
+	     référence une API de localisation sans phrase d'usage.
+	     Signalements (qui la demanderont) : coupés pour la 1.0.6, cf.
+	     ROAD_REPORTS_ENABLED. Leur phrase est à remettre avec eux. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Strive affiche sur la carte les zones où vos courses rapportent le plus. Votre position n'est ni demandée ni enregistrée.</string>
 	<key>CFBundleDevelopmentRegion</key>

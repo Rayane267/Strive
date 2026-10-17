@@ -9,10 +9,16 @@ import {
   Easing,
   Image,
   useWindowDimensions,
+  Alert,
+  Linking,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
-import MapView, { Marker, Overlay, Polygon } from 'react-native-maps';
+// Plans sur iOS, Mapbox sur Android : même interface (cf. ZoneMap.tsx).
+import MapView, { Marker, Overlay, Polygon } from '../components/ZoneMap';
 import Feather from 'react-native-vector-icons/Feather';
 import SafeGradient from '../components/SafeGradient';
 import MapSheet, { SheetNavButton } from '../components/MapSheet';
@@ -24,12 +30,30 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { supabase } from '../services/supabase';
 import { fetchCommunityLive, fetchRidePoints, type CommunityLive } from '../services/ridesService';
 import { isHotZoneSimulationOn, simulateRidePoints } from '../services/simulatedZones';
+import {
+  ROAD_REPORTS_ENABLED,
+  createRoadReport,
+  fetchRoadReports,
+  metersBetween,
+  voteRoadReport,
+  type RoadReport,
+  type RoadReportKind,
+} from '../services/roadReportsService';
+import {
+  ReportButton,
+  ReportDetails,
+  ReportNearbyCard,
+  ReportNotice,
+  ReportPicker,
+  ReportPin,
+  REPORT_FAB_HEIGHT,
+} from '../components/RoadReports';
 import { normalizeRides } from '../services/fxService';
 import { getEffectivePlanTier } from '../services/subscriptionService';
 import { useTabBarInset } from '../navigation/useTabBarInset';
 import { rideScoreColor } from '../utils/qualityScore';
 import { formatMoney, toMarketRate, type CountryCode } from '../utils/market';
-import { hapticSelection } from '../utils/haptics';
+import { hapticError, hapticLight, hapticSelection, hapticSuccess } from '../utils/haptics';
 import {
   buildZones,
   framingBounds,
@@ -59,6 +83,52 @@ const WINDOW_DAYS = 90;
 
 /** Rafraîchissement du direct tant que l'écran est ouvert. */
 const LIVE_REFRESH_MS = 60_000;
+
+/** Rafraîchissement des signalements tant que l'écran est ouvert. */
+const REPORTS_REFRESH_MS = 60_000;
+/** Au-delà, la dernière position connue ne sert plus à placer un signalement. */
+const LOCATION_FRESH_MS = 15 * 60_000;
+/** Sans position passé ce délai, la localisation est refusée ou coupée. */
+const LOCATION_WAIT_MS = 8_000;
+/** Accordée une fois, la position s'affiche à chaque ouverture de la carte. */
+const LOCATION_ON_KEY = '@strive_map_location_on';
+/** Passé à moins de cette distance d'un signalement, on demande s'il est
+ *  toujours là — une seule fois par signalement et par ouverture de l'app. */
+const NEARBY_M = 250;
+/** Ignorée, la question s'efface d'elle-même. */
+const NEARBY_SHOW_MS = 20_000;
+
+/**
+ * Plan sombre et atténué sur Android. Google Maps n'a ni `userInterfaceStyle`
+ * ni `mutedStandard` : il faut le décrire. Même intention qu'avec Plans sur
+ * iOS — le fond prolonge l'app, points d'intérêt et transports s'effacent.
+ */
+const ANDROID_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#0f1712' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#7d8a83' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0a120e' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1c2a22' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#131d17' }] },
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#25362c' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1a1f' }] },
+];
+
+/** Android demande la position à l'exécution, et un refus de la précision
+ *  laisse la position approximative : l'une ou l'autre suffit à placer un
+ *  signalement. */
+async function androidLocationGranted(ask: boolean): Promise<boolean> {
+  const { ACCESS_FINE_LOCATION: fine, ACCESS_COARSE_LOCATION: coarse } = PermissionsAndroid.PERMISSIONS;
+  if (!ask) {
+    return (await PermissionsAndroid.check(fine)) || (await PermissionsAndroid.check(coarse));
+  }
+  const res = await PermissionsAndroid.requestMultiple([fine, coarse]);
+  const ok = PermissionsAndroid.RESULTS.GRANTED;
+  return res[fine] === ok || res[coarse] === ok;
+}
 
 /**
  * Cadre d'ouverture tant qu'aucune course n'est placée : la grande ville du
@@ -362,6 +432,8 @@ const MapScreen = () => {
   // d'onglets ; la carte d'info, quand elle s'affiche, passe au-dessus d'eux.
   const logoBottom = clearance + space.xs;
   const cardBottom = logoBottom + LEGAL_ROW_H + space.sm;
+  // Le bouton « Signaler » au-dessus de la carte d'info quand elle est là.
+  const fabBottom = cardBottom + (showCard ? cardH + space.sm : 0);
   const mapPadding = {
     top: insets.top + headerH,
     bottom: cardBottom + cardH + space.sm,
@@ -494,6 +566,214 @@ const MapScreen = () => {
     const timer = setTimeout(loadLive, 250);
     return () => clearTimeout(timer);
   }, [liveActive, liveBounds, region, loadLive]);
+
+  // ─── Signalements : police, accident, danger, bouchon, travaux ─────────────
+  // Pour tous les chauffeurs, abonnés ou non : un signalement vaut par le
+  // nombre de ceux qui le voient et le confirment.
+  const [reports, setReports] = useState<RoadReport[]>([]);
+  const [reportsBounds, setReportsBounds] = useState<Bounds | null>(null);
+  const reportsRequest = useRef(0);
+  const loadReports = useCallback(async () => {
+    const id = ++reportsRequest.current;
+    const bounds = fetchBounds(regionRef.current);
+    try {
+      const data = await fetchRoadReports(bounds);
+      if (id !== reportsRequest.current) return;
+      setReports(data);
+      setReportsBounds(bounds);
+    } catch {
+      // Sans signalements la carte reste utilisable : rien à afficher.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ROAD_REPORTS_ENABLED || !focused) return;
+    loadReports();
+    const timer = setInterval(loadReports, REPORTS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [focused, loadReports]);
+
+  useEffect(() => {
+    if (!ROAD_REPORTS_ENABLED || !focused || !reportsBounds || covers(reportsBounds, region)) return;
+    const timer = setTimeout(loadReports, 400);
+    return () => clearTimeout(timer);
+  }, [focused, reportsBounds, region, loadReports]);
+
+  // La position n'est demandée qu'au premier « Signaler » : c'est ce geste qui
+  // dit au chauffeur pourquoi l'app en a besoin. Accordée, elle reste affichée.
+  const [locationOn, setLocationOn] = useState(false);
+  useEffect(() => {
+    // Signalements coupés : la position n'est ni demandée ni affichée.
+    if (!ROAD_REPORTS_ENABLED) return;
+    AsyncStorage.getItem(LOCATION_ON_KEY)
+      .then(async v => {
+        if (v !== '1') return;
+        // Android : l'autorisation a pu être retirée depuis les réglages, et la
+        // carte n'affiche la position qu'avec elle.
+        if (Platform.OS === 'android' && !(await androidLocationGranted(false))) return;
+        setLocationOn(true);
+      })
+      .catch(() => {});
+  }, []);
+  const lastFix = useRef<{ coord: LatLng; at: number } | null>(null);
+  const waitingFix = useRef(false);
+  const fixTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [picking, setPicking] = useState<LatLng | null>(null);
+  const [busyKind, setBusyKind] = useState<RoadReportKind | null>(null);
+  const [openReport, setOpenReport] = useState<RoadReport | null>(null);
+  const [voting, setVoting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nearby, setNearby] = useState<{ report: RoadReport; meters: number } | null>(null);
+  const prompted = useRef(new Set<string>());
+  const nearbyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (fixTimer.current) clearTimeout(fixTimer.current);
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+      if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
+    },
+    [],
+  );
+
+  const showNotice = (text: string) => {
+    setNotice(text);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2600);
+  };
+
+  const onUserLocation = (coordinate?: { latitude: number; longitude: number }) => {
+    if (!coordinate) return;
+    const coord = { latitude: coordinate.latitude, longitude: coordinate.longitude };
+    lastFix.current = { coord, at: Date.now() };
+    if (waitingFix.current) {
+      waitingFix.current = false;
+      if (fixTimer.current) clearTimeout(fixTimer.current);
+      setLocating(false);
+      setPicking(coord);
+      return;
+    }
+    askIfNearby(coord);
+  };
+
+  /** Le plus proche des signalements d'autrui encore sans réponse, s'il est à
+   *  portée. Rien pendant qu'une feuille est ouverte : une question à la fois. */
+  const askIfNearby = (at: LatLng) => {
+    if (nearby || picking || openReport) return;
+    let best: { report: RoadReport; meters: number } | null = null;
+    for (const r of reports) {
+      if (r.mine || r.voted || prompted.current.has(r.id)) continue;
+      const m = metersBetween(at.latitude, at.longitude, r.lat, r.lon);
+      if (m <= NEARBY_M && (!best || m < best.meters)) best = { report: r, meters: Math.round(m) };
+    }
+    if (!best) return;
+    prompted.current.add(best.report.id);
+    hapticLight();
+    setNearby(best);
+    if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
+    nearbyTimer.current = setTimeout(() => setNearby(null), NEARBY_SHOW_MS);
+  };
+
+  const showLocationOff = () =>
+    Alert.alert(t('reports.locationOffTitle'), t('reports.locationOffBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('reports.openSettings'),
+        onPress: () => {
+          Linking.openSettings().catch(() => {});
+        },
+      },
+    ]);
+
+  const startReport = async () => {
+    hapticSelection();
+    const fix = lastFix.current;
+    if (fix && Date.now() - fix.at < LOCATION_FRESH_MS) {
+      setPicking(fix.coord);
+      return;
+    }
+    if (!locationOn) {
+      // iOS pose sa question tout seul quand la carte affiche la position ;
+      // Android exige qu'on la pose AVANT, sinon la carte n'affiche rien.
+      if (Platform.OS === 'android' && !(await androidLocationGranted(true))) {
+        showLocationOff();
+        return;
+      }
+      setLocationOn(true);
+      AsyncStorage.setItem(LOCATION_ON_KEY, '1').catch(() => {});
+    }
+    waitingFix.current = true;
+    setLocating(true);
+    if (fixTimer.current) clearTimeout(fixTimer.current);
+    fixTimer.current = setTimeout(() => {
+      if (!waitingFix.current) return;
+      waitingFix.current = false;
+      setLocating(false);
+      showLocationOff();
+    }, LOCATION_WAIT_MS);
+  };
+
+  const pickKind = async (kind: RoadReportKind) => {
+    const at = picking;
+    if (!at || busyKind) return;
+    setBusyKind(kind);
+    try {
+      await createRoadReport(kind, at.latitude, at.longitude);
+      hapticSuccess();
+      showNotice(t('reports.thanks'));
+      loadReports();
+    } catch (e: any) {
+      hapticError();
+      showNotice(e?.message === 'RATE_LIMITED' ? t('reports.rateLimited') : t('reports.failed'));
+    } finally {
+      setBusyKind(null);
+      setPicking(null);
+    }
+  };
+
+  const openReportSheet = (r: RoadReport) => {
+    hapticSelection();
+    setOpenReport(r);
+  };
+
+  const voteOn = async (r: RoadReport, stillThere: boolean) => {
+    if (voting) return;
+    setVoting(true);
+    try {
+      const res = await voteRoadReport(r.id, stillThere);
+      hapticSuccess();
+      if (res.removed || res.reason === 'gone') {
+        setReports(prev => prev.filter(x => x.id !== r.id));
+      } else {
+        setReports(prev => prev.map(x => (x.id === r.id ? { ...x, voted: true } : x)));
+      }
+      showNotice(res.reason === 'gone' ? t('reports.gone') : t('reports.thanksVote'));
+      loadReports();
+    } catch {
+      hapticError();
+      showNotice(t('reports.failed'));
+    } finally {
+      setVoting(false);
+      setOpenReport(null);
+      setNearby(null);
+    }
+  };
+
+  // Mêmes raisons que les étiquettes de tarif plus bas : une épingle est une
+  // vue native figée en image. Sur Android, figée trop tôt, elle sortirait
+  // vide — on la laisse se dessiner un instant à chaque nouveau jeu.
+  const [pinsTracking, setPinsTracking] = useState(true);
+  useEffect(() => {
+    setPinsTracking(true);
+    const timer = setTimeout(() => setPinsTracking(false), 600);
+    return () => clearTimeout(timer);
+  }, [reports]);
+
+  const reportTarget = useMemo<LatLng | null>(
+    () => picking ?? (openReport ? { latitude: openReport.lat, longitude: openReport.lon } : null),
+    [picking, openReport],
+  );
 
   // ─── Zones de « Mes courses » ──────────────────────────────────────────────
   const ownZones = useMemo(
@@ -802,6 +1082,13 @@ const MapScreen = () => {
         showsCompass={false}
         pitchEnabled={false}
         rotateEnabled={false}
+        showsUserLocation={locationOn}
+        onUserLocationChange={e => onUserLocation(e.nativeEvent.coordinate)}
+        // Android (Google Maps) : le plan sombre se décrit, et ni la barre
+        // d'outils ni le bouton « ma position » ne doivent recouvrir l'écran.
+        customMapStyle={Platform.OS === 'android' ? ANDROID_MAP_STYLE : undefined}
+        toolbarEnabled={false}
+        showsMyLocationButton={false}
         loadingEnabled
         loadingBackgroundColor={colors.background}
         loadingIndicatorColor={colors.primary}
@@ -886,6 +1173,18 @@ const MapScreen = () => {
             </View>
           </Marker>
         ))}
+        {reports.map(r => (
+          <Marker
+            key={`r:${r.id}`}
+            coordinate={{ latitude: r.lat, longitude: r.lon }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => openReportSheet(r)}
+            tracksViewChanges={pinsTracking}
+            zIndex={10}
+          >
+            <ReportPin kind={r.kind} />
+          </Marker>
+        ))}
       </MapView>
 
       {/* Le haut de l'écran s'enfonce dans la même couleur que les autres
@@ -931,8 +1230,37 @@ const MapScreen = () => {
         </View>
       )}
 
+      {ROAD_REPORTS_ENABLED && (
+        <ReportButton onPress={startReport} locating={locating} style={{ bottom: fabBottom }} />
+      )}
+      {nearby && (
+        <ReportNearbyCard
+          report={nearby.report}
+          meters={nearby.meters}
+          busy={voting}
+          onVote={stillThere => voteOn(nearby.report, stillThere)}
+          onClose={() => setNearby(null)}
+          style={{ bottom: fabBottom + REPORT_FAB_HEIGHT + space.md }}
+        />
+      )}
+      {notice && <ReportNotice text={notice} top={insets.top + headerH + space.sm} />}
+
       <MapSheet target={sheetTarget} onClose={closeSheet}>
         {renderSheet()}
+      </MapSheet>
+
+      <MapSheet
+        target={reportTarget}
+        onClose={() => {
+          setPicking(null);
+          setOpenReport(null);
+        }}
+      >
+        {picking ? (
+          <ReportPicker onPick={pickKind} busy={busyKind} />
+        ) : openReport ? (
+          <ReportDetails report={openReport} onVote={stillThere => voteOn(openReport, stillThere)} busy={voting} />
+        ) : null}
       </MapSheet>
     </View>
   );

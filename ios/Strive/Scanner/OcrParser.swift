@@ -11,6 +11,11 @@ final class OcrParser {
   static let shared = OcrParser()
   private init() {}
 
+  /// Étape où le dernier `parse` a renoncé, avec ce qu'il avait déjà lu — nil
+  /// s'il a abouti. Part en `detail` de l'échec : « offre illisible » seul ne dit
+  /// pas si c'est le prix, la distance ou les bornes qui ont manqué.
+  private(set) var lastFailure: String?
+
   // MARK: - Remote config (alignée avec Android)
 
   private var priceAnchors: [ScanPlatform: [String]] = [
@@ -23,11 +28,29 @@ final class OcrParser {
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
   private var fareMin: Double = 8.0
+  /// Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue par
+  /// l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €.
   private var fareMax: Double = 200.0
+  /// Plafond d'un montant écrit AVEC ses décimales. Ce n'était que `fareMax`, et
+  /// toute course longue mourait au parse (272,30 € pour Lisses → Lyon, abonné
+  /// perdu le 2026-10-15). Rien n'y est à reconstruire.
+  private var fareCeiling: Double = 2000.0
   private var distMin: Double = 0.3
-  private var distMax: Double = 500.0
+  /// 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le
+  /// plancher €/km de `isSane` qui juge une distance aberrante.
+  private var distMax: Double = 2000.0
+  /// Plancher seulement, pas de plafond : le prix d'une plateforme est réel, et
+  /// une course Van/XL courte dépasse sans peine 12 €/km (12,79 € pour 1 km,
+  /// 31,34 € pour 1,6 km). L'ancien plafond à 12 a rejeté 35 offres d'un même
+  /// chauffeur les 15-16/10/2026 sans écarter une seule erreur de lecture.
   private var rateMin: Double = 0.4
-  private var rateMax: Double = 12.0
+  /// Haut d'écran jamais lu : barre d'état, bannières de notification (celle
+  /// d'Uber qui répète le prix, le verdict de Strive lui-même, la Live
+  /// Activity). Sur les captures réelles, ces bannières finissent avant 17 % de
+  /// la hauteur et les offres commencent après 35 %. Même bande que la « zone
+  /// prix/header » des adresses. Lu aussi par le pré-filtre de `ScanProcessor`.
+  /// Mirror TS/Kotlin.
+  static let topCut = 0.25
 
   /// Applique la remote config (même format JSON que Android).
   func updateConfig(_ configJson: String) {
@@ -49,10 +72,10 @@ final class OcrParser {
     if let s = root["sanity"] as? [String: Any] {
       if let v = s["fareMin"] as? NSNumber { fareMin = v.doubleValue }
       if let v = s["fareMax"] as? NSNumber { fareMax = v.doubleValue }
+      if let v = s["fareCeiling"] as? NSNumber { fareCeiling = v.doubleValue }
       if let v = s["distMin"] as? NSNumber { distMin = v.doubleValue }
       if let v = s["distMax"] as? NSNumber { distMax = v.doubleValue }
       if let v = s["rateMin"] as? NSNumber { rateMin = v.doubleValue }
-      if let v = s["rateMax"] as? NSNumber { rateMax = v.doubleValue }
     }
   }
 
@@ -264,7 +287,13 @@ final class OcrParser {
   // MARK: - Entry point
 
   func parse(blocks: [OcrTextBlock], screenWidth: Int, screenHeight: Int, image: UIImage? = nil) -> ScanResultModel? {
-    if blocks.isEmpty { return nil }
+    lastFailure = nil
+    if blocks.isEmpty { lastFailure = "no_blocks"; return nil }
+
+    // Strive se lisait lui-même : sa notification de verdict, restée à l'écran,
+    // devenait une fausse offre au scan suivant (scan_debug #110).
+    let topCutY = Int(Double(screenHeight) * Self.topCut)
+    let visible = blocks.filter { $0.box.centerY >= topCutY }
 
     // Conversion des miles AVANT tout le reste : ce qui suit ne connaît que le km.
     //
@@ -274,10 +303,10 @@ final class OcrParser {
     // marché qui affiche des miles est le seul où l'on prend ce risque.
     let country = marketCountry
     let blocks = country == "GB"
-      ? blocks.map {
+      ? visible.map {
           OcrTextBlock(text: milesToKm($0.text), box: $0.box, confidence: $0.confidence)
         }
-      : blocks
+      : visible
 
     let fullText = blocks.map { $0.text }.joined(separator: " ").lowercased()
     // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -288,17 +317,29 @@ final class OcrParser {
       platform = detectPlatformByButtonColor(image: img)
     }
 
-    guard let fare = extractFare(blocks: blocks, platform: platform, screenHeight: screenHeight)
-    else { return nil }
-    let fareBlockY = locateFareBlockY(blocks: blocks, fare: fare)
+    guard let fareHit = extractFare(blocks: blocks, platform: platform, screenHeight: screenHeight)
+    else { lastFailure = "no_fare platform=\(platform.rawValue)"; return nil }
+    let fare = fareHit.value
+    // La zone des adresses part du bloc de prix RETENU. Le chercher à nouveau par
+    // son texte prenait la première occurrence du montant — un bandeau ou l'overlay
+    // d'une autre app tout en haut — et écartait les deux vraies adresses. Le
+    // texte recherché était de surcroît faux une fois sur deux : `Int((18.54 - 18)
+    // * 100)` vaut 53.
+    let fareBlockY = fareHit.block.box.centerY
+    let fareInButton = Self.isAcceptButton(fareHit.block.text)
 
-    let addressBlocks = findAddressBlocks(blocks: blocks, screenHeight: screenHeight, fareBlockY: fareBlockY)
+    let addressBlocks = findAddressBlocks(
+      blocks: blocks, screenHeight: screenHeight, fareBlockY: fareBlockY, fareInButton: fareInButton
+    )
     let pickupAddrBlock = addressBlocks.indices.contains(0) ? addressBlocks[0] : nil
     let destAddrBlock = addressBlocks.indices.contains(1) ? addressBlocks[1] : nil
 
     guard let distance = extractDistance(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
-    else { return nil }
-    if !isSane(fare: fare, distanceKm: distance) { return nil }
+    else { lastFailure = String(format: "no_distance fare=%.2f", fare); return nil }
+    if !isSane(fare: fare, distanceKm: distance) {
+      lastFailure = String(format: "out_of_bounds fare=%.2f km=%.1f", fare, distance)
+      return nil
+    }
 
     // L'approche est résolue AVANT la durée : `extractDuration` doit pouvoir
     // écarter le combo qui la porte, sinon les minutes d'approche deviennent
@@ -433,8 +474,21 @@ final class OcrParser {
 
   // MARK: - Fare scoring (mirror Android)
 
-  private func extractFare(blocks: [OcrTextBlock], platform: ScanPlatform, screenHeight: Int) -> Double? {
-    struct Candidate { let value: Double; let score: Float }
+  /// Bouton d'acceptation (« Accept €272,30 », « Accepter 12,30 € »…). Un prix
+  /// écrit DANS ce bouton est celui que le chauffeur touche en acceptant ; les
+  /// autres montants de l'écran sont des contre-propositions. Mirror TS/Kotlin.
+  private static let acceptRegex = try? NSRegularExpression(
+    pattern: "accept|acept|accett|aceit|annehm|aanvaard", options: .caseInsensitive
+  )
+  private static func isAcceptButton(_ text: String) -> Bool {
+    guard let regex = acceptRegex else { return false }
+    return regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
+  }
+
+  private func extractFare(
+    blocks: [OcrTextBlock], platform: ScanPlatform, screenHeight: Int
+  ) -> (value: Double, block: OcrTextBlock)? {
+    struct Candidate { let value: Double; let score: Float; let block: OcrTextBlock }
     let anchors = priceAnchors[platform] ?? priceAnchors[.UNKNOWN]!
     var candidates: [Candidate] = []
 
@@ -455,11 +509,13 @@ final class OcrParser {
       let nsNorm = deRated as NSString
       var value: Double?
       var isWhole = false
+      var ceiling = fareMax
 
       if let m = Self.priceRegex.firstMatch(in: deRated, range: NSRange(location: 0, length: nsNorm.length)) {
         let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
         let decPart = nsNorm.substring(with: m.range(at: 2)).replacingOccurrences(of: " ", with: "")
         value = Double("\(intPart).\(decPart)")
+        ceiling = fareCeiling
       } else if let m = Self.priceWholeRegex.firstMatch(in: deRated, range: NSRange(location: 0, length: nsNorm.length)) {
         let intPart = nsNorm.substring(with: m.range(at: 1)).replacingOccurrences(of: " ", with: "")
         if let raw = Double(intPart) {
@@ -475,7 +531,7 @@ final class OcrParser {
         }
       }
 
-      guard let v = value, v >= fareMin, v <= fareMax else { continue }
+      guard let v = value, v >= fareMin, v <= ceiling else { continue }
 
       var score: Float = 0
       score += Float(block.box.height) * 1.5
@@ -495,26 +551,14 @@ final class OcrParser {
         score += 20
       }
       if v >= 1.0 && v <= 5.0 { score -= 40 }
-      candidates.append(Candidate(value: v, score: score))
+      // Le prix du bouton d'acceptation l'emporte sur les contre-propositions
+      // (Heetch : « Accept €272,30 » face à €345,10 et €326,90, plus gros).
+      if Self.isAcceptButton(block.text) { score += 60 }
+      candidates.append(Candidate(value: v, score: score, block: block))
     }
 
-    return candidates.max(by: { $0.score < $1.score })?.value
-  }
-
-  private func locateFareBlockY(blocks: [OcrTextBlock], fare: Double) -> Int? {
-    let euros = Int(fare)
-    let cents = Int((fare - Double(euros)) * 100)
-    let patterns = [
-      String(format: "%d,%02d", euros, cents),
-      String(format: "%d.%02d", euros, cents),
-    ]
-    if let m = blocks.first(where: { b in patterns.contains(where: { b.text.contains($0) }) }) {
-      return m.box.centerY
-    }
-    // Repli : tarif collé sans virgule ("1743€") — on exige le € pour ne pas
-    // matcher un code postal ou une heure qui contiendrait la même suite.
-    let glued = String(format: "%d%02d", euros, cents)
-    return blocks.first(where: { $0.text.contains(glued) && Self.hasCurrency($0.text) })?.box.centerY
+    guard let best = candidates.max(by: { $0.score < $1.score }) else { return nil }
+    return (best.value, best.block)
   }
 
   // MARK: - Distance extraction
@@ -672,7 +716,8 @@ final class OcrParser {
         let hours = Int(nsNorm.substring(with: mH.range(at: 1))) ?? 0
         let mins = mH.range(at: 2).location != NSNotFound ? (Int(nsNorm.substring(with: mH.range(at: 2))) ?? 0) : 0
         let total = hours * 60 + mins
-        if total >= 1 && total <= 300 {
+        // Jusqu'à 24 h : « 4h 15min » pour Lisses → Lyon dépassait les 300 min.
+        if total >= 1 && total <= 1440 {
           candidates.append(Cand(value: total, km: comboKm, y: block.box.centerY, isPickupCombo: isPickupCombo))
           continue
         }
@@ -864,17 +909,21 @@ final class OcrParser {
     return false
   }
 
-  private func findAddressBlocks(blocks: [OcrTextBlock], screenHeight: Int, fareBlockY: Int?) -> [OcrTextBlock] {
+  private func findAddressBlocks(
+    blocks: [OcrTextBlock], screenHeight: Int, fareBlockY: Int?, fareInButton: Bool = false
+  ) -> [OcrTextBlock] {
     var candidates = blocks
       .filter { $0.box.centerY > Int(Double(screenHeight) * 0.25) }
       .filter { isAddressBlock($0, screenHeight: screenHeight) }
       .sorted { $0.box.centerY < $1.box.centerY }
 
+    // Prix dans le bouton d'acceptation : le bouton est SOUS la carte de la
+    // course, la fenêtre se retourne (adresses au-dessus du prix).
     if let fareY = fareBlockY {
       let slackAbove = Int(Double(screenHeight) * 0.05)
       let depthBelow = Int(Double(screenHeight) * 0.5)
-      let yMin = fareY - slackAbove
-      let yMax = fareY + depthBelow
+      let yMin = fareInButton ? fareY - depthBelow : fareY - slackAbove
+      let yMax = fareInButton ? fareY + slackAbove : fareY + depthBelow
       candidates = candidates.filter { $0.box.centerY >= yMin && $0.box.centerY <= yMax }
     }
 
@@ -1059,10 +1108,9 @@ final class OcrParser {
   // MARK: - Sanity
 
   private func isSane(fare: Double, distanceKm: Double) -> Bool {
-    if fare < fareMin || fare > fareMax { return false }
+    if fare < fareMin || fare > fareCeiling { return false }
     if distanceKm < distMin || distanceKm > distMax { return false }
-    let rate = fare / distanceKm
-    if rate < rateMin || rate > rateMax { return false }
+    if fare / distanceKm < rateMin { return false }
     return true
   }
 

@@ -596,7 +596,7 @@ class ShareViewController: UIViewController {
       // `analyze` rend la main sur le main thread ; les `DispatchQueue.main.async`
       // ci-dessous restent inoffensifs (async, jamais sync → pas de deadlock).
       guard let result = geminiResult?.asScanResult else {
-        DispatchQueue.main.async { self.showError(self.localizedString(fr: "Impossible d'analyser cette image", en: "Could not analyze this image"), code: .geminiKo) }
+        DispatchQueue.main.async { self.showError(self.localizedString(fr: "Impossible d'analyser cette image", en: "Could not analyze this image"), code: .offerUnreadable) }
         return
       }
 
@@ -628,10 +628,12 @@ class ShareViewController: UIViewController {
       }
 
       DispatchQueue.main.async { self.statusLabel.text = self.localizedString(fr: "Calcul de l'itinéraire…", en: "Calculating the route…") }
-      TomTomService.shared.calculateRoute(pickupAddress: pickup, destinationAddress: dest) { outcome in
+      TomTomService.shared.calculateRoute(
+        pickupAddress: pickup, destinationAddress: dest, screenDistanceKm: result.distanceKm
+      ) { outcome in
         // calculateRoute rend la main sur le main thread.
         guard case .ok(let route) = outcome,
-              route.distanceKm >= 0.3, route.distanceKm <= 500, route.durationMin <= 300 else {
+              route.distanceKm >= 0.3, route.distanceKm <= 2000, route.durationMin <= 1440 else {
           switch outcome {
           case .unreachable: self.showRouteFailure(.unreachable)
           case .noKey:       self.showRouteFailure(.noKey)
@@ -640,7 +642,8 @@ class ShareViewController: UIViewController {
           return
         }
         let ratio = result.fare / route.distanceKm
-        guard ratio >= 0.2, ratio <= 12.0 else {
+        // Plancher seul, comme `ScanProcessor` : pas de plafond €/km.
+        guard ratio >= 0.2 else {
           self.showRouteFailure(.unusable)
           return
         }

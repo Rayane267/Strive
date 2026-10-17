@@ -5,7 +5,7 @@ const STORAGE_KEY = '@strive_rating_prompted';
 const TRIGGER_COUNT = 5; // show after 5 accepted rides
 
 const STORE_URL = Platform.select({
-  android: 'market://details?id=com.strive',
+  android: 'market://details?id=com.striveapp.app',
   ios: 'itms-apps://itunes.apple.com/app/id6772641578',
 }) ?? '';
 

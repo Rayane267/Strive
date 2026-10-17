@@ -11,6 +11,8 @@ import { RIDE_NETWORK_ENABLED } from '../services/networkDemo';
 import { grantWelcomeCredits } from '../utils/deviceId';
 import { useTranslation } from 'react-i18next';
 import { withErrorBoundary } from '../components/ErrorBoundary';
+import { checkAppRelease, snoozeRelease, type ReleaseCheck } from '../services/appReleaseService';
+import UpdateScreen from '../screens/UpdateScreen';
 
 // Imports des écrans — chaque screen est isolé dans son ErrorBoundary pour
 // éviter qu'un crash local blanchisse toute l'app.
@@ -64,7 +66,19 @@ const ONBOARDING_REPLAY_KEY = '@strive_onboarding_replay';
 
 const RootNavigator = () => {
   const { user, profile, loading, profileError, refreshProfile } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // « Mise à jour disponible », à l'ouverture. Vérifié pendant le splash, et
+  // borné : une réponse lente ne doit ni retarder l'ouverture, ni faire surgir
+  // l'écran une fois le chauffeur dans l'app.
+  const [release, setRelease] = useState<ReleaseCheck>({ status: 'none' });
+  useEffect(() => {
+    let open = true;
+    const deadline = setTimeout(() => { open = false; }, 4000);
+    checkAppRelease(i18n.language).then(r => { if (open) setRelease(r); });
+    return () => { open = false; clearTimeout(deadline); };
+    // Une fois par ouverture : la langue n'a pas à relancer la vérification.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Pour QUEL compte la vérification a été faite, et non un simple booléen. Le
   // booléen passait à vrai dès l'écran de connexion (aucun compte à vérifier) et
   // le restait après la connexion : le navigateur montait alors sur MainTabs
@@ -164,6 +178,21 @@ const RootNavigator = () => {
   if (!splashDone || bootPending) {
     return (
       <SplashScreen ready={!bootPending} onFinish={() => setSplashDone(true)} />
+    );
+  }
+
+  // Avant tout le reste, connexion comprise. Jamais bloquant : « Plus tard »
+  // ramène à l'app.
+  if (release.status === 'available') {
+    return (
+      <UpdateScreen
+        latest={release.latest}
+        notes={release.notes}
+        onLater={() => {
+          snoozeRelease(release.latest);
+          setRelease({ status: 'none' });
+        }}
+      />
     );
   }
 

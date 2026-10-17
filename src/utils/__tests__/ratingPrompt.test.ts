@@ -56,7 +56,7 @@ describe('openStoreForRating', () => {
   it('opens the store URL when it can be opened', async () => {
     mockCanOpenURL.mockResolvedValue(true);
     await openStoreForRating();
-    expect(mockOpenURL).toHaveBeenCalledWith('market://details?id=com.strive');
+    expect(mockOpenURL).toHaveBeenCalledWith('market://details?id=com.striveapp.app');
   });
 
   it('does not open anything when the URL is not supported', async () => {

@@ -797,7 +797,7 @@
       "ocr_empty": "No se ha leído texto en pantalla",
       "no_addresses": "Direcciones ilegibles",
       "not_a_ride": "Ninguna oferta detectada",
-      "gemini_ko": "No se pudo leer la oferta",
+      "offer_unreadable": "No se pudo leer la oferta",
       "la_start_failed": "No se ha podido mostrar",
       "expired": "Análisis interrumpido",
       "timeout": "Análisis demasiado largo",
@@ -1238,6 +1238,41 @@
     "verdictMid": "Zona media",
     "verdictBad": "Zona a evitar"
   },
+  "reports": {
+    "button": "Reportar",
+    "locating": "Ubicando…",
+    "pickTitle": "¿Qué ocurre?",
+    "pickSubtitle": "Se coloca en tu posición actual.",
+    "kind": {
+      "police": "Policía",
+      "accident": "Accidente",
+      "danger": "Peligro",
+      "traffic": "Atasco",
+      "roadworks": "Obras"
+    },
+    "stillThere": "¿Sigue ahí?",
+    "yes": "Sigue ahí",
+    "no": "Ya no está",
+    "nearbyTitle": "{{kind}} a {{meters}} m",
+    "justNow": "Reportado ahora mismo",
+    "minutesAgo_one": "Reportado hace {{count}} min",
+    "minutesAgo_other": "Reportado hace {{count}} min",
+    "hoursAgo_one": "Reportado hace {{count}} h",
+    "hoursAgo_other": "Reportado hace {{count}} h",
+    "confirmed_one": "confirmado {{count}} vez",
+    "confirmed_other": "confirmado {{count}} veces",
+    "mine": "Es tu reporte. Quítalo si ya no está vigente.",
+    "withdraw": "Quitar mi reporte",
+    "voted": "Gracias, ya diste tu opinión.",
+    "thanks": "¡Gracias! Reporte añadido.",
+    "thanksVote": "Gracias por tu respuesta.",
+    "gone": "Este reporte ya no está activo.",
+    "rateLimited": "Demasiados reportes seguidos. Inténtalo dentro de un rato.",
+    "failed": "No se pudo enviar. Comprueba tu conexión.",
+    "locationOffTitle": "Ubicación desactivada",
+    "locationOffBody": "Permite que Strive use tu ubicación para colocar un reporte en el mapa.",
+    "openSettings": "Abrir Ajustes"
+  },
   "rideNetwork": {
     "title": "Red",
     "menuTitle": "Red",
@@ -1341,7 +1376,7 @@
     "unsupportedFormat": "Formato de imagen no compatible",
     "noImageInShare": "No se encontró ninguna imagen en lo compartido",
     "noOffer": "Ninguna oferta de viaje detectada",
-    "unsupportedLanguage": "Idioma no reconocido. Pon tu app de conductor en inglés.",
+    "unsupportedLanguage": "Idioma no reconocido. Pon tu app de conductor en un idioma disponible en Strive.",
     "aiAnalysis": "Análisis IA en curso…",
     "cannotAnalyze": "No se pudo analizar esta imagen",
     "addressesUnreadable": "Escaneo fallido — direcciones ilegibles, inténtalo otra vez",
@@ -1360,5 +1395,12 @@
     "bubbleRideDeclined": "❌ Rechazada",
     "bubbleQuota": "Cuota alcanzada",
     "bubbleQuotaFree": "Cuota alcanzada · Pasa a Plus"
+  },
+  "update": {
+    "title": "Actualización disponible",
+    "body": "Strive {{version}} ya está disponible. Instálala para tener las últimas correcciones.",
+    "whatsNew": "Novedades",
+    "cta": "Actualizar",
+    "later": "Más tarde"
   }
 }

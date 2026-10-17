@@ -1,0 +1,3352 @@
+[
+  {
+    "name": "heetch-long-distance-accept-button-fare",
+    "description": "scan_debug #57 (iOS, Heetch en anglais, abonné perdu le 2026-10-15) : Lisses → Lyon, 432 km. Le prix à prendre est dans le bouton « Accept €272,30 » ; €345,10 et €326,90 sont des contre-propositions (« or choose a price »). Deux pièges : un prix au-delà de l'ancien plafond de 200 €, et des adresses AU-DESSUS du prix, puisqu'il est dans le bouton du bas.",
+    "screenHeight": 2556,
+    "blocks": [
+      {
+        "text": "14:411",
+        "x": 88,
+        "y": 66,
+        "width": 174,
+        "height": 44
+      },
+      {
+        "text": "э",
+        "x": 863,
+        "y": 69,
+        "width": 196,
+        "height": 42
+      },
+      {
+        "text": "< Back",
+        "x": 886,
+        "y": 241,
+        "width": 207,
+        "height": 64
+      },
+      {
+        "text": "Google Maps",
+        "x": 18,
+        "y": 1209,
+        "width": 312,
+        "height": 67
+      },
+      {
+        "text": ": Heetch",
+        "x": 159,
+        "y": 1392,
+        "width": 181,
+        "height": 37
+      },
+      {
+        "text": "Net price",
+        "x": 374,
+        "y": 1387,
+        "width": 182,
+        "height": 47
+      },
+      {
+        "text": "Louis",
+        "x": 986,
+        "y": 1389,
+        "width": 118,
+        "height": 40
+      },
+      {
+        "text": "Imin • 282 m",
+        "x": 140,
+        "y": 1545,
+        "width": 289,
+        "height": 41
+      },
+      {
+        "text": "24 Rue des Malines, 91090 Lisses, France",
+        "x": 140,
+        "y": 1612,
+        "width": 804,
+        "height": 49
+      },
+      {
+        "text": "4h 15min • 432.1 km",
+        "x": 140,
+        "y": 1723,
+        "width": 456,
+        "height": 48
+      },
+      {
+        "text": "Lyon",
+        "x": 140,
+        "y": 1794,
+        "width": 100,
+        "height": 48
+      },
+      {
+        "text": "Lyon, France",
+        "x": 140,
+        "y": 1861,
+        "width": 252,
+        "height": 44
+      },
+      {
+        "text": "€345,10",
+        "x": 184,
+        "y": 2353,
+        "width": 194,
+        "height": 63
+      },
+      {
+        "text": "Accept €272,30",
+        "x": 400,
+        "y": 2087,
+        "width": 374,
+        "height": 59
+      },
+      {
+        "text": "or choose a price",
+        "x": 418,
+        "y": 2236,
+        "width": 337,
+        "height": 40
+      },
+      {
+        "text": "€326,90",
+        "x": 622,
+        "y": 2354,
+        "width": 208,
+        "height": 61
+      }
+    ],
+    "expected": {
+      "platform": "HEETCH",
+      "fare": 272.3,
+      "distanceKm": 432.1,
+      "pickupAddressContains": "Rue des Malines",
+      "destinationAddressContains": "Lyon"
+    }
+  },
+  {
+    "name": "bolt-fare-repeated-by-overlay-above",
+    "description": "scan_debug #54 (iOS, Bolt) : un overlay d'une autre app répète « €21.96 » en haut de l'écran. La zone des adresses doit partir du bloc de prix réellement retenu (« 21,96 € (net, TTC) »), pas de la première occurrence du montant — sinon les deux adresses sont écartées.",
+    "screenHeight": 2532,
+    "blocks": [
+      {
+        "text": "S",
+        "x": 0,
+        "y": 103,
+        "width": 18,
+        "height": 25
+      },
+      {
+        "text": "13:33",
+        "x": 136,
+        "y": 51,
+        "width": 121,
+        "height": 36
+      },
+      {
+        "text": "NOuv-en-Josas",
+        "x": 158,
+        "y": 92,
+        "width": 294,
+        "height": 36
+      },
+      {
+        "text": "HOPP",
+        "x": 80,
+        "y": 147,
+        "width": 84,
+        "height": 25
+      },
+      {
+        "text": "€36.60/hr",
+        "x": 73,
+        "y": 223,
+        "width": 239,
+        "height": 49
+      },
+      {
+        "text": "€0.78/km",
+        "x": 77,
+        "y": 338,
+        "width": 220,
+        "height": 48
+      },
+      {
+        "text": "ESSON",
+        "x": 10,
+        "y": 429,
+        "width": 160,
+        "height": 109
+      },
+      {
+        "text": "€21.96",
+        "x": 470,
+        "y": 242,
+        "width": 228,
+        "height": 58
+      },
+      {
+        "text": "PRIX TOTAL",
+        "x": 511,
+        "y": 312,
+        "width": 147,
+        "height": 22
+      },
+      {
+        "text": "5G",
+        "x": 930,
+        "y": 62,
+        "width": 55,
+        "height": 36
+      },
+      {
+        "text": "56",
+        "x": 1011,
+        "y": 58,
+        "width": 66,
+        "height": 40
+      },
+      {
+        "text": "X REFUSER",
+        "x": 894,
+        "y": 143,
+        "width": 165,
+        "height": 29
+      },
+      {
+        "text": "Net -€17.67",
+        "x": 835,
+        "y": 231,
+        "width": 250,
+        "height": 45
+      },
+      {
+        "text": "36 min",
+        "x": 938,
+        "y": 345,
+        "width": 150,
+        "height": 40
+      },
+      {
+        "text": "N118",
+        "x": 757,
+        "y": 500,
+        "width": 73,
+        "height": 29
+      },
+      {
+        "text": "D446",
+        "x": 194,
+        "y": 643,
+        "width": 77,
+        "height": 29
+      },
+      {
+        "text": "Saclay",
+        "x": 419,
+        "y": 791,
+        "width": 128,
+        "height": 44
+      },
+      {
+        "text": "Vauhallan",
+        "x": 842,
+        "y": 853,
+        "width": 187,
+        "height": 41
+      },
+      {
+        "text": "-LE CHRIST-DE-SACLAY",
+        "x": 11,
+        "y": 937,
+        "width": 367,
+        "height": 34
+      },
+      {
+        "text": "D36",
+        "x": 632,
+        "y": 1111,
+        "width": 62,
+        "height": 29
+      },
+      {
+        "text": "Google",
+        "x": 14,
+        "y": 1162,
+        "width": 176,
+        "height": 66
+      },
+      {
+        "text": "es",
+        "x": 0,
+        "y": 1413,
+        "width": 40,
+        "height": 36
+      },
+      {
+        "text": "ar",
+        "x": 0,
+        "y": 1468,
+        "width": 36,
+        "height": 29
+      },
+      {
+        "text": "@ Bolt",
+        "x": 95,
+        "y": 1306,
+        "width": 165,
+        "height": 48
+      },
+      {
+        "text": "• Carte",
+        "x": 316,
+        "y": 1305,
+        "width": 202,
+        "height": 49
+      },
+      {
+        "text": "C Hors rayon",
+        "x": 573,
+        "y": 1301,
+        "width": 338,
+        "height": 61
+      },
+      {
+        "text": "21,96 € (net, TTC)",
+        "x": 80,
+        "y": 1413,
+        "width": 534,
+        "height": 102
+      },
+      {
+        "text": "Refuser n'affectera pas votre taux",
+        "x": 83,
+        "y": 1517,
+        "width": 744,
+        "height": 72
+      },
+      {
+        "text": "d'acceptation",
+        "x": 80,
+        "y": 1600,
+        "width": 301,
+        "height": 44
+      },
+      {
+        "text": "Walid • 5.0 *",
+        "x": 105,
+        "y": 1714,
+        "width": 314,
+        "height": 70
+      },
+      {
+        "text": "• 8 min • 6.1 km",
+        "x": 80,
+        "y": 1835,
+        "width": 445,
+        "height": 59
+      },
+      {
+        "text": "Raoul Dautry, Saclay 91400",
+        "x": 150,
+        "y": 1917,
+        "width": 599,
+        "height": 52
+      },
+      {
+        "text": "O",
+        "x": 80,
+        "y": 1998,
+        "width": 40,
+        "height": 40
+      },
+      {
+        "text": "28 min • 21.9 km",
+        "x": 150,
+        "y": 1994,
+        "width": 448,
+        "height": 59
+      },
+      {
+        "text": "18 Rue Du Ranelagh, Paris",
+        "x": 147,
+        "y": 2075,
+        "width": 577,
+        "height": 55
+      },
+      {
+        "text": "136)",
+        "x": 1096,
+        "y": 1225,
+        "width": 69,
+        "height": 58
+      },
+      {
+        "text": "Accepter",
+        "x": 467,
+        "y": 2274,
+        "width": 239,
+        "height": 58
+      },
+      {
+        "text": "Saint-Jean-de-Beauregard",
+        "x": 29,
+        "y": 2484,
+        "width": 504,
+        "height": 40
+      }
+    ],
+    "expected": {
+      "platform": "BOLT",
+      "fare": 21.96,
+      "distanceKm": 21.9,
+      "pickupAddressContains": "Raoul Dautry",
+      "destinationAddressContains": "Ranelagh"
+    }
+  },
+  {
+    "name": "uber-priority-gare-du-nord",
+    "description": "scan_debug #58 (iOS 1.0.5, échec en production) : UberX Priority 27,81 € avec « +5,50 € inclus pour la prise en charge » sous le prix, départ coupé sur deux lignes (« … Le Plessis- » / « Robinson »), destination « Gare SNCF de Paris Nord », bandeau « Course longue (+30 min) ».",
+    "screenHeight": 2532,
+    "blocks": [
+      {
+        "text": "15:08",
+        "x": 136,
+        "y": 51,
+        "width": 121,
+        "height": 37
+      },
+      {
+        "text": "5G 464",
+        "x": 930,
+        "y": 61,
+        "width": 147,
+        "height": 38
+      },
+      {
+        "text": "Bob",
+        "x": 1063,
+        "y": 121,
+        "width": 95,
+        "height": 44
+      },
+      {
+        "text": "1",
+        "x": 0,
+        "y": 224,
+        "width": 14,
+        "height": 25
+      },
+      {
+        "text": "Nanterre",
+        "x": 143,
+        "y": 216,
+        "width": 213,
+        "height": 42
+      },
+      {
+        "text": "Paris",
+        "x": 743,
+        "y": 397,
+        "width": 161,
+        "height": 55
+      },
+      {
+        "text": "Mont",
+        "x": 1037,
+        "y": 393,
+        "width": 128,
+        "height": 44
+      },
+      {
+        "text": "D307",
+        "x": 55,
+        "y": 522,
+        "width": 81,
+        "height": 29
+      },
+      {
+        "text": "ailles",
+        "x": 0,
+        "y": 713,
+        "width": 121,
+        "height": 44
+      },
+      {
+        "text": "E5",
+        "x": 540,
+        "y": 548,
+        "width": 47,
+        "height": 33
+      },
+      {
+        "text": "amart",
+        "x": 451,
+        "y": 739,
+        "width": 144,
+        "height": 38
+      },
+      {
+        "text": "Ch",
+        "x": 1107,
+        "y": 629,
+        "width": 58,
+        "height": 40
+      },
+      {
+        "text": "Villejuif",
+        "x": 798,
+        "y": 753,
+        "width": 180,
+        "height": 54
+      },
+      {
+        "text": "a",
+        "x": 14,
+        "y": 1464,
+        "width": 29,
+        "height": 33
+      },
+      {
+        "text": "Bievres",
+        "x": 235,
+        "y": 985,
+        "width": 173,
+        "height": 46
+      },
+      {
+        "text": "Antony",
+        "x": 540,
+        "y": 992,
+        "width": 169,
+        "height": 46
+      },
+      {
+        "text": "UberX Priority",
+        "x": 180,
+        "y": 1107,
+        "width": 334,
+        "height": 51
+      },
+      {
+        "text": "Exclusivité",
+        "x": 577,
+        "y": 1110,
+        "width": 243,
+        "height": 41
+      },
+      {
+        "text": "27,81 €",
+        "x": 87,
+        "y": 1210,
+        "width": 433,
+        "height": 154
+      },
+      {
+        "text": "* 4,50",
+        "x": 117,
+        "y": 1380,
+        "width": 172,
+        "height": 62
+      },
+      {
+        "text": "Montant net de frais",
+        "x": 360,
+        "y": 1387,
+        "width": 459,
+        "height": 40
+      },
+      {
+        "text": "+5,50 € inclus pour la prise en charge p...",
+        "x": 150,
+        "y": 1548,
+        "width": 905,
+        "height": 52
+      },
+      {
+        "text": "• 3 min (0.9 km)",
+        "x": 103,
+        "y": 1667,
+        "width": 386,
+        "height": 47
+      },
+      {
+        "text": "1 Av. Réaumur, 92350, Le Plessis-",
+        "x": 165,
+        "y": 1725,
+        "width": 743,
+        "height": 55
+      },
+      {
+        "text": "Robinson",
+        "x": 165,
+        "y": 1783,
+        "width": 213,
+        "height": 46
+      },
+      {
+        "text": "Course de 23.7 km",
+        "x": 164,
+        "y": 1852,
+        "width": 410,
+        "height": 56
+      },
+      {
+        "text": "Gare SNCF de Paris Nord, 75010, Paris",
+        "x": 165,
+        "y": 1916,
+        "width": 846,
+        "height": 56
+      },
+      {
+        "text": "N Course longue (+30 min)",
+        "x": 117,
+        "y": 2045,
+        "width": 618,
+        "height": 52
+      },
+      {
+        "text": "C",
+        "x": 1122,
+        "y": 1729,
+        "width": 25,
+        "height": 33
+      },
+      {
+        "text": "lA",
+        "x": 1125,
+        "y": 2060,
+        "width": 36,
+        "height": 29
+      },
+      {
+        "text": "Accepter",
+        "x": 467,
+        "y": 2225,
+        "width": 239,
+        "height": 56
+      },
+      {
+        "text": "Auvers-Saint-Georges",
+        "x": 66,
+        "y": 2476,
+        "width": 533,
+        "height": 51
+      },
+      {
+        "text": "Baulne",
+        "x": 783,
+        "y": 2465,
+        "width": 158,
+        "height": 45
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 27.81,
+      "distanceKm": 23.7,
+      "pickupAddressContains": "Réaumur",
+      "destinationAddressContains": "Gare SNCF de Paris Nord"
+    }
+  },
+  {
+    "name": "heetch-long-distance-under-own-banners",
+    "description": "scan_debug #56 : la même offre Heetch que #57, recouverte par le bandeau d'échec de Strive (« Analysis failed ») et la notification Heetch « You're all set! … 24 Rue des Malines » tout en haut.",
+    "screenHeight": 2556,
+    "blocks": [
+      {
+        "text": "Analysis Tailea",
+        "x": 463,
+        "y": 140,
+        "width": 255,
+        "height": 37
+      },
+      {
+        "text": "Try another screenshot",
+        "x": 400,
+        "y": 211,
+        "width": 378,
+        "height": 41
+      },
+      {
+        "text": "Th..",
+        "x": 92,
+        "y": 263,
+        "width": 92,
+        "height": 44
+      },
+      {
+        "text": "H",
+        "x": 88,
+        "y": 393,
+        "width": 66,
+        "height": 74
+      },
+      {
+        "text": "You're all set!",
+        "x": 215,
+        "y": 349,
+        "width": 292,
+        "height": 45
+      },
+      {
+        "text": "Lys Gedeon is on their way to 24 Rue des",
+        "x": 215,
+        "y": 404,
+        "width": 845,
+        "height": 48
+      },
+      {
+        "text": "Malines, 91090 Lisses, France",
+        "x": 215,
+        "y": 460,
+        "width": 619,
+        "height": 52
+      },
+      {
+        "text": "now",
+        "x": 1023,
+        "y": 364,
+        "width": 77,
+        "height": 26
+      },
+      {
+        "text": "Google Maps",
+        "x": 18,
+        "y": 1209,
+        "width": 312,
+        "height": 67
+      },
+      {
+        "text": ": Heetch",
+        "x": 159,
+        "y": 1392,
+        "width": 181,
+        "height": 37
+      },
+      {
+        "text": "Net price",
+        "x": 374,
+        "y": 1387,
+        "width": 182,
+        "height": 47
+      },
+      {
+        "text": "Louis",
+        "x": 986,
+        "y": 1389,
+        "width": 118,
+        "height": 40
+      },
+      {
+        "text": "Imin • 282 m",
+        "x": 140,
+        "y": 1545,
+        "width": 289,
+        "height": 41
+      },
+      {
+        "text": "24 Rue des Malines, 91090 Lisses, France",
+        "x": 140,
+        "y": 1612,
+        "width": 804,
+        "height": 49
+      },
+      {
+        "text": "4h 15min • 432.1 km",
+        "x": 140,
+        "y": 1723,
+        "width": 456,
+        "height": 48
+      },
+      {
+        "text": "Lyon",
+        "x": 140,
+        "y": 1794,
+        "width": 100,
+        "height": 48
+      },
+      {
+        "text": "Lyon, France",
+        "x": 140,
+        "y": 1861,
+        "width": 252,
+        "height": 44
+      },
+      {
+        "text": "€345,10",
+        "x": 184,
+        "y": 2353,
+        "width": 194,
+        "height": 63
+      },
+      {
+        "text": "Accept €272,30",
+        "x": 400,
+        "y": 2087,
+        "width": 374,
+        "height": 56
+      },
+      {
+        "text": "or choose a price",
+        "x": 418,
+        "y": 2236,
+        "width": 337,
+        "height": 40
+      },
+      {
+        "text": "€326,90",
+        "x": 622,
+        "y": 2355,
+        "width": 207,
+        "height": 60
+      }
+    ],
+    "expected": {
+      "platform": "HEETCH",
+      "fare": 272.3,
+      "distanceKm": 432.1,
+      "pickupAddressContains": "Rue des Malines",
+      "destinationAddressContains": "Lyon"
+    }
+  },
+  {
+    "name": "bolt-hors-rayon-st-ouen",
+    "description": "scan_debug #55 (route_unusable en production) : Bolt « Hors rayon » 18,54 €, code postal du départ sur sa propre ligne (« 92370 »). La lecture est bonne ; c'est le géocodage de « St.-Ouen » qui a échoué.",
+    "screenHeight": 2532,
+    "blocks": [
+      {
+        "text": "des",
+        "x": 279,
+        "y": 25,
+        "width": 77,
+        "height": 36
+      },
+      {
+        "text": "13:49",
+        "x": 135,
+        "y": 46,
+        "width": 125,
+        "height": 42
+      },
+      {
+        "text": "nces -",
+        "x": 283,
+        "y": 80,
+        "width": 110,
+        "height": 26
+      },
+      {
+        "text": "UVSQ",
+        "x": 202,
+        "y": 120,
+        "width": 118,
+        "height": 41
+      },
+      {
+        "text": "1D910",
+        "x": 765,
+        "y": 0,
+        "width": 84,
+        "height": 25
+      },
+      {
+        "text": "•ll 5G",
+        "x": 846,
+        "y": 62,
+        "width": 139,
+        "height": 47
+      },
+      {
+        "text": "604)",
+        "x": 1008,
+        "y": 66,
+        "width": 77,
+        "height": 29
+      },
+      {
+        "text": "Cha",
+        "x": 710,
+        "y": 169,
+        "width": 80,
+        "height": 40
+      },
+      {
+        "text": "X Refuser",
+        "x": 798,
+        "y": 201,
+        "width": 280,
+        "height": 82
+      },
+      {
+        "text": "Viroflay",
+        "x": 437,
+        "y": 356,
+        "width": 143,
+        "height": 40
+      },
+      {
+        "text": "PORCHEFONTAINE",
+        "x": 88,
+        "y": 456,
+        "width": 272,
+        "height": 25
+      },
+      {
+        "text": "Forêt",
+        "x": 982,
+        "y": 397,
+        "width": 99,
+        "height": 37
+      },
+      {
+        "text": "domaniale",
+        "x": 938,
+        "y": 445,
+        "width": 187,
+        "height": 41
+      },
+      {
+        "text": "de Meudon",
+        "x": 927,
+        "y": 496,
+        "width": 206,
+        "height": 37
+      },
+      {
+        "text": "Vélizy-Villacoublay",
+        "x": 577,
+        "y": 610,
+        "width": 353,
+        "height": 44
+      },
+      {
+        "text": "Westfield Vélizy 2",
+        "x": 824,
+        "y": 728,
+        "width": 320,
+        "height": 44
+      },
+      {
+        "text": "A86",
+        "x": 791,
+        "y": 805,
+        "width": 58,
+        "height": 29
+      },
+      {
+        "text": "M",
+        "x": 1140,
+        "y": 625,
+        "width": 25,
+        "height": 29
+      },
+      {
+        "text": "D446",
+        "x": 165,
+        "y": 863,
+        "width": 81,
+        "height": 34
+      },
+      {
+        "text": "SUPER Buc",
+        "x": 0,
+        "y": 1026,
+        "width": 209,
+        "height": 37
+      },
+      {
+        "text": "Google",
+        "x": 24,
+        "y": 1102,
+        "width": 160,
+        "height": 41
+      },
+      {
+        "text": "s-en-vosas",
+        "x": 0,
+        "y": 1140,
+        "width": 220,
+        "height": 25
+      },
+      {
+        "text": "Jouy-",
+        "x": 285,
+        "y": 1129,
+        "width": 134,
+        "height": 39
+      },
+      {
+        "text": "Vosas",
+        "x": 478,
+        "y": 1126,
+        "width": 114,
+        "height": 36
+      },
+      {
+        "text": "@ Bolt",
+        "x": 95,
+        "y": 1232,
+        "width": 165,
+        "height": 51
+      },
+      {
+        "text": "Espèces",
+        "x": 371,
+        "y": 1232,
+        "width": 221,
+        "height": 59
+      },
+      {
+        "text": "C Hors rayon",
+        "x": 646,
+        "y": 1234,
+        "width": 339,
+        "height": 56
+      },
+      {
+        "text": "18,54 € (net, TTC)",
+        "x": 76,
+        "y": 1348,
+        "width": 548,
+        "height": 100
+      },
+      {
+        "text": "Refuser n'affectera pas votre taux",
+        "x": 84,
+        "y": 1456,
+        "width": 743,
+        "height": 52
+      },
+      {
+        "text": "d'acceptation",
+        "x": 80,
+        "y": 1530,
+        "width": 301,
+        "height": 44
+      },
+      {
+        "text": "Deguene • 4.8 *",
+        "x": 106,
+        "y": 1648,
+        "width": 393,
+        "height": 62
+      },
+      {
+        "text": "•",
+        "x": 84,
+        "y": 1766,
+        "width": 40,
+        "height": 44
+      },
+      {
+        "text": "12 min • 5.9 km",
+        "x": 139,
+        "y": 1766,
+        "width": 423,
+        "height": 58
+      },
+      {
+        "text": "34 Boulevard De La Libération, Chaville",
+        "x": 147,
+        "y": 1843,
+        "width": 868,
+        "height": 55
+      },
+      {
+        "text": "92370",
+        "x": 147,
+        "y": 1913,
+        "width": 147,
+        "height": 44
+      },
+      {
+        "text": "34 min • 18.5 km",
+        "x": 136,
+        "y": 1994,
+        "width": 470,
+        "height": 59
+      },
+      {
+        "text": "17 Rue Pasteur, St.-Ouen",
+        "x": 147,
+        "y": 2075,
+        "width": 544,
+        "height": 55
+      },
+      {
+        "text": "a trainale",
+        "x": 537,
+        "y": 2152,
+        "width": 441,
+        "height": 107
+      },
+      {
+        "text": "Accepter",
+        "x": 467,
+        "y": 2274,
+        "width": 239,
+        "height": 58
+      },
+      {
+        "text": "es",
+        "x": 1129,
+        "y": 1354,
+        "width": 36,
+        "height": 29
+      },
+      {
+        "text": "D3",
+        "x": 1133,
+        "y": 2130,
+        "width": 33,
+        "height": 18
+      },
+      {
+        "text": "ve",
+        "x": 0,
+        "y": 2329,
+        "width": 44,
+        "height": 25
+      },
+      {
+        "text": "Université",
+        "x": 257,
+        "y": 2398,
+        "width": 184,
+        "height": 38
+      },
+      {
+        "text": "Paris-Saclay",
+        "x": 213,
+        "y": 2447,
+        "width": 228,
+        "height": 44
+      },
+      {
+        "text": "LOZÈR",
+        "x": 1070,
+        "y": 2414,
+        "width": 95,
+        "height": 29
+      },
+      {
+        "text": "ette",
+        "x": 0,
+        "y": 2506,
+        "width": 77,
+        "height": 22
+      }
+    ],
+    "expected": {
+      "platform": "BOLT",
+      "fare": 18.54,
+      "distanceKm": 18.5,
+      "pickupAddressContains": "Boulevard De La Libération",
+      "destinationAddressContains": "Rue Pasteur"
+    }
+  },
+  {
+    "name": "bolt-order-taken-by-another-driver",
+    "description": "scan_debug #35 : « Cette commande a été acceptée par un autre chauffeur ». Pas une offre : un montant (gains du jour), mais ni km ni min.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "Rue Arago",
+        "x": 957,
+        "y": -10,
+        "width": 169,
+        "height": 78
+      },
+      {
+        "text": "oll",
+        "x": 1010,
+        "y": 69,
+        "width": 73,
+        "height": 44
+      },
+      {
+        "text": "100)",
+        "x": 1095,
+        "y": 73,
+        "width": 97,
+        "height": 36
+      },
+      {
+        "text": "21:20",
+        "x": 93,
+        "y": 65,
+        "width": 141,
+        "height": 56
+      },
+      {
+        "text": "Mairie",
+        "x": 235,
+        "y": 73,
+        "width": 121,
+        "height": 65
+      },
+      {
+        "text": "H",
+        "x": 243,
+        "y": 467,
+        "width": 32,
+        "height": 40
+      },
+      {
+        "text": "Av. Youri Gagarine",
+        "x": 290,
+        "y": 233,
+        "width": 189,
+        "height": 309
+      },
+      {
+        "text": "Parc Frédéric",
+        "x": 649,
+        "y": 157,
+        "width": 239,
+        "height": 41
+      },
+      {
+        "text": "+ Curie",
+        "x": 742,
+        "y": 206,
+        "width": 129,
+        "height": 40
+      },
+      {
+        "text": "43,78 €",
+        "x": 543,
+        "y": 239,
+        "width": 202,
+        "height": 65
+      },
+      {
+        "text": "Aujourd'hui",
+        "x": 543,
+        "y": 303,
+        "width": 203,
+        "height": 43
+      },
+      {
+        "text": "Rue Camille Groult",
+        "x": 497,
+        "y": 348,
+        "width": 285,
+        "height": 136
+      },
+      {
+        "text": "My Best Tea -",
+        "x": 718,
+        "y": 536,
+        "width": 251,
+        "height": 41
+      },
+      {
+        "text": "Bubble Tea",
+        "x": 718,
+        "y": 588,
+        "width": 202,
+        "height": 37
+      },
+      {
+        "text": "Rue de Choisy",
+        "x": 1063,
+        "y": 458,
+        "width": 153,
+        "height": 255
+      },
+      {
+        "text": "ce",
+        "x": 0,
+        "y": 678,
+        "width": 44,
+        "height": 32
+      },
+      {
+        "text": "te",
+        "x": 0,
+        "y": 727,
+        "width": 36,
+        "height": 32
+      },
+      {
+        "text": "Rue Ampère",
+        "x": 977,
+        "y": 723,
+        "width": 95,
+        "height": 194
+      },
+      {
+        "text": "Av. Rabelais-",
+        "x": 286,
+        "y": 988,
+        "width": 85,
+        "height": 190
+      },
+      {
+        "text": "-Av. Rouget de Lisle",
+        "x": 641,
+        "y": 972,
+        "width": 170,
+        "height": 345
+      },
+      {
+        "text": "Rue Grétillat-",
+        "x": 897,
+        "y": 1003,
+        "width": 193,
+        "height": 136
+      },
+      {
+        "text": "Rue Anselme Rondenay",
+        "x": 923,
+        "y": 1182,
+        "width": 377,
+        "height": 282
+      },
+      {
+        "text": "Google",
+        "x": 18,
+        "y": 1429,
+        "width": 173,
+        "height": 57
+      },
+      {
+        "text": "v. Lemerle Vetter",
+        "x": -22,
+        "y": 1547,
+        "width": 267,
+        "height": 243
+      },
+      {
+        "text": "Rue Henri Matisse",
+        "x": 511,
+        "y": 1334,
+        "width": 213,
+        "height": 260
+      },
+      {
+        "text": "E-Guichet Carte Grise 94",
+        "x": 523,
+        "y": 1881,
+        "width": 454,
+        "height": 40
+      },
+      {
+        "text": "McDonald's",
+        "x": 872,
+        "y": 1978,
+        "width": 219,
+        "height": 41
+      },
+      {
+        "text": "44",
+        "x": 1119,
+        "y": 1971,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "text": "124 12",
+        "x": 888,
+        "y": 2238,
+        "width": 89,
+        "height": 37
+      },
+      {
+        "text": "Cette commande a été acceptée par un autre",
+        "x": 97,
+        "y": 2328,
+        "width": 993,
+        "height": 52
+      },
+      {
+        "text": "chauffeur",
+        "x": 93,
+        "y": 2396,
+        "width": 219,
+        "height": 50
+      },
+      {
+        "text": "Accueil",
+        "x": 146,
+        "y": 2653,
+        "width": 133,
+        "height": 36
+      },
+      {
+        "text": "Plus de revenus",
+        "x": 511,
+        "y": 2653,
+        "width": 267,
+        "height": 32
+      },
+      {
+        "text": "Aide",
+        "x": 1030,
+        "y": 2657,
+        "width": 81,
+        "height": 32
+      }
+    ],
+    "expected": null
+  },
+  {
+    "name": "bolt-poi-destination-under-strive-banner",
+    "description": "scan_debug #30 : l'offre Bolt #29 rescannée, sous le bandeau d'échec de Strive (« Analyse impossible / Réessayez avec une autre capture »). Lecture bonne ; l'échec venait du géocodage du lieu de destination.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "-Bois",
+        "x": 0,
+        "y": 394,
+        "width": 105,
+        "height": 40
+      },
+      {
+        "text": "Analyse impossible",
+        "x": 450,
+        "y": 150,
+        "width": 389,
+        "height": 49
+      },
+      {
+        "text": "Réessayez avec une autre capture",
+        "x": 316,
+        "y": 239,
+        "width": 645,
+        "height": 44
+      },
+      {
+        "text": "Rue Laennec",
+        "x": 692,
+        "y": 334,
+        "width": 120,
+        "height": 196
+      },
+      {
+        "text": "Rosny-sous-Bois",
+        "x": 93,
+        "y": 674,
+        "width": 365,
+        "height": 44
+      },
+      {
+        "text": "Rue Jules Guesde",
+        "x": 713,
+        "y": 613,
+        "width": 265,
+        "height": 142
+      },
+      {
+        "text": "17.1",
+        "x": 113,
+        "y": 983,
+        "width": 52,
+        "height": 32
+      },
+      {
+        "text": "Rue Claude Pernès",
+        "x": 301,
+        "y": 859,
+        "width": 271,
+        "height": 214
+      },
+      {
+        "text": "AL",
+        "x": 1135,
+        "y": 1052,
+        "width": 40,
+        "height": 48
+      },
+      {
+        "text": "1 des Fauvettes",
+        "x": 1144,
+        "y": 872,
+        "width": 153,
+        "height": 202
+      },
+      {
+        "text": "Av. Jean-Jaurès",
+        "x": 289,
+        "y": 1282,
+        "width": 115,
+        "height": 236
+      },
+      {
+        "text": "Rue du Général Leclerc.",
+        "x": 464,
+        "y": 1113,
+        "width": 274,
+        "height": 290
+      },
+      {
+        "text": "Neuilly-",
+        "x": 1127,
+        "y": 1385,
+        "width": 158,
+        "height": 44
+      },
+      {
+        "text": "18",
+        "x": 125,
+        "y": 1483,
+        "width": 36,
+        "height": 28
+      },
+      {
+        "text": "Google",
+        "x": 18,
+        "y": 1573,
+        "width": 173,
+        "height": 58
+      },
+      {
+        "text": "Rue Lavoisier",
+        "x": 588,
+        "y": 1556,
+        "width": 194,
+        "height": 49
+      },
+      {
+        "text": "® Bolt",
+        "x": 97,
+        "y": 1714,
+        "width": 166,
+        "height": 49
+      },
+      {
+        "text": "SEINE-SAIN",
+        "x": 311,
+        "y": 1594,
+        "width": 260,
+        "height": 83
+      },
+      {
+        "text": "• Carte",
+        "x": 316,
+        "y": 1714,
+        "width": 202,
+        "height": 53
+      },
+      {
+        "text": "10,34 € (net, TTC)",
+        "x": 76,
+        "y": 1825,
+        "width": 552,
+        "height": 103
+      },
+      {
+        "text": "Jade • 5.0 *",
+        "x": 105,
+        "y": 1981,
+        "width": 304,
+        "height": 71
+      },
+      {
+        "text": "8 min • 2.3 km",
+        "x": 133,
+        "y": 2101,
+        "width": 409,
+        "height": 61
+      },
+      {
+        "text": "10 Chemin Du Bel Air, Neuilly-Plaisance",
+        "x": 146,
+        "y": 2182,
+        "width": 872,
+        "height": 53
+      },
+      {
+        "text": "24 min • 14.3 km",
+        "x": 146,
+        "y": 2259,
+        "width": 462,
+        "height": 61
+      },
+      {
+        "text": "Parking, Cité des Sciences et de l'Industrie",
+        "x": 150,
+        "y": 2340,
+        "width": 941,
+        "height": 57
+      },
+      {
+        "text": "Répondre",
+        "x": 519,
+        "y": 2535,
+        "width": 251,
+        "height": 61
+      },
+      {
+        "text": "Av. a",
+        "x": 0,
+        "y": 2604,
+        "width": 68,
+        "height": 28
+      },
+      {
+        "text": "Fort de Nogent",
+        "x": 170,
+        "y": 2718,
+        "width": 275,
+        "height": 44
+      }
+    ],
+    "expected": {
+      "platform": "BOLT",
+      "fare": 10.34,
+      "distanceKm": 14.3,
+      "pickupAddressContains": "Chemin Du Bel Air",
+      "destinationAddressContains": "Cité des Sciences"
+    }
+  },
+  {
+    "name": "bolt-poi-destination-cite-des-sciences",
+    "description": "scan_debug #29 (route_unusable) : Bolt 10,34 €, destination « Parking, Cité des Sciences et de l'Industrie » — un lieu, que /geocode envoyait à Belfort.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "14:58 4",
+        "x": 97,
+        "y": 39,
+        "width": 199,
+        "height": 50
+      },
+      {
+        "text": "• Ma Banque",
+        "x": 36,
+        "y": 109,
+        "width": 215,
+        "height": 32
+      },
+      {
+        "text": "Bd Alsace-Lurraine",
+        "x": 227,
+        "y": 77,
+        "width": 275,
+        "height": 113
+      },
+      {
+        "text": "=",
+        "x": 892,
+        "y": 69,
+        "width": 40,
+        "height": 44
+      },
+      {
+        "text": "•ill",
+        "x": 1010,
+        "y": 77,
+        "width": 73,
+        "height": 40
+      },
+      {
+        "text": "MARCHE FRAIS",
+        "x": 758,
+        "y": 149,
+        "width": 292,
+        "height": 37
+      },
+      {
+        "text": "VILLEMO",
+        "x": 754,
+        "y": 198,
+        "width": 174,
+        "height": 37
+      },
+      {
+        "text": "424)",
+        "x": 1099,
+        "y": 73,
+        "width": 89,
+        "height": 36
+      },
+      {
+        "text": "X",
+        "x": 924,
+        "y": 247,
+        "width": 64,
+        "height": 56
+      },
+      {
+        "text": "Refuser",
+        "x": 1001,
+        "y": 255,
+        "width": 190,
+        "height": 45
+      },
+      {
+        "text": "-Bois",
+        "x": 0,
+        "y": 394,
+        "width": 105,
+        "height": 40
+      },
+      {
+        "text": "Rue Laënnec",
+        "x": 691,
+        "y": 330,
+        "width": 124,
+        "height": 200
+      },
+      {
+        "text": "Rosny-sous-Bois",
+        "x": 93,
+        "y": 674,
+        "width": 365,
+        "height": 44
+      },
+      {
+        "text": "Rue Jules Guesde",
+        "x": 711,
+        "y": 612,
+        "width": 266,
+        "height": 145
+      },
+      {
+        "text": "17.1",
+        "x": 113,
+        "y": 983,
+        "width": 52,
+        "height": 32
+      },
+      {
+        "text": "Rue Claude Pernès",
+        "x": 299,
+        "y": 857,
+        "width": 273,
+        "height": 216
+      },
+      {
+        "text": "AL",
+        "x": 1135,
+        "y": 1052,
+        "width": 40,
+        "height": 48
+      },
+      {
+        "text": "1 des Fauvettes",
+        "x": 1144,
+        "y": 872,
+        "width": 154,
+        "height": 201
+      },
+      {
+        "text": "Av. Jean-Jaurès",
+        "x": 289,
+        "y": 1282,
+        "width": 115,
+        "height": 236
+      },
+      {
+        "text": "Rue du Général Leclerc",
+        "x": 464,
+        "y": 1113,
+        "width": 274,
+        "height": 290
+      },
+      {
+        "text": "Neuilly-",
+        "x": 1127,
+        "y": 1385,
+        "width": 158,
+        "height": 44
+      },
+      {
+        "text": "18",
+        "x": 125,
+        "y": 1483,
+        "width": 36,
+        "height": 28
+      },
+      {
+        "text": "Google",
+        "x": 18,
+        "y": 1573,
+        "width": 173,
+        "height": 58
+      },
+      {
+        "text": "Rue Lavoisier",
+        "x": 588,
+        "y": 1556,
+        "width": 194,
+        "height": 49
+      },
+      {
+        "text": "® Bolt",
+        "x": 97,
+        "y": 1714,
+        "width": 166,
+        "height": 49
+      },
+      {
+        "text": "SEINE-SAIN",
+        "x": 311,
+        "y": 1594,
+        "width": 260,
+        "height": 83
+      },
+      {
+        "text": "• Carte",
+        "x": 316,
+        "y": 1714,
+        "width": 202,
+        "height": 53
+      },
+      {
+        "text": "10,34 € (net, TTC)",
+        "x": 76,
+        "y": 1825,
+        "width": 553,
+        "height": 108
+      },
+      {
+        "text": "Jade • 5.0 *",
+        "x": 105,
+        "y": 1987,
+        "width": 300,
+        "height": 61
+      },
+      {
+        "text": "8 min • 2.3 km",
+        "x": 133,
+        "y": 2101,
+        "width": 409,
+        "height": 61
+      },
+      {
+        "text": "10 Chemin Du Bel Air, Neuilly-Plaisance",
+        "x": 146,
+        "y": 2182,
+        "width": 872,
+        "height": 53
+      },
+      {
+        "text": "24 min • 14.3 km",
+        "x": 146,
+        "y": 2259,
+        "width": 462,
+        "height": 61
+      },
+      {
+        "text": "Parking, Cité des Sciences et de l'Industrie",
+        "x": 150,
+        "y": 2340,
+        "width": 941,
+        "height": 57
+      },
+      {
+        "text": "Répondre",
+        "x": 519,
+        "y": 2535,
+        "width": 251,
+        "height": 61
+      },
+      {
+        "text": "Av. a",
+        "x": 0,
+        "y": 2604,
+        "width": 68,
+        "height": 28
+      },
+      {
+        "text": "Fort de Nogent",
+        "x": 170,
+        "y": 2718,
+        "width": 275,
+        "height": 44
+      }
+    ],
+    "expected": {
+      "platform": "BOLT",
+      "fare": 10.34,
+      "distanceKm": 14.3,
+      "pickupAddressContains": "Chemin Du Bel Air",
+      "destinationAddressContains": "Cité des Sciences"
+    }
+  },
+  {
+    "name": "uber-urgent-banner-repeats-fare",
+    "description": "scan_debug #27 : Uber Exclusivité 14,30 €, avec en haut le bandeau « URGENT · UberX • 14,30 € » qui répète le prix — la zone des adresses partait de ce bandeau.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "12:27 4",
+        "x": 92,
+        "y": 63,
+        "width": 195,
+        "height": 51
+      },
+      {
+        "text": "aint-Denis",
+        "x": 0,
+        "y": 123,
+        "width": 252,
+        "height": 57
+      },
+      {
+        "text": "Uber",
+        "x": 73,
+        "y": 247,
+        "width": 97,
+        "height": 36
+      },
+      {
+        "text": "→",
+        "x": 77,
+        "y": 288,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "text": "URGENT",
+        "x": 214,
+        "y": 211,
+        "width": 162,
+        "height": 36
+      },
+      {
+        "text": "UberX • 14,30 €",
+        "x": 215,
+        "y": 259,
+        "width": 340,
+        "height": 49
+      },
+      {
+        "text": "3 min (à 0.4 km)",
+        "x": 214,
+        "y": 312,
+        "width": 336,
+        "height": 45
+      },
+      {
+        "text": "sous-boi",
+        "x": 1001,
+        "y": 73,
+        "width": 202,
+        "height": 56
+      },
+      {
+        "text": "S-DOIS",
+        "x": 1087,
+        "y": 97,
+        "width": 137,
+        "height": 32
+      },
+      {
+        "text": "maintenant",
+        "x": 1010,
+        "y": 215,
+        "width": 202,
+        "height": 32
+      },
+      {
+        "text": "Bobigny",
+        "x": 506,
+        "y": 429,
+        "width": 207,
+        "height": 59
+      },
+      {
+        "text": "Bondy",
+        "x": 811,
+        "y": 479,
+        "width": 166,
+        "height": 48
+      },
+      {
+        "text": "Gagn",
+        "x": 1156,
+        "y": 670,
+        "width": 129,
+        "height": 56
+      },
+      {
+        "text": "ris",
+        "x": 0,
+        "y": 930,
+        "width": 93,
+        "height": 52
+      },
+      {
+        "text": "Montreuil",
+        "x": 466,
+        "y": 916,
+        "width": 240,
+        "height": 52
+      },
+      {
+        "text": "13e",
+        "x": 0,
+        "y": 1158,
+        "width": 89,
+        "height": 44
+      },
+      {
+        "text": "dissement",
+        "x": 0,
+        "y": 1218,
+        "width": 247,
+        "height": 45
+      },
+      {
+        "text": "D120",
+        "x": 957,
+        "y": 1158,
+        "width": 77,
+        "height": 36
+      },
+      {
+        "text": "Champigny-sur-Marne",
+        "x": 709,
+        "y": 1337,
+        "width": 551,
+        "height": 52
+      },
+      {
+        "text": "Ivry-sur-Seine",
+        "x": 0,
+        "y": 1434,
+        "width": 344,
+        "height": 48
+      },
+      {
+        "text": "Ro",
+        "x": 0,
+        "y": 1727,
+        "width": 56,
+        "height": 48
+      },
+      {
+        "text": "ng",
+        "x": 0,
+        "y": 2031,
+        "width": 56,
+        "height": 44
+      },
+      {
+        "text": "ro",
+        "x": 0,
+        "y": 2308,
+        "width": 44,
+        "height": 32
+      },
+      {
+        "text": ": Uberx",
+        "x": 109,
+        "y": 1625,
+        "width": 247,
+        "height": 81
+      },
+      {
+        "text": "Exclusivité",
+        "x": 401,
+        "y": 1645,
+        "width": 243,
+        "height": 45
+      },
+      {
+        "text": "14,30 €",
+        "x": 84,
+        "y": 1750,
+        "width": 458,
+        "height": 152
+      },
+      {
+        "text": "* 4,84",
+        "x": 109,
+        "y": 1905,
+        "width": 186,
+        "height": 77
+      },
+      {
+        "text": "Montant net de frais",
+        "x": 361,
+        "y": 1922,
+        "width": 458,
+        "height": 44
+      },
+      {
+        "text": "2 min (0.4 km)",
+        "x": 158,
+        "y": 2080,
+        "width": 332,
+        "height": 44
+      },
+      {
+        "text": "13 Quartier Lieutenant Pichard, 93700,",
+        "x": 162,
+        "y": 2141,
+        "width": 872,
+        "height": 57
+      },
+      {
+        "text": "Drancy",
+        "x": 169,
+        "y": 2202,
+        "width": 160,
+        "height": 46
+      },
+      {
+        "text": "Course de 19.1 km",
+        "x": 166,
+        "y": 2271,
+        "width": 401,
+        "height": 40
+      },
+      {
+        "text": "4 Ave. Busteau, 94700, Maisons-Alfort",
+        "x": 166,
+        "y": 2328,
+        "width": 855,
+        "height": 57
+      },
+      {
+        "text": "er",
+        "x": 1229,
+        "y": 1987,
+        "width": 48,
+        "height": 36
+      },
+      {
+        "text": "Accepter",
+        "x": 523,
+        "y": 2490,
+        "width": 239,
+        "height": 61
+      },
+      {
+        "text": "ur-Orge",
+        "x": 0,
+        "y": 2665,
+        "width": 203,
+        "height": 54
+      },
+      {
+        "text": "Draveil",
+        "x": 311,
+        "y": 2664,
+        "width": 175,
+        "height": 43
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 14.3,
+      "distanceKm": 19.1,
+      "pickupAddressContains": "Lieutenant Pichard",
+      "destinationAddressContains": "Busteau"
+    }
+  },
+  {
+    "name": "bolt-poi-destination-austerlitz",
+    "description": "scan_debug #26 (route_unusable) : Bolt 12,84 €, destination « Cour Seine, Gare d'Austerlitz » — un lieu, que /geocode envoyait à Rouen.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "12.26-",
+        "x": 97,
+        "y": 20,
+        "width": 158,
+        "height": 89
+      },
+      {
+        "text": "Rue Anatole",
+        "x": -14,
+        "y": 91,
+        "width": 146,
+        "height": 146
+      },
+      {
+        "text": "=",
+        "x": 389,
+        "y": 69,
+        "width": 40,
+        "height": 44
+      },
+      {
+        "text": "(D115",
+        "x": 600,
+        "y": 430,
+        "width": 73,
+        "height": 32
+      },
+      {
+        "text": "LA MUETTE",
+        "x": 701,
+        "y": 576,
+        "width": 223,
+        "height": 42
+      },
+      {
+        "text": "Mémorial de la",
+        "x": 154,
+        "y": 694,
+        "width": 263,
+        "height": 45
+      },
+      {
+        "text": "Shoah de Drancy",
+        "x": 105,
+        "y": 743,
+        "width": 312,
+        "height": 48
+      },
+      {
+        "text": "Rue Jane Joye",
+        "x": 105,
+        "y": 875,
+        "width": 200,
+        "height": 180
+      },
+      {
+        "text": "Av. Jean Jaurès",
+        "x": 594,
+        "y": 875,
+        "width": 207,
+        "height": 178
+      },
+      {
+        "text": "Rue della Liberté",
+        "x": 389,
+        "y": 914,
+        "width": 211,
+        "height": 219
+      },
+      {
+        "text": "Rue RenélDeschamps",
+        "x": 463,
+        "y": 1190,
+        "width": 283,
+        "height": 236
+      },
+      {
+        "text": "Rue Henri Langlois-",
+        "x": 283,
+        "y": 1412,
+        "width": 260,
+        "height": 190
+      },
+      {
+        "text": "Google",
+        "x": 18,
+        "y": 1573,
+        "width": 177,
+        "height": 59
+      },
+      {
+        "text": "air",
+        "x": 0,
+        "y": 2162,
+        "width": 40,
+        "height": 36
+      },
+      {
+        "text": "® Bolt",
+        "x": 97,
+        "y": 1714,
+        "width": 166,
+        "height": 49
+      },
+      {
+        "text": "• Carte",
+        "x": 316,
+        "y": 1714,
+        "width": 202,
+        "height": 53
+      },
+      {
+        "text": "12,84 € (net, TTC)",
+        "x": 72,
+        "y": 1826,
+        "width": 556,
+        "height": 106
+      },
+      {
+        "text": "isma • 5.0*",
+        "x": 96,
+        "y": 1978,
+        "width": 310,
+        "height": 77
+      },
+      {
+        "text": "6 min • 2.1 km",
+        "x": 146,
+        "y": 2101,
+        "width": 381,
+        "height": 57
+      },
+      {
+        "text": "4 Rue Des Huats, Bobigny",
+        "x": 146,
+        "y": 2181,
+        "width": 580,
+        "height": 57
+      },
+      {
+        "text": "33 min • 18.3 km",
+        "x": 150,
+        "y": 2259,
+        "width": 454,
+        "height": 61
+      },
+      {
+        "text": "Cour Seine, Gare d'Austerlitz",
+        "x": 150,
+        "y": 2340,
+        "width": 636,
+        "height": 57
+      },
+      {
+        "text": "Répondre",
+        "x": 518,
+        "y": 2534,
+        "width": 252,
+        "height": 63
+      },
+      {
+        "text": "•Il",
+        "x": 1022,
+        "y": 65,
+        "width": 81,
+        "height": 52
+      },
+      {
+        "text": "664",
+        "x": 1099,
+        "y": 69,
+        "width": 105,
+        "height": 40
+      },
+      {
+        "text": "Refuser",
+        "x": 1005,
+        "y": 255,
+        "width": 186,
+        "height": 45
+      },
+      {
+        "text": "Av. Jean Jaurès",
+        "x": 993,
+        "y": 1233,
+        "width": 186,
+        "height": 203
+      },
+      {
+        "text": "elaune",
+        "x": 1117,
+        "y": 1557,
+        "width": 60,
+        "height": 108
+      }
+    ],
+    "expected": {
+      "platform": "BOLT",
+      "fare": 12.84,
+      "distanceKm": 18.3,
+      "pickupAddressContains": "Rue Des Huats",
+      "destinationAddressContains": "Austerlitz"
+    }
+  },
+  {
+    "name": "uberxl-english-1km-short-trip",
+    "description": "scan_debug #100 (iOS 1.0.5, Uber en anglais, Van/XL dans Paris centre) : UberXL Exclusive « €12,79 » pour « 1.0 km trip », soit 12,8 €/km. L'ancien plafond de 12 €/km rejetait l'offre : le chauffeur a renvoyé cette même capture 29 fois les 15-16/10/2026. Prix devant le montant, note précédée de « $ » (« $ 4.94 »).",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "20:19",
+        "x": 88,
+        "y": 63,
+        "width": 175,
+        "height": 51
+      },
+      {
+        "text": "InterContinental",
+        "x": 52,
+        "y": 186,
+        "width": 344,
+        "height": 44
+      },
+      {
+        "text": "Paris!",
+        "x": 81,
+        "y": 239,
+        "width": 133,
+        "height": 44
+      },
+      {
+        "text": "Hôtel",
+        "x": 669,
+        "y": 142,
+        "width": 117,
+        "height": 44
+      },
+      {
+        "text": "56",
+        "x": 1103,
+        "y": 73,
+        "width": 60,
+        "height": 36
+      },
+      {
+        "text": "O'Sullivans (",
+        "x": 1042,
+        "y": 128,
+        "width": 244,
+        "height": 48
+      },
+      {
+        "text": "& Bar",
+        "x": 1151,
+        "y": 185,
+        "width": 118,
+        "height": 43
+      },
+      {
+        "text": "49)",
+        "x": 924,
+        "y": 337,
+        "width": 56,
+        "height": 44
+      },
+      {
+        "text": "Bianca",
+        "x": 880,
+        "y": 414,
+        "width": 141,
+        "height": 40
+      },
+      {
+        "text": "PLACE",
+        "x": 28,
+        "y": 539,
+        "width": 194,
+        "height": 49
+      },
+      {
+        "text": "/ENDÔME",
+        "x": 0,
+        "y": 589,
+        "width": 275,
+        "height": 56
+      },
+      {
+        "text": "49",
+        "x": 896,
+        "y": 560,
+        "width": 52,
+        "height": 48
+      },
+      {
+        "text": "Daroco",
+        "x": 847,
+        "y": 641,
+        "width": 150,
+        "height": 41
+      },
+      {
+        "text": "PALAIS-ROYAL",
+        "x": 409,
+        "y": 1040,
+        "width": 442,
+        "height": 56
+      },
+      {
+        "text": "ies Garden",
+        "x": 0,
+        "y": 1111,
+        "width": 215,
+        "height": 43
+      },
+      {
+        "text": "RUE DU LOUVRE",
+        "x": 1040,
+        "y": 928,
+        "width": 164,
+        "height": 356
+      },
+      {
+        "text": "Le",
+        "x": 1225,
+        "y": 946,
+        "width": 60,
+        "height": 36
+      },
+      {
+        "text": "SAINT-GERM",
+        "x": 896,
+        "y": 1446,
+        "width": 389,
+        "height": 48
+      },
+      {
+        "text": "L'AUXERRO",
+        "x": 941,
+        "y": 1495,
+        "width": 336,
+        "height": 52
+      },
+      {
+        "text": "Restaurant la",
+        "x": 0,
+        "y": 1568,
+        "width": 279,
+        "height": 40
+      },
+      {
+        "text": "Fre",
+        "x": 0,
+        "y": 1621,
+        "width": 73,
+        "height": 40
+      },
+      {
+        "text": "UberXL",
+        "x": 190,
+        "y": 1697,
+        "width": 178,
+        "height": 46
+      },
+      {
+        "text": "Exclusive",
+        "x": 434,
+        "y": 1698,
+        "width": 215,
+        "height": 45
+      },
+      {
+        "text": "€12,79",
+        "x": 85,
+        "y": 1808,
+        "width": 434,
+        "height": 146
+      },
+      {
+        "text": "$ 4.94",
+        "x": 113,
+        "y": 1966,
+        "width": 182,
+        "height": 65
+      },
+      {
+        "text": "After fees",
+        "x": 360,
+        "y": 1977,
+        "width": 227,
+        "height": 47
+      },
+      {
+        "text": "X",
+        "x": 1083,
+        "y": 1714,
+        "width": 64,
+        "height": 65
+      },
+      {
+        "text": "1 min (0.1 km)",
+        "x": 162,
+        "y": 2137,
+        "width": 324,
+        "height": 44
+      },
+      {
+        "text": "5 rue de la Paix, 75002, Paris",
+        "x": 166,
+        "y": 2194,
+        "width": 645,
+        "height": 56
+      },
+      {
+        "text": "1.0 km trip",
+        "x": 162,
+        "y": 2263,
+        "width": 251,
+        "height": 57
+      },
+      {
+        "text": "Pl. André Malraux, 75001, Paris",
+        "x": 166,
+        "y": 2328,
+        "width": 701,
+        "height": 57
+      },
+      {
+        "text": "Accept",
+        "x": 547,
+        "y": 2490,
+        "width": 194,
+        "height": 57
+      },
+      {
+        "text": "Hôtel de l'Abbaye",
+        "x": 60,
+        "y": 2690,
+        "width": 356,
+        "height": 53
+      },
+      {
+        "text": "ODÉON",
+        "x": 750,
+        "y": 2714,
+        "width": 231,
+        "height": 52
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 12.79,
+      "distanceKm": 1.0,
+      "durationMin": null,
+      "pickupAddressContains": "5 rue de la Paix",
+      "destinationAddressContains": "André Malraux",
+      "pickupDistanceKm": 0.1,
+      "pickupDurationMin": 1
+    }
+  },
+  {
+    "name": "uber-van-english-short-trip-19-per-km",
+    "description": "scan_debug #103 (iOS 1.0.5, Uber en anglais) : Van Exclusive « €31,34° » pour « 1.6 km trip », soit 19,6 €/km, la course courte la plus chère du lot. Rejetée par l'ancien plafond de 12 €/km alors que tout était lu juste.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "ONGL",
+        "x": 762,
+        "y": 0,
+        "width": 133,
+        "height": 20
+      },
+      {
+        "text": "18:19 4",
+        "x": 93,
+        "y": 40,
+        "width": 207,
+        "height": 49
+      },
+      {
+        "text": "• Waze",
+        "x": 36,
+        "y": 109,
+        "width": 125,
+        "height": 29
+      },
+      {
+        "text": "o0l",
+        "x": 1010,
+        "y": 81,
+        "width": 56,
+        "height": 32
+      },
+      {
+        "text": "135+",
+        "x": 1079,
+        "y": 73,
+        "width": 105,
+        "height": 36
+      },
+      {
+        "text": "E",
+        "x": 0,
+        "y": 243,
+        "width": 28,
+        "height": 36
+      },
+      {
+        "text": "VIVIENNE -",
+        "x": 730,
+        "y": 308,
+        "width": 328,
+        "height": 40
+      },
+      {
+        "text": "GAILLON",
+        "x": 762,
+        "y": 364,
+        "width": 260,
+        "height": 47
+      },
+      {
+        "text": "iddha Bar",
+        "x": 0,
+        "y": 474,
+        "width": 199,
+        "height": 42
+      },
+      {
+        "text": "ACE",
+        "x": 498,
+        "y": 462,
+        "width": 118,
+        "height": 41
+      },
+      {
+        "text": "DÔME",
+        "x": 494,
+        "y": 516,
+        "width": 174,
+        "height": 48
+      },
+      {
+        "text": "ace de la",
+        "x": 0,
+        "y": 701,
+        "width": 178,
+        "height": 38
+      },
+      {
+        "text": "oncora",
+        "x": 0,
+        "y": 759,
+        "width": 146,
+        "height": 37
+      },
+      {
+        "text": "PALAIS ROYAL",
+        "x": 673,
+        "y": 836,
+        "width": 434,
+        "height": 40
+      },
+      {
+        "text": "Tuileries Garden",
+        "x": 288,
+        "y": 893,
+        "width": 356,
+        "height": 49
+      },
+      {
+        "text": "Les Antiquaires",
+        "x": 348,
+        "y": 1296,
+        "width": 316,
+        "height": 49
+      },
+      {
+        "text": "MONNAI",
+        "x": 1030,
+        "y": 1552,
+        "width": 247,
+        "height": 40
+      },
+      {
+        "text": "Van",
+        "x": 186,
+        "y": 1702,
+        "width": 93,
+        "height": 40
+      },
+      {
+        "text": "Exclusive",
+        "x": 348,
+        "y": 1702,
+        "width": 219,
+        "height": 40
+      },
+      {
+        "text": "€31,34°",
+        "x": 88,
+        "y": 1806,
+        "width": 495,
+        "height": 153
+      },
+      {
+        "text": "* 4.84",
+        "x": 113,
+        "y": 1966,
+        "width": 182,
+        "height": 65
+      },
+      {
+        "text": "After fees",
+        "x": 360,
+        "y": 1977,
+        "width": 231,
+        "height": 47
+      },
+      {
+        "text": "X",
+        "x": 1087,
+        "y": 1714,
+        "width": 60,
+        "height": 65
+      },
+      {
+        "text": "3 min (0.6 km)",
+        "x": 166,
+        "y": 2137,
+        "width": 328,
+        "height": 44
+      },
+      {
+        "text": "1 rue des Saints-Pères, 75006, Paris",
+        "x": 162,
+        "y": 2194,
+        "width": 819,
+        "height": 56
+      },
+      {
+        "text": "1.6 km trip",
+        "x": 165,
+        "y": 2265,
+        "width": 240,
+        "height": 56
+      },
+      {
+        "text": "6 rue de Castiglione, 75001, Paris",
+        "x": 166,
+        "y": 2328,
+        "width": 754,
+        "height": 57
+      },
+      {
+        "text": "Accept",
+        "x": 547,
+        "y": 2489,
+        "width": 195,
+        "height": 59
+      },
+      {
+        "text": "VAL-D",
+        "x": 1107,
+        "y": 2665,
+        "width": 178,
+        "height": 44
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 31.34,
+      "distanceKm": 1.6,
+      "durationMin": null,
+      "pickupAddressContains": "Saints-Pères",
+      "destinationAddressContains": "Castiglione",
+      "pickupDistanceKm": 0.6,
+      "pickupDurationMin": 3
+    }
+  },
+  {
+    "name": "uber-van-french-short-trip-no-brand",
+    "description": "scan_debug #109 (iOS 1.0.5, Uber en français) : Van Exclusivité 15,75 € pour « Course de 1.2 km » (13,1 €/km), sans le mot « Uber » à l'écran. Rejetée en production (offer_unreadable) par l'ancien plafond de 12 €/km.",
+    "screenHeight": 2796,
+    "blocks": [
+      {
+        "text": "12:31 4",
+        "x": 93,
+        "y": 63,
+        "width": 207,
+        "height": 50
+      },
+      {
+        "text": "he",
+        "x": 0,
+        "y": 158,
+        "width": 64,
+        "height": 52
+      },
+      {
+        "text": "RUE WASHIN",
+        "x": 411,
+        "y": 117,
+        "width": 229,
+        "height": 229
+      },
+      {
+        "text": "Clinique du Ror",
+        "x": 973,
+        "y": 438,
+        "width": 312,
+        "height": 49
+      },
+      {
+        "text": "Point des",
+        "x": 1050,
+        "y": 495,
+        "width": 190,
+        "height": 41
+      },
+      {
+        "text": "Champs Elysee",
+        "x": 977,
+        "y": 548,
+        "width": 308,
+        "height": 48
+      },
+      {
+        "text": "Five Guys",
+        "x": 672,
+        "y": 645,
+        "width": 204,
+        "height": 49
+      },
+      {
+        "text": "le Bize",
+        "x": 0,
+        "y": 999,
+        "width": 129,
+        "height": 40
+      },
+      {
+        "text": "/ENUE MARCEAU",
+        "x": 161,
+        "y": 702,
+        "width": 128,
+        "height": 363
+      },
+      {
+        "text": "TRI",
+        "x": 920,
+        "y": 804,
+        "width": 89,
+        "height": 36
+      },
+      {
+        "text": "Dior La Galerie",
+        "x": 770,
+        "y": 1056,
+        "width": 300,
+        "height": 44
+      },
+      {
+        "text": "Grar",
+        "x": 1196,
+        "y": 1154,
+        "width": 89,
+        "height": 40
+      },
+      {
+        "text": "Gigi P",
+        "x": 482,
+        "y": 1202,
+        "width": 125,
+        "height": 53
+      },
+      {
+        "text": "Alma",
+        "x": 304,
+        "y": 1353,
+        "width": 109,
+        "height": 44
+      },
+      {
+        "text": "Bateaux Mouches",
+        "x": 612,
+        "y": 1425,
+        "width": 365,
+        "height": 45
+      },
+      {
+        "text": "QUAI I",
+        "x": 1122,
+        "y": 1512,
+        "width": 170,
+        "height": 71
+      },
+      {
+        "text": "MIRAC",
+        "x": 154,
+        "y": 1576,
+        "width": 158,
+        "height": 56
+      },
+      {
+        "text": "Van",
+        "x": 186,
+        "y": 1702,
+        "width": 93,
+        "height": 44
+      },
+      {
+        "text": "Exclusivité",
+        "x": 348,
+        "y": 1698,
+        "width": 251,
+        "height": 45
+      },
+      {
+        "text": "15,75 €",
+        "x": 88,
+        "y": 1807,
+        "width": 446,
+        "height": 148
+      },
+      {
+        "text": "* 4,77",
+        "x": 113,
+        "y": 1970,
+        "width": 182,
+        "height": 65
+      },
+      {
+        "text": "Montant net de frais",
+        "x": 361,
+        "y": 1979,
+        "width": 470,
+        "height": 44
+      },
+      {
+        "text": "X",
+        "x": 1087,
+        "y": 1714,
+        "width": 64,
+        "height": 65
+      },
+      {
+        "text": "4 min (0.8 km)",
+        "x": 162,
+        "y": 2137,
+        "width": 336,
+        "height": 44
+      },
+      {
+        "text": "57 Av. Montaigne, 75008, Paris",
+        "x": 166,
+        "y": 2194,
+        "width": 701,
+        "height": 56
+      },
+      {
+        "text": "Course de 1.2 km",
+        "x": 166,
+        "y": 2271,
+        "width": 385,
+        "height": 40
+      },
+      {
+        "text": "18 Rue Clément Marot, 75008, Paris",
+        "x": 162,
+        "y": 2328,
+        "width": 819,
+        "height": 57
+      },
+      {
+        "text": "Accepter",
+        "x": 523,
+        "y": 2490,
+        "width": 243,
+        "height": 57
+      },
+      {
+        "text": "Le Tourville AVENUE DE TO",
+        "x": 709,
+        "y": 2637,
+        "width": 571,
+        "height": 52
+      },
+      {
+        "text": "OFFRE",
+        "x": 561,
+        "y": 2672,
+        "width": 148,
+        "height": 148
+      }
+    ],
+    "expected": {
+      "platform": "UBER",
+      "fare": 15.75,
+      "distanceKm": 1.2,
+      "durationMin": null,
+      "pickupAddressContains": "57 Av. Montaigne",
+      "destinationAddressContains": "Clément Marot",
+      "pickupDistanceKm": 0.8,
+      "pickupDurationMin": 4
+    }
+  },
+  {
+    "name": "strive-own-verdict-notification-not-an-offer",
+    "description": "scan_debug #110 (iOS 1.0.6, Bolt) : notre propre notification de verdict (« BOLT · 13,76€ · ❌ », « 24 €/h · 0,77€/km · 34min · 17,9km », « Carte masquée ») restée à l'écran par-dessus l'accueil de Bolt, sans offre. Elle était lue comme une course Bolt à 13,76 € puis échouait en no_addresses. La notification finit à 17 % de la hauteur : elle tombe dans le haut d'écran coupé.",
+    "screenHeight": 2868,
+    "blocks": [
+      {
+        "text": "R",
+        "x": 0,
+        "y": 212,
+        "width": 24,
+        "height": 33
+      },
+      {
+        "text": "La Frette-cur-Seine",
+        "x": 353,
+        "y": 7,
+        "width": 508,
+        "height": 54
+      },
+      {
+        "text": "12:58 4",
+        "x": 99,
+        "y": 49,
+        "width": 216,
+        "height": 55
+      },
+      {
+        "text": "• Waze",
+        "x": 37,
+        "y": 120,
+        "width": 125,
+        "height": 26
+      },
+      {
+        "text": "•ll 4G 804",
+        "x": 993,
+        "y": 78,
+        "width": 248,
+        "height": 48
+      },
+      {
+        "text": "=",
+        "x": 79,
+        "y": 312,
+        "width": 83,
+        "height": 87
+      },
+      {
+        "text": "URGENT",
+        "x": 216,
+        "y": 220,
+        "width": 191,
+        "height": 42
+      },
+      {
+        "text": "maintenant",
+        "x": 995,
+        "y": 229,
+        "width": 249,
+        "height": 41
+      },
+      {
+        "text": "BOLT • 13,76€ • X",
+        "x": 216,
+        "y": 282,
+        "width": 445,
+        "height": 58
+      },
+      {
+        "text": "24 €/h • 0,77€/km • 34min • 17,9km",
+        "x": 212,
+        "y": 358,
+        "width": 803,
+        "height": 58
+      },
+      {
+        "text": "Carte masquée - session toujours active...",
+        "x": 212,
+        "y": 428,
+        "width": 1024,
+        "height": 54
+      },
+      {
+        "text": "Av. Eglé",
+        "x": 203,
+        "y": 565,
+        "width": 160,
+        "height": 166
+      },
+      {
+        "text": "Av. Molière",
+        "x": 217,
+        "y": 769,
+        "width": 200,
+        "height": 206
+      },
+      {
+        "text": "VAL-D'OISE",
+        "x": 565,
+        "y": 583,
+        "width": 155,
+        "height": 319
+      },
+      {
+        "text": "ZI",
+        "x": 1203,
+        "y": 887,
+        "width": 74,
+        "height": 66
+      },
+      {
+        "text": "ite",
+        "x": 0,
+        "y": 1046,
+        "width": 62,
+        "height": 41
+      },
+      {
+        "text": "VAL-D'OISE",
+        "x": 914,
+        "y": 872,
+        "width": 314,
+        "height": 182
+      },
+      {
+        "text": "YVELINES",
+        "x": 906,
+        "y": 942,
+        "width": 274,
+        "height": 166
+      },
+      {
+        "text": "LA CROIX",
+        "x": 557,
+        "y": 1140,
+        "width": 229,
+        "height": 45
+      },
+      {
+        "text": "MALLARD",
+        "x": 557,
+        "y": 1191,
+        "width": 229,
+        "height": 43
+      },
+      {
+        "text": "Sartrouville",
+        "x": 37,
+        "y": 1236,
+        "width": 300,
+        "height": 57
+      },
+      {
+        "text": "Rue Turgot",
+        "x": 152,
+        "y": 1390,
+        "width": 216,
+        "height": 208
+      },
+      {
+        "text": "Le Cap O",
+        "x": 0,
+        "y": 1686,
+        "width": 259,
+        "height": 73
+      },
+      {
+        "text": "es",
+        "x": 0,
+        "y": 2284,
+        "width": 58,
+        "height": 37
+      },
+      {
+        "text": "G",
+        "x": 16,
+        "y": 2346,
+        "width": 49,
+        "height": 54
+      },
+      {
+        "text": "Rue Desaix",
+        "x": 807,
+        "y": 1464,
+        "width": 149,
+        "height": 231
+      },
+      {
+        "text": "D308",
+        "x": 715,
+        "y": 1603,
+        "width": 104,
+        "height": 40
+      },
+      {
+        "text": "Houilles",
+        "x": 711,
+        "y": 1687,
+        "width": 212,
+        "height": 56
+      },
+      {
+        "text": "RER (",
+        "x": 699,
+        "y": 1912,
+        "width": 49,
+        "height": 38
+      },
+      {
+        "text": "CARRIÈRES",
+        "x": 562,
+        "y": 2012,
+        "width": 270,
+        "height": 51
+      },
+      {
+        "text": "Lidi-C",
+        "x": 499,
+        "y": 2138,
+        "width": 166,
+        "height": 58
+      },
+      {
+        "text": "Rue Paul Doumer",
+        "x": 762,
+        "y": 1959,
+        "width": 280,
+        "height": 297
+      },
+      {
+        "text": "Se déconnecter",
+        "x": 474,
+        "y": 2301,
+        "width": 366,
+        "height": 46
+      },
+      {
+        "text": "Av. J",
+        "x": 1220,
+        "y": 1237,
+        "width": 91,
+        "height": 46
+      },
+      {
+        "text": "AV. Gabriel:",
+        "x": 1173,
+        "y": 1409,
+        "width": 165,
+        "height": 216
+      },
+      {
+        "text": "B",
+        "x": 1282,
+        "y": 1738,
+        "width": 33,
+        "height": 41
+      },
+      {
+        "text": "Pont de Be",
+        "x": 1049,
+        "y": 1866,
+        "width": 262,
+        "height": 47
+      },
+      {
+        "text": "Jnive",
+        "x": 1032,
+        "y": 2355,
+        "width": 137,
+        "height": 45
+      },
+      {
+        "text": "Accueil",
+        "x": 157,
+        "y": 2725,
+        "width": 129,
+        "height": 35
+      },
+      {
+        "text": "Plus de revenus",
+        "x": 524,
+        "y": 2726,
+        "width": 270,
+        "height": 34
+      },
+      {
+        "text": "Aide",
+        "x": 1053,
+        "y": 2730,
+        "width": 83,
+        "height": 33
+      }
+    ],
+    "expected": null
+  }
+]

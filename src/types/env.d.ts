@@ -7,4 +7,5 @@ declare module '@env' {
   export const SENTRY_DSN: string;
   export const GOOGLE_WEB_CLIENT_ID: string;
   export const GOOGLE_IOS_CLIENT_ID: string;
+  export const MAPBOX_APIKEY: string;
 }

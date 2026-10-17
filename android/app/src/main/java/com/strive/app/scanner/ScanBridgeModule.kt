@@ -463,6 +463,11 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 // fixture, donc un cas de non-régression pour les trois parsers.
                 o.optString("blocks").takeIf { it.isNotEmpty() }?.let { putString("blocks", it) }
                 o.optInt("screenHeight", 0).takeIf { it > 0 }?.let { putInt("screenHeight", it) }
+                // Ce que le parser avait lu avant l'échec (adresses envoyées à TomTom…).
+                o.optString("pickup").takeIf { it.isNotEmpty() }?.let { putString("pickup", it) }
+                o.optString("destination").takeIf { it.isNotEmpty() }?.let { putString("destination", it) }
+                if (o.has("fare")) putDouble("fare", o.optDouble("fare", 0.0))
+                if (o.has("distanceKm")) putDouble("distanceKm", o.optDouble("distanceKm", 0.0))
             })
         }
     }
@@ -758,9 +763,13 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             surface: String = "bubble",
             blocks: String? = null,
             screenHeight: Int = 0,
+            parsed: OcrParser.ScanResult? = null,
         ) {
             val occurredAt = System.currentTimeMillis() / 1000.0
             val keptBlocks = blocks?.takeIf { it.length <= 96_000 }
+            // Ce que le parser avait lu (adresses envoyées à TomTom…) : seulement
+            // avec les blocs — même contenu personnel, même table `scan_debug`.
+            val trace = parsed?.takeIf { keptBlocks != null }
             val map = Arguments.createMap().apply {
                 putString("reason", reason)
                 putString("surface", surface)
@@ -769,6 +778,12 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                 putDouble("occurredAt", occurredAt)
                 if (keptBlocks != null) putString("blocks", keptBlocks)
                 if (keptBlocks != null && screenHeight > 0) putInt("screenHeight", screenHeight)
+                if (trace != null) {
+                    trace.pickupAddress?.let { putString("pickup", it) }
+                    trace.destinationAddress?.let { putString("destination", it) }
+                    putDouble("fare", trace.fare)
+                    putDouble("distanceKm", trace.distanceKm)
+                }
             }
             // Même règle que les résultats : on ne bufferise QUE si le JS n'a pas
             // pu recevoir l'événement, sinon la vidange le rejouerait en double.
@@ -785,6 +800,12 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
                     if (keptBlocks != null) {
                         put("blocks", keptBlocks)
                         if (screenHeight > 0) put("screenHeight", screenHeight)
+                    }
+                    if (trace != null) {
+                        trace.pickupAddress?.let { put("pickup", it) }
+                        trace.destinationAddress?.let { put("destination", it) }
+                        put("fare", trace.fare)
+                        put("distanceKm", trace.distanceKm)
                     }
                 })
                 val trimmed = if (arr.length() > FAILS_MAX) {

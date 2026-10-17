@@ -471,24 +471,14 @@ class FloatingBubbleService : Service() {
         recognizer.process(InputImage.fromBitmap(bitmapForOcr, 0))
             .addOnSuccessListener { visionText ->
                 ocrBitmap?.recycle()
-                // Offre dans une langue que l'app ne parle pas : refusée AVANT le
-                // parse, même s'il aurait abouti — mêmes raisons qu'iOS (cf.
-                // ScanProcessor.process). Les blocs ne partent pas en base ;
-                // `detail` porte la langue du téléphone.
-                val lines = visionText.textBlocks.flatMap { b -> b.lines.map { it.text } }
-                if (OcrParser.looksLikeRideOffer(visionText.text) && OcrParser.isUnsupportedLanguage(lines)) {
-                    fullBitmap.recycle()
-                    onUnsupportedLanguage()
-                    ScanBridgeModule.emitScanFailure(
-                        this, "unsupported_language",
-                        android.content.res.Resources.getSystem().configuration.locales[0].toLanguageTag(),
-                    )
-                    ScanBridgeModule.emitScanFailed()
-                    scanInProgress = false
-                    return@addOnSuccessListener
-                }
-                val result = OcrParser.parse(visionText, w, h, fullBitmap)
+                // Pré-filtre sous la même bande que le parser : la Live Activity
+                // de Strive en haut faisait passer un journal d'appels pour une
+                // offre, et son OCR partait dans scan_debug (#66). Mirror iOS.
+                val visible = OcrParser.belowTopCut(visionText, h)
+                val visibleText = visible.joinToString("\n") { it.text }
+                val lines = visible.flatMap { b -> b.lines.map { it.text } }
                 val debugBlocks = OcrParser.dumpBlocks(visionText)
+                val result = OcrParser.parse(visionText, w, h, fullBitmap)
                 if (result != null) {
                     val base64 = GeminiVisionService.encodeForBridge(fullBitmap)
                     fullBitmap.recycle()
@@ -502,24 +492,52 @@ class FloatingBubbleService : Service() {
                     // scan_debug côté JS quand une adresse manque.
                     resolveTomTomAndEmit(result, base64, debugBlocks, h)
                     scanInProgress = false
-                } else if (OcrParser.looksLikeRideOffer(visionText.text)) {
+                } else if (OcrParser.looksLikeRideOffer(visibleText) && OcrParser.isUnsupportedLanguage(lines)) {
+                    // LA LANGUE N'EXPLIQUE QU'UN ÉCHEC, ELLE N'EN PROVOQUE AUCUN.
+                    // Mirror iOS (ScanProcessor.process) : l'offre étrangère était
+                    // refusée AVANT le parse, alors que le parser lit montants, km
+                    // et min — que le roumain garde — et que les adresses restent
+                    // françaises. Seul un échec sur un écran aux lettres étrangères
+                    // reçoit la consigne. `detail` : langue du téléphone, lettres
+                    // vues, étape du parser. Les blocs partent avec.
+                    fullBitmap.recycle()
+                    onUnsupportedLanguage()
+                    val phone = android.content.res.Resources.getSystem().configuration.locales[0].toLanguageTag()
+                    val step = OcrParser.lastFailure?.let { " · $it" } ?: ""
+                    ScanBridgeModule.emitScanFailure(
+                        this, "unsupported_language",
+                        "$phone ${OcrParser.foreignLetters(lines)}$step",
+                        blocks = debugBlocks, screenHeight = h,
+                    )
+                    ScanBridgeModule.emitScanFailed()
+                    scanInProgress = false
+                } else if (OcrParser.looksLikeRideOffer(visibleText)) {
                     // Les blocs partent avec : c'est un écran d'offre que le parser
                     // local n'a pas su lire, donc exactement la fixture qui manque.
-                    failUnreadable(fullBitmap, debugBlocks, h)
+                    // Le détail dit à quelle étape il a renoncé.
+                    failUnreadable(fullBitmap, debugBlocks, h, detail = OcrParser.lastFailure)
                 } else {
                     // Pré-filtre anti-pub : du texte a été lu mais pas d'offre (un
                     // montant ET une distance ou une durée) → « pas une offre ».
-                    // Mirror iOS (ScanProcessor.lastScanMayBeRide).
+                    // Mirror iOS (ScanProcessor.lastScanMayBeRide). Rien lu du
+                    // tout, c'est un OCR vide, pas un écran sans offre.
                     fullBitmap.recycle()
                     onNotARide()
-                    ScanBridgeModule.emitScanFailure(this, "not_a_ride")
+                    if (visionText.textBlocks.isEmpty()) {
+                        ScanBridgeModule.emitScanFailure(this, "ocr_empty")
+                    } else {
+                        ScanBridgeModule.emitScanFailure(this, "not_a_ride", OcrParser.lastFailure)
+                    }
                     ScanBridgeModule.emitScanFailed()
                     scanInProgress = false
                 }
             }
-            .addOnFailureListener {
+            .addOnFailureListener { e ->
                 ocrBitmap?.recycle()
-                failUnreadable(fullBitmap)
+                failUnreadable(
+                    fullBitmap, reason = "ocr_empty",
+                    detail = "mlkit_error ${e.javaClass.simpleName}",
+                )
             }
     }
 
@@ -529,19 +547,22 @@ class FloatingBubbleService : Service() {
      *  reste dans le binaire pour le jeton de session et l'encodage d'image, mais
      *  `analyze` n'est plus appelé nulle part.
      *
-     *  Le motif reste `gemini_ko` — le vocabulaire de `log_scan_failure` est fermé,
-     *  et c'est toujours « les règles ont calé sur un écran qui ressemblait à une
-     *  offre ». `debugBlocks` / `screenHeight` partent avec : c'est exactement la
-     *  fixture qui manque au parser. Ils sont nuls quand l'OCR lui-même a échoué. */
+     *  Motif `offer_unreadable` (ex-`gemini_ko`, que le RPC traduit encore pour
+     *  les anciens builds) : les règles ont calé sur un écran qui ressemblait à
+     *  une offre, `detail` dit à quelle étape. `ocr_empty` quand c'est l'OCR
+     *  lui-même qui a échoué. `debugBlocks` / `screenHeight` partent avec : c'est
+     *  exactement la fixture qui manque au parser. Nuls quand l'OCR a échoué. */
     private fun failUnreadable(
         bitmap: Bitmap,
         debugBlocks: String? = null,
         screenHeight: Int = 0,
+        reason: String = "offer_unreadable",
+        detail: String? = null,
     ) {
         bitmap.recycle()
         onScanError()
         ScanBridgeModule.emitScanFailure(
-            this, "gemini_ko", "no_fallback",
+            this, reason, detail,
             blocks = debugBlocks, screenHeight = screenHeight,
         )
         ScanBridgeModule.emitScanFailed()
@@ -662,26 +683,36 @@ class FloatingBubbleService : Service() {
             refundDeviceScanCount(this)
             mainHandler.post { showErrorState(network) }
             // Le motif part en base, comme sur iOS : sans lui, un échec
-            // d'itinéraire Android ne se compterait nulle part.
+            // d'itinéraire Android ne se compterait nulle part. Une adresse
+            // manquante est un échec de LECTURE, pas d'itinéraire.
+            val missing = listOfNotNull(
+                if (pickup.isEmpty()) "no_pickup" else null,
+                if (dest.isEmpty()) "no_dest" else null,
+            ).joinToString(" ")
             ScanBridgeModule.emitScanFailure(
                 this,
-                if (network) "route_no_key" else "route_unusable",
-                if (network) "no_key" else "missing_addresses",
+                if (network) "route_no_key" else "no_addresses",
+                if (network) null else "$missing platform=${ocr.platform.name}",
                 platform = ocr.platform.name,
                 blocks = debugBlocks, screenHeight = screenHeight,
+                parsed = ocr,
             )
             ScanBridgeModule.emitScanFailed()
             return
         }
 
-        TomTomService.calculateRoute(pickup, dest) { outcome ->
+        TomTomService.calculateRoute(pickup, dest, screenDistanceKm = ocr.distanceKm) { outcome ->
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom outcome=$outcome (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
             val route = (outcome as? TomTomService.RouteOutcome.Ok)?.route
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
             val measured = route != null
-                && route.distanceKm in 0.3..500.0
-                && route.durationMin <= 300
-                && ratio in 0.2..12.0
+                // Plafonds larges : une course longue (Paris → Marseille) est
+                // une course comme une autre. Mirror iOS.
+                && route.distanceKm in 0.3..2000.0
+                && route.durationMin <= 1440
+                // Plancher seul : pas de plafond €/km, une course Van/XL
+                // courte le dépasse. Mirror iOS.
+                && ratio >= 0.2
 
             if (!measured || route == null) {
                 // Même règle que le SKIP ci-dessus : sans mesure, pas de verdict.
@@ -698,13 +729,24 @@ class FloatingBubbleService : Service() {
                     is TomTomService.RouteOutcome.NoKey -> "route_no_key"
                     else -> "route_unusable"
                 }
+                // Laquelle des causes : adresse refusée par le géocodeur (et son
+                // score), trajet hors bornes, rapport prix/km aberrant. Mirror iOS.
+                val detail = when {
+                    outcome is TomTomService.RouteOutcome.Unusable -> outcome.detail
+                    route == null -> null
+                    route.distanceKm !in 0.3..2000.0 || route.durationMin > 1440 ->
+                        String.format(java.util.Locale.ROOT, "bounds km=%.1f min=%d", route.distanceKm, route.durationMin)
+                    else ->
+                        String.format(java.util.Locale.ROOT, "ratio fare=%.2f km=%.1f", ocr.fare, route.distanceKm)
+                }
                 ScanBridgeModule.emitScanFailure(
-                    this, reason,
+                    this, reason, detail,
                     platform = ocr.platform.name,
                     // Une adresse refusée par le géocodeur se rejoue ; un réseau
                     // coupé ne dit rien sur la lecture de l'écran.
                     blocks = if (network) null else debugBlocks,
                     screenHeight = screenHeight,
+                    parsed = ocr,
                 )
                 ScanBridgeModule.emitScanFailed()
                 return@calculateRoute

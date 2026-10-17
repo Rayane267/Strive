@@ -488,6 +488,13 @@ class ScanBridgeModule: RCTEventEmitter {
       // elle qui deviendra une fixture, donc un cas de non-régression.
       if let blocks = f["blocks"] as? String { body["blocks"] = blocks }
       if let h = (f["screenHeight"] as? NSNumber)?.intValue, h > 0 { body["screenHeight"] = h }
+      // Ce que le parser avait lu avant l'échec (adresses envoyées à TomTom…).
+      for key in ["pickup", "destination"] {
+        if let v = f[key] as? String { body[key] = v }
+      }
+      for key in ["fare", "distanceKm"] {
+        if let v = (f[key] as? NSNumber)?.doubleValue { body[key] = v }
+      }
       sendEvent(withName: "onScanFailure", body: body)
     }
   }
