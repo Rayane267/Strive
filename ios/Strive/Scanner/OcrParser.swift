@@ -28,6 +28,14 @@ final class OcrParser {
   private var distanceAnchors: [String] = ["km", "kilomètre", "distance", "away"]
 
   private var fareMin: Double = 8.0
+  /// Heetch seulement : sa course minimum rapporte 7,50 € net (10 € brut moins
+  /// 25 %), et c'est le net que Strive retient. Uber et Bolt gardent `fareMin`.
+  /// Mirror TS/Kotlin.
+  private let heetchFareMin: Double = 7.0
+
+  private func fareFloor(for platform: ScanPlatform) -> Double {
+    platform == .HEETCH ? heetchFareMin : fareMin
+  }
   /// Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue par
   /// l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €.
   private var fareMax: Double = 200.0
@@ -336,7 +344,7 @@ final class OcrParser {
 
     guard let distance = extractDistance(blocks: blocks, pickupAddr: pickupAddrBlock, destAddr: destAddrBlock)
     else { lastFailure = String(format: "no_distance fare=%.2f", fare); return nil }
-    if !isSane(fare: fare, distanceKm: distance) {
+    if !isSane(fare: fare, distanceKm: distance, platform: platform) {
       lastFailure = String(format: "out_of_bounds fare=%.2f km=%.1f", fare, distance)
       return nil
     }
@@ -490,6 +498,7 @@ final class OcrParser {
   ) -> (value: Double, block: OcrTextBlock)? {
     struct Candidate { let value: Double; let score: Float; let block: OcrTextBlock }
     let anchors = priceAnchors[platform] ?? priceAnchors[.UNKNOWN]!
+    let minFare = fareFloor(for: platform)
     var candidates: [Candidate] = []
 
     for (idx, block) in blocks.enumerated() {
@@ -531,7 +540,7 @@ final class OcrParser {
         }
       }
 
-      guard let v = value, v >= fareMin, v <= ceiling else { continue }
+      guard let v = value, v >= minFare, v <= ceiling else { continue }
 
       var score: Float = 0
       score += Float(block.box.height) * 1.5
@@ -950,7 +959,7 @@ final class OcrParser {
     candidates = candidates.filter { b in
       !candidates.contains(where: { head in
         !(head.box.left == b.box.left && head.box.top == b.box.top)
-          && isContinuationLine(head: head, tail: b)
+          && isContinuationLine(head: head, tail: b, allBlocks: blocks)
       })
     }
 
@@ -1035,13 +1044,27 @@ final class OcrParser {
   /// Vrai si `tail` est la fin coupée de l'adresse `head` juste au-dessus :
   /// collée verticalement (≤ 1 ligne), alignée, SANS mot de voie ni numéro de rue
   /// en tête (sinon nouvelle adresse). Ex: head="…sur-", tail="Marne 94430".
-  private func isContinuationLine(head: OcrTextBlock, tail: OcrTextBlock) -> Bool {
+  private func isContinuationLine(head: OcrTextBlock, tail: OcrTextBlock, allBlocks: [OcrTextBlock]) -> Bool {
     let hb = head.box, tb = tail.box
     if tb.top <= hb.top { return false }
     if tb.top - hb.bottom > hb.height { return false }
     let xOverlap = min(hb.right, tb.right) - max(hb.left, tb.left)
     let minWidth = min(hb.width, tb.width)
     if Double(xOverlap) < Double(minWidth) * 0.5 { return false }
+    // Même bord gauche : une suite d'adresse repart de la même colonne (≤ 7 px
+    // sur les vraies captures). Un libellé de la carte sous la fiche chevauche la
+    // ligne mais part ailleurs — scan_debug #114, « All Suitec Annart Hâtel »
+    // recollé à la destination, 289 px plus loin. Mirror TS/Kotlin.
+    if abs(tb.left - hb.left) > hb.height { return false }
+    // Juste dessous : aucun bloc entre les deux. « Course de 1.9 km » séparait le
+    // départ de la destination, recollée comme sa 2e ligne — scan_debug #115.
+    let between = allBlocks.contains { b in
+      let bb = b.box
+      if (bb.left == hb.left && bb.top == hb.top) || (bb.left == tb.left && bb.top == tb.top) { return false }
+      return bb.centerY > hb.bottom && bb.centerY < tb.top
+        && min(bb.right, tb.right) > max(bb.left, tb.left)
+    }
+    if between { return false }
     let t = tail.text.trimmingCharacters(in: .whitespacesAndNewlines)
     if t.isEmpty || t.count > 60 { return false }
     if matches(t, pattern: #"\d\s*(?:km|min)\b"#, caseInsensitive: true) { return false }
@@ -1093,7 +1116,7 @@ final class OcrParser {
     // continuations (max 3) tant qu'on en trouve une sous la précédente.
     for _ in 0..<3 {
       guard let cont = allBlocks.first(where: { c in
-        !usedBoxes.contains([c.box.left, c.box.top]) && isContinuationLine(head: current, tail: c)
+        !usedBoxes.contains([c.box.left, c.box.top]) && isContinuationLine(head: current, tail: c, allBlocks: allBlocks)
       }) else { break }
       let contText = cleanAddressText(cont.text).trimmingCharacters(in: .whitespacesAndNewlines)
       // Tiret en fin de ligne OU en début de la suite (mot coupé) → collage
@@ -1107,8 +1130,8 @@ final class OcrParser {
 
   // MARK: - Sanity
 
-  private func isSane(fare: Double, distanceKm: Double) -> Bool {
-    if fare < fareMin || fare > fareCeiling { return false }
+  private func isSane(fare: Double, distanceKm: Double, platform: ScanPlatform) -> Bool {
+    if fare < fareFloor(for: platform) || fare > fareCeiling { return false }
     if distanceKm < distMin || distanceKm > distMax { return false }
     if fare / distanceKm < rateMin { return false }
     return true

@@ -223,6 +223,14 @@ const NON_ADDRESS_WORDS = [
 // ─── Sanity bounds ────────────────────────────────────────────────────────────
 
 const FARE_MIN = 8;
+/** Heetch seulement : sa course minimum rapporte 7,50 € net (10 € brut moins
+ *  25 %), et c'est le net que Strive retient. Uber et Bolt gardent FARE_MIN.
+ *  Mirror Swift/Kotlin. */
+const HEETCH_FARE_MIN = 7;
+
+function fareMinFor(platform: ScanPlatform): number {
+  return platform === 'HEETCH' ? HEETCH_FARE_MIN : FARE_MIN;
+}
 /** Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue par
  *  l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €. */
 const FARE_MAX = 200;
@@ -297,7 +305,7 @@ export function parseBlocks(
   const distanceKm = extractDistance(blocks, pickupAddrBlock, destAddrBlock);
   if (distanceKm === null) return null;
 
-  if (!isSane(fare, distanceKm)) return null;
+  if (!isSane(fare, distanceKm, platform)) return null;
 
   const pickup = extractPickupInfo(blocks, distanceKm, screenHeight);
 
@@ -321,7 +329,7 @@ export function parseBlocks(
 function mergeAddressContinuation(addrBlock: TextBlock, allBlocks: TextBlock[]): string {
   const baseText = addrBlock.text.trim();
   const continuation = allBlocks.find(
-    other => other !== addrBlock && isContinuationLine(addrBlock, other),
+    other => other !== addrBlock && isContinuationLine(addrBlock, other, allBlocks),
   );
 
   const merged = !continuation
@@ -413,6 +421,7 @@ function extractFare(
   screenHeight: number,
 ): { value: number; block: TextBlock } | null {
   const anchors = PRICE_ANCHORS[platform] ?? PRICE_ANCHORS.UNKNOWN;
+  const fareMin = fareMinFor(platform);
 
   const candidates: { value: number; score: number; block: TextBlock }[] = [];
 
@@ -446,7 +455,7 @@ function extractFare(
         value = raw > FARE_MAX ? raw / 100 : raw;
       }
     }
-    if (value === null || value < FARE_MIN || value > ceiling) return;
+    if (value === null || value < fareMin || value > ceiling) return;
 
     let score = 0;
 
@@ -863,7 +872,7 @@ function findAddressBlocks(
   // « Point, W2 1HB ») : elles n'occupent pas un slot, sinon la destination est
   // évincée. Recollées à l'affichage par mergeAddressContinuation. Mirror Swift.
   candidates = candidates.filter(
-    b => !candidates.some(head => head !== b && isContinuationLine(head, b)),
+    b => !candidates.some(head => head !== b && isContinuationLine(head, b, blocks)),
   );
 
   return collapseUkOutwardPairs(dedupOverlappingAddresses(candidates));
@@ -874,12 +883,26 @@ function findAddressBlocks(
  * (≤ 1 ligne), alignée, sans mot de voie ni numéro de rue en tête — sinon c'est
  * une nouvelle adresse. Mirror Swift/Kotlin `isContinuationLine`.
  */
-function isContinuationLine(head: TextBlock, tail: TextBlock): boolean {
+function isContinuationLine(head: TextBlock, tail: TextBlock, allBlocks: TextBlock[]): boolean {
   if (tail.y <= head.y) return false;
   if (tail.y - (head.y + head.height) > head.height) return false;
   const xOverlap =
     Math.min(head.x + head.width, tail.x + tail.width) - Math.max(head.x, tail.x);
   if (xOverlap < Math.min(head.width, tail.width) * 0.5) return false;
+  // Même bord gauche : une suite d'adresse repart de la même colonne (≤ 7 px
+  // sur les vraies captures). Un libellé de la carte sous la fiche chevauche la
+  // ligne mais part ailleurs — scan_debug #114, 289 px. Mirror Swift/Kotlin.
+  if (Math.abs(tail.x - head.x) > head.height) return false;
+  // Juste dessous : aucun bloc entre les deux. « Course de 1.9 km » séparait le
+  // départ de la destination, recollée comme sa 2e ligne — scan_debug #115.
+  const headBottom = head.y + head.height;
+  const between = allBlocks.some(b => {
+    if (b === head || b === tail) return false;
+    const cy = b.y + b.height / 2;
+    return cy > headBottom && cy < tail.y
+      && Math.min(b.x + b.width, tail.x + tail.width) > Math.max(b.x, tail.x);
+  });
+  if (between) return false;
   const t = tail.text.trim();
   if (!t || t.length > 60) return false;
   if (/\d\s*(?:km|min)\b/i.test(t)) return false;
@@ -965,8 +988,10 @@ function dedupOverlappingAddresses(candidates: TextBlock[]): TextBlock[] {
 
 // ─── Sanity check ─────────────────────────────────────────────────────────────
 
-function isSane(fare: number, distanceKm: number): boolean {
-  if (fare < FARE_MIN || fare > FARE_CEILING) return false;
+function isSane(fare: number, distanceKm: number, platform: ScanPlatform): boolean {
+  if (fare < fareMinFor(platform) || fare > FARE_CEILING) return false;
+  // Distance non affichée (Heetch) : TomTom tranchera.
+  if (distanceKm === 0 && platform === 'HEETCH') return true;
   if (distanceKm < DIST_MIN || distanceKm > DIST_MAX) return false;
   if (fare / distanceKm < RATE_MIN) return false;
   return true;

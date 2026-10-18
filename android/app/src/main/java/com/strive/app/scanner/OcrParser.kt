@@ -44,6 +44,13 @@ object OcrParser {
     private var distanceAnchors = listOf("km", "kilomètre", "distance", "away")
 
     private var fareMin = 8.0
+    /** Heetch seulement : sa course minimum rapporte 7,50 € net (10 € brut moins
+     *  25 %), et c'est le net que Strive retient. Uber et Bolt gardent [fareMin].
+     *  Mirror iOS/TS. */
+    private const val HEETCH_FARE_MIN = 7.0
+
+    private fun fareFloor(platform: Platform): Double =
+        if (platform == Platform.HEETCH) HEETCH_FARE_MIN else fareMin
     /** Plafond d'un montant SANS décimales : au-delà, c'est une virgule perdue
      *  par l'OCR (« 1743€ » = 17,43 €), pas une course à 1 743 €. */
     private var fareMax = 200.0
@@ -413,7 +420,7 @@ object OcrParser {
                 return null
             }
 
-        if (!isSane(fare, distance)) {
+        if (!isSane(fare, distance, platform)) {
             lastFailure = String.format(java.util.Locale.ROOT, "out_of_bounds fare=%.2f km=%.1f", fare, distance)
             return null
         }
@@ -467,7 +474,7 @@ object OcrParser {
      * voie ni numéro de rue en tête (sinon c'est une nouvelle adresse, pas une
      * continuation). Ex: head="…Chennevières-sur-", tail="Marne 94430".
      */
-    private fun isContinuationLine(head: Text.TextBlock, tail: Text.TextBlock): Boolean {
+    private fun isContinuationLine(head: Text.TextBlock, tail: Text.TextBlock, allBlocks: List<Text.TextBlock>): Boolean {
         val hb = head.boundingBox ?: return false
         val tb = tail.boundingBox ?: return false
         if (tb.top <= hb.top) return false
@@ -475,6 +482,19 @@ object OcrParser {
         val xOverlap = minOf(hb.right, tb.right) - maxOf(hb.left, tb.left)
         val minWidth = minOf(hb.width(), tb.width())
         if (xOverlap < minWidth * 0.5) return false
+        // Même bord gauche : une suite d'adresse repart de la même colonne (≤ 7 px
+        // sur les vraies captures). Un libellé de la carte sous la fiche chevauche
+        // la ligne mais part ailleurs — scan_debug #114, 289 px. Mirror TS/Swift.
+        if (Math.abs(tb.left - hb.left) > hb.height()) return false
+        // Juste dessous : aucun bloc entre les deux. « Course de 1.9 km » séparait
+        // le départ de la destination, recollée comme sa 2e ligne — scan_debug #115.
+        val between = allBlocks.any { b ->
+            if (b === head || b === tail) return@any false
+            val bb = b.boundingBox ?: return@any false
+            bb.centerY() > hb.bottom && bb.centerY() < tb.top &&
+                minOf(bb.right, tb.right) > maxOf(bb.left, tb.left)
+        }
+        if (between) return false
         val t = tail.text.trim()
         if (t.isEmpty() || t.length > 60) return false
         if (Regex("""\d\s*(?:km|min)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return false
@@ -540,7 +560,7 @@ object OcrParser {
         // Une adresse peut être coupée sur plusieurs lignes → on enchaîne les
         // continuations (max 3) tant qu'on en trouve une sous la précédente.
         repeat(3) {
-            val cont = allBlocks.firstOrNull { c -> used.none { it === c } && isContinuationLine(current, c) }
+            val cont = allBlocks.firstOrNull { c -> used.none { it === c } && isContinuationLine(current, c, allBlocks) }
                 ?: return withUkOutwardPrefix(result, addrBlock, allBlocks)
             val contText = cleanAddressText(cont.text).trim()
             // Tiret en fin de ligne OU en début de la suite (mot coupé) → collage
@@ -640,6 +660,7 @@ object OcrParser {
         data class Candidate(val value: Double, val score: Float, val block: Text.TextBlock)
 
         val anchors = priceAnchors[platform] ?: priceAnchors[Platform.UNKNOWN]!!
+        val minFare = fareFloor(platform)
         val candidates = mutableListOf<Candidate>()
 
         blocks.forEachIndexed { idx, block ->
@@ -671,7 +692,7 @@ object OcrParser {
                 if (raw > fareMax) raw / 100 else raw
             }
 
-            if (value !in fareMin..ceiling) return@forEachIndexed
+            if (value !in minFare..ceiling) return@forEachIndexed
 
             var score = 0f
             val box = block.boundingBox
@@ -1171,7 +1192,7 @@ object OcrParser {
         // elles ne doivent pas occuper un slot adresse (sinon la destination est
         // évincée). Re-fusionnées à l'affichage par mergeAddressContinuation.
         candidates = candidates.filter { b ->
-            candidates.none { head -> head !== b && isContinuationLine(head, b) }
+            candidates.none { head -> head !== b && isContinuationLine(head, b, blocks) }
         }
 
         // Symétrique, pour le Royaume-Uni : retire l'EN-TÊTE « TW6, Hounslow »
@@ -1261,8 +1282,8 @@ object OcrParser {
 
     // ─── Sanity check ────────────────────────────────────────────────────────────
 
-    private fun isSane(fare: Double, distanceKm: Double): Boolean {
-        if (fare !in fareMin..fareCeiling) return false
+    private fun isSane(fare: Double, distanceKm: Double, platform: Platform): Boolean {
+        if (fare !in fareFloor(platform)..fareCeiling) return false
         if (distanceKm !in distMin..distMax) return false
         if (fare / distanceKm < rateMin) return false
         return true

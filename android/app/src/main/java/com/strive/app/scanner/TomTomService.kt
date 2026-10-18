@@ -180,7 +180,15 @@ object TomTomService {
                     val f = from
                     val t = to
                     if (f != null) {
-                        to = resolveNear(destinationAddress, t, f.coords, screenDistanceKm) ?: t
+                        val near = resolveNear(destinationAddress, t, f.coords, screenDistanceKm)
+                        if (near != null) {
+                            to = near
+                        } else if (t != null) {
+                            // Aucune destination plausible autour du départ : c'est
+                            // le DÉPART qui était ailleurs (« Chessy Nord, Disneyland »
+                            // géocodé à Chessy-les-Prés, Aube → 181,5 km au lieu de 47,7).
+                            from = resolveNear(pickupAddress, null, t.coords, screenDistanceKm) ?: f
+                        }
                     } else if (t != null) {
                         from = resolveNear(pickupAddress, null, t.coords, screenDistanceKm)
                     }
@@ -270,13 +278,13 @@ object TomTomService {
             ?.first
     }
 
-    /** Premier résultat de [base] dans un cercle autour de [near]. Ni cache ni
-     *  plancher de score : le score de la recherche de lieux n'est pas sur la
-     *  même échelle qu'en `/geocode`, c'est la cohérence de distance qui juge. */
-    private fun lookup(base: String, address: String, near: Coords, radiusKm: Double): GeocodeHit? {
+    /** Premier résultat de [base], dans un cercle autour de [near] s'il est
+     *  donné. Ni cache ni plancher de score : le score de la recherche de lieux
+     *  n'est pas sur la même échelle qu'en `/geocode`, c'est l'appelant qui juge. */
+    private fun lookup(base: String, address: String, near: Coords? = null, radiusKm: Double = 0.0): GeocodeHit? {
         val encoded = URLEncoder.encode(address, "UTF-8")
         val url = "$base/$encoded.json?key=$apiKey&language=$geocodeLanguage&countrySet=$countrySet&limit=1" +
-            "&lat=${near.lat}&lon=${near.lon}&radius=${(radiusKm * 1000).toInt()}"
+            (near?.let { "&lat=${it.lat}&lon=${it.lon}&radius=${(radiusKm * 1000).toInt()}" } ?: "")
         val json = httpGet(url) ?: return null
         return try {
             val first = JSONObject(json).optJSONArray("results")?.optJSONObject(0) ?: return null
@@ -295,7 +303,48 @@ object TomTomService {
      * Essaie l'adresse telle quelle puis des variantes si le score est bas.
      * Garde le meilleur score. Early-exit si on trouve un résultat fiable.
      */
+    /** Mots de voie des marchés couverts. Sans « gare », « aéroport »,
+     *  « terminal », « cité »… que le parseur compte comme adresses : ici, ce
+     *  sont justement des lieux. Mirror Swift. */
+    private val STREET_WORDS = listOf(
+        "rue", "ruelle", "avenue", "av", "av.", "boulevard", "bd", "bd.", "blvd",
+        "place", "pl.", "impasse", "imp.", "allée", "allee", "chemin", "ch.",
+        "route", "rte", "rte.", "passage", "quai", "esplanade", "cours",
+        "faubourg", "fg.", "square", "sq.", "voie", "sentier",
+        "street", "st.", "road", "rd.", "lane", "drive", "ave.", "way",
+        "close", "crescent", "terrace", "mews",
+        "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
+        "via", "viale", "corso", "piazza", "strada", "vicolo",
+        "straat", "laan", "plein", "gracht", "weg",
+        "straße", "strasse", "str.", "platz", "gasse",
+        "rua", "travessa", "praça", "praca", "estrada", "alameda",
+    )
+
+    /** Un numéro en tête d'un segment (« 5 Rue… », « 1 des Fauvettes ») ou un mot
+     *  de voie. Pas « Terminal 1 » ni « Hall 2 » : le numéro y suit le nom. */
+    private val STREET_REGEX = Regex(
+        """(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|(?<!\p{L})(?:""" +
+            STREET_WORDS.joinToString("|") { Regex.escape(it) } + """)(?!\p{L})""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Ni numéro de rue ni mot de voie : un LIEU — site touristique, gare,
+     * aéroport, hôtel. `/geocode` ne connaît que les rues : il garde les mots
+     * qu'il reconnaît et les recolle à une rue ailleurs. « Chessy Nord,
+     * Disneyland » y devenait la place des Combattants en Afrique du Nord, à
+     * Chessy-les-Prés (Aube), 150 km plus loin ; la recherche de lieux répond
+     * Disneyland Paris.
+     */
+    private fun looksLikePlace(address: String): Boolean = !STREET_REGEX.containsMatchIn(address)
+
     private fun geocodeBestVariant(address: String): GeocodeOutcome {
+        // Un lieu se cherche d'abord en recherche de lieux ; `/geocode` reste le
+        // filet s'il n'y est pas.
+        if (looksLikePlace(address)) {
+            lookup(BASE_PLACE_SEARCH, address)?.takeIf { it.score >= MIN_SCORE }
+                ?.let { return GeocodeOutcome.Hit(it) }
+        }
         val variants = buildAddressVariants(address)
         var best: GeocodeHit? = null
         var sawUnreachable = false

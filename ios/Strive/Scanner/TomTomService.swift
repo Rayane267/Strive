@@ -173,7 +173,15 @@ final class TomTomService {
       // cohérent, on garde le résultat d'origine.
       if let screen = screenDistanceKm, screen > 0 {
         if let f = fromHit {
-          toHit = self.resolveNear(dest, current: toHit, anchor: f.coords, screenKm: screen) ?? toHit
+          if let near = self.resolveNear(dest, current: toHit, anchor: f.coords, screenKm: screen) {
+            toHit = near
+          } else if let t = toHit,
+                    let near = self.resolveNear(pickup, current: nil, anchor: t.coords, screenKm: screen) {
+            // Aucune destination plausible autour du départ : c'est le DÉPART qui
+            // était ailleurs. « Chessy Nord, Disneyland » géocodé à Chessy-les-Prés
+            // (Aube), 150 km plus loin → 181,5 km affichés au lieu de 47,7.
+            fromHit = near
+          }
         } else if let t = toHit {
           fromHit = self.resolveNear(pickup, current: nil, anchor: t.coords, screenKm: screen)
         }
@@ -269,16 +277,18 @@ final class TomTomService {
       .hit
   }
 
-  /// Premier résultat de `base` dans un cercle autour de `near`. Ni cache ni
-  /// plancher de score : le score de la recherche de lieux n'est pas sur la même
-  /// échelle qu'en `/geocode`, et c'est la cohérence de distance qui juge.
-  private func lookup(_ base: String, _ address: String, near: Coords, radiusKm: Double) -> GeocodeHit? {
+  /// Premier résultat de `base`, dans un cercle autour de `near` s'il est donné.
+  /// Ni cache ni plancher de score : le score de la recherche de lieux n'est pas
+  /// sur la même échelle qu'en `/geocode`, c'est l'appelant qui juge.
+  private func lookup(_ base: String, _ address: String, near: Coords? = nil, radiusKm: Double = 0) -> GeocodeHit? {
     guard let key = apiKey(),
           let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
     else { return nil }
-    let urlString = "\(base)/\(encoded).json?key=\(key)&language=\(geocodeLanguage)"
+    var urlString = "\(base)/\(encoded).json?key=\(key)&language=\(geocodeLanguage)"
       + "&countrySet=\(activeCountrySet)&limit=1"
-      + "&lat=\(near.lat)&lon=\(near.lon)&radius=\(Int(radiusKm * 1000))"
+    if let near = near {
+      urlString += "&lat=\(near.lat)&lon=\(near.lon)&radius=\(Int(radiusKm * 1000))"
+    }
     guard let url = URL(string: urlString),
           let data = httpGet(url),
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -292,7 +302,51 @@ final class TomTomService {
     return GeocodeHit(coords: Coords(lat: lat, lon: lon), score: score, formatted: formatted)
   }
 
+  /// Mots de voie des marchés couverts. Sans « gare », « aéroport »,
+  /// « terminal », « cité »… que le parseur compte comme adresses : ici, ce
+  /// sont justement des lieux. Mirror Kotlin.
+  private static let streetWords = [
+    "rue", "ruelle", "avenue", "av", "av.", "boulevard", "bd", "bd.", "blvd",
+    "place", "pl.", "impasse", "imp.", "allée", "allee", "chemin", "ch.",
+    "route", "rte", "rte.", "passage", "quai", "esplanade", "cours",
+    "faubourg", "fg.", "square", "sq.", "voie", "sentier",
+    "street", "st.", "road", "rd.", "lane", "drive", "ave.", "way",
+    "close", "crescent", "terrace", "mews",
+    "calle", "c/", "avenida", "avda", "plaza", "paseo", "carretera", "camino", "ronda",
+    "via", "viale", "corso", "piazza", "strada", "vicolo",
+    "straat", "laan", "plein", "gracht", "weg",
+    "straße", "strasse", "str.", "platz", "gasse",
+    "rua", "travessa", "praça", "praca", "estrada", "alameda",
+  ]
+
+  /// Un numéro en tête d'un segment (« 5 Rue… », « 1 des Fauvettes ») ou un mot
+  /// de voie. Pas « Terminal 1 » ni « Hall 2 » : le numéro y suit le nom.
+  private static let streetRegex: NSRegularExpression? = {
+    let words = streetWords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+    return try? NSRegularExpression(
+      pattern: #"(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|(?<!\p{L})(?:"# + words + #")(?!\p{L})"#,
+      options: .caseInsensitive
+    )
+  }()
+
+  /// Ni numéro de rue ni mot de voie : un LIEU — site touristique, gare,
+  /// aéroport, hôtel. `/geocode` ne connaît que les rues : il garde les mots
+  /// qu'il reconnaît et les recolle à une rue ailleurs. « Chessy Nord,
+  /// Disneyland » y devenait la place des Combattants en Afrique du Nord, à
+  /// Chessy-les-Prés (Aube), 150 km plus loin ; la recherche de lieux répond
+  /// Disneyland Paris.
+  private static func looksLikePlace(_ address: String) -> Bool {
+    guard let re = streetRegex else { return false }
+    return re.firstMatch(in: address, range: NSRange(address.startIndex..., in: address)) == nil
+  }
+
   private func geocodeBestVariant(_ address: String) -> GeocodeOutcome {
+    // Un lieu se cherche d'abord en recherche de lieux ; `/geocode` reste le
+    // filet s'il n'y est pas.
+    if Self.looksLikePlace(address),
+       let hit = lookup(Self.basePlaceSearch, address), hit.score >= Self.minScore {
+      return .hit(hit)
+    }
     var best: GeocodeHit?
     var sawUnreachable = false
     for variant in buildAddressVariants(address) {
