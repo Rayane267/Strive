@@ -1,7 +1,8 @@
 'use client';
 
-import { CAPTURE, FAILURE, ago, fmt, isRefusal, isScanFailure } from './types';
-import { useFeed } from './data';
+import { useState } from 'react';
+import { CAPTURE, FAILURE, ago, fmt, isRefusal, isScanFailure, type Failure } from './types';
+import { useAllFailures, useFeed } from './data';
 import { Bars, Card, Empty, Pill, Stat } from './ui';
 
 const nf = new Intl.NumberFormat('fr-FR');
@@ -21,6 +22,7 @@ const BLAME = {
 
 export default function ErrorsView({ days }: { days: number }) {
   const { data: feed, err } = useFeed(days, 25);
+  const [showAll, setShowAll] = useState(false);
 
   if (err) return <p role="alert" className="p-8 text-center text-sm text-[#FF5A4D]">{err}</p>;
   if (!feed) return <p className="p-8 text-center text-sm text-white/40">Chargement…</p>;
@@ -32,9 +34,10 @@ export default function ErrorsView({ days }: { days: number }) {
   const displayOnly = feed.failures_by_reason
     .filter((r) => FAILURE[r.reason]?.blame === 'display')
     .reduce((s, r) => s + r.total, 0);
-  // Tant que 20261017_admin_feed_refusals n'est pas appliquée, le flux mêle
-  // encore les refus aux erreurs : on les trie ici.
-  const recent = feed.failures_recent.filter((f) => !isRefusal(f.reason));
+  // Le flux ne retire que les refus (et encore, pas tant que
+  // 20261017_admin_feed_refusals n'est pas appliquée) : les cartes non
+  // affichées y restent, alors qu'elles ont leur compteur sous la liste.
+  const recent = feed.failures_recent.filter((f) => isScanFailure(f.reason));
   const refusalsRecent =
     feed.refusals_recent ?? feed.failures_recent.filter((f) => isRefusal(f.reason));
   const all = reasons.reduce((s, r) => s + r.total, 0);
@@ -91,40 +94,27 @@ export default function ErrorsView({ days }: { days: number }) {
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         <Card
-          title="Dernières erreurs"
-          subtitle="Motif normalisé à l'écriture — « autre » conserve le brut dans le détail"
+          title={showAll ? 'Toutes les erreurs' : 'Dernières erreurs'}
+          subtitle={showAll
+            ? `Les ${feed.window_days} derniers jours, refus et cartes non affichées compris`
+            : "Motif normalisé à l'écriture — « autre » conserve le brut dans le détail"}
+          aside={
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              aria-pressed={showAll}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/60 transition-colors duration-150 hover:text-white"
+            >
+              {showAll ? 'Dernières seulement' : 'Voir toutes les erreurs'}
+            </button>
+          }
         >
-          {recent.length === 0 ? (
+          {showAll ? (
+            <AllFailures key={days} days={days} />
+          ) : recent.length === 0 ? (
             <Empty>Aucune erreur rapportée.</Empty>
           ) : (
             <ul className="divide-y divide-white/5">
-              {recent.map((f, i) => {
-                const meta = FAILURE[f.reason] ?? { label: f.reason, blame: 'app' as const };
-                // La capture tranche : vraie offre ratée, ou écran du chauffeur.
-                const cap = f.capture ? CAPTURE[f.capture] : null;
-                const blame = cap?.blame ?? meta.blame;
-                return (
-                  <li key={i} className="py-2.5 text-sm">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="flex-none text-xs tabular-nums text-white/35" title={fmt(f.at)}>
-                        {ago(f.at)}
-                      </span>
-                      <span className="flex-none font-semibold text-white/90">{meta.label}</span>
-                      {cap && <span className="flex-none text-xs text-white/55">{cap.label}</span>}
-                      <Pill label={BLAME[blame].label} color={BLAME[blame].color} dim />
-                      <span className="min-w-0 flex-1 truncate text-xs text-white/50">{f.email ?? '—'}</span>
-                      <span className="flex-none text-xs text-white/35">
-                        {[f.os, f.surface, f.platform, f.app_version].filter(Boolean).join(' · ') || '—'}
-                      </span>
-                    </div>
-                    {f.detail && (
-                      <p className="mt-1 truncate font-mono text-[11px] text-white/35" title={f.detail}>
-                        {f.detail}
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
+              {recent.map((f, i) => <FailureItem key={i} f={f} />)}
             </ul>
           )}
         </Card>
@@ -268,5 +258,66 @@ export default function ErrorsView({ days }: { days: number }) {
         </Card>
       )}
     </div>
+  );
+}
+
+function FailureItem({ f }: { f: Failure }) {
+  const meta = FAILURE[f.reason] ?? { label: f.reason, blame: 'app' as const };
+  // La capture tranche : vraie offre ratée, ou écran du chauffeur.
+  const cap = f.capture ? CAPTURE[f.capture] : null;
+  const blame = cap?.blame ?? meta.blame;
+  return (
+    <li className="py-2.5 text-sm">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="flex-none text-xs tabular-nums text-white/35" title={fmt(f.at)}>
+          {ago(f.at)}
+        </span>
+        <span className="flex-none font-semibold text-white/90">{meta.label}</span>
+        {cap && <span className="flex-none text-xs text-white/55">{cap.label}</span>}
+        <Pill label={BLAME[blame].label} color={BLAME[blame].color} dim />
+        <span className="min-w-0 flex-1 truncate text-xs text-white/50">{f.email ?? '—'}</span>
+        <span className="flex-none text-xs text-white/35">
+          {[f.os, f.surface, f.platform, f.app_version].filter(Boolean).join(' · ') || '—'}
+        </span>
+      </div>
+      {f.detail && (
+        <p className="mt-1 truncate font-mono text-[11px] text-white/35" title={f.detail}>
+          {f.detail}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/** Toute la fenêtre, refus et cartes non affichées compris, par pages de 100. */
+function AllFailures({ days }: { days: number }) {
+  const { rows, total, err, loading, more } = useAllFailures(days);
+
+  if (err) return <p role="alert" className="text-sm text-[#FF5A4D]">{err}</p>;
+  if (rows.length === 0) {
+    return loading
+      ? <p className="text-sm text-white/40">Chargement…</p>
+      : <Empty>Aucune erreur sur la période.</Empty>;
+  }
+  return (
+    <>
+      <ul className="divide-y divide-white/5">
+        {rows.map((f, i) => <FailureItem key={i} f={f} />)}
+      </ul>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/5 pt-3 text-xs text-white/45">
+        <span className="tabular-nums">
+          {nf.format(rows.length)} sur {nf.format(total ?? rows.length)}
+        </span>
+        {total != null && rows.length < total && (
+          <button
+            onClick={more}
+            disabled={loading}
+            className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-white/60 transition-colors duration-150 hover:text-white disabled:opacity-50"
+          >
+            {loading ? 'Chargement…' : 'Charger plus'}
+          </button>
+        )}
+      </div>
+    </>
   );
 }
