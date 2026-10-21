@@ -262,6 +262,7 @@ const ProfileScreen = () => {
   };
 
   const [langSheetVisible, setLangSheetVisible] = useState(false);
+  const [countrySheetVisible, setCountrySheetVisible] = useState(false);
   const [subSheetVisible, setSubSheetVisible] = useState(false);
 
   // ── Balayage lumineux de la carte d'identité ──────────────────────────────
@@ -793,6 +794,19 @@ const ProfileScreen = () => {
             value: LANGUAGE_NAMES[i18n.language] ?? i18n.language,
             onPress: () => setLangSheetVisible(true),
           },
+          // Le pays où il ROULE, à côté de la langue qu'il LIT — deux réglages,
+          // pas un. C'est lui qui borne la recherche des adresses et pose les
+          // seuils. Tant qu'il n'est pas choisi, il est déduit de la région du
+          // téléphone : un chauffeur portugais à Paris se retrouvait au
+          // Portugal, et Suresnes → Villenoy y restait introuvable (scan_debug
+          // #128). Le rendre visible ici, c'est rendre l'erreur rattrapable.
+          {
+            icon: 'map-marker-outline',
+            iconLib: 'mc',
+            title: t('preferences.workCountry', 'Pays de travail'),
+            value: t(`countries.${market.country.toLowerCase()}`, market.country),
+            onPress: () => setCountrySheetVisible(true),
+          },
           // Un interrupteur qui ne peut pas s'allumer n'est pas un interrupteur.
           // Après un refus système, iOS ne réaffiche jamais sa fenêtre :
           // `registerPushToken` se fait répondre « non » de mémoire, sans rien
@@ -919,6 +933,11 @@ const ProfileScreen = () => {
       </Animated.ScrollView>
 
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
+      <LanguageSheet
+        visible={countrySheetVisible}
+        initialStep="country"
+        onClose={() => setCountrySheetVisible(false)}
+      />
 
       <ManageSubscriptionSheet
         visible={subSheetVisible}

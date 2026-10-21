@@ -457,6 +457,7 @@
     "country": "Pays et devise",
     "countrySub": "Il fixe votre devise, vos cotisations et votre seuil de rentabilité.",
     "countryChange": "Ce n'est pas mon pays ?",
+    "workCountry": "Pays de travail",
     "currency": "Votre devise",
     "currencySub": "Celle que vous lirez sur chaque course."
   },

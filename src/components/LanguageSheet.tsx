@@ -64,9 +64,16 @@ const DURATION = 260;
 const LanguageSheet = ({
   visible,
   onClose,
+  initialStep = 'lang',
 }: {
   visible: boolean;
   onClose: () => void;
+  /**
+   * `country` : ouverte depuis la ligne « Pays de travail » du profil, droit
+   * sur la liste des pays. Le pays où l'on roule n'a rien à voir avec la langue
+   * qu'on lit : un chauffeur portugais à Paris garde son app en portugais.
+   */
+  initialStep?: 'lang' | 'country';
 }) => {
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
@@ -86,11 +93,11 @@ const LanguageSheet = ({
 
   useEffect(() => {
     if (!visible) return;
-    // Rouvrir la feuille repart de la langue : c'est ce que le chauffeur vient
-    // chercher, et l'étape pays n'a de sens qu'à la suite d'un choix.
-    setStep('lang');
+    // Rouvrir la feuille repart de l'étape demandée : la langue depuis la ligne
+    // « Langue », la liste des pays depuis la ligne « Pays de travail ».
+    setStep(initialStep);
     AsyncStorage.getItem(STORE_LANGUAGE_KEY).then(v => setFollowsDevice(!v));
-  }, [visible]);
+  }, [visible, initialStep]);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -394,13 +401,24 @@ const LanguageSheet = ({
                 })}
                 {/* Retour à la devise, pas fermeture : on est venu d'ici par un
                     détour, et un « Annuler » qui referme tout obligerait à
-                    rouvrir la feuille et à repasser par la langue. */}
-                <Option
-                  label={t('common.back', 'Retour')}
-                  muted
-                  disabled={savingCountry}
-                  onPress={() => { hapticLight(); setStep('market'); }}
-                />
+                    rouvrir la feuille et à repasser par la langue. Ouverte
+                    directement sur les pays (profil), il n'y a pas de devise
+                    où revenir : là, c'est « Annuler ». */}
+                {initialStep === 'country' ? (
+                  <Option
+                    label={t('common.cancel', 'Annuler')}
+                    muted
+                    disabled={savingCountry}
+                    onPress={onClose}
+                  />
+                ) : (
+                  <Option
+                    label={t('common.back', 'Retour')}
+                    muted
+                    disabled={savingCountry}
+                    onPress={() => { hapticLight(); setStep('market'); }}
+                  />
+                )}
               </ScrollView>
             </>
           )}

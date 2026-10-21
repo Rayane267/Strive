@@ -457,6 +457,7 @@
     "country": "País y moneda",
     "countrySub": "Define tu moneda, tus cotizaciones y tu umbral de rentabilidad.",
     "countryChange": "¿No es mi país?",
+    "workCountry": "País de trabajo",
     "currency": "Tu moneda",
     "currencySub": "La que verás en cada viaje."
   },
