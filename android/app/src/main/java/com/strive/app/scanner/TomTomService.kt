@@ -112,8 +112,11 @@ object TomTomService {
         data class Ok(val route: RouteResult) : RouteOutcome()
         /** Aucune clé configurée : rien n'est mesurable sur cette install. */
         object NoKey : RouteOutcome()
-        /** TomTom n'a pas répondu — réseau, timeout, erreur HTTP. */
-        object Unreachable : RouteOutcome()
+        /** TomTom n'a pas répondu — réseau, timeout, erreur HTTP. [detail] dit
+         *  lequel (« geocode pickup=timeout », « route_api http429 »…) : sans lui,
+         *  un réseau absent, la limite de requêtes et un quota épuisé se
+         *  confondaient. Mirror iOS. */
+        data class Unreachable(val detail: String) : RouteOutcome()
         /** TomTom a répondu, résultat inexploitable : adresse sous le plancher
          *  de fiabilité, ou trajet hors bornes. [detail] dit laquelle
          *  (« geocode pickup=none », « route_api »…) — il part en `detail` de l'échec. */
@@ -125,16 +128,20 @@ object TomTomService {
      *  trouvé mais sous le plancher (centroïde de ville). */
     private sealed class GeocodeOutcome {
         data class Hit(val hit: GeocodeHit) : GeocodeOutcome()
-        object Unreachable : GeocodeOutcome()
+        /** [cause] : pourquoi TomTom n'a pas répondu (cf. [HttpReply.failure]). */
+        data class Unreachable(val cause: String) : GeocodeOutcome()
         data class Unusable(val bestScore: Double? = null) : GeocodeOutcome()
     }
 
-    /** « pickup=none », « dest=2.1 » : ce que le géocodeur a fait d'une adresse
-     *  refusée. null si l'adresse est passée. Mirror iOS. */
-    private fun geocodeFailure(side: String, outcome: GeocodeOutcome): String? {
-        if (outcome !is GeocodeOutcome.Unusable) return null
-        return outcome.bestScore?.let { String.format(java.util.Locale.ROOT, "%s=%.1f", side, it) }
-            ?: "$side=none"
+    /** « pickup=none », « dest=2.1 », « pickup=timeout » : ce que le géocodeur a
+     *  fait d'une adresse refusée, ou ce qui l'a empêché de répondre. null si
+     *  l'adresse est passée. Mirror iOS. */
+    private fun geocodeFailure(side: String, outcome: GeocodeOutcome): String? = when (outcome) {
+        is GeocodeOutcome.Hit -> null
+        is GeocodeOutcome.Unreachable -> "$side=${outcome.cause}"
+        is GeocodeOutcome.Unusable ->
+            outcome.bestScore?.let { String.format(java.util.Locale.ROOT, "%s=%.1f", side, it) }
+                ?: "$side=none"
     }
 
     /**
@@ -204,7 +211,10 @@ object TomTomService {
                     val refused = listOfNotNull(
                         geocodeFailure("pickup", fromOutcome), geocodeFailure("dest", toOutcome),
                     ).joinToString(" ")
-                    callback(if (unreachable) RouteOutcome.Unreachable else RouteOutcome.Unusable("geocode $refused"))
+                    callback(
+                        if (unreachable) RouteOutcome.Unreachable("geocode $refused")
+                        else RouteOutcome.Unusable("geocode $refused")
+                    )
                     return@Thread
                 }
                 Log.i(TAG, "geocode scores pickup=${"%.1f".format(from.score)} dest=${"%.1f".format(to.score)}")
@@ -224,7 +234,7 @@ object TomTomService {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "exception", e)
-                callback(RouteOutcome.Unreachable)
+                callback(RouteOutcome.Unreachable("exception ${e.javaClass.simpleName}"))
             }
         }.start()
     }
@@ -285,7 +295,7 @@ object TomTomService {
         val encoded = URLEncoder.encode(address, "UTF-8")
         val url = "$base/$encoded.json?key=$apiKey&language=$geocodeLanguage&countrySet=$countrySet&limit=1" +
             (near?.let { "&lat=${it.lat}&lon=${it.lon}&radius=${(radiusKm * 1000).toInt()}" } ?: "")
-        val json = httpGet(url) ?: return null
+        val json = httpGet(url).body ?: return null
         return try {
             val first = JSONObject(json).optJSONArray("results")?.optJSONObject(0) ?: return null
             val pos = first.getJSONObject("position")
@@ -347,7 +357,7 @@ object TomTomService {
         }
         val variants = buildAddressVariants(address)
         var best: GeocodeHit? = null
-        var sawUnreachable = false
+        var unreachable: String? = null
         for (variant in variants) {
             when (val outcome = geocode(variant)) {
                 is GeocodeOutcome.Hit -> {
@@ -357,7 +367,7 @@ object TomTomService {
                     val kept = best
                     if (kept != null && kept.score >= MIN_SCORE + 2) return GeocodeOutcome.Hit(kept)
                 }
-                GeocodeOutcome.Unreachable -> sawUnreachable = true
+                is GeocodeOutcome.Unreachable -> unreachable = outcome.cause
                 is GeocodeOutcome.Unusable -> continue
             }
         }
@@ -365,7 +375,8 @@ object TomTomService {
         // (adresse OCR douteuse). On préfère échouer → pas de "vraie" distance
         // fausse, et surtout pas un trajet centre-à-centre présenté comme mesuré.
         best?.takeIf { it.score >= MIN_SCORE }?.let { return GeocodeOutcome.Hit(it) }
-        return if (sawUnreachable) GeocodeOutcome.Unreachable else GeocodeOutcome.Unusable(best?.score)
+        unreachable?.let { return GeocodeOutcome.Unreachable(it) }
+        return GeocodeOutcome.Unusable(best?.score)
     }
 
     /**
@@ -402,7 +413,8 @@ object TomTomService {
         // La distinction porte ici : pas de réponse = réseau, réponse illisible =
         // adresse. Confondre les deux, c'est dire « recapture » à quelqu'un qui est
         // simplement dans un parking souterrain.
-        val json = httpGet(url) ?: return GeocodeOutcome.Unreachable
+        val reply = httpGet(url)
+        val json = reply.body ?: return GeocodeOutcome.Unreachable(reply.failure)
         val hit = try {
             val results = JSONObject(json).optJSONArray("results")
                 ?: return GeocodeOutcome.Unusable()
@@ -430,7 +442,8 @@ object TomTomService {
         // traffic=true + departAt=now → trafic temps réel (flux live + incidents)
         // à l'instant du calcul ; routeType=fastest → meilleur trajet.
         val url = "$BASE_ROUTING/$waypoints/json?key=$apiKey&travelMode=car&traffic=true&routeType=fastest&departAt=now"
-        val json = httpGet(url) ?: return RouteOutcome.Unreachable
+        val reply = httpGet(url)
+        val json = reply.body ?: return RouteOutcome.Unreachable("route_api ${reply.failure}")
         return try {
             val summary = JSONObject(json)
                 .getJSONArray("routes")
@@ -451,7 +464,12 @@ object TomTomService {
 
     // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
-    private fun httpGet(url: String): String? {
+    /** Le corps d'une réponse 200 — ou, quand il manque, pourquoi : « timeout »,
+     *  « offline », « http429 », « net-ConnectException »… Ce motif part en
+     *  `detail` de `route_unreachable`. Mirror iOS. */
+    private class HttpReply(val body: String?, val failure: String = "")
+
+    private fun httpGet(url: String): HttpReply {
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -460,10 +478,15 @@ object TomTomService {
                 readTimeout = TIMEOUT_MS
             }
             val code = conn.responseCode
-            if (code != 200) { Log.w(TAG, "HTTP $code"); return null }
-            conn.inputStream.bufferedReader().readText()
+            if (code != 200) { Log.w(TAG, "HTTP $code"); return HttpReply(null, "http$code") }
+            HttpReply(conn.inputStream.bufferedReader().readText())
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.w(TAG, "http", e); HttpReply(null, "timeout")
+        } catch (e: java.net.UnknownHostException) {
+            // Sans réseau, c'est la résolution DNS qui tombe la première.
+            Log.w(TAG, "http", e); HttpReply(null, "offline")
         } catch (e: Exception) {
-            Log.w(TAG, "http", e); null
+            Log.w(TAG, "http", e); HttpReply(null, "net-${e.javaClass.simpleName}")
         } finally {
             conn?.disconnect()
         }

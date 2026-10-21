@@ -238,7 +238,10 @@ const FARE_MAX = 200;
  *  toute course longue mourait au parse : 272,30 € pour Lisses → Lyon. Ici rien
  *  n'est à reconstruire. */
 const FARE_CEILING = 2000;
-const DIST_MIN = 0.3;
+/** 100 m : une course aussi courte existe (31,09 € pour 0,2 km, scan_debug
+ *  #129, rejetée par l'ancien plancher à 0,3). En dessous, ce n'est plus une
+ *  course, et le €/km frôlerait la division par zéro. Mirror Swift/Kotlin. */
+const DIST_MIN = 0.1;
 /** 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le plancher
  *  €/km de `isSane` qui juge une distance aberrante. Mirror Swift/Kotlin. */
 const DIST_MAX = 2000;

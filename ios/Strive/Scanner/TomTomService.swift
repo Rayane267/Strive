@@ -87,8 +87,10 @@ final class TomTomService {
     case ok(RouteResult)
     /// Aucune clé configurée : l'app ne peut rien mesurer sur cette install.
     case noKey
-    /// TomTom n'a pas répondu — réseau coupé, timeout, erreur HTTP.
-    case unreachable
+    /// TomTom n'a pas répondu — réseau coupé, timeout, erreur HTTP. Le texte dit
+    /// lequel (« geocode pickup=timeout », « route_api http429 »…) : sans lui,
+    /// un réseau absent, la limite de requêtes et un quota épuisé se confondaient.
+    case unreachable(String)
     /// TomTom a répondu, mais le résultat n'est pas exploitable : adresse sous
     /// le plancher de fiabilité, ou trajet hors bornes. Le texte dit laquelle
     /// (« geocode pickup=none », « route_api »…) — il part en `detail` de l'échec.
@@ -100,15 +102,23 @@ final class TomTomService {
   /// trouvé mais sous le plancher (centroïde de ville).
   private enum GeocodeOutcome {
     case hit(GeocodeHit)
-    case unreachable
+    /// Pourquoi TomTom n'a pas répondu (cf. `HttpReply.failure`).
+    case unreachable(String)
     case unusable(Double?)
   }
 
-  /// « pickup=none », « dest=2.1 » : ce que le géocodeur a fait d'une adresse
-  /// refusée. nil si l'adresse est passée.
+  /// « pickup=none », « dest=2.1 », « pickup=timeout » : ce que le géocodeur a
+  /// fait d'une adresse refusée, ou ce qui l'a empêché de répondre. nil si
+  /// l'adresse est passée.
   private static func geocodeFailure(_ side: String, _ outcome: GeocodeOutcome) -> String? {
-    guard case .unusable(let score) = outcome else { return nil }
-    return score.map { String(format: "%@=%.1f", side, $0) } ?? "\(side)=none"
+    switch outcome {
+    case .hit:
+      return nil
+    case .unreachable(let why):
+      return "\(side)=\(why)"
+    case .unusable(let score):
+      return score.map { String(format: "%@=%.1f", side, $0) } ?? "\(side)=none"
+    }
   }
 
   struct Coords { let lat: Double; let lon: Double }
@@ -143,7 +153,7 @@ final class TomTomService {
     guard !pickup.isEmpty, !dest.isEmpty else { completion(.unusable("empty_address")); return }
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      guard let self = self else { completion(.unreachable); return }
+      guard let self = self else { completion(.unreachable("released")); return }
       // Geocoding pickup + destination en parallèle — divise par ~2 le temps
       // total. Chaque variant chain reste séquentiel à l'intérieur d'une
       // adresse (early-exit sur bon score), seuls les 2 fronts sont lancés.
@@ -198,7 +208,9 @@ final class TomTomService {
         let refused = [
           Self.geocodeFailure("pickup", fromOutcome), Self.geocodeFailure("dest", toOutcome),
         ].compactMap { $0 }.joined(separator: " ")
-        DispatchQueue.main.async { completion(unreachable ? .unreachable : .unusable("geocode " + refused)) }
+        DispatchQueue.main.async {
+          completion(unreachable ? .unreachable("geocode " + refused) : .unusable("geocode " + refused))
+        }
         return
       }
 
@@ -290,7 +302,7 @@ final class TomTomService {
       urlString += "&lat=\(near.lat)&lon=\(near.lon)&radius=\(Int(radiusKm * 1000))"
     }
     guard let url = URL(string: urlString),
-          let data = httpGet(url),
+          let data = httpGet(url).data,
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let first = (json["results"] as? [[String: Any]])?.first,
           let pos = first["position"] as? [String: Any],
@@ -348,14 +360,14 @@ final class TomTomService {
       return .hit(hit)
     }
     var best: GeocodeHit?
-    var sawUnreachable = false
+    var unreachable: String?
     for variant in buildAddressVariants(address) {
       switch geocode(variant) {
       case .hit(let hit):
         if best == nil || hit.score > best!.score { best = hit }
         if best!.score >= Self.minScore + 2 { return .hit(best!) }
-      case .unreachable:
-        sawUnreachable = true
+      case .unreachable(let why):
+        unreachable = why
       case .unusable:
         continue
       }
@@ -364,7 +376,8 @@ final class TomTomService {
     // (adresse OCR douteuse). On préfère échouer → pas de "vraie" distance
     // fausse, et surtout pas un trajet centre-à-centre présenté comme mesuré.
     if let b = best, b.score >= Self.minScore { return .hit(b) }
-    return sawUnreachable ? .unreachable : .unusable(best?.score)
+    if let why = unreachable { return .unreachable(why) }
+    return .unusable(best?.score)
   }
 
   private func buildAddressVariants(_ address: String) -> [String] {
@@ -412,7 +425,8 @@ final class TomTomService {
     // La distinction porte ici : pas de réponse = réseau, réponse illisible =
     // adresse. Confondre les deux, c'est dire « recapture » à quelqu'un qui est
     // simplement dans un parking souterrain.
-    guard let data = httpGet(url) else { return .unreachable }
+    let reply = httpGet(url)
+    guard let data = reply.data else { return .unreachable(reply.failure) }
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let results = json["results"] as? [[String: Any]],
           let first = results.first,
@@ -438,7 +452,8 @@ final class TomTomService {
     // l'instant du calcul ; routeType=fastest → meilleur trajet.
     let urlString = "\(Self.baseRouting)/\(waypoints)/json?key=\(key)&travelMode=car&traffic=true&routeType=fastest&departAt=now"
     guard let url = URL(string: urlString) else { return .unusable("route_api bad_url") }
-    guard let data = httpGet(url) else { return .unreachable }
+    let reply = httpGet(url)
+    guard let data = reply.data else { return .unreachable("route_api " + reply.failure) }
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let routes = json["routes"] as? [[String: Any]],
           let summary = routes.first?["summary"] as? [String: Any],
@@ -455,17 +470,47 @@ final class TomTomService {
 
   // MARK: - HTTP helper
 
-  private func httpGet(_ url: URL) -> Data? {
-    var result: Data?
+  /// Le corps d'une réponse 200 — ou, quand il manque, pourquoi : « timeout »,
+  /// « offline », « cellular_off », « http429 », « net-1004 »… Ce motif part en
+  /// `detail` de `route_unreachable`.
+  private struct HttpReply {
+    let data: Data?
+    /// Lu seulement quand `data` est nil.
+    let failure: String
+  }
+
+  private func httpGet(_ url: URL) -> HttpReply {
+    var reply = HttpReply(data: nil, failure: "timeout")
     let semaphore = DispatchSemaphore(value: 0)
     var req = URLRequest(url: url)
     req.timeoutInterval = Self.timeoutSec
-    URLSession.shared.dataTask(with: req) { data, response, _ in
+    URLSession.shared.dataTask(with: req) { data, response, error in
       defer { semaphore.signal() }
-      guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-      result = data
+      if let http = response as? HTTPURLResponse {
+        reply = http.statusCode == 200
+          ? HttpReply(data: data, failure: "no_body")
+          : HttpReply(data: nil, failure: "http\(http.statusCode)")
+      } else {
+        reply = HttpReply(data: nil, failure: TomTomService.networkFailure(error))
+      }
     }.resume()
-    _ = semaphore.wait(timeout: .now() + Self.timeoutSec + 1)
-    return result
+    // Filet : `timeoutInterval` ne borne que l'attente entre deux paquets.
+    if semaphore.wait(timeout: .now() + Self.timeoutSec + 1) == .timedOut {
+      return HttpReply(data: nil, failure: "timeout")
+    }
+    return reply
+  }
+
+  /// Nom court d'une erreur réseau. `cellular_off` = données cellulaires
+  /// coupées pour Strive dans Réglages : le seul cas que le chauffeur règle
+  /// lui-même, d'où un nom à part.
+  private static func networkFailure(_ error: Error?) -> String {
+    guard let code = (error as? URLError)?.code else { return "net" }
+    switch code {
+    case .timedOut: return "timeout"
+    case .notConnectedToInternet: return "offline"
+    case .dataNotAllowed: return "cellular_off"
+    default: return "net\(code.rawValue)"
+    }
   }
 }

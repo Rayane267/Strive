@@ -59,7 +59,10 @@ object OcrParser {
      *  et toute course longue mourait au parse (272,30 € pour Lisses → Lyon,
      *  abonné perdu le 2026-10-15). Mirror iOS/TS. */
     private var fareCeiling = 2000.0
-    private var distMin = 0.3
+    /** 100 m : une course aussi courte existe (31,09 € pour 0,2 km, scan_debug
+     *  #129, rejetée par l'ancien plancher à 0,3). En dessous, ce n'est plus une
+     *  course, et le €/km frôlerait la division par zéro. Mirror iOS/TS. */
+    private var distMin = 0.1
     /** 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le
      *  plancher €/km de [isSane] qui juge une distance aberrante. Mirror iOS/TS. */
     private var distMax = 2000.0
@@ -93,7 +96,7 @@ object OcrParser {
      * {
      *   "priceAnchors": { "UBER": [...], "BOLT": [...], "HEETCH": [...] },
      *   "distanceAnchors": [...],
-     *   "sanity": { "fareMin": 3.0, "fareMax": 200.0, "distMin": 0.3, "distMax": 1000.0, "rateMin": 0.4 }
+     *   "sanity": { "fareMin": 3.0, "fareMax": 200.0, "distMin": 0.1, "distMax": 1000.0, "rateMin": 0.4 }
      * }
      */
     fun updateConfig(configJson: String) {

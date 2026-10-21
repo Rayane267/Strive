@@ -633,7 +633,7 @@ class ShareViewController: UIViewController {
       ) { outcome in
         // calculateRoute rend la main sur le main thread.
         guard case .ok(let route) = outcome,
-              route.distanceKm >= 0.3, route.distanceKm <= 2000, route.durationMin <= 1440 else {
+              route.distanceKm >= 0.1, route.distanceKm <= 2000, route.durationMin <= 1440 else {
           switch outcome {
           case .unreachable: self.showRouteFailure(.unreachable)
           case .noKey:       self.showRouteFailure(.noKey)

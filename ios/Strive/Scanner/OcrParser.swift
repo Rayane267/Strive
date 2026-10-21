@@ -43,7 +43,10 @@ final class OcrParser {
   /// toute course longue mourait au parse (272,30 € pour Lisses → Lyon, abonné
   /// perdu le 2026-10-15). Rien n'y est à reconstruire.
   private var fareCeiling: Double = 2000.0
-  private var distMin: Double = 0.3
+  /// 100 m : une course aussi courte existe (31,09 € pour 0,2 km, scan_debug
+  /// #129, rejetée par l'ancien plancher à 0,3). En dessous, ce n'est plus une
+  /// course, et le €/km frôlerait la division par zéro. Mirror TS/Kotlin.
+  private var distMin: Double = 0.1
   /// 500 km bloquait Paris → Marseille (775 km). Large exprès : c'est le
   /// plancher €/km de `isSane` qui juge une distance aberrante.
   private var distMax: Double = 2000.0

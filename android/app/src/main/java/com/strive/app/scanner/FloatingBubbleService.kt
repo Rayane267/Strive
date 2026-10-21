@@ -913,8 +913,9 @@ class FloatingBubbleService : Service() {
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
             val measured = route != null
                 // Plafonds larges : une course longue (Paris → Marseille) est
-                // une course comme une autre. Mirror iOS.
-                && route.distanceKm in 0.3..2000.0
+                // une course comme une autre ; plancher à 100 m, comme le
+                // parser — une course aussi courte existe. Mirror iOS.
+                && route.distanceKm in 0.1..2000.0
                 && route.durationMin <= 1440
                 // Plancher seul : pas de plafond €/km, une course Van/XL
                 // courte le dépasse. Mirror iOS.
@@ -938,8 +939,9 @@ class FloatingBubbleService : Service() {
                 // score), trajet hors bornes, rapport prix/km aberrant. Mirror iOS.
                 val detail = when {
                     outcome is TomTomService.RouteOutcome.Unusable -> outcome.detail
+                    outcome is TomTomService.RouteOutcome.Unreachable -> outcome.detail
                     route == null -> null
-                    route.distanceKm !in 0.3..2000.0 || route.durationMin > 1440 ->
+                    route.distanceKm !in 0.1..2000.0 || route.durationMin > 1440 ->
                         String.format(java.util.Locale.ROOT, "bounds km=%.1f min=%d", route.distanceKm, route.durationMin)
                     else ->
                         String.format(java.util.Locale.ROOT, "ratio fare=%.2f km=%.1f", ocr.fare, route.distanceKm)

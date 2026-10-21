@@ -237,10 +237,10 @@ final class ScanProcessor {
             self.computeFinal(scan: result, routeStatus: .noKey),
             Failure(reason: "route_no_key", detail: nil)
           )
-        case .unreachable:
+        case .unreachable(let why):
           gate.fire(
             self.computeFinal(scan: result, routeStatus: .unreachable),
-            Failure(reason: "route_unreachable", detail: nil)
+            Failure(reason: "route_unreachable", detail: why)
           )
         case .unusable(let why):
           gate.fire(
@@ -248,7 +248,9 @@ final class ScanProcessor {
             Failure(reason: "route_unusable", detail: why)
           )
         case .ok(let route):
-          guard route.distanceKm >= 0.3,
+          // Plancher à 100 m, comme le parser : une course aussi courte existe.
+          // Mirror Android / Share Sheet.
+          guard route.distanceKm >= 0.1,
                 // Plafonds larges : une course longue (Paris → Marseille) est
                 // une course comme une autre. Mirror Android / Share Sheet.
                 route.distanceKm <= 2000,

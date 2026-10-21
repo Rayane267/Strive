@@ -413,26 +413,27 @@
   },
   {
     "name": "distance-below-min-rejected",
+    "description": "Plancher à 100 m : 50 m n'est pas une course. Blocs sous la bande haute ignorée (25 %), sinon le cas échouait sans même lire la distance.",
     "screenHeight": 1920,
     "blocks": [
       {
         "text": "uber",
         "x": 50,
-        "y": 50,
+        "y": 600,
         "width": 200,
         "height": 20
       },
       {
-        "text": "Total 5.00",
+        "text": "Total 15.00",
         "x": 50,
-        "y": 200,
+        "y": 800,
         "width": 200,
         "height": 40
       },
       {
-        "text": "0.1 km",
+        "text": "0.05 km",
         "x": 50,
-        "y": 400,
+        "y": 1000,
         "width": 200,
         "height": 15
       }
