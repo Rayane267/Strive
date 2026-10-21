@@ -13,9 +13,14 @@
   <string name="scanner_notif_online">en ligne</string>
   <string name="scanner_ride_accept">✅ Course prise</string>
   <string name="scanner_ride_decline">❌ Refusée</string>
+  <string name="scanner_ride_taken">Prise</string>
+  <string name="scanner_ride_declined">Refusée</string>
+  <string name="scanner_ride_accepted">Acceptée</string>
   <string name="scanner_quota_reached">Quota atteint</string>
   <string name="scanner_quota_reached_free">Quota atteint · Passez à Plus</string>
   <string name="scanner_error_capture">Capture illisible</string>
   <string name="scanner_error_network">Erreur réseau</string>
+  <string name="scanner_error_timeout">Analyse interrompue — relancez le scan.</string>
+  <string name="notif_channel_reminders">Rappels</string>
   <string name="expo_runtime_version">2.4.1</string>
 </resources>

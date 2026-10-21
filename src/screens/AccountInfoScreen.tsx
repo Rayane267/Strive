@@ -323,6 +323,9 @@ const AccountInfoScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Le champ n'était posé que pendant le chargement : une fois les données
+          là, l'écran retombait sur le noir uni de `container`. */}
+      <ScreenField />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
 
       {/* ── HEADER ── */}

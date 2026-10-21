@@ -7,7 +7,7 @@
  * - Notifications de nouvelles fonctionnalités
  */
 
-import { Alert, Platform } from 'react-native';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { navigateFromNotification } from '../navigation/navigationRef';
@@ -109,10 +109,27 @@ export async function registerPushToken(
 
     const messagingInstance = fcm.getMessaging(fcm.getApp());
 
-    // C'est CET appel qui affiche la fenêtre « Strive souhaite vous envoyer des
-    // notifications ». Il ne la montre qu'une fois par installation : ensuite le
-    // système répond de mémoire, sans rien afficher.
-    const authStatus = prompt
+    // Android 13+ : la fenêtre vient de `POST_NOTIFICATIONS`, à demander à part.
+    // `requestPermission` de Firebase n'affiche rien sur Android et répond
+    // « autorisé » d'office : le système bloquait alors toutes les
+    // notifications de l'app — le verdict de la bulle compris — pendant que
+    // l'app les croyait accordées.
+    if (prompt && Platform.OS === 'android' && Number(Platform.Version) >= 33) {
+      const res = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+      );
+      if (res !== PermissionsAndroid.RESULTS.GRANTED) {
+        await rememberPushChoice('denied');
+        return 'denied';
+      }
+    }
+
+    // iOS : c'est CET appel qui affiche la fenêtre « Strive souhaite vous
+    // envoyer des notifications ». Il ne la montre qu'une fois par
+    // installation : ensuite le système répond de mémoire, sans rien afficher.
+    // Android : `hasPermission` lit l'état réel (notifications coupées dans les
+    // Réglages comprises), là où `requestPermission` répondrait toujours oui.
+    const authStatus = prompt && Platform.OS === 'ios'
       ? await fcm.requestPermission(messagingInstance)
       : await fcm.hasPermission(messagingInstance);
     const enabled =

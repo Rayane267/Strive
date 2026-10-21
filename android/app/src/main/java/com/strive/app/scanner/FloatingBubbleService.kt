@@ -11,12 +11,15 @@ import android.os.*
 import android.util.DisplayMetrics
 import android.view.*
 import android.view.WindowManager.LayoutParams
+import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.core.app.NotificationCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.strive.BuildConfig
+import kotlin.math.hypot
+import kotlin.math.max
 
 class FloatingBubbleService : Service() {
 
@@ -25,7 +28,12 @@ class FloatingBubbleService : Service() {
     private lateinit var bubbleParams: LayoutParams
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var scanInProgress = false
+    @Volatile private var scanInProgress = false
+    /** Numéro du scan en cours. Un rappel (capture, OCR, TomTom) qui arrive après
+     *  la garde, ou après un scan plus récent, porte un ancien numéro : ignoré. */
+    @Volatile private var scanToken = 0
+    /** Lancement du dernier scan, pour l'anti double-tap. */
+    private var lastScanAttemptAt = 0L
     private var countdownTimer: CountDownTimer? = null
     private var fareBadgeView: TextView? = null
     private var verdictBarView: View? = null
@@ -40,6 +48,14 @@ class FloatingBubbleService : Service() {
     private var hourlyRateView: TextView? = null
     private var kmRateView: TextView? = null
     private var distancePulse: ObjectAnimator? = null
+    /** Course affichée par la carte de résultat, en attente de Prise / Refusée.
+     *  La carte repartie, la décision se prend sur la notification. */
+    private var shownRideId: String? = null
+    /** Une confirmation Prise / Refusée est en cours : un second toucher est ignoré. */
+    private var decisionAnimating = false
+    /** Place de la bulle avant que la carte ne se centre ; elle la retrouve au
+     *  retour au repos. Effacée si le chauffeur la déplace entre-temps. */
+    private var restingX: Int? = null
 
     /** Contexte résolu dans la langue de l'app — invalidé quand elle change. */
     private var localizedCtx: android.content.Context? = null
@@ -52,11 +68,69 @@ class FloatingBubbleService : Service() {
          *  du foreground service. */
         private const val ALERT_CHANNEL_ID = "strive_scanner_alerts"
         private const val SESSION_NOTIF_ID = 43
-        /** Notification de résultat de scan avec boutons Accepter / Refuser.
-         *  Non privé : `ScanBridgeModule.clearRideResult` l'annule quand la
-         *  décision a été prise dans l'app. */
-        const val RESULT_NOTIF_ID = 44
-        private const val COUNTDOWN_MS = 15_000L
+
+        /** Dernière course affichée : son prix et ses km s'ajoutent aux gains du
+         *  jour dès « Prise », app fermée comprise. Mirror iOS (`lastTaggableRide`). */
+        private const val TAGGABLE_PREFS = "strive_last_taggable_ride"
+
+        /** Couleurs de verdict du Dynamic Island (`verdictColor`, StriveLiveActivity.swift). */
+        private val VERDICT_GREEN = Color.rgb(0, 199, 82)
+        private val VERDICT_ORANGE = Color.rgb(255, 153, 0)
+        private val VERDICT_RED = Color.rgb(240, 69, 69)
+
+        /** MaterialCommunityIcons, pendants des SF Symbols de l'île. */
+        private const val MDI_CAR = 0xF010B             // car.fill
+        private const val MDI_PERSON_WAVE = 0xF064A     // figure.wave
+        private const val MDI_CHECK = 0xF0E1E           // checkmark
+        private const val MDI_EXCLAMATION = 0xF1238     // exclamationmark
+        private const val MDI_CLOSE = 0xF1398           // xmark
+        private const val MDI_ARROW_UP_RIGHT = 0xF09C6  // arrow.up.right
+
+        /** Une décision Prise / Refusée prise sur la carte de la bulle. Mirror iOS
+         *  (`appendRideDecision` + `revertLiveActivityToIdle`) : elle part dans la
+         *  file du JS, une course prise s'ajoute aussitôt aux gains du jour, la
+         *  bulle revient au repos. */
+        fun applyRideDecision(
+            ctx: android.content.Context,
+            rideId: String,
+            status: String,
+            // Faux quand la carte joue son animation de confirmation : c'est elle
+            // qui rend la main au logo, une fois terminée.
+            returnToIdle: Boolean = true,
+        ) {
+            if (rideId.isEmpty()) return
+            val app = ctx.applicationContext
+            ScanBridgeModule.emitRideDecision(app, rideId, status)
+            val p = app.getSharedPreferences(TAGGABLE_PREFS, MODE_PRIVATE)
+            // Une seule fois par course.
+            if (status == "ACCEPTED" && p.getString("rideId", null) == rideId) {
+                todayEarnings += p.getString("fare", null)?.toDoubleOrNull() ?: 0.0
+                todayKm += p.getString("km", null)?.toDoubleOrNull() ?: 0.0
+                // €/h recalculé sur le temps en ligne, comme iOS sur `sessionStartEpoch`.
+                if (sessionStartMs > 0) {
+                    val hours = (System.currentTimeMillis() - sessionStartMs) / 3_600_000.0
+                    if (hours > 0.0003) todayHourlyRate = todayEarnings / hours
+                }
+                p.edit().clear().apply()
+            }
+            instance?.let { svc ->
+                svc.mainHandler.post {
+                    if (returnToIdle && svc.shownRideId == rideId) svc.showIdleState()
+                    svc.refreshForegroundNotification()
+                }
+            }
+        }
+        /** Durée d'affichage de la carte de résultat avant le retour au logo. */
+        private const val COUNTDOWN_MS = 10_000L
+        /** Durée d'affichage d'une erreur, quelle qu'elle soit (scan, session,
+         *  quota) avant le retour au logo. */
+        private const val ERROR_DISPLAY_MS = 3_000L
+        /** Anti double-tap : deux scans lancés à moins de 3 s d'écart. Mirror iOS
+         *  (`ScanProcessor.shouldThrottleRapidScan`). */
+        private const val SCAN_COOLDOWN_MS = 3_000L
+        /** Garde : un scan sans issue au bout de 15 s est abandonné. iOS est à
+         *  20–25 s ; plus court ici, la bulle est sous les yeux du chauffeur. */
+        private const val SCAN_TIMEOUT_MS = 15_000L
         var instance: FloatingBubbleService? = null
 
         /** Langue choisie DANS Strive (fr/en). Persistée : le service survit à la
@@ -187,24 +261,6 @@ class FloatingBubbleService : Service() {
                 .edit().remove(DEVICE_COUNT_KEY).remove(DEVICE_DAY_KEY).apply()
         }
 
-        /**
-         * Rend le scan qui n'a rien donné.
-         *
-         * Le compteur est incrémenté AVANT l'appel TomTom — il fallait bien qu'il
-         * le soit, la bulle pouvant mourir entre les deux. Mais depuis qu'un
-         * itinéraire manquant se solde par un échec et non plus par les chiffres
-         * de la plateforme, le chauffeur payait un scan pour un message d'erreur.
-         * iOS ne compte le sien qu'au moment d'afficher un résultat : on s'aligne.
-         */
-        fun refundDeviceScanCount(ctx: android.content.Context) {
-            val p = ctx.applicationContext
-                .getSharedPreferences(DEVICE_QUOTA_PREFS, android.content.Context.MODE_PRIVATE)
-            if (p.getInt(DEVICE_DAY_KEY, 0) != todayKey()) return
-            val base = p.getInt(DEVICE_COUNT_KEY, 0)
-            if (base <= 0) return
-            p.edit().putInt(DEVICE_COUNT_KEY, base - 1).apply()
-        }
-
         /** Plafond d'appareil : ce téléphone a épuisé les scans gratuits du jour
          *  avec un AUTRE compte. Miroir de `AnalyzeRideIntent.isDeviceQuotaReached`
          *  et de la règle serveur — les trois doivent rester identiques.
@@ -227,14 +283,113 @@ class FloatingBubbleService : Service() {
         var todayKm: Double = 0.0
         var onlineMinutes: Int = 0
         var hasSessionKpi: Boolean = false
+        /** Début du temps en ligne du jour, déduit du cumul poussé par le JS :
+         *  ancre du chronomètre de la notification et du €/h recalculé après
+         *  « Prise ». Mirror iOS (`sessionStartEpoch`). */
+        var sessionStartMs: Long = 0L
 
         fun updateSessionKpi(todayEarnings: Double, todayHourlyRate: Double, todayKm: Double, onlineMinutes: Int) {
             this.todayEarnings = todayEarnings
             this.todayHourlyRate = todayHourlyRate
             this.todayKm = todayKm
             this.onlineMinutes = onlineMinutes
+            sessionStartMs = System.currentTimeMillis() - onlineMinutes * 60_000L
             hasSessionKpi = true
             instance?.refreshForegroundNotification()
+        }
+
+        // ─── Relance automatique ─────────────────────────────────────────────
+
+        /** Ce que le JS pousse à la bulle, gardé sur le téléphone. Relancée sans
+         *  lui — Android qui la recrée, redémarrage, mise à jour — elle doit
+         *  retrouver le même verdict, le même quota et le même état en ligne.
+         *  Le jeton de session n'y est PAS : il expire en une heure, et un jeton
+         *  périmé bloquerait les scans ; sans lui, la course passe par le journal. */
+        private const val STATE_PREFS = "strive_bubble_state"
+
+        /** Au-delà de 2 h sans activité, le JS ferme la session
+         *  (`SESSION_INACTIVITY_MS`) : la bulle ne revient pas pour une session
+         *  oubliée la veille. */
+        private const val AUTO_RUN_MAX_IDLE_MS = 2 * 3_600_000L
+
+        private fun statePrefs(ctx: android.content.Context) =
+            ctx.applicationContext.getSharedPreferences(STATE_PREFS, android.content.Context.MODE_PRIVATE)
+
+        fun saveState(ctx: android.content.Context) {
+            statePrefs(ctx).edit()
+                .putBoolean("sessionOnline", sessionOnline)
+                .putBoolean("includePickup", includePickup)
+                .putString("minHourlyRate", minHourlyRate.toString())
+                .putString("minKmRate", minKmRate.toString())
+                .putBoolean("deductFuel", deductFuel)
+                .putString("fuelCostPerKm", fuelCostPerKm.toString())
+                .putBoolean("quotaReached", quotaReached)
+                .putBoolean("isFreeTier", isFreeTier)
+                .putInt("scanCountToday", scanCountToday)
+                .putInt("scanQuotaLimit", scanQuotaLimit)
+                .putInt("scanCountDay", scanCountDay)
+                .putInt("quotaResetHour", quotaResetHour)
+                .putInt("deviceFreeLimit", deviceFreeLimit)
+                .apply()
+        }
+
+        private fun restoreState(ctx: android.content.Context) {
+            val p = statePrefs(ctx)
+            if (!p.contains("sessionOnline")) return
+            sessionOnline = p.getBoolean("sessionOnline", sessionOnline)
+            includePickup = p.getBoolean("includePickup", includePickup)
+            minHourlyRate = p.getString("minHourlyRate", null)?.toDoubleOrNull() ?: minHourlyRate
+            minKmRate = p.getString("minKmRate", null)?.toDoubleOrNull() ?: minKmRate
+            deductFuel = p.getBoolean("deductFuel", deductFuel)
+            fuelCostPerKm = p.getString("fuelCostPerKm", null)?.toDoubleOrNull() ?: fuelCostPerKm
+            quotaReached = p.getBoolean("quotaReached", quotaReached)
+            isFreeTier = p.getBoolean("isFreeTier", isFreeTier)
+            scanCountToday = p.getInt("scanCountToday", scanCountToday)
+            scanQuotaLimit = p.getInt("scanQuotaLimit", scanQuotaLimit)
+            scanCountDay = p.getInt("scanCountDay", scanCountDay)
+            quotaResetHour = p.getInt("quotaResetHour", quotaResetHour)
+            deviceFreeLimit = p.getInt("deviceFreeLimit", deviceFreeLimit)
+        }
+
+        /** Activité de session : passage en ligne, chaque scan abouti. */
+        fun markActive(ctx: android.content.Context) {
+            statePrefs(ctx).edit().putLong("lastActiveMs", System.currentTimeMillis()).apply()
+        }
+
+        /** Le chauffeur a coupé la bulle lui-même (bouton scanner) : elle ne
+         *  revient pas d'elle-même tant qu'il ne la rallume pas. */
+        fun setUserStopped(ctx: android.content.Context, stopped: Boolean) {
+            statePrefs(ctx).edit().putBoolean("userStopped", stopped).apply()
+        }
+
+        /** La bulle doit-elle tourner sans qu'on le lui demande ? En ligne, pas
+         *  coupée à la main, et une session qui a servi il y a moins de 2 h. */
+        fun shouldAutoRun(ctx: android.content.Context): Boolean {
+            val p = statePrefs(ctx)
+            return p.getBoolean("sessionOnline", false) &&
+                !p.getBoolean("userStopped", false) &&
+                System.currentTimeMillis() - p.getLong("lastActiveMs", 0L) < AUTO_RUN_MAX_IDLE_MS
+        }
+
+        /** Relance la bulle si elle doit tourner et que ses autorisations sont
+         *  là. Appelée à l'ouverture de l'app, au démarrage du téléphone et après
+         *  une mise à jour. Rend vrai si la bulle tourne. */
+        fun ensureRunning(ctx: android.content.Context): Boolean {
+            if (instance != null) return true
+            if (!shouldAutoRun(ctx)) return false
+            val app = ctx.applicationContext
+            val overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                android.provider.Settings.canDrawOverlays(app)
+            // Android < 11 : la capture exige un accord redonné à chaque démarrage,
+            // qu'une relance sans le chauffeur ne peut pas obtenir.
+            if (!overlayOk || !ScanBridgeModule.isAccessibilityServiceEnabled(app) ||
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+            val intent = Intent(app, FloatingBubbleService::class.java)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) app.startForegroundService(intent)
+                else app.startService(intent)
+            }.onFailure { return false }
+            return true
         }
     }
 
@@ -243,6 +398,9 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Seuils, quota et état en ligne : ceux que le JS avait poussés, au cas
+        // où la bulle repart sans lui.
+        restoreState(this)
         // Le service peut redémarrer sans que JS ait tourné : le parser et le
         // géocodeur repartiraient alors sur leurs valeurs par défaut. On leur
         // rend le pays écrit en préférences avant le premier scan.
@@ -252,23 +410,34 @@ class FloatingBubbleService : Service() {
         TomTomService.hydrate(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIF_ID,
-                buildNotification(),
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                else
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
-        } else {
-            startForeground(NOTIF_ID, buildNotification())
-        }
+        // La bulle d'abord : relancé par le système en arrière-plan, le service
+        // n'a le droit de passer au premier plan qu'avec une fenêtre visible.
         setupBubble()
+        val foreground = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIF_ID,
+                    buildNotification(),
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    else
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
+            } else {
+                startForeground(NOTIF_ID, buildNotification())
+            }
+        }.isSuccess
+        if (!foreground) stopSelf()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY
+    /** STICKY : tuée par Android (mémoire, batterie), la bulle est recréée. Une
+     *  relance par le système arrive sans intent ; elle n'aboutit que si la
+     *  session tourne encore. */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null && !shouldAutoRun(this)) stopSelf()
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -289,6 +458,7 @@ class FloatingBubbleService : Service() {
     private fun clearTransientState() {
         countdownTimer?.cancel()
         countdownTimer = null
+        decisionAnimating = false
         distancePulse?.cancel()
         distancePulse = null
         distanceView?.alpha = 1f
@@ -366,6 +536,7 @@ class FloatingBubbleService : Service() {
                         bubbleParams.y = (initY + dy).coerceAtLeast(0)
                         windowManager.updateViewLayout(bubbleContainer, bubbleParams)
                         moved = true
+                        restingX = null
                     }; true
                 }
                 MotionEvent.ACTION_UP -> { if (!moved) triggerScan(); true }
@@ -390,7 +561,7 @@ class FloatingBubbleService : Service() {
             ScanBridgeModule.emitScanFailure(this, "session_off")
             notifySessionRequired()
             showSessionRequiredState()
-            mainHandler.postDelayed({ showIdleState() }, 2500)
+            mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
             return
         }
         // Jeton présent mais périmé : le scan aurait tourné puis échoué à l'appel
@@ -403,7 +574,7 @@ class FloatingBubbleService : Service() {
             ScanBridgeModule.emitScanFailure(this, "session_off")
             notifySessionRequired()
             showSessionRequiredState()
-            mainHandler.postDelayed({ showIdleState() }, 2500)
+            mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
             return
         }
         // Quota dépassé → on bloque AVANT toute capture/OCR/TomTom. Pas d'event
@@ -425,39 +596,78 @@ class FloatingBubbleService : Service() {
         if (isDeviceQuotaReached(this)) {
             ScanBridgeModule.emitScanFailure(this, "quota_reached")
             showQuotaReachedState()
-            mainHandler.postDelayed({ showIdleState() }, 2500)
+            mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
             return
         }
         val quotaByCount = scanQuotaLimit > 0 && scanCountForToday() >= scanQuotaLimit
         if (quotaReached || quotaByCount) {
             ScanBridgeModule.emitScanFailure(this, "quota_reached")
             showQuotaReachedState()
-            mainHandler.postDelayed({ showIdleState() }, 2500)
+            mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
             return
         }
+        // Anti double-tap : un appui moins de 3 s après le lancement du scan
+        // précédent est ignoré. Le verrou seul laissait passer l'appui qui suit de
+        // près un résultat. Après les refus, comme sur iOS : un scan refusé ne
+        // consomme pas le délai.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastScanAttemptAt < SCAN_COOLDOWN_MS) {
+            ScanBridgeModule.emitScanFailure(this, "throttled")
+            return
+        }
+        lastScanAttemptAt = now
+        // Le verrou tient jusqu'à l'ISSUE du scan — résultat, échec ou garde —
+        // et plus seulement jusqu'au départ de TomTom : un second appui pendant
+        // l'itinéraire créait une seconde course pour la même offre, et
+        // consommait un second scan. Mirror iOS (`scanInProgressSince`).
         scanInProgress = true
+        val token = ++scanToken
+        mainHandler.postDelayed({ onScanTimeout(token) }, SCAN_TIMEOUT_MS)
         showLoadingState()
 
         mainHandler.postDelayed({
+            if (!isCurrentScan(token)) return@postDelayed
             val svc = StriveAccessibilityService.instance
             if (svc == null) {
-                onScanError(); scanInProgress = false
+                onScanError(); finishScan(token)
                 ScanBridgeModule.emitScanFailure(this, "invalid_image", "no_accessibility_service")
                 ScanBridgeModule.emitScanFailed(); return@postDelayed
             }
             svc.captureScreen { bitmap ->
+                if (!isCurrentScan(token)) { bitmap?.recycle(); return@captureScreen }
                 if (bitmap == null) {
                     mainHandler.post { onScanError() }
-                    scanInProgress = false
+                    finishScan(token)
                     ScanBridgeModule.emitScanFailure(this, "invalid_image", "null_bitmap")
                     ScanBridgeModule.emitScanFailed(); return@captureScreen
                 }
-                runOcr(bitmap, getScreenWidth(), getScreenHeight())
+                runOcr(bitmap, getScreenWidth(), getScreenHeight(), token)
             }
         }, 50)
     }
 
-    private fun runOcr(fullBitmap: Bitmap, w: Int, h: Int) {
+    private fun isCurrentScan(token: Int) = scanInProgress && token == scanToken
+
+    /** Issue du scan [token] : lève le verrou, sauf s'il appartient déjà à un
+     *  scan plus récent. */
+    private fun finishScan(token: Int) {
+        if (token == scanToken) scanInProgress = false
+    }
+
+    /** Garde : capture, OCR ou TomTom n'ont pas rendu la main à temps. Le verrou
+     *  se lève, le chauffeur lit qu'il doit relancer, et un résultat qui
+     *  arriverait encore est ignoré (`isCurrentScan`). Mirror iOS (motif
+     *  `timeout`, « Analyse interrompue — relancez le scan »). */
+    private fun onScanTimeout(token: Int) {
+        if (!isCurrentScan(token)) return
+        scanInProgress = false
+        showErrorState(textRes = com.strive.R.string.scanner_error_timeout)
+        mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
+        ScanBridgeModule.emitScanFailure(this, "timeout")
+        ScanBridgeModule.emitScanFailed()
+    }
+
+    private fun runOcr(fullBitmap: Bitmap, w: Int, h: Int, token: Int) {
         // Downscale à 1440px — on privilégie la qualité (fidélité des glyphes fins
         // comme "1" vs "l") plutôt que la vitesse. Sous 1440px on garde la res native.
         val maxW = 1440
@@ -471,6 +681,7 @@ class FloatingBubbleService : Service() {
         recognizer.process(InputImage.fromBitmap(bitmapForOcr, 0))
             .addOnSuccessListener { visionText ->
                 ocrBitmap?.recycle()
+                if (!isCurrentScan(token)) { fullBitmap.recycle(); return@addOnSuccessListener }
                 // Pré-filtre sous la même bande que le parser : la Live Activity
                 // de Strive en haut faisait passer un journal d'appels pour une
                 // offre, et son OCR partait dans scan_debug (#66). Mirror iOS.
@@ -490,8 +701,8 @@ class FloatingBubbleService : Service() {
                     // donner un verdict différent du verdict final.
                     // Blocs émis en release (et non plus DEBUG-only) : alimentent
                     // scan_debug côté JS quand une adresse manque.
-                    resolveTomTomAndEmit(result, base64, debugBlocks, h)
-                    scanInProgress = false
+                    // Le verrou se lève dans `resolveTomTomAndEmit`, à l'issue.
+                    resolveTomTomAndEmit(result, base64, debugBlocks, token, h)
                 } else if (OcrParser.looksLikeRideOffer(visibleText) && OcrParser.isUnsupportedLanguage(lines)) {
                     // LA LANGUE N'EXPLIQUE QU'UN ÉCHEC, ELLE N'EN PROVOQUE AUCUN.
                     // Mirror iOS (ScanProcessor.process) : l'offre étrangère était
@@ -510,12 +721,12 @@ class FloatingBubbleService : Service() {
                         blocks = debugBlocks, screenHeight = h,
                     )
                     ScanBridgeModule.emitScanFailed()
-                    scanInProgress = false
+                    finishScan(token)
                 } else if (OcrParser.looksLikeRideOffer(visibleText)) {
                     // Les blocs partent avec : c'est un écran d'offre que le parser
                     // local n'a pas su lire, donc exactement la fixture qui manque.
                     // Le détail dit à quelle étape il a renoncé.
-                    failUnreadable(fullBitmap, debugBlocks, h, detail = OcrParser.lastFailure)
+                    failUnreadable(fullBitmap, token, debugBlocks, h, detail = OcrParser.lastFailure)
                 } else {
                     // Pré-filtre anti-pub : du texte a été lu mais pas d'offre (un
                     // montant ET une distance ou une durée) → « pas une offre ».
@@ -529,13 +740,14 @@ class FloatingBubbleService : Service() {
                         ScanBridgeModule.emitScanFailure(this, "not_a_ride", OcrParser.lastFailure)
                     }
                     ScanBridgeModule.emitScanFailed()
-                    scanInProgress = false
+                    finishScan(token)
                 }
             }
             .addOnFailureListener { e ->
                 ocrBitmap?.recycle()
+                if (!isCurrentScan(token)) { fullBitmap.recycle(); return@addOnFailureListener }
                 failUnreadable(
-                    fullBitmap, reason = "ocr_empty",
+                    fullBitmap, token, reason = "ocr_empty",
                     detail = "mlkit_error ${e.javaClass.simpleName}",
                 )
             }
@@ -554,6 +766,7 @@ class FloatingBubbleService : Service() {
      *  exactement la fixture qui manque au parser. Nuls quand l'OCR a échoué. */
     private fun failUnreadable(
         bitmap: Bitmap,
+        token: Int,
         debugBlocks: String? = null,
         screenHeight: Int = 0,
         reason: String = "offer_unreadable",
@@ -566,25 +779,25 @@ class FloatingBubbleService : Service() {
             blocks = debugBlocks, screenHeight = screenHeight,
         )
         ScanBridgeModule.emitScanFailed()
-        scanInProgress = false
+        finishScan(token)
     }
 
     private fun onScanError() {
         mainHandler.post { showErrorState() }
-        mainHandler.postDelayed({ showIdleState() }, 2500)
+        mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
     }
 
     /** Écran scanné sans signal d'offre VTC (pub, etc.). */
     private fun onNotARide() {
         mainHandler.post { showNotARideState() }
-        mainHandler.postDelayed({ showIdleState() }, 2500)
+        mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
     }
 
-    /** Offre dans une langue que l'app ne lit pas. Reste plus longtemps : c'est
-     *  une consigne à lire, pas un simple constat. */
+    /** Offre dans une langue que l'app ne lit pas : une consigne à lire, même
+     *  durée que les autres erreurs. */
     private fun onUnsupportedLanguage() {
         mainHandler.post { showNotARideState(com.strive.R.string.scanner_unsupported_language) }
-        mainHandler.postDelayed({ showIdleState() }, 5000)
+        mainHandler.postDelayed({ showIdleState() }, ERROR_DISPLAY_MS)
     }
 
     /**
@@ -637,19 +850,10 @@ class FloatingBubbleService : Service() {
         ocr: OcrParser.ScanResult,
         base64: String,
         debugBlocks: String?,
+        token: Int,
         screenHeight: Int = 0,
         geminiUsed: Boolean = false,
     ) {
-        // Scan réussi (OCR a produit un résultat) → on incrémente le compteur
-        // natif. Le JS réécrira la valeur réelle (compte DB) au prochain sync.
-        // Nouveau jour → on repart de 0 avant d'incrémenter.
-        val today = todayKey()
-        scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
-        scanCountDay = today
-        // Le compteur d'appareil suit le même scan, dans la même foulée : un
-        // écart entre les deux ferait croire à un second compte et déclencherait
-        // le refus « autre compte » sur un chauffeur seul.
-        incrementDeviceScanCount(this)
         // Horodatage du scan (secondes epoch) : il DATE la course — jour
         // d'affectation et registre de quota. Il ne l'identifie plus.
         val scanTs = System.currentTimeMillis() / 1000.0
@@ -680,7 +884,6 @@ class FloatingBubbleService : Service() {
             // droit d'avoir.
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom SKIP (adresse vide ou clé absente) → échec")
             val network = !TomTomService.isReady
-            refundDeviceScanCount(this)
             mainHandler.post { showErrorState(network) }
             // Le motif part en base, comme sur iOS : sans lui, un échec
             // d'itinéraire Android ne se compterait nulle part. Une adresse
@@ -698,10 +901,13 @@ class FloatingBubbleService : Service() {
                 parsed = ocr,
             )
             ScanBridgeModule.emitScanFailed()
+            finishScan(token)
             return
         }
 
         TomTomService.calculateRoute(pickup, dest, screenDistanceKm = ocr.distanceKm) { outcome ->
+            // Arrivé après la garde : le chauffeur a déjà lu « relancez ».
+            if (!isCurrentScan(token)) return@calculateRoute
             if (BuildConfig.DEBUG) android.util.Log.d("StriveScan", "TomTom outcome=$outcome (OCR dist=${ocr.distanceKm} dur=${ocr.durationMin})")
             val route = (outcome as? TomTomService.RouteOutcome.Ok)?.route
             val ratio = if (route != null && route.distanceKm > 0) ocr.fare / route.distanceKm else 0.0
@@ -720,7 +926,6 @@ class FloatingBubbleService : Service() {
                 // demande une autre capture. Deux motifs, deux messages.
                 val network = outcome is TomTomService.RouteOutcome.Unreachable ||
                     outcome is TomTomService.RouteOutcome.NoKey
-                refundDeviceScanCount(this)
                 mainHandler.post { showErrorState(network) }
                 // Le motif exact part en base : c'est lui qui dira, dans une
                 // semaine, s'il faut un retry réseau ou un meilleur géocodage.
@@ -749,6 +954,7 @@ class FloatingBubbleService : Service() {
                     parsed = ocr,
                 )
                 ScanBridgeModule.emitScanFailed()
+                finishScan(token)
                 return@calculateRoute
             }
 
@@ -764,8 +970,35 @@ class FloatingBubbleService : Service() {
                 destLat = route.destCoords?.lat?.let(OcrParser::roundedPoint),
                 destLon = route.destCoords?.lon?.let(OcrParser::roundedPoint),
             )
-            mainHandler.post { showResultState(finalResult); applyVerdict(finalResult); postRideDecisionNotification(finalResult, rideId) }
+            // Le scan ne compte qu'ICI, au verdict mesuré : un échec, une adresse
+            // introuvable ou la garde ne consomment rien. Mirror iOS, et règle du
+            // serveur, qui ne compte que les courses enregistrées. Le JS réécrit
+            // la valeur réelle (compte DB) au prochain sync. Nouveau jour → 0.
+            val today = todayKey()
+            scanCountToday = (if (scanCountDay == today) scanCountToday else 0) + 1
+            scanCountDay = today
+            markActive(this)
+            saveState(this)
+            // Le compteur d'appareil suit le même scan, dans la même foulée : un
+            // écart entre les deux ferait croire à un second compte et déclencherait
+            // le refus « autre compte » sur un chauffeur seul.
+            incrementDeviceScanCount(this)
+            val metrics = computeMetrics(finalResult)
+            applicationContext.getSharedPreferences(TAGGABLE_PREFS, MODE_PRIVATE).edit()
+                .putString("rideId", rideId)
+                .putString("fare", metrics.displayFare.toString())
+                .putString("km", metrics.totalDistanceKm.toString())
+                .apply()
+            // La carte seule, pas de notification en plus : comme iOS, qui n'en
+            // envoie une que si la Dynamic Island n'a rien pu afficher.
+            mainHandler.post { showResultState(finalResult, rideId); applyVerdict(finalResult) }
             ScanBridgeModule.emitScanResult(this, finalResult, base64, debugBlocks, screenHeight, scanTs, rideId, geminiUsed)
+            // En base dès le scan, après le journal, sans attendre le JS. Mirror iOS.
+            RideUploader.upload(
+                finalResult, rideId, scanTs,
+                metrics.totalDistanceKm, metrics.totalDurationMin, metrics.hourlyRate, metrics.kmRate, fuelCostPerKm,
+            )
+            finishScan(token)
         }
     }
 
@@ -820,7 +1053,8 @@ class FloatingBubbleService : Service() {
         else result.fare
 
         return RideMetrics(
-            hourlyRate, kmRate, totalDuration.toInt(), totalDistance, level, displayFare
+            // Arrondi et non tronqué : 23,7 min s'affiche 24, comme sur iOS.
+            hourlyRate, kmRate, Math.round(totalDuration).toInt(), totalDistance, level, displayFare
         )
     }
 
@@ -833,25 +1067,19 @@ class FloatingBubbleService : Service() {
     /** @param level 0=rouge (nul), 1=orange (moyen), 2=vert (bien) */
     fun updateVerdict(level: Int) {
         mainHandler.post {
-            val color = when (level) {
-                2    -> Color.parseColor("#00C853")  // vert
-                1    -> Color.parseColor("#FF9800")  // orange
-                else -> Color.parseColor("#EF4444")  // rouge
-            }
-            val r = dpToPx(12).toFloat()
-            val rc = dpToPx(14).toFloat()
+            val color = verdictColor(level)
 
-            // Badge prix
-            fareBadgeView?.background = GradientDrawable().apply { setColor(color); cornerRadius = r }
-            // Triangle
+            // Pilule du prix
+            fareBadgeView?.background = farePillBackground(color)
+            // Flèche du €/km
             verdictTriangleView?.setTextColor(color)
-            // Route : cercle voiture + ligne + dot central + cercle warning
-            routeCarCircle?.background = GradientDrawable().apply { setColor(color); cornerRadius = rc }
-            routeLine?.setBackgroundColor(color)
-            routeCenterDot?.background = GradientDrawable().apply { setColor(color); cornerRadius = dpToPx(5).toFloat() }
-            routeGpsCircle?.background = GradientDrawable().apply { setColor(color); cornerRadius = rc }
-            // Verdict au bout de la ligne — comme la Live Activity iOS (✓ / ! / ✕).
-            routeGpsGlyphView?.text = when (level) { 2 -> "✓"; 1 -> "!"; else -> "✕" }
+            // Trajet : voiture, trait, passager, verdict
+            routeCarCircle?.background = circleBackground(color)
+            routeLine?.background = routeLineBackground(color)
+            routeCenterDot?.background = circleBackground(color)
+            routeGpsCircle?.background = circleBackground(color)
+            // Verdict au bout du trajet — comme le Dynamic Island (✓ / ! / ✕).
+            routeGpsGlyphView?.text = mdi(verdictGlyphFor(level))
             // Countdown bar
             verdictBarView?.background = GradientDrawable().apply {
                 setColor(color); cornerRadius = dpToPx(2).toFloat()
@@ -872,7 +1100,7 @@ class FloatingBubbleService : Service() {
     fun updateMetrics(hourlyRate: Double, kmRate: Double, durationMin: Int, distanceKm: Double) {
         mainHandler.post {
             hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
-            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
+            kmRateView?.text = MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
             distanceView?.text = MarketFormat.distanceText(this, distanceKm)
         }
@@ -890,7 +1118,7 @@ class FloatingBubbleService : Service() {
     ) {
         mainHandler.post {
             hourlyRateView?.text = MarketFormat.money(this, hourlyRate, 0)
-            kmRateView?.text = "↑" + MarketFormat.perDistance(this, kmRate)
+            kmRateView?.text = MarketFormat.perDistance(this, kmRate)
             durationView?.text = "${durationMin}min"
             distanceView?.text = MarketFormat.distanceText(this, distanceKm)
             updateVerdict(verdictLevel)
@@ -935,43 +1163,35 @@ class FloatingBubbleService : Service() {
     private fun showIdleState() {
         clearTransientState()
         bubbleContainer.removeAllViews()
+        shownRideId = null
+        restingX?.let { bubbleParams.x = it; restingX = null }
 
-        val pill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(6), dpToPx(6), dpToPx(14), dpToPx(6))
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#E8000000"))
-                cornerRadius = dpToPx(999).toFloat()
-                setStroke(dpToPx(1), Color.parseColor("#3300E676"))
+        // Le logo seul, comme l'icône de l'app : ni pilule ni texte.
+        val logoSize = dpToPx(48)
+        val logo = ImageView(this).apply {
+            setImageResource(com.strive.R.drawable.strive_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            // Ombre portée sur la forme du logo (carré arrondi), pas sur son cadre.
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, view.width * 0.23f)
+                }
             }
             elevation = dpToPx(10).toFloat()
         }
-
-        val logoSize = dpToPx(30)
-        pill.addView(ImageView(this).apply {
-            setImageResource(com.strive.R.drawable.strive_logo)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }, LinearLayout.LayoutParams(logoSize, logoSize).apply {
-            marginEnd = dpToPx(8)
+        // Marge : l'ombre déborde du logo et la fenêtre la couperait.
+        bubbleContainer.addView(logo, FrameLayout.LayoutParams(logoSize, logoSize).apply {
+            setMargins(dpToPx(6), dpToPx(6), dpToPx(6), dpToPx(6))
         })
-
-        pill.addView(TextView(this).apply {
-            text = "Strive"; textSize = 14f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-        })
-
-        bubbleContainer.addView(pill, FrameLayout.LayoutParams(
-            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT
-        ))
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
     private fun showLoadingState() {
         clearTransientState()
         bubbleContainer.removeAllViews()
+        // Le scan suivant remplace la carte, comme sur iOS ; la course d'avant
+        // reste taguable depuis sa propre notification.
+        shownRideId = null
 
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1003,28 +1223,33 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
-    private fun showResultState(result: OcrParser.ScanResult) {
+    private fun showResultState(result: OcrParser.ScanResult, rideId: String) {
         clearTransientState()
         bubbleContainer.removeAllViews()
+        shownRideId = rideId
 
         val screenWidth = getScreenWidth()
-        val cardW = (screenWidth * 0.76f).toInt().coerceAtMost(dpToPx(320))
+        // À peu près la largeur de l'île étendue : l'écran moins ses marges.
+        val cardW = (screenWidth * 0.92f).toInt().coerceAtMost(dpToPx(380))
 
         // Métriques provisoires affichées *tant que TomTom n'a pas répondu*.
         // Source unique : computeMetrics — il porte déjà la préférence
         // include_pickup_location, l'heuristique de durée et la déduction
         // carburant. Les recalculer ici avait fini par diverger.
         val m = computeMetrics(result)
-        val hourlyRate = m.hourlyRate
-        val kmRate = m.kmRate
+        val color = verdictColor(m.level)
+        val medium = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
-        // ── Card ──
+        // ── Card ── Le Dynamic Island étendu, région par région
+        // (`StriveLiveActivity.swift`) : même fond noir, mêmes tailles, mêmes
+        // couleurs. Ce que le chauffeur lit dans l'île sur iPhone, il le lit
+        // dans la bulle sur Android — et le tutoriel peut montrer l'un pour l'autre.
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+            setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14))
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#F01A1A1A"))
-                cornerRadius = dpToPx(18).toFloat()
+                setColor(Color.BLACK)
+                cornerRadius = dpToPx(32).toFloat()
             }
             elevation = dpToPx(10).toFloat()
             // Tap sur la bulle → ouvre l'app sur l'écran Historique
@@ -1033,135 +1258,111 @@ class FloatingBubbleService : Service() {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // ROW 1 : Platform | €XX/h | [€XX pill] | ↑€X.XX/km | ▼
+        // ROW 1 : Plateforme ............ ↗ €X.XX/km  (leading / trailing)
+        //         puis, centrés dessous : €XX/h [€XX]  (center)
+        //   Dans l'île, les régions latérales flanquent la caméra et le
+        //   centre passe en dessous : c'est cet étagement qu'on reproduit.
         // ═══════════════════════════════════════════════════════════════
         val row1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
-        // ── Zone GAUCHE : Platform + €/h ──
-        val leftZone = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.START
-        }
-        leftZone.addView(TextView(this).apply {
+        row1.addView(TextView(this).apply {
             text = result.platform.name.let { it[0] + it.substring(1).lowercase() }
-            textSize = 15f; setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+            textSize = 14f; setTextColor(Color.argb(191, 255, 255, 255))
+            typeface = medium
             includeFontPadding = false
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginEnd = dpToPx(6) })
+        })
+
+        val center = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
         val hourlyRateTv = TextView(this).apply {
-            text = MarketFormat.money(this@FloatingBubbleService, hourlyRate, 0)
-            textSize = 21f; setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+            text = MarketFormat.money(this@FloatingBubbleService, m.hourlyRate, 0)
+            textSize = 19f; setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
             includeFontPadding = false
         }
         hourlyRateView = hourlyRateTv
-        leftZone.addView(hourlyRateTv)
-        leftZone.addView(TextView(this).apply {
+        center.addView(hourlyRateTv)
+        center.addView(TextView(this).apply {
             text = "/h"
-            textSize = 13f; setTextColor(Color.parseColor("#999999"))
+            textSize = 12f; setTextColor(Color.argb(140, 255, 255, 255))
+            typeface = medium
             includeFontPadding = false
-        })
-        row1.addView(leftZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        // ── Zone MILIEU : Fare pill ──
-        val middleZone = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginStart = dpToPx(2); marginEnd = dpToPx(10) })
         val fareBadge = TextView(this).apply {
             // Net de carburant si la préférence est active (affichage seul).
-            text = MarketFormat.money(this@FloatingBubbleService, m.displayFare, 0)
-            textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
+            // Centimes gardés quand le montant n'est pas rond. Mirror iOS (`striveFareText`).
+            text = MarketFormat.fare(this@FloatingBubbleService, m.displayFare)
+            textSize = 14f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4))
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#CC3333"))
-                cornerRadius = dpToPx(11).toFloat()
-            }
+            setPadding(dpToPx(12), dpToPx(5), dpToPx(12), dpToPx(5))
+            background = farePillBackground(color)
             includeFontPadding = false
         }
         fareBadgeView = fareBadge
-        middleZone.addView(fareBadge)
-        row1.addView(middleZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        center.addView(fareBadge)
+        row1.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
 
-        // ── Zone DROITE : ↑€/km + ▼ ──
-        val rightZone = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+        val kmArrow = TextView(this).apply {
+            text = mdi(MDI_ARROW_UP_RIGHT)
+            typeface = iconFont; textSize = 13f; setTextColor(color)
+            includeFontPadding = false
         }
+        verdictTriangleView = kmArrow
+        row1.addView(kmArrow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = dpToPx(4) })
         val kmRateTv = TextView(this).apply {
-            text = "↑" + MarketFormat.perDistance(this@FloatingBubbleService, kmRate)
-            textSize = 13f; setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+            text = MarketFormat.perDistance(this@FloatingBubbleService, m.kmRate)
+            textSize = 14f; setTextColor(Color.WHITE)
+            typeface = medium
             includeFontPadding = false
         }
         kmRateView = kmRateTv
-        rightZone.addView(kmRateTv)
-        val triangle = TextView(this).apply {
-            text = "▼"; textSize = 11f
-            setTextColor(Color.parseColor("#666666"))
-            includeFontPadding = false
-        }
-        verdictTriangleView = triangle
-        rightZone.addView(triangle, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginStart = dpToPx(4) })
-        row1.addView(rightZone, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row1.addView(kmRateTv)
 
         card.addView(row1, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(8) })
+        ).apply { bottomMargin = dpToPx(4) })
+        card.addView(center, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(12) })
 
         // ═══════════════════════════════════════════════════════════════
-        // ROW 2 : [🚗] —— ● —— [29min / 12.9km] [ⓘ]
-        //   Circles, line, dot recolor via updateVerdict
+        // ROW 2 : (voiture) ━━(passager)━━ 29min/12.9km (✓) — `RouteRow`.
+        //   Cercles, trait et passager recolorés par updateVerdict.
         // ═══════════════════════════════════════════════════════════════
-        val neutralColor = Color.parseColor("#555555")
-        val circleSize = dpToPx(18)
-        val dotSize = dpToPx(10)
-
         val row2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+        val circleSize = dpToPx(24)
 
-        // Car circle (pickup)
-        val carView = FrameLayout(this).apply {
-            background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = circleSize / 2f }
-        }
-        carView.addView(TextView(this).apply {
-            text = "▶"; textSize = 8f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
-            includeFontPadding = false
-        }, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ).apply { gravity = Gravity.CENTER })
-        routeCarCircle = carView
-        row2.addView(carView, LinearLayout.LayoutParams(circleSize, circleSize))
+        val (carCircle, _) = iconCircle(MDI_CAR, circleSize, 11f, color)
+        routeCarCircle = carCircle
+        row2.addView(carCircle, LinearLayout.LayoutParams(circleSize, circleSize))
 
-        // Connecting line with center dot overlay
         val lineWrapper = FrameLayout(this)
-        val lineView = View(this).apply { setBackgroundColor(neutralColor) }
+        val lineView = View(this).apply { background = routeLineBackground(color) }
         routeLine = lineView
         lineWrapper.addView(lineView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(2)
+            FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(4)
         ).apply { gravity = Gravity.CENTER_VERTICAL })
-        val centerDot = View(this).apply {
-            background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = dotSize / 2f }
-        }
-        routeCenterDot = centerDot
-        lineWrapper.addView(centerDot, FrameLayout.LayoutParams(dotSize, dotSize).apply {
+        val riderSize = dpToPx(20)
+        val (riderCircle, _) = iconCircle(MDI_PERSON_WAVE, riderSize, 10f, color)
+        routeCenterDot = riderCircle
+        lineWrapper.addView(riderCircle, FrameLayout.LayoutParams(riderSize, riderSize).apply {
             gravity = Gravity.CENTER
         })
         row2.addView(lineWrapper, LinearLayout.LayoutParams(
             0, circleSize, 1f
-        ).apply { marginStart = dpToPx(4); marginEnd = dpToPx(8) })
+        ).apply { marginStart = dpToPx(10); marginEnd = dpToPx(10) })
 
-        // Duration + distance column (right side)
         val rightCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
@@ -1176,55 +1377,346 @@ class FloatingBubbleService : Service() {
             includeFontPadding = false
         }
         durationView = durationTv
-        rightCol.addView(durationTv)
+        // Largeur au contenu, explicitement : par défaut une colonne verticale
+        // donne MATCH_PARENT, et la durée finale (« 43min » après « —min »)
+        // était coupée à la largeur de l'ancienne.
+        rightCol.addView(durationTv, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
         val distanceTv = TextView(this).apply {
             text = MarketFormat.distanceText(
                 this@FloatingBubbleService, m.totalDistanceKm)
-            textSize = 12f; setTextColor(Color.parseColor("#888888"))
+            textSize = 11f; setTextColor(Color.argb(140, 255, 255, 255))
+            typeface = medium
             includeFontPadding = false
         }
         distanceView = distanceTv
-        rightCol.addView(distanceTv)
+        rightCol.addView(distanceTv, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dpToPx(1) })
         row2.addView(rightCol, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { marginEnd = dpToPx(6) })
+        ).apply { marginEnd = dpToPx(10) })
 
-        // Warning circle (end of row)
-        val warnView = FrameLayout(this).apply {
-            background = GradientDrawable().apply { setColor(neutralColor); cornerRadius = circleSize / 2f }
-        }
-        val warnGlyph = TextView(this).apply {
-            text = "!"; textSize = 12f; setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
-            includeFontPadding = false
-        }
-        routeGpsGlyphView = warnGlyph
-        warnView.addView(warnGlyph, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ).apply { gravity = Gravity.CENTER })
-        routeGpsCircle = warnView
-        row2.addView(warnView, LinearLayout.LayoutParams(circleSize, circleSize))
+        // Verdict au bout du trajet : ✓ / ! / ✕, comme l'île.
+        val (verdictCircle, verdictGlyph) = iconCircle(verdictGlyphFor(m.level), circleSize, 11f, color)
+        routeGpsGlyphView = verdictGlyph
+        routeGpsCircle = verdictCircle
+        row2.addView(verdictCircle, LinearLayout.LayoutParams(circleSize, circleSize))
 
         card.addView(row2, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(6) })
+        ))
+
+        // ═══════════════════════════════════════════════════════════════
+        // ROW 3 : [✕ Refusée] [✓ Prise] — `DecisionButtons` de l'île : deux
+        //   capsules pleines, rouge et verte, icône puis libellé.
+        // ═══════════════════════════════════════════════════════════════
+        val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun decisionButton(label: Int, glyph: Int, bg: Int, status: String): DecisionButton {
+            val icon = TextView(this).apply {
+                text = mdi(glyph); typeface = iconFont
+                textSize = 13f; setTextColor(Color.WHITE)
+                includeFontPadding = false
+            }
+            val text = TextView(this).apply {
+                text = str(label)
+                textSize = 13f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
+                includeFontPadding = false
+            }
+            val button = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                // 32 et non les 28 pt de l'île : la cible est sous le pouce, en voiture.
+                minimumHeight = dpToPx(32)
+                background = GradientDrawable().apply {
+                    setColor(bg)
+                    cornerRadius = dpToPx(16).toFloat()
+                }
+                isClickable = true
+                addView(icon, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = dpToPx(5) })
+                addView(text)
+            }
+            return DecisionButton(button, icon, text, status, bg)
+        }
+        val declined = decisionButton(com.strive.R.string.scanner_ride_declined, MDI_CLOSE, VERDICT_RED, "DECLINED")
+        val taken = decisionButton(com.strive.R.string.scanner_ride_taken, MDI_CHECK, VERDICT_GREEN, "ACCEPTED")
+        declined.button.setOnClickListener { onDecisionTapped(card, row3, declined, rideId) }
+        taken.button.setOnClickListener { onDecisionTapped(card, row3, taken, rideId) }
+        row3.addView(
+            declined.button,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = dpToPx(8) },
+        )
+        row3.addView(
+            taken.button,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        card.addView(row3, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dpToPx(10) })
 
         bubbleContainer.addView(card, FrameLayout.LayoutParams(cardW, LayoutParams.WRAP_CONTENT))
         animateTo(cardW, LayoutParams.WRAP_CONTENT)
 
-        // Recentrer si nécessaire
-        val maxX = screenWidth - cardW
-        if (bubbleParams.x > maxX) {
-            bubbleParams.x = maxX.coerceAtLeast(0)
-            runCatching { windowManager.updateViewLayout(bubbleContainer, bubbleParams) }
-        }
+        // Centrée, comme l'île ; la bulle reprend sa place au retour au repos.
+        if (restingX == null) restingX = bubbleParams.x
+        bubbleParams.x = ((screenWidth - cardW) / 2).coerceAtLeast(0)
+        runCatching { windowManager.updateViewLayout(bubbleContainer, bubbleParams) }
 
-        // Countdown 15s (sans barre visuelle — juste dismiss à la fin)
+        // Au bout de 10 s, retour direct au logo : la carte a dit ce qu'elle
+        // avait à dire, et la course reste taguable depuis sa notification.
         countdownTimer?.cancel()
         countdownTimer = object : CountDownTimer(COUNTDOWN_MS, COUNTDOWN_MS) {
             override fun onTick(millisLeft: Long) {}
             override fun onFinish() { mainHandler.post { showIdleState() } }
         }.start()
+    }
+
+    // ─── Confirmation Prise / Refusée ────────────────────────────────────────────
+
+    private class DecisionButton(
+        val button: LinearLayout,
+        val icon: TextView,
+        val label: TextView,
+        val status: String,
+        val color: Int,
+    )
+
+    /** La décision part TOUT DE SUITE — l'animation n'est qu'un accusé de
+     *  réception, rien n'attend qu'elle finisse. Puis retour au logo. */
+    private fun onDecisionTapped(
+        card: LinearLayout,
+        row: LinearLayout,
+        chosen: DecisionButton,
+        rideId: String,
+    ) {
+        if (decisionAnimating) return
+        decisionAnimating = true
+        countdownTimer?.cancel()
+        countdownTimer = null
+        val accepted = chosen.status == "ACCEPTED"
+        applyRideDecision(this, rideId, chosen.status, returnToIdle = false)
+        chosen.button.performHapticFeedback(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (accepted) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.REJECT
+            } else {
+                HapticFeedbackConstants.VIRTUAL_KEY
+            }
+        )
+        val total = animateDecisionReveal(card, row, chosen, accepted)
+        mainHandler.postDelayed({
+            if (decisionAnimating && shownRideId == rideId) showIdleState()
+        }, total)
+    }
+
+    private fun confirmLabel(accepted: Boolean) = str(
+        if (accepted) com.strive.R.string.scanner_ride_accepted else com.strive.R.string.scanner_ride_declined
+    )
+
+    /** Un cercle de la couleur du bouton part de son icône et remplit la carte,
+     *  puis le bloc se rétracte vers le centre jusqu'à une pastille de 40 % de
+     *  sa largeur et de sa hauteur — la carte entière en couleur, c'était trop,
+     *  la moitié encore un peu (choix de l'utilisateur, 2026-10-21). La coche ou
+     *  la croix s'y trace d'un trait, « Acceptée » / « Refusée » à côté, puis
+     *  tout s'efface vers le logo. */
+    private fun animateDecisionReveal(
+        card: LinearLayout,
+        row: LinearLayout,
+        chosen: DecisionButton,
+        accepted: Boolean,
+    ): Long {
+        val w = card.width
+        val h = card.height
+        if (w == 0 || h == 0) return 0L
+        val pillScale = 0.4f
+        val startRadius = dpToPx(32).toFloat()
+        val shape = GradientDrawable().apply {
+            setColor(chosen.color)
+            cornerRadius = startRadius
+        }
+        val overlay = FrameLayout(this).apply {
+            background = shape
+            elevation = card.elevation
+            visibility = View.INVISIBLE
+        }
+        val glyph = StrokeGlyphView(this, check = accepted)
+        val label = TextView(this).apply {
+            text = confirmLabel(accepted)
+            textSize = 16f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            alpha = 0f
+            translationX = -dpToPx(6).toFloat()
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(glyph, LinearLayout.LayoutParams(dpToPx(26), dpToPx(26)))
+            addView(label, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dpToPx(6) })
+        }
+        overlay.addView(content, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        // Centré : la carte, devenue transparente, garde la hauteur de la bulle,
+        // et le bloc se rétracte vers son milieu.
+        val lp = FrameLayout.LayoutParams(w, h, Gravity.CENTER)
+        bubbleContainer.addView(overlay, lp)
+
+        // Centre de l'icône touchée, en coordonnées de la carte.
+        val cx = row.left + chosen.button.left + chosen.icon.left + chosen.icon.width / 2
+        val cy = row.top + chosen.button.top + chosen.button.height / 2
+        overlay.post {
+            overlay.visibility = View.VISIBLE
+            val maxR = hypot(max(cx, w - cx).toFloat(), max(cy, h - cy).toFloat())
+            ViewAnimationUtils.createCircularReveal(overlay, cx, cy, 0f, maxR).apply {
+                duration = 260
+                interpolator = DecelerateInterpolator()
+            }.start()
+            card.animate().alpha(0f).setStartDelay(200).setDuration(120).start()
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                startDelay = 220
+                duration = 320
+                interpolator = DecelerateInterpolator(1.6f)
+                addUpdateListener {
+                    val f = it.animatedValue as Float
+                    lp.width = (w - w * (1f - pillScale) * f).toInt()
+                    lp.height = (h - h * (1f - pillScale) * f).toInt()
+                    // De l'arrondi de la carte à une pastille.
+                    shape.cornerRadius = startRadius + (h * pillScale / 2f - startRadius) * f
+                    overlay.layoutParams = lp
+                }
+            }.start()
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                startDelay = 420
+                duration = 320
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { glyph.progress = it.animatedValue as Float }
+            }.start()
+            label.animate().alpha(1f).translationX(0f).setStartDelay(520).setDuration(200).start()
+        }
+        mainHandler.postDelayed({
+            if (overlay.isAttachedToWindow) {
+                overlay.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(180).start()
+            }
+        }, 1450L)
+        return 1650L
+    }
+
+    /** Une coche ou une croix qui se trace d'un trait, de 0 à `progress`. */
+    private class StrokeGlyphView(ctx: android.content.Context, private val check: Boolean) : View(ctx) {
+        var progress = 0f
+            set(value) {
+                field = value
+                invalidate()
+            }
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.WHITE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        private val path = Path()
+        private val segment = Path()
+        private val lengths = ArrayList<Float>()
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            val s = minOf(w, h).toFloat()
+            paint.strokeWidth = s * 0.11f
+            path.reset()
+            if (check) {
+                path.moveTo(s * 0.22f, s * 0.54f)
+                path.lineTo(s * 0.42f, s * 0.72f)
+                path.lineTo(s * 0.78f, s * 0.32f)
+            } else {
+                path.moveTo(s * 0.28f, s * 0.28f)
+                path.lineTo(s * 0.72f, s * 0.72f)
+                path.moveTo(s * 0.72f, s * 0.28f)
+                path.lineTo(s * 0.28f, s * 0.72f)
+            }
+            lengths.clear()
+            val pm = PathMeasure(path, false)
+            do { lengths.add(pm.length) } while (pm.nextContour())
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            if (progress <= 0f || lengths.isEmpty()) return
+            var remaining = lengths.sum() * progress
+            val pm = PathMeasure(path, false)
+            var i = 0
+            do {
+                if (remaining <= 0f || i >= lengths.size) break
+                segment.reset()
+                pm.getSegment(0f, minOf(lengths[i], remaining), segment, true)
+                canvas.drawPath(segment, paint)
+                remaining -= lengths[i]
+                i++
+            } while (pm.nextContour())
+        }
+    }
+
+    // ─── Matériau du Dynamic Island ──────────────────────────────────────────────
+
+    /** Police d'icônes de l'app (MaterialCommunityIcons, déjà embarquée pour le
+     *  JS) : les symboles de l'île — voiture, passager, ✓, ↗ — sans un seul
+     *  vecteur à dessiner. */
+    private val iconFont: Typeface by lazy {
+        runCatching { Typeface.createFromAsset(assets, "fonts/MaterialCommunityIcons.ttf") }
+            .getOrDefault(Typeface.DEFAULT_BOLD)
+    }
+
+    private fun mdi(codePoint: Int) = String(Character.toChars(codePoint))
+
+    private fun verdictColor(level: Int) = when (level) {
+        2 -> VERDICT_GREEN; 1 -> VERDICT_ORANGE; else -> VERDICT_RED
+    }
+
+    private fun verdictGlyphFor(level: Int) = when (level) {
+        2 -> MDI_CHECK; 1 -> MDI_EXCLAMATION; else -> MDI_CLOSE
+    }
+
+    private fun withAlpha(color: Int, alpha: Float) =
+        Color.argb((alpha * 255).toInt(), Color.red(color), Color.green(color), Color.blue(color))
+
+    /** `FarePill` : fond teinté à 28 %, liseré à 85 %. */
+    private fun farePillBackground(color: Int) = GradientDrawable().apply {
+        setColor(withAlpha(color, 0.28f))
+        cornerRadius = dpToPx(999).toFloat()
+        setStroke(dpToPx(1), withAlpha(color, 0.85f))
+    }
+
+    private fun routeLineBackground(color: Int) = GradientDrawable().apply {
+        setColor(withAlpha(color, 0.85f))
+        cornerRadius = dpToPx(2).toFloat()
+    }
+
+    private fun circleBackground(color: Int) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+    }
+
+    /** Pastille pleine, glyphe noir au centre — les cercles de `RouteRow`. */
+    private fun iconCircle(glyph: Int, sizePx: Int, glyphSp: Float, color: Int): Pair<FrameLayout, TextView> {
+        val glyphView = TextView(this).apply {
+            text = mdi(glyph); typeface = iconFont
+            textSize = glyphSp; setTextColor(Color.BLACK)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+        val circle = FrameLayout(this).apply {
+            background = circleBackground(color)
+            addView(glyphView, FrameLayout.LayoutParams(sizePx, sizePx).apply { gravity = Gravity.CENTER })
+        }
+        return circle to glyphView
+    }
+
+    /** Décision prise dans l'app : la bulle quitte cette course. Mirror iOS
+     *  (`LiveActivityManager.clearResult`). */
+    fun clearShownRide(rideId: String) {
+        mainHandler.post { if (shownRideId == rideId) showIdleState() }
     }
 
     private fun showQuotaReachedState() {
@@ -1276,7 +1768,11 @@ class FloatingBubbleService : Service() {
      * tel quel, « capture illisible » demande une autre capture. Le libellé était
      * codé en dur (« Échec ») et ne disait donc rien de ce qu'il fallait faire.
      */
-    private fun showErrorState(network: Boolean = false) {
+    private fun showErrorState(
+        network: Boolean = false,
+        textRes: Int = if (network) com.strive.R.string.scanner_error_network
+                       else com.strive.R.string.scanner_error_capture,
+    ) {
         clearTransientState()
         bubbleContainer.removeAllViews()
 
@@ -1295,10 +1791,7 @@ class FloatingBubbleService : Service() {
             setPadding(0, 0, dpToPx(6), 0)
         })
         pill.addView(TextView(this).apply {
-            text = str(
-                if (network) com.strive.R.string.scanner_error_network
-                else com.strive.R.string.scanner_error_capture
-            )
+            text = str(textRes)
             textSize = 13f; setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
         })
@@ -1375,22 +1868,26 @@ class FloatingBubbleService : Service() {
         animateTo(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     }
 
-    /** Notification système invitant à démarrer la session. Tap → ouvre l'app. */
-    private fun notifySessionRequired() {
+    /** Tap sur une notification du scanner → ouvre l'app, comme sur iOS. */
+    private fun launchAppPi(): android.app.PendingIntent {
         val launch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-        val pi = android.app.PendingIntent.getActivity(
+        return android.app.PendingIntent.getActivity(
             this, 0, launch ?: Intent(),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
+    }
+
+    /** Notification système invitant à démarrer la session. Tap → ouvre l'app. */
+    private fun notifySessionRequired() {
         val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setContentTitle(str(com.strive.R.string.scanner_session_required_title))
             .setContentText(str(com.strive.R.string.scanner_session_required_body))
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(com.strive.R.drawable.ic_stat_strive)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setContentIntent(pi)
+            .setContentIntent(launchAppPi())
             .build()
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(SESSION_NOTIF_ID, notif)
     }
@@ -1417,9 +1914,14 @@ class FloatingBubbleService : Service() {
 
     private fun buildNotification(): Notification {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(com.strive.R.drawable.ic_stat_strive)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setContentIntent(launchAppPi())
+        // Temps en ligne qui défile, comme le minuteur de la Live Activity.
+        if (sessionOnline && sessionStartMs > 0) {
+            builder.setUsesChronometer(true).setShowWhen(true).setWhen(sessionStartMs)
+        }
         // KPI de session (poussés par le JS) → mini tableau de bord persistant,
         // équivalent du dashboard de la Live Activity iOS. Avant le 1ᵉ push : texte d'invite.
         if (hasSessionKpi) {
@@ -1427,8 +1929,8 @@ class FloatingBubbleService : Service() {
                 MarketFormat.money(this, todayEarnings, 0) + " · " +
                     MarketFormat.perHour(this, todayHourlyRate)
             ).setContentText(
-                "%.1f km · %dh%02d %s".format(
-                    todayKm, onlineMinutes / 60, onlineMinutes % 60,
+                "%s · %dh%02d %s".format(
+                    MarketFormat.distanceText(this, todayKm), onlineMinutes / 60, onlineMinutes % 60,
                     str(com.strive.R.string.scanner_notif_online)
                 )
             )
@@ -1444,67 +1946,6 @@ class FloatingBubbleService : Service() {
         runCatching {
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
                 .notify(NOTIF_ID, buildNotification())
-        }
-    }
-
-    /**
-     * Notification de résultat avec boutons Accepter / Refuser — permet de taguer
-     * la course sans ouvrir l'app (mains libres). Au tap, RideDecisionReceiver
-     * enregistre la décision sous `rideId`, que le Dashboard écrit directement en
-     * base. Mirror iOS (AnalyzeRideIntent.sendLocalNotification + catégorie
-     * STRIVE_SCAN_RESULT).
-     */
-    private fun postRideDecisionNotification(result: OcrParser.ScanResult, rideId: String) {
-        val m = computeMetrics(result)
-        val verdict = when (m.level) { 2 -> "✅"; 1 -> "⚠️"; else -> "❌" }
-        // displayFare = net de carburant si l'option est active, sinon brut.
-        val title = "%s · %s · %s".format(
-            result.platform.name, MarketFormat.money(this, m.displayFare, 0), verdict)
-        // Quatre unites dans une seule ligne, et trois dependaient du marche.
-        val body = "%s · %s · %dmin · %s".format(
-            MarketFormat.perHour(this, m.hourlyRate),
-            MarketFormat.perDistance(this, m.kmRate),
-            m.totalDurationMin,
-            MarketFormat.distanceText(this, m.totalDistanceKm),
-        )
-
-        fun decisionPi(status: String, requestCode: Int): android.app.PendingIntent {
-            val intent = Intent(this, RideDecisionReceiver::class.java).apply {
-                action = RideDecisionReceiver.ACTION
-                putExtra(RideDecisionReceiver.EXTRA_RIDE_ID, rideId)
-                putExtra(RideDecisionReceiver.EXTRA_STATUS, status)
-                putExtra(RideDecisionReceiver.EXTRA_NOTIF_ID, RESULT_NOTIF_ID)
-            }
-            return android.app.PendingIntent.getBroadcast(
-                this, requestCode, intent,
-                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        }
-
-        // Course visée par la notification affichée : `clearRideResult` s'y
-        // réfère pour ne l'annuler que si la décision porte bien sur elle — et
-        // pas sur un scan plus ancien, dont la carte a déjà été remplacée.
-        applicationContext
-            .getSharedPreferences(ScanBridgeModule.SCANS_PREFS, MODE_PRIVATE)
-            .edit().putString(ScanBridgeModule.LAST_NOTIF_RIDE_KEY, rideId).apply()
-
-        // requestCodes distincts pour ne pas écraser un PendingIntent par l'autre.
-        // Deux notifications successives doivent aussi porter des codes distincts,
-        // sinon FLAG_UPDATE_CURRENT réécrit les extras de la précédente — d'où le
-        // hash de l'id plutôt qu'un compteur.
-        val base = (rideId.hashCode() and 0x3FFFFFFF) * 2
-        val notif = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .addAction(0, str(com.strive.R.string.scanner_ride_accept), decisionPi("ACCEPTED", base))
-            .addAction(0, str(com.strive.R.string.scanner_ride_decline), decisionPi("DECLINED", base + 1))
-            .build()
-        runCatching {
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-                .notify(RESULT_NOTIF_ID, notif)
         }
     }
 }

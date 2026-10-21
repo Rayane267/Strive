@@ -110,7 +110,7 @@ const MapSheet = ({
   });
 
   return (
-    <Modal visible={!!shown} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+    <Modal navigationBarTranslucent visible={!!shown} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdropOpacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>

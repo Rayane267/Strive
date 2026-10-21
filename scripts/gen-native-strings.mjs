@@ -88,10 +88,17 @@ const ANDROID = {
   scanner_notif_online: 'bubbleOnline',
   scanner_ride_accept: 'bubbleRideTaken',
   scanner_ride_decline: 'bubbleRideDeclined',
+  // Les boutons de la carte, mêmes mots que ceux du Dynamic Island étendu.
+  scanner_ride_taken: 'taken',
+  scanner_ride_declined: 'declined',
+  // L'accusé de réception après un toucher sur « Prise » (bulle seulement).
+  scanner_ride_accepted: 'accepted',
   scanner_quota_reached: 'bubbleQuota',
   scanner_quota_reached_free: 'bubbleQuotaFree',
   scanner_error_capture: 'bubbleErrorCapture',
   scanner_error_network: 'bubbleErrorNetwork',
+  scanner_error_timeout: 'interrupted',
+  notif_channel_reminders: 'remindersChannel',
 };
 
 /** `values` sans suffixe = le français, défaut du projet Android. */
@@ -132,7 +139,10 @@ for (const lang of LANGS) {
 const swiftEscape = s =>
   s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
-const swiftRows = keys.map(k => {
+// Libellés qui n'existent que côté Android : ils ne vont pas dans la table
+// Swift, pour qu'un changement Android ne touche jamais au code iOS.
+const ANDROID_ONLY = new Set(['remindersChannel', 'accepted']);
+const swiftRows = keys.filter(k => !ANDROID_ONLY.has(k)).map(k => {
   const pairs = LANGS.map(l => `"${l}": "${swiftEscape(native[l][k] ?? '')}"`).join(', ');
   return `    "${k}": [${pairs}],`;
 });

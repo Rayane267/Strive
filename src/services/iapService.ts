@@ -84,7 +84,13 @@ async function getAllPackages(): Promise<Record<string, any>> {
   const map: Record<string, any> = {};
   for (const key of Object.keys(offerings.all)) {
     for (const pkg of offerings.all[key].availablePackages) {
-      map[pkg.product.identifier] = pkg;
+      // Google Play nomme un abonnement « id:plan de base »
+      // (`strive_plus_monthly:mensuel`), l'App Store « id » tout court. Rangé
+      // aussi sous l'id nu : l'app cherche partout `IAP_PRODUCTS`, comme sur iOS.
+      const id: string = pkg.product.identifier;
+      map[id] = pkg;
+      const base = id.split(':')[0];
+      if (base !== id) map[base] = pkg;
     }
   }
   return map;

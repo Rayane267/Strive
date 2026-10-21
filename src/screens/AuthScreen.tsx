@@ -200,6 +200,12 @@ const AuthField = () => (
   </View>
 );
 
+/// Android : le même champ, dessiné par la vue native (`AndroidAuthField`) —
+/// les trois `LinearGradient` ci-dessus y sortaient en traînées et en bandes.
+/// Nul sur iOS : la branche ne s'évalue pas, le module n'y est jamais chargé.
+const AndroidAuthField: React.ComponentType | null =
+  Platform.OS === 'android' ? require('../components/AndroidAuthField').default : null;
+
 let appleAuth: any = null;
 if (Platform.OS === 'ios') {
   appleAuth = require('@invertase/react-native-apple-authentication').default;
@@ -350,7 +356,7 @@ const AuthScreen = () => {
     // contraire d'une source. Sa couleur de bas est celle de la racine, donc
     // rien ne se voit là où il s'arrête.
     <View style={styles.root}>
-      <AuthField />
+      {AndroidAuthField ? <AndroidAuthField /> : <AuthField />}
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {/* Transparente et non `colors.background` : sur Android une barre opaque
           repeindrait en noir les 24 pt les plus lumineux de la lueur. */}

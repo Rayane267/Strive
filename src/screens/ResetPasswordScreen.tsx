@@ -86,6 +86,8 @@ const ResetPasswordScreen = () => {
   if (!hasSession) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Le champ n'était posé que pendant la vérification de session. */}
+        <ScreenField />
         <Text style={styles.title}>{t('auth.resetExpiredTitle', 'Lien expiré')}</Text>
         <Text style={styles.subtitle}>
           {t('auth.resetExpired', 'Le lien de réinitialisation est invalide ou a expiré. Demandez-en un nouveau.')}
@@ -99,6 +101,7 @@ const ResetPasswordScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScreenField />
       <Toast data={toast} onDismiss={dismissToast} bottomOffset={40} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.form}>
         <Text style={styles.title}>{t('auth.resetTitle', 'Réinitialiser le mot de passe')}</Text>

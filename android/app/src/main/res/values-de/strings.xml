@@ -13,8 +13,13 @@
   <string name="scanner_notif_online">online</string>
   <string name="scanner_ride_accept">✅ Fahrt angenommen</string>
   <string name="scanner_ride_decline">❌ Abgelehnt</string>
+  <string name="scanner_ride_taken">Angenommen</string>
+  <string name="scanner_ride_declined">Abgelehnt</string>
+  <string name="scanner_ride_accepted">Angenommen</string>
   <string name="scanner_quota_reached">Limit erreicht</string>
   <string name="scanner_quota_reached_free">Limit erreicht · Hol dir Plus</string>
   <string name="scanner_error_capture">Screenshot unlesbar</string>
   <string name="scanner_error_network">Netzwerkfehler</string>
+  <string name="scanner_error_timeout">Analyse abgebrochen — scanne erneut.</string>
+  <string name="notif_channel_reminders">Erinnerungen</string>
 </resources>

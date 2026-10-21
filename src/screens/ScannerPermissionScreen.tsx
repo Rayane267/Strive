@@ -204,6 +204,9 @@ const ScannerPermissionScreen = () => {
   // ── Rendu Android (inchangé) ───────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Le champ, comme dans la branche iOS : sans lui l'écran restait sur le
+          noir uni de `container`. */}
+      <ScreenField />
 
       {/* Header */}
       <View style={styles.header}>

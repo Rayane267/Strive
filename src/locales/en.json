@@ -532,8 +532,7 @@
       "desc": "Never accept a ride blind again. We show you what it actually pays — real {{cur}}/h and {{cur}}/{{unit}}, traffic included."
     },
     "step2": {
-      "title": "Set up the scanner",
-      "desc": "Allow notifications below. Accessibility and display-over-other-apps will be requested the first time you start the scanner."
+      "title": "Four settings, just once"
     },
     "step2_ios": {
       "title": "Three settings, once and for all",
@@ -567,10 +566,10 @@
         "step4Sub": "Taken or declined — that's what fills your stats"
       },
       "android": {
-        "step1": "Turn on the scanner",
-        "step1Sub": "From the Strive dashboard",
+        "step1": "Go online",
+        "step1Sub": "The bubble appears over your apps",
         "step2": "Tap the bubble",
-        "step2Sub": "When the offer appears",
+        "step2Sub": "As soon as the offer shows in Uber, Bolt or Heetch",
         "step3": "Read the verdict",
         "step3Sub": "Real {{cur}}/h and {{cur}}/{{unit}}, traffic included",
         "step4": "Mark the ride",
@@ -587,7 +586,7 @@
       "notifErrorBody": "Couldn't finish turning them on. Check your connection and try again.",
       "shortcutT": "The shortcut",
       "shortcutS": "It does everything: the screenshot, the analysis, the verdict. Already set up — just add it.",
-      "notifS_android": "That's how the verdict reaches you, with the Taken and Declined buttons. Without it, a successful scan may show you nothing.",
+      "notifS_android": "That's how Strive warns you: a scan started while you're not online, a session left open with no rides.",
       "confirmCta": "I added it",
       "confirmed": "You confirmed you added it",
       "urgentT": "Time-sensitive alerts",
@@ -692,9 +691,25 @@
       "diS": "Tap Taken or Declined right in the Dynamic Island.",
       "notifT": "From the notification",
       "notifS_ios": "No Dynamic Island? Pull the notification down and both buttons appear.",
-      "notifS_android": "The Taken and Declined buttons sit right on the result notification.",
       "historyT": "Or later, in History",
-      "historyS": "Unanswered rides stay flagged \"Pending\" there until you decide."
+      "historyS": "Unanswered rides stay flagged \"Pending\" there until you decide.",
+      "bubbleT": "On the bubble's card",
+      "bubbleS": "Tap Taken or Declined while the verdict is showing, without leaving your VTC app."
+    },
+    "androidInstall": {
+      "overlayT": "Display over other apps",
+      "overlayS": "This is what lets the bubble float above Uber, Bolt and Heetch.",
+      "overlayCta": "Allow display",
+      "overlayDone": "Display allowed",
+      "accessT": "Strive accessibility",
+      "accessS": "It reads the offer on screen — fare, distance, addresses — when you tap the bubble, and at no other time. Strive only uses it to work out the verdict.",
+      "accessCta": "Turn on accessibility",
+      "accessDone": "Accessibility on",
+      "accessLocked": "Allow display first",
+      "batteryT": "Unrestricted battery",
+      "batteryS": "Without it, some phones shut the bubble down after a few minutes. In the app info: Battery › Unrestricted.",
+      "batteryCta": "Open app info",
+      "batteryDone": "Battery unrestricted"
     }
   },
   "help": {
@@ -1327,6 +1342,7 @@
     "networkRetry": "Check your connection and scan again",
     "bubbleErrorCapture": "Unreadable screenshot",
     "bubbleErrorNetwork": "Network error",
+    "remindersChannel": "Reminders",
     "analyzing": "Analyzing…",
     "goPlus": "Go Plus to see",
     "sessionRunning": "Session running",
@@ -1336,6 +1352,7 @@
     "ride": "Ride",
     "earningsCaps": "EARNINGS",
     "perHourCaps": "/HOUR",
+    "accepted": "Accepted",
     "declined": "Declined",
     "taken": "Taken",
     "noSession": "No session",

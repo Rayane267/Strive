@@ -196,6 +196,7 @@ const DiagnosticsScreen = () => {
             const { ScanBridge } = NativeModules;
             ScanBridge?.setSessionOnline?.(false);
             if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+            if (Platform.OS === 'android') ScanBridge?.stopScanner?.()?.catch?.(() => {});
           } catch {}
           try { scannerService.clearRideDecisions?.(); } catch {}
           // Google oublie le dernier compte choisi : son sélecteur revient, et

@@ -266,6 +266,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const { ScanBridge } = NativeModules;
           ScanBridge?.setSessionOnline?.(false);
           if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+          // Android : la bulle et sa notification de KPI, pendant de la Live Activity.
+          if (Platform.OS === 'android') ScanBridge?.stopScanner?.()?.catch?.(() => {});
         } catch {}
         // RGPD : vide les caches locaux porteurs d'adresses (géocodage + courses
         // hors-ligne) pour qu'un user suivant sur le même appareil n'en hérite

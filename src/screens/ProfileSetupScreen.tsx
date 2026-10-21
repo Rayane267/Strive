@@ -432,6 +432,8 @@ export default function ProfileSetupScreen() {
 
       {/* ── Modal indicatif ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={dialPickerOpen}
         animationType="slide"
         transparent

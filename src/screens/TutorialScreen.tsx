@@ -37,6 +37,7 @@ import { openSettingsFor, openShortcutsApp } from '../utils/appSettings';
 /// verdict ». Et il reste tapable : trois courses, une bonne, une moyenne, une
 /// mauvaise.
 import ScanPreview from '../components/ScanPreview';
+import { scannerService } from '../services/scanner';
 import { PREBUILT_SHORTCUT_URL } from '../utils/iosShortcut';
 import { FIELD_TOP } from '../theme/field';
 import ScreenField from '../components/ScreenField';
@@ -187,6 +188,14 @@ const SHORTCUT_NAME = 'Strive Shortcut';
  *
  * iOS     = 6 slides : Bienvenue · Installation · AssistiveTouch · Récap · Taguer · Antisèche
  * Android = 4 slides : Bienvenue · Installation · Taguer · Antisèche
+ *
+ * La bulle n'a pas de page à elle, contrairement à AssistiveTouch : elle n'a rien
+ * à régler, seulement à reconnaître. L'antisèche la montre à l'étape où elle
+ * apparaît, et sa carte de résultat — le Dynamic Island étendu, à l'identique —
+ * à l'étape où on la lit.
+ *
+ * Pas de récap sur Android : ses quatre réglages se VÉRIFIENT, et l'installation
+ * les montre déjà dans leur état réel. iOS n'a un récap que faute de le pouvoir.
  */
 const STEPS = (IS_IOS
   ? [
@@ -202,14 +211,14 @@ const STEPS = (IS_IOS
     ]
   : [
       { key: 'welcome', titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', tip: 'tutorial.tips.step1' },
-      { key: 'install', titleKey: 'tutorial.step2.title', descKey: 'tutorial.step2.desc', tip: '' },
+      { key: 'install', titleKey: 'tutorial.step2.title', descKey: '',                    tip: '' },
       { key: 'tag',     titleKey: 'tutorial.tag.title',   descKey: 'tutorial.tag.desc',   tip: '' },
       { key: 'done',    titleKey: 'tutorial.step5.title', descKey: 'tutorial.step5.desc', tip: '' },
     ]
 ) as readonly { key: string; titleKey: string; descKey: string; tip: string }[];
 
 /** Les façons de répondre « prise / refusée », par plateforme. iOS a la carte
- *  Dynamic Island ; Android a les actions de la notification de résultat
+ *  Dynamic Island ; Android a les boutons de la carte de la bulle
  *  (`FloatingBubbleService`). Les deux retombent sur l'Historique, où les
  *  courses sans réponse restent « En attente ».
  *
@@ -222,7 +231,7 @@ const TAG_ROWS = IS_IOS
       { key: 'notif', icon: 'bell-outline' },
     ]
   : [
-      { key: 'notif',   icon: 'bell-outline' },
+      { key: 'bubble',  icon: 'gesture-tap' },
       { key: 'history', icon: 'history' },
     ];
 
@@ -264,6 +273,16 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
    *  elle, la vue réduite garderait la place de la vue pleine taille et laisserait
    *  un trou de 15 % sous elle. */
   const [previewH, setPreviewH] = useState(0);
+  /** Android : les trois autorisations de la bulle, relues du système. */
+  const [perms, setPerms] = useState({ overlay: false, accessibility: false, battery: false });
+
+  const refreshPerms = useCallback(async () => {
+    if (IS_IOS) return;
+    try {
+      const p = await scannerService.checkPermissions();
+      setPerms({ overlay: p.overlay, accessibility: p.accessibility, battery: !!p.batteryUnrestricted });
+    } catch {}
+  }, []);
 
   /// « Prêt » exige DEUX conditions, pas une : la permission système accordée
   /// ET un jeton FCM enregistré. Le Profil se fie déjà au jeton, et son
@@ -281,6 +300,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
 
   useEffect(() => {
     refreshNotifStatus();
+    refreshPerms();
     AsyncStorage.getItem(SHORTCUT_DECLARED_KEY).then(v => {
       if (v === '1') { setShortcutDeclared(true); setShortcutOpened(true); }
     });
@@ -289,12 +309,13 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
     });
     // Le chauffeur peut accorder la permission depuis les Réglages iOS, hors de
     // l'app : on relit à chaque retour au premier plan plutôt que de rester sur
-    // un état figé au montage.
+    // un état figé au montage. Idem pour les autorisations de la bulle, qui ne
+    // s'accordent QUE depuis les Paramètres Android.
     const sub = AppState.addEventListener('change', st => {
-      if (st === 'active') refreshNotifStatus();
+      if (st === 'active') { refreshNotifStatus(); refreshPerms(); }
     });
     return () => sub.remove();
-  }, [refreshNotifStatus]);
+  }, [refreshNotifStatus, refreshPerms]);
 
   /// C'est CET appel qui affiche la fenêtre système. Il est ici et pas au
   /// démarrage parce que c'est le seul moment où le chauffeur a une raison de
@@ -517,13 +538,13 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
             {/* ── Installation ─────────────────────────────────────────────
                  Un réglage, son explication, son bouton juste dessous : l'action
                  est là où on vient de comprendre pourquoi elle sert. Les
-                 notifications valent pour les DEUX plateformes ; seul le
-                 raccourci est propre à iOS. */}
+                 notifications valent pour les DEUX plateformes ; le reste est
+                 propre à chacune : raccourci et urgentes sur iOS, autorisations
+                 de la bulle sur Android. */}
             {isInstall ? (
               <View style={styles.block}>
                 <LoopStep
                   n={1}
-                  isLast={!IS_IOS}
                   title={t('tutorial.iosInstall.notifT')}
                   sub={IS_IOS ? t('tutorial.iosInstall.notifS') : t('tutorial.iosInstall.notifS_android')}
                 >
@@ -603,7 +624,85 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                     </LoopStep>
 
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    <LoopStep
+                      n={2}
+                      title={t('tutorial.androidInstall.overlayT')}
+                      sub={t('tutorial.androidInstall.overlayS')}
+                    >
+                      <TouchableOpacity
+                        style={[styles.cta, perms.overlay && styles.ctaDone]}
+                        onPress={() => { hapticLight(); scannerService.openOverlayPermissionSettings(); }}
+                        activeOpacity={0.85}
+                        disabled={perms.overlay}
+                      >
+                        <Text style={[styles.ctaTxt, perms.overlay && styles.ctaDoneTxt]}>
+                          {perms.overlay
+                            ? t('tutorial.androidInstall.overlayDone')
+                            : t('tutorial.androidInstall.overlayCta')}
+                        </Text>
+                      </TouchableOpacity>
+                    </LoopStep>
+
+                    {/* Le texte de l'étape EST l'information préalable que Google
+                        Play exige avant d'activer un service d'accessibilité : ce
+                        qui est lu, quand, et pour quoi faire. Le bouton en est le
+                        consentement. Verrouillé tant que l'affichage par-dessus
+                        manque, dans le même ordre que ScannerPermission — mais
+                        jamais muet : il dit ce qu'il attend. */}
+                    <LoopStep
+                      n={3}
+                      title={t('tutorial.androidInstall.accessT')}
+                      sub={t('tutorial.androidInstall.accessS')}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.cta,
+                          perms.accessibility && styles.ctaDone,
+                          !perms.accessibility && !perms.overlay && styles.ctaGhost,
+                        ]}
+                        onPress={() => { hapticLight(); scannerService.openAccessibilitySettings(); }}
+                        activeOpacity={0.85}
+                        disabled={perms.accessibility || !perms.overlay}
+                      >
+                        <Text
+                          style={[
+                            styles.ctaTxt,
+                            perms.accessibility && styles.ctaDoneTxt,
+                            !perms.accessibility && !perms.overlay && styles.ctaGhostTxt,
+                          ]}
+                        >
+                          {perms.accessibility
+                            ? t('tutorial.androidInstall.accessDone')
+                            : perms.overlay
+                            ? t('tutorial.androidInstall.accessCta')
+                            : t('tutorial.androidInstall.accessLocked')}
+                        </Text>
+                      </TouchableOpacity>
+                    </LoopStep>
+
+                    <LoopStep
+                      n={4}
+                      isLast
+                      title={t('tutorial.androidInstall.batteryT')}
+                      sub={t('tutorial.androidInstall.batteryS')}
+                    >
+                      <TouchableOpacity
+                        style={[styles.cta, perms.battery && styles.ctaDone]}
+                        onPress={() => { hapticLight(); scannerService.openBatterySettings?.(); }}
+                        activeOpacity={0.85}
+                        disabled={perms.battery}
+                      >
+                        <Text style={[styles.ctaTxt, perms.battery && styles.ctaDoneTxt]}>
+                          {perms.battery
+                            ? t('tutorial.androidInstall.batteryDone')
+                            : t('tutorial.androidInstall.batteryCta')}
+                        </Text>
+                      </TouchableOpacity>
+                    </LoopStep>
+                  </>
+                )}
               </View>
             ) : null}
 
@@ -810,7 +909,7 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                       <Text style={styles.recapTitle}>{t(`tutorial.tag.${row.key}T`)}</Text>
                       <Text style={styles.stepSub}>
                         {row.key === 'notif'
-                          ? t(IS_IOS ? 'tutorial.tag.notifS_ios' : 'tutorial.tag.notifS_android')
+                          ? t('tutorial.tag.notifS_ios')
                           : t(`tutorial.tag.${row.key}S`)}
                       </Text>
                     </View>
@@ -836,6 +935,14 @@ const TutorialScreen = ({ onFinish }: { onFinish?: () => void }) => {
                       title={t(`tutorial.quickRef.${os}.step${n}`)}
                       sub={t(`tutorial.quickRef.${os}.step${n}Sub`)}
                     >
+                        {/* Android : la bulle au repos, telle que
+                            `FloatingBubbleService.showIdleState` la dessine — le
+                            logo seul, ce que le chauffeur doit reconnaître
+                            par-dessus Uber. Sa carte de résultat est l'aperçu de
+                            l'étape 3. */}
+                        {!IS_IOS && n === 1 ? (
+                          <Image source={require('../assets/strive-logo.png')} style={styles.bubbleLogo} />
+                        ) : null}
 
                         {n === 3 ? (
                           <View
@@ -1111,6 +1218,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: PREVIEW_SCALE }],
     transformOrigin: 'top left',
   },
+
+  // ── Bulle Android ──────────────────────────────────────────────────────────
+  // Couleurs et mesures de `FloatingBubbleService` : c'est la bulle que le
+  // chauffeur verra, pas une interprétation.
+  bubbleLogo: { width: 48, height: 48, marginTop: space.md, resizeMode: 'contain' },
 
   // ── Boutons ────────────────────────────────────────────────────────────────
   // Même pilule que l'onboarding : pleine largeur, entièrement arrondie, un

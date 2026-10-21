@@ -27,23 +27,25 @@ interface ServiceAccount {
   token_uri: string;
 }
 
-const MESSAGES: Record<string, { title: (v: string) => string; cta: string }> = {
-  fr: { title: (v) => `Strive ${v} est disponible`, cta: "Mets à jour Strive pour en profiter." },
-  en: { title: (v) => `Strive ${v} is available`, cta: "Update Strive to get it." },
-  de: { title: (v) => `Strive ${v} ist verfügbar`, cta: "Aktualisiere Strive, um es zu nutzen." },
-  es: { title: (v) => `Strive ${v} ya está disponible`, cta: "Actualiza Strive para aprovecharlo." },
-  it: { title: (v) => `Strive ${v} è disponibile`, cta: "Aggiorna Strive per approfittarne." },
-  nl: { title: (v) => `Strive ${v} is beschikbaar`, cta: "Werk Strive bij om het te gebruiken." },
-  pt: { title: (v) => `Strive ${v} está disponível`, cta: "Atualiza o Strive para aproveitar." },
+// Pas de numéro de version dans le titre : le chauffeur n'en a que faire, il
+// doit seulement savoir qu'il y a une mise à jour à télécharger.
+const MESSAGES: Record<string, { title: string; cta: string }> = {
+  fr: { title: "Mise à jour disponible", cta: "Une nouvelle mise à jour est disponible, télécharge-la !" },
+  en: { title: "Update available", cta: "A new update is available, download it!" },
+  de: { title: "Update verfügbar", cta: "Ein neues Update ist verfügbar, lade es herunter!" },
+  es: { title: "Actualización disponible", cta: "Hay una nueva actualización disponible, ¡descárgala!" },
+  it: { title: "Aggiornamento disponibile", cta: "È disponibile un nuovo aggiornamento, scaricalo!" },
+  nl: { title: "Update beschikbaar", cta: "Er is een nieuwe update beschikbaar, download hem!" },
+  pt: { title: "Atualização disponível", cta: "Há uma nova atualização disponível, descarrega-a!" },
 };
 
 // Même repli que l'app (appReleaseService.pickNotes) : langue, sinon en, sinon fr.
-function compose(lang: string, version: string, notes: Record<string, unknown>) {
+function compose(lang: string, notes: Record<string, unknown>) {
   const m = MESSAGES[lang] ?? MESSAGES.en;
   const raw = notes[lang] ?? notes.en ?? notes.fr;
   const list = Array.isArray(raw) ? raw.filter((n): n is string => typeof n === "string") : [];
   const body = list.length > 0 ? `${list.join(" · ")}\n${m.cta}` : m.cta;
-  return { title: m.title(version), body };
+  return { title: m.title, body };
 }
 
 // Comparaison numérique segment par segment : « 1.0.10 » > « 1.0.9 ». Copie de
@@ -185,7 +187,7 @@ serve(async (req) => {
         langs[l] = (langs[l] ?? 0) + 1;
       }
       const preview = Object.fromEntries(
-        Object.keys(langs).map((l) => [l, compose(l, version, notes)]),
+        Object.keys(langs).map((l) => [l, compose(l, notes)]),
       );
       return json({ dry_run: true, version, devices: devices.length, up_to_date: upToDate, langs, preview });
     }
@@ -200,7 +202,7 @@ serve(async (req) => {
     const staleTokens: string[] = [];
 
     for (const d of devices) {
-      const m = compose(d.preferred_lang ?? "en", version, notes);
+      const m = compose(d.preferred_lang ?? "en", notes);
 
       const res = await fetch(endpoint, {
         method: "POST",

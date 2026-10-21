@@ -241,7 +241,7 @@ const LanguageSheet = ({
   const current = followsDevice ? null : i18n.language;
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal statusBarTranslucent navigationBarTranslucent visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
         {/* Le fond est tapable pour fermer, et reste sous la feuille : un
             Pressable enveloppant capterait aussi les taps sur les options. */}

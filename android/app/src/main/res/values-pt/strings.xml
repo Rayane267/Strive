@@ -13,8 +13,13 @@
   <string name="scanner_notif_online">online</string>
   <string name="scanner_ride_accept">✅ Viagem aceite</string>
   <string name="scanner_ride_decline">❌ Recusada</string>
+  <string name="scanner_ride_taken">Aceite</string>
+  <string name="scanner_ride_declined">Recusada</string>
+  <string name="scanner_ride_accepted">Aceite</string>
   <string name="scanner_quota_reached">Quota atingida</string>
   <string name="scanner_quota_reached_free">Quota atingida · Passe a Plus</string>
   <string name="scanner_error_capture">Captura ilegível</string>
   <string name="scanner_error_network">Erro de rede</string>
+  <string name="scanner_error_timeout">Análise interrompida — volte a analisar.</string>
+  <string name="notif_channel_reminders">Lembretes</string>
 </resources>

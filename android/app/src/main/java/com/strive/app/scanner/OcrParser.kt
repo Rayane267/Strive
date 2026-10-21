@@ -1,6 +1,7 @@
 package com.strive.scanner
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.util.Log
 import com.google.mlkit.vision.text.Text
 import com.strive.BuildConfig
@@ -73,6 +74,11 @@ object OcrParser {
      *  offres commencent après 35 %. Même bande que la « zone prix/header » des
      *  adresses. Mirror iOS/TS. */
     private const val TOP_CUT = 0.25
+
+    /** Un bloc tel que le parser le lit : son texte et son cadre. Mirror de
+     *  `OcrTextBlock` (iOS). Le texte d'un `Text.TextBlock` de ML Kit est en
+     *  lecture seule ; celui-ci peut être réécrit à l'entrée (miles → km). */
+    private class Block(val text: String, val boundingBox: Rect?)
 
     /** Blocs sous la bande ignorée : ce que lisent le parser ET le pré-filtre
      *  « est-ce une offre ? ». Mirror iOS (`ScanProcessor.process`). */
@@ -261,7 +267,8 @@ object OcrParser {
     )
 
     // Regex : tolèrent des espaces internes autour du séparateur (OCR fantaisiste).
-    private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{2})(?!\d)""")
+    // Une ou deux décimales (« 12,5 € »). Mirror iOS `priceRegex`.
+    private val PRICE_REGEX = Regex("""(\d{1,3})\s*[.,]\s*(\d{1,2})(?!\d)""")
     // Tarif sans séparateur ("1743€" ou "17 €"). Deux chiffres ou plus, OU un
     // chiffre seul de 6 à 9 : une course à 9 € existe (tarif minimum VTC), alors
     // qu'un "5€" sec est presque toujours un pourboire, un pack ou une note —
@@ -321,11 +328,10 @@ object OcrParser {
      * indices de groupe et leurs gardes. Tout l'aval — bornes de plausibilité,
      * colonne `rides.distance_km` — raisonne en kilomètres.
      *
-     * BRANCHÉ DANS `normalizeOcrDigits` et non à l'entrée, contrairement au JS et
-     * au Swift : ici les blocs sont des `Text.TextBlock` de ML Kit, dont le
-     * texte est en lecture seule et ne se reconstruit pas. Tous les endroits qui
-     * lisent une distance passent par cette normalisation, la couverture est
-     * donc la même.
+     * Appliqué à l'entrée de `parse`, sur le texte de chaque bloc, comme le JS et
+     * le Swift. Il était branché dans `normalizeOcrDigits` : les tests sur le
+     * texte brut (« km » d'un combo d'approche, rejet des lignes de distance
+     * dans les adresses) ne voyaient alors que des miles.
      *
      * « min » n'est pas touché : le `(?![a-z])` empêche « mi » de mordre dessus.
      */
@@ -347,10 +353,7 @@ object OcrParser {
         //   "1l8", "1o8"            → "118", "108"   (lettre isolée entre chiffres)
         // Les runs l/I/o/O à côté de lettres (ex: "Libération") ne matchent pas
         // grâce aux lookbehind/lookahead `(?<![a-zA-Zà-ü])`.
-        // ⚠️ Les miles UNIQUEMENT au Royaume-Uni : ML Kit découpe parfois
-        // « 11 min » en deux blocs, et « 11 mi » seul deviendrait 17,7 km —
-        // une distance 1,6× trop grande, sans la moindre alerte.
-        return (if (marketCountry == "GB") milesToKm(s) else s)
+        return s
             // Runs l/I avant ".X" ou avant un nombre décimal "X.Y"
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=[.,]\d)""")) { "1".repeat(it.value.length) }
             .replace(Regex("""(?<![a-zA-Zà-ü])[lI]+(?=\d[.,]\d)""")) { "1".repeat(it.value.length) }
@@ -363,6 +366,9 @@ object OcrParser {
             .replace(Regex("""(?<![a-zA-Zà-ü])[oO]+(?=\d[.,]\d)""")) { "0".repeat(it.value.length) }
             .replace(Regex("""(?<=\d[.,])[oO]+(?![a-zA-Zà-ü])""")) { "0".repeat(it.value.length) }
             .replace(Regex("""(?<=\d)[oO](?=\d)"""), "0")
+            // S→5, B→8 entre chiffres. Mirror iOS.
+            .replace(Regex("""(?<=\d)[sS](?=\d)"""), "5")
+            .replace(Regex("""(?<=\d)[bB](?=\d)"""), "8")
     }
 
     // ─── Sanity bounds (voir les vars mutables dans remote config) ───────────────
@@ -374,7 +380,13 @@ object OcrParser {
         if (visionText.textBlocks.isEmpty()) { lastFailure = "no_blocks"; return null }
         // Strive se lisait lui-même : sa notification de verdict, restée à
         // l'écran, devenait une fausse offre au scan suivant (scan_debug #110).
-        val blocks = belowTopCut(visionText, screenHeight)
+        // Miles → km AVANT toute autre lecture, au Royaume-Uni seulement : ML Kit
+        // découpe parfois « 11 min » en deux blocs, et « 11 mi » seul deviendrait
+        // ailleurs 17,7 km — une distance 1,6× trop grande, sans la moindre
+        // alerte. Mirror iOS.
+        val blocks = belowTopCut(visionText, screenHeight).map {
+            Block(if (marketCountry == "GB") milesToKm(it.text) else it.text, it.boundingBox)
+        }
 
         val fullText = blocks.joinToString(" ") { it.text }.lowercase()
         // Détection texte d'abord (marque → tournures → mode), indépendante du
@@ -474,7 +486,7 @@ object OcrParser {
      * voie ni numéro de rue en tête (sinon c'est une nouvelle adresse, pas une
      * continuation). Ex: head="…Chennevières-sur-", tail="Marne 94430".
      */
-    private fun isContinuationLine(head: Text.TextBlock, tail: Text.TextBlock, allBlocks: List<Text.TextBlock>): Boolean {
+    private fun isContinuationLine(head: Block, tail: Block, allBlocks: List<Block>): Boolean {
         val hb = head.boundingBox ?: return false
         val tb = tail.boundingBox ?: return false
         if (tb.top <= hb.top) return false
@@ -513,7 +525,7 @@ object OcrParser {
      * La ligne `tail` suit-elle immédiatement l'en-tête `head` (même colonne,
      * collée dessous) ? Sert à reconnaître la paire « code postal / détail ».
      */
-    private fun isUkOutwardHead(head: Text.TextBlock, tail: Text.TextBlock): Boolean {
+    private fun isUkOutwardHead(head: Block, tail: Block): Boolean {
         val h = head.boundingBox ?: return false
         val t = tail.boundingBox ?: return false
         if (t.top < h.bottom) return false
@@ -534,8 +546,8 @@ object OcrParser {
      */
     private fun withUkOutwardPrefix(
         merged: String,
-        addrBlock: Text.TextBlock,
-        allBlocks: List<Text.TextBlock>,
+        addrBlock: Block,
+        allBlocks: List<Block>,
     ): String {
         if (marketCountry != "GB") return merged
         if (ukOutwardRegex.containsMatchIn(merged)) return merged
@@ -549,8 +561,8 @@ object OcrParser {
     }
 
     private fun mergeAddressContinuation(
-        addrBlock: Text.TextBlock,
-        allBlocks: List<Text.TextBlock>,
+        addrBlock: Block,
+        allBlocks: List<Block>,
         screenHeight: Int,
     ): String {
         var result = cleanAddressText(addrBlock.text).trim()
@@ -653,11 +665,11 @@ object OcrParser {
     // ─── Fare extraction — scoring sémantique ────────────────────────────────────
 
     private fun extractFare(
-        blocks: List<Text.TextBlock>,
+        blocks: List<Block>,
         platform: Platform,
         screenHeight: Int,
-    ): Pair<Double, Text.TextBlock>? {
-        data class Candidate(val value: Double, val score: Float, val block: Text.TextBlock)
+    ): Pair<Double, Block>? {
+        data class Candidate(val value: Double, val score: Float, val block: Block)
 
         val anchors = priceAnchors[platform] ?: priceAnchors[Platform.UNKNOWN]!!
         val minFare = fareFloor(platform)
@@ -679,6 +691,8 @@ object OcrParser {
             val match = PRICE_REGEX.find(deRated)
             // Avec décimales : rien à reconstruire, seul le plafond large s'applique.
             val ceiling = if (match != null) fareCeiling else fareMax
+            // Entier pris tel quel (« 17 € ») : moins sûr qu'un montant à décimales.
+            var isWhole = false
             val value: Double = if (match != null) {
                 val intPart = match.groupValues[1].replace("\\s+".toRegex(), "")
                 val decPart = match.groupValues[2].replace("\\s+".toRegex(), "")
@@ -689,7 +703,7 @@ object OcrParser {
                 // du plafond plausible, les 2 derniers chiffres sont des centimes.
                 val glued = PRICE_GLUED_REGEX.find(deRated) ?: return@forEachIndexed
                 val raw = glued.groupValues[1].toDoubleOrNull() ?: return@forEachIndexed
-                if (raw > fareMax) raw / 100 else raw
+                if (raw > fareMax) raw / 100 else { isWhole = true; raw }
             }
 
             if (value !in minFare..ceiling) return@forEachIndexed
@@ -702,6 +716,13 @@ object OcrParser {
                 val centerY = (box.top + box.bottom) / 2f
                 if (centerY < screenHeight * 0.55f) score += 30f
             }
+            // Mirror iOS : la devise sur la ligne, un entier sans décimales, et la
+            // ligne de distance « Course de 11.8 km », que la regex à une décimale
+            // lit aussi comme un montant.
+            if (blockLower.contains("€") || blockLower.contains("£") || blockLower.contains("chf")
+                || blockLower.contains("eur")) score += 20f
+            if (isWhole) score -= 10f
+            if (Regex("""course\s+de""").containsMatchIn(blockLower)) score -= 30f
 
             if (anchors.any { blockLower.contains(it) }) score += 25f
 
@@ -742,8 +763,8 @@ object OcrParser {
      * les combos pickup sont déjà filtrés par `isPickupCombo`.
      */
     private fun tryStitchFragmentedDistance(
-        blocks: List<Text.TextBlock>,
-        current: Text.TextBlock,
+        blocks: List<Block>,
+        current: Block,
         rawInt: String,
     ): Double? {
         val box = current.boundingBox ?: return null
@@ -827,9 +848,9 @@ object OcrParser {
     // ─── Distance extraction ──────────────────────────────────────────────────────
 
     private fun extractDistance(
-        blocks: List<Text.TextBlock>,
-        pickupAddr: Text.TextBlock?,
-        destAddr: Text.TextBlock?,
+        blocks: List<Block>,
+        pickupAddr: Block?,
+        destAddr: Block?,
     ): Double? {
         // Un écran VTC a souvent 2 km : pickup ("X min • Y km") et course.
         // 2 signaux :
@@ -902,9 +923,9 @@ object OcrParser {
     // ─── Duration extraction ─────────────────────────────────────────────────────
 
     private fun extractDuration(
-        blocks: List<Text.TextBlock>,
-        pickupAddr: Text.TextBlock?,
-        destAddr: Text.TextBlock?,
+        blocks: List<Block>,
+        pickupAddr: Block?,
+        destAddr: Block?,
         courseDistanceKm: Double,
         pickup: Pair<Int, Double>?,
     ): Int? {
@@ -983,7 +1004,7 @@ object OcrParser {
     // ─── Pickup combo extraction ("X min • X,X km") ───────────────────────────────
 
     private fun extractPickupInfo(
-        blocks: List<Text.TextBlock>,
+        blocks: List<Block>,
         courseDistanceKm: Double,
         screenHeight: Int,
     ): Pair<Int, Double>? {
@@ -1070,7 +1091,7 @@ object OcrParser {
                 .joinToString("\n")
         )
 
-    private fun isAddressBlock(block: Text.TextBlock, screenHeight: Int): Boolean {
+    private fun isAddressBlock(block: Block, screenHeight: Int): Boolean {
         val original = cleanAddressText(block.text).trim()
         val text = original.lowercase()
         if (text.length < 6 || text.length > 90) return false
@@ -1081,9 +1102,10 @@ object OcrParser {
         if (Regex("""\d[.,\s]*\d*\s*km\b""").containsMatchIn(text)) return false
         if (Regex("""\d\s*min\b""").containsMatchIn(text)) return false
         // Prix isolé / note ("12,50 €", "4,9 ★").
-        if (Regex("""^\s*\d{1,3}[.,]\d{1,2}\s*€?\s*$""").containsMatchIn(text)) return false
-        // Toute ligne tarifaire ("19,38 € (net, TTC)") → jamais une adresse.
-        if (text.contains("€")) return false
+        if (Regex("""^\s*\d{1,3}[.,]\d{1,2}\s*(?:€|£|CHF)?\s*$""").containsMatchIn(text)) return false
+        // Toute ligne tarifaire ("19,38 € (net, TTC)", « £16.40 », « CHF 24.50 »)
+        // → jamais une adresse. Mirror iOS `hasCurrency`.
+        if (text.contains("€") || text.contains("£") || text.contains("chf")) return false
         if (text.contains("★") || text.contains("⭐") || Regex("""\brating\b""").containsMatchIn(text)) return false
         // Ligne "note passager" : "Shirley 5.0 ★" / "Jean 4,9 *". Une note (0-5 avec
         // décimale) n'apparaît jamais dans une adresse → évite de prendre le nom du
@@ -1122,8 +1144,9 @@ object OcrParser {
         // 6. Segment avec virgule SUIVIE d'une lettre + assez de lettres :
         //    "Châtelet, Paris". On exige ", lettre" (pas une virgule décimale type
         //    "4,79") sinon une ligne note/tarif passe pour une adresse.
+        //    Toute lettre compte (« œ », lettres d'Europe de l'Est). Mirror iOS.
         if (Regex(""",\s*[a-zà-üß]""").containsMatchIn(text) &&
-            Regex("""[a-zà-üß]""").findAll(text).count() >= 6) return true
+            text.count { it.isLetter() } >= 6) return true
         return false
     }
 
@@ -1138,11 +1161,11 @@ object OcrParser {
      * les vraies adresses du card trip sont toujours accolées aux stats.
      */
     private fun findAddressBlocks(
-        blocks: List<Text.TextBlock>,
+        blocks: List<Block>,
         screenHeight: Int,
         fareBlockY: Int? = null,
         fareInButton: Boolean = false,
-    ): List<Text.TextBlock> {
+    ): List<Block> {
         var candidates = blocks
             .filter { (it.boundingBox?.centerY() ?: 0) > screenHeight * 0.25 }
             .filter { isAddressBlock(it, screenHeight) }
@@ -1249,7 +1272,7 @@ object OcrParser {
         return x.startsWith(y) || y.startsWith(x)
     }
 
-    private fun dedupOverlappingAddresses(candidates: List<Text.TextBlock>): List<Text.TextBlock> {
+    private fun dedupOverlappingAddresses(candidates: List<Block>): List<Block> {
         // Compare sur le texte nettoyé (préfixe parasite retiré) pour que la ligne
         // courte soit bien reconnue comme préfixe de la version longue (cas Heetch).
         val texts = candidates.map { cleanAddressText(it.text).trim() }

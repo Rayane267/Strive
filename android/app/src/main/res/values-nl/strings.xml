@@ -13,8 +13,13 @@
   <string name="scanner_notif_online">online</string>
   <string name="scanner_ride_accept">✅ Rit aangenomen</string>
   <string name="scanner_ride_decline">❌ Geweigerd</string>
+  <string name="scanner_ride_taken">Aangenomen</string>
+  <string name="scanner_ride_declined">Geweigerd</string>
+  <string name="scanner_ride_accepted">Geaccepteerd</string>
   <string name="scanner_quota_reached">Limiet bereikt</string>
   <string name="scanner_quota_reached_free">Limiet bereikt · Ga naar Plus</string>
   <string name="scanner_error_capture">Onleesbare schermafbeelding</string>
   <string name="scanner_error_network">Netwerkfout</string>
+  <string name="scanner_error_timeout">Analyse onderbroken — scan opnieuw.</string>
+  <string name="notif_channel_reminders">Herinneringen</string>
 </resources>

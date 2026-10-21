@@ -1,60 +1,25 @@
-import { Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n';
 import { getBusinessDayKey } from '../utils/dateUtils';
 import { getMarket, formatMoney, type CurrencyDisplay } from '../utils/market';
 
-const NOTIF_CHANNEL_ID = 'strive_reminders';
 const QUOTA_RESET_KEY = '@strive_quota_reset_scheduled';
 
-let PushNotification: any = null;
-try {
-  PushNotification = Platform.OS === 'android'
-    ? require('react-native-push-notification')
-    : null;
-} catch {}
-
+// Le même module natif sur les deux plateformes, avec les mêmes identifiants
+// texte : UNUserNotificationCenter sur iOS, AlarmManager sur Android
+// (LocalNotifications.kt). `react-native-push-notification` ne programmait
+// rien sur Android : elle exige un identifiant numérique.
 function scheduleNative(id: string, title: string, body: string, delayMs: number) {
-  const fireDate = new Date(Date.now() + delayMs);
-
-  if (Platform.OS === 'ios') {
-    // iOS: use UNUserNotificationCenter via native module bridge
-    // Since we don't have a dedicated local notif lib, we use the
-    // UserNotifications API through the existing RN bridge
-    try {
-      const { NativeModules } = require('react-native');
-      const { ScanBridge } = NativeModules;
-      if (ScanBridge?.scheduleLocalNotification) {
-        ScanBridge.scheduleLocalNotification(id, title, body, delayMs / 1000);
-        return;
-      }
-    } catch {}
-    // Fallback: use setTimeout (only works while app is in foreground/background)
-    setTimeout(() => {
-      // Can't show notification from JS when app is suspended
-    }, delayMs);
-  } else if (PushNotification) {
-    PushNotification.localNotificationSchedule({
-      id,
-      channelId: NOTIF_CHANNEL_ID,
-      title,
-      message: body,
-      date: fireDate,
-      allowWhileIdle: true,
-    });
-  }
+  try {
+    NativeModules.ScanBridge?.scheduleLocalNotification?.(id, title, body, delayMs / 1000);
+  } catch {}
 }
 
 function cancelNative(id: string) {
-  if (Platform.OS === 'ios') {
-    try {
-      const { NativeModules } = require('react-native');
-      const { ScanBridge } = NativeModules;
-      ScanBridge?.cancelLocalNotification?.(id);
-    } catch {}
-  } else if (PushNotification) {
-    PushNotification.cancelLocalNotification(id);
-  }
+  try {
+    NativeModules.ScanBridge?.cancelLocalNotification?.(id);
+  } catch {}
 }
 
 /**

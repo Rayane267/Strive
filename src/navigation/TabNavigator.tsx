@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   Platform,
   StyleSheet,
   Animated,
+  requireNativeComponent,
+  ViewProps,
 } from 'react-native';
 import { MAPBOX_APIKEY } from '@env';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -53,8 +54,9 @@ const Tab = createBottomTabNavigator();
 // dessous, la teinte qui s'adapte au fond, le liseré lumineux — et ses
 // comportements : la barre se réduit quand on fait défiler vers le bas, les
 // SF Symbols s'animent, un retour haptique au toucher. Aucun flou dessiné à la
-// main ne reproduit la lentille. Android garde la barre JS ci-dessous ; le
-// module natif n'y est pas lié (react-native.config.js).
+// main ne reproduit la lentille. Android prend la capsule en verre dessinée
+// ci-dessous (`GlassTabBar`) ; le module natif n'y est pas lié
+// (react-native.config.js).
 const NativeTab = Platform.OS === 'ios'
   ? require('@bottom-tabs/react-navigation').createNativeBottomTabNavigator()
   : null;
@@ -88,6 +90,16 @@ const INDICATOR_INSET_H = 4;
 
 const INACTIVE_TINT = 'rgba(255,255,255,0.42)';
 
+// Flou de la capsule : iOS seulement. Celui d'Android travaille en basse
+// résolution et rendait le contenu de dessous en gros blocs carrés, visibles
+// derrière l'indicateur ; il y est remplacé par un voile uni (`pillAndroid`), le
+// fondu sous la barre ayant déjà effacé l'essentiel du contenu.
+const PILL_BLUR = {
+  blurType: 'chromeMaterialDark',
+  blurAmount: 40,
+  reducedTransparencyFallbackColor: 'rgba(10,20,14,0.92)',
+} as const;
+
 // Hauteur fixe de la cellule : elle doit contenir l'icône remontée ET le
 // libellé, sinon l'onglet actif serait plus haut que ses voisins et toute la
 // rangée se décalerait à chaque changement d'onglet.
@@ -100,6 +112,23 @@ const BAR_INSET_H = 20;
 // passe de net à flou. Trop court, on voit une bande ; trop long, la moitié de
 // l'écran est molle.
 const EDGE_FADE = 40;
+
+/** Android : pas de flou pour effacer le contenu, donc un peu plus de hauteur
+ *  que les 40 pt d'iOS. Avec 40 pt, les cartes restaient lisibles jusqu'au bord
+ *  de la capsule puis s'arrêtaient net ; 120 montait trop haut sur l'écran. */
+const ANDROID_EDGE_FADE = 56;
+
+/** Le fondu Android, dessiné par la vue native du champ (`StriveFieldView.kt`,
+ *  mode fondu) et non en `LinearGradient` : un voile semi-transparent posé sur
+ *  le dégradé du fond progresse par paliers de 1/255, et les deux séries de
+ *  paliers se croisaient en traits horizontaux, tramage ou pas. La vue porte la
+ *  couleur EXACTE du champ là où elle se pose, à la taille exacte de la bande,
+ *  avec une opacité continue — montée douce jusqu'à 100 % au haut de la
+ *  capsule, puis opaque dessous : rien ne transparaît sous ni dans la capsule.
+ *  Nul sur iOS : la constante n'y est jamais rendue. */
+const AndroidEdgeFade = Platform.OS === 'android'
+  ? requireNativeComponent<ViewProps & { fadeLength: number }>('StriveFieldFade')
+  : null;
 
 // Ressort du déplacement : arrivée franche, sans rebond — c'est l'étirement du
 // verre qui porte la matière, pas un dépassement de position.
@@ -153,15 +182,6 @@ const TabItem = ({
     inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp',
   });
 
-  // Le ressort dépasse 1 : sans `clamp`, l'icône monterait au-delà de sa place
-  // avant de redescendre. Le rebond est porté par l'échelle, pas par la position.
-  const iconLift = focus.interpolate({
-    inputRange: [0, 1], outputRange: [0, -ICON_LIFT], extrapolate: 'clamp',
-  });
-  const labelRise = focus.interpolate({
-    inputRange: [0, 1], outputRange: [4, 0], extrapolate: 'clamp',
-  });
-
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -186,23 +206,26 @@ const TabItem = ({
       <Animated.View
         style={[styles.itemInner, { transform: [{ scale: press }, { scale: popScale }] }]}
       >
-        <Animated.View style={{ transform: [{ translateY: iconLift }] }}>
+        <View style={styles.iconLifted}>
           <Animated.View style={{ opacity: inactiveOpacity }}>
             {TAB_ICONS[route]?.(INACTIVE_TINT, 22)}
           </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, { opacity: activeOpacity }]}>
             {TAB_ICONS[route]?.(colors.primary, 22)}
           </Animated.View>
-        </Animated.View>
-        {/* Seul l'onglet sélectionné porte son nom. Le libellé est en absolu :
-            il ne prend pas de place dans la colonne, donc son apparition ne
-            pousse pas l'icône — c'est `iconLift` qui décide du déplacement, et
-            la cellule garde la même hauteur d'un onglet à l'autre. */}
+        </View>
+        {/* Chaque onglet porte son nom, comme dans la barre native d'iOS : le
+            chauffeur passe d'une plateforme à l'autre sans réapprendre la
+            barre. Le libellé est en absolu, sous l'icône remontée : la cellule
+            garde la même hauteur d'un onglet à l'autre. */}
         <Animated.Text
-          style={[
-            styles.label,
-            { opacity: activeOpacity, transform: [{ translateY: labelRise }] },
-          ]}
+          style={[styles.label, styles.labelInactive, { opacity: inactiveOpacity }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Animated.Text>
+        <Animated.Text
+          style={[styles.label, { opacity: activeOpacity }]}
           numberOfLines={1}
         >
           {label}
@@ -250,7 +273,14 @@ const ScrollEdgeBlur = ({ height, bottom }: { height: number; bottom: number }) 
   </MaskedView>
 );
 
-const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+/**
+ * La capsule flottante en verre : celle d'iOS avant la barre native, reprise
+ * telle quelle sur Android pour que les deux apps se ressemblent.
+ *
+ * Sur iOS elle ne sert plus (`NativeTab` prend la main) ; ses branches iOS sont
+ * gardées pour le jour où la barre native serait débranchée.
+ */
+const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const numTabs = state.routes.length;
 
@@ -319,20 +349,37 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
       {/* Repli pour les iOS antérieurs à 26, où le système ne dessine pas
           l'effet lui-même. Premier enfant = dessiné sous la capsule. Il déborde
           du wrapper vers le bas et sur les côtés : le contenu passe aussi dans
-          les marges, il doit s'y éteindre pareil. */}
-      {!HAS_NATIVE_SCROLL_EDGE && (
+          les marges, il doit s'y éteindre pareil.
+          Pas encore sur Android : un flou dans un MaskedView reste à voir sur
+          un vrai téléphone avant d'être servi aux chauffeurs. */}
+      {Platform.OS === 'ios' && !HAS_NATIVE_SCROLL_EDGE && (
         <ScrollEdgeBlur
           height={barBottom + PILL_HEIGHT + EDGE_FADE}
           bottom={-barBottom}
         />
       )}
+      {/* Android : le même fondu, sans flou — la vue native
+          (`AndroidEdgeFade`). Sans lui les cartes restaient nettes sous la
+          capsule, et leurs bords l'encadraient d'un rectangle vert.
+          Pas sur la Carte : rien n'y défile, et sur iOS 26 l'effet système ne
+          s'y pose pas non plus — le voile ne faisait qu'assombrir le plan. */}
+      {AndroidEdgeFade && state.routes[state.index]?.name !== 'Map' && (
+        <View
+          style={[
+            styles.edge,
+            { height: barBottom + PILL_HEIGHT + ANDROID_EDGE_FADE, bottom: -barBottom },
+          ]}
+          pointerEvents="none"
+        >
+          <AndroidEdgeFade fadeLength={ANDROID_EDGE_FADE} style={StyleSheet.absoluteFill} />
+        </View>
+      )}
       <View style={styles.pill}>
-        <BlurView
-          style={StyleSheet.absoluteFill}
-          blurType="chromeMaterialDark"
-          blurAmount={40}
-          reducedTransparencyFallbackColor="rgba(10,20,14,0.92)"
-        />
+        {Platform.OS === 'ios' ? (
+          <BlurView style={StyleSheet.absoluteFill} {...PILL_BLUR} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.pillAndroid]} />
+        )}
         <View style={[StyleSheet.absoluteFill, styles.tintOverlay]} />
         {/* Reflet du haut de la capsule, en DÉGRADÉ et non en aplat.
             Un aplat de 1 px posé à `top: 0` est une ligne DROITE en travers
@@ -380,12 +427,20 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
                 },
               ]}
             >
-              <BlurView
-                style={StyleSheet.absoluteFill}
-                blurType="light"
-                blurAmount={12}
-                reducedTransparencyFallbackColor="rgba(255,255,255,0.15)"
-              />
+              {/* Android : un flou ne se dessine pas dans la capture d'un autre
+                  flou, celui-ci ne verrait que la capsule déjà floutée. Le
+                  voile clair seul donne le même éclaircissement, sans une
+                  seconde capture de l'écran à chaque image. */}
+              {Platform.OS === 'ios' ? (
+                <BlurView
+                  style={StyleSheet.absoluteFill}
+                  blurType="light"
+                  blurAmount={12}
+                  reducedTransparencyFallbackColor="rgba(255,255,255,0.15)"
+                />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.indicatorAndroid]} />
+              )}
               <View style={[StyleSheet.absoluteFill, styles.indicatorTint]} />
             </Animated.View>
           )}
@@ -424,58 +479,6 @@ const IOSTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
       </View>
     </View>
   );
-};
-
-const AndroidTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={[styles.androidBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
-        const focused = state.index === index;
-        const iconColor = focused ? colors.primary : 'rgba(255,255,255,0.42)';
-        const label = (options.tabBarLabel as string) ?? route.name;
-
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!focused && !event.defaultPrevented) {
-            hapticSelection();
-            navigation.navigate(route.name);
-          }
-        };
-
-        return (
-          <TouchableOpacity
-            key={route.key}
-            onPress={onPress}
-            activeOpacity={0.75}
-            style={styles.androidItem}
-            accessibilityRole="button"
-            accessibilityLabel={options.tabBarAccessibilityLabel}
-          >
-            {focused && <View style={styles.androidActiveIndicator} />}
-            <View style={focused ? styles.androidIconLifted : null}>
-              {TAB_ICONS[route.name]?.(iconColor, 22)}
-            </View>
-            {focused && (
-              <Text style={styles.androidLabel} numberOfLines={1}>
-                {label}
-              </Text>
-            )}
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-};
-
-const CustomTabBar = (props: BottomTabBarProps) => {
-  return Platform.OS === 'ios' ? <IOSTabBar {...props} /> : <AndroidTabBar {...props} />;
 };
 
 const TabNavigator = () => {
@@ -532,10 +535,12 @@ const TabNavigator = () => {
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => <GlassTabBar {...props} />}
+      // La capsule flotte : les écrans passent dessous et réservent la place
+      // eux-mêmes (`useTabBarInset`).
       screenOptions={{
         headerShown: false,
-        ...(Platform.OS === 'ios' ? { tabBarStyle: { position: 'absolute' } } : {}),
+        tabBarStyle: { position: 'absolute' },
       }}
     >
       {Object.keys(labels).map((name) => {
@@ -587,8 +592,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8, 22, 14, 0.35)',
   },
 
-  androidBg: {
-    backgroundColor: 'rgba(8, 22, 14, 0.94)',
+  // Tient lieu du flou de la capsule sur Android : le vert sombre du matériau
+  // iOS, presque opaque.
+  pillAndroid: {
+    backgroundColor: 'rgba(12, 22, 16, 0.86)',
   },
 
   // Retrait en pourcentage : le reflet doit mourir avant l'arrondi, or celui-ci
@@ -630,6 +637,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 230, 118, 0.13)',
   },
 
+  // Tient lieu du flou clair de l'indicateur sur Android.
+  indicatorAndroid: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+
   item: {
     flex: 1,
     height: '100%',
@@ -657,43 +669,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.1,
   },
+  labelInactive: {
+    color: INACTIVE_TINT,
+  },
 
-  // Android classic tab bar
-  androidBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    paddingTop: 8,
-  },
-  androidItem: {
-    flex: 1,
-    height: TAB_ITEM_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  androidIconLifted: {
+  iconLifted: {
     transform: [{ translateY: -ICON_LIFT }],
-  },
-  androidLabel: {
-    position: 'absolute',
-    bottom: 1,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  androidActiveIndicator: {
-    position: 'absolute',
-    top: -8,
-    width: 32,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
   },
 });
 

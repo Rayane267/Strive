@@ -532,8 +532,7 @@
       "desc": "Non accettare più una corsa alla cieca. Ti mostriamo quanto rende davvero — {{cur}}/h e {{cur}}/{{unit}}, traffico compreso."
     },
     "step2": {
-      "title": "Configura lo scanner",
-      "desc": "Autorizza le notifiche qui sotto. L'accessibilità e la visualizzazione sopra le altre app ti saranno chieste al primo avvio dello scanner."
+      "title": "Quattro impostazioni, una volta sola"
     },
     "step2_ios": {
       "title": "Tre impostazioni, una sola volta",
@@ -567,10 +566,10 @@
         "step4Sub": "Accettata o rifiutata — è ciò che riempie le tue statistiche"
       },
       "android": {
-        "step1": "Attiva lo scanner",
-        "step1Sub": "Dalla home di Strive",
+        "step1": "Vai online",
+        "step1Sub": "La bolla appare sopra le tue app",
         "step2": "Tocca la bolla",
-        "step2Sub": "Quando compare l'offerta",
+        "step2Sub": "Appena l'offerta compare in Uber, Bolt o Heetch",
         "step3": "Leggi il verdetto",
         "step3Sub": "{{cur}}/h e {{cur}}/{{unit}} reali, traffico incluso",
         "step4": "Segna la corsa",
@@ -587,7 +586,7 @@
       "notifErrorBody": "Impossibile completare l'attivazione. Controlla la connessione e riprova.",
       "shortcutT": "Il comando rapido",
       "shortcutS": "È lui che fa tutto: la cattura, l'analisi, il verdetto. È già pronto, basta aggiungerlo.",
-      "notifS_android": "È tramite esse che arriva il verdetto, con i pulsanti Accettata e Rifiutata. Senza questa impostazione, una scansione riuscita può non mostrarti nulla.",
+      "notifS_android": "È così che Strive ti avvisa: uno scan senza essere online, una sessione rimasta aperta senza corse.",
       "confirmCta": "L'ho aggiunto",
       "confirmed": "Hai confermato l'aggiunta",
       "urgentT": "Notifiche urgenti",
@@ -692,9 +691,25 @@
       "diS": "Tocca Accettata o Rifiutata direttamente nella Dynamic Island.",
       "notifT": "Dalla notifica",
       "notifS_ios": "Senza Dynamic Island, tira la notifica verso il basso: appaiono i due pulsanti.",
-      "notifS_android": "I pulsanti Accettata e Rifiutata sono direttamente sulla notifica di risultato.",
       "historyT": "O più tardi, nella Cronologia",
-      "historyS": "Le corse senza risposta restano segnate come «In attesa» finché non decidi."
+      "historyS": "Le corse senza risposta restano segnate come «In attesa» finché non decidi.",
+      "bubbleT": "Sulla scheda della bolla",
+      "bubbleS": "Tocca Accettata o Rifiutata mentre il verdetto è visibile, senza lasciare la tua app VTC."
+    },
+    "androidInstall": {
+      "overlayT": "Mostra sopra altre app",
+      "overlayS": "È ciò che permette alla bolla di fluttuare sopra Uber, Bolt e Heetch.",
+      "overlayCta": "Consenti la visualizzazione",
+      "overlayDone": "Visualizzazione consentita",
+      "accessT": "Accessibilità di Strive",
+      "accessS": "Legge l'offerta sullo schermo — prezzo, distanza, indirizzi — quando tocchi la bolla, e in nessun altro momento. Strive la usa solo per calcolare il verdetto.",
+      "accessCta": "Attiva l'accessibilità",
+      "accessDone": "Accessibilità attiva",
+      "accessLocked": "Consenti prima la visualizzazione",
+      "batteryT": "Batteria senza restrizioni",
+      "batteryS": "Senza questa impostazione, alcuni telefoni chiudono la bolla dopo pochi minuti. Nelle informazioni dell'app: Batteria › Senza restrizioni.",
+      "batteryCta": "Apri le informazioni dell'app",
+      "batteryDone": "Batteria senza restrizioni"
     }
   },
   "help": {
@@ -1335,6 +1350,7 @@
     "networkRetry": "Controlla la connessione e riprova",
     "bubbleErrorCapture": "Schermata illeggibile",
     "bubbleErrorNetwork": "Errore di rete",
+    "remindersChannel": "Promemoria",
     "analyzing": "Analisi…",
     "goPlus": "Passa a Plus per vedere",
     "sessionRunning": "Sessione in corso",
@@ -1344,6 +1360,7 @@
     "ride": "Corsa",
     "earningsCaps": "GUADAGNI",
     "perHourCaps": "/ORA",
+    "accepted": "Accettata",
     "declined": "Rifiutata",
     "taken": "Accettata",
     "noSession": "Nessuna sessione",

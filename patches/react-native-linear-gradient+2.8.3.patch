@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-linear-gradient/android/src/main/java/com/BV/LinearGradient/LinearGradientView.java b/node_modules/react-native-linear-gradient/android/src/main/java/com/BV/LinearGradient/LinearGradientView.java
+index 3194c0b..4119f74 100644
+--- a/node_modules/react-native-linear-gradient/android/src/main/java/com/BV/LinearGradient/LinearGradientView.java
++++ b/node_modules/react-native-linear-gradient/android/src/main/java/com/BV/LinearGradient/LinearGradientView.java
+@@ -15,7 +15,9 @@ import android.graphics.Shader;
+ import android.view.View;
+ 
+ public class LinearGradientView extends View {
+-    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    // Strive : tramage activé. Sans lui, un dégradé sombre et faiblement opaque
++    // (le fond `ScreenField`) s'affiche en bandes au lieu d'une pente continue.
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+     private Path mPathForBorderRadius;
+     private RectF mTempRectForBorderRadius;
+     private LinearGradient mShader;

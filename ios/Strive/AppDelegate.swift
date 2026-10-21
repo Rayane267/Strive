@@ -169,7 +169,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         name: UIApplication.didBecomeActiveNotification,
         object: nil
       )
-      return true
+      // Transmise à `Linking` : sans ça, un lien reçu app ouverte ne naviguait
+      // pas — seul le lancement à froid passait, par `getInitialURL`.
+      // Reste non couvert : le process lancé en arrière-plan par un scan, pont
+      // pas encore prêt quand l'URL arrive. Aucun émetteur iOS ne vise ce cas
+      // aujourd'hui.
+      return RCTLinkingManager.application(app, open: url, options: options)
     }
     return false
   }

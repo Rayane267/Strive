@@ -532,8 +532,7 @@
       "desc": "Não volte a aceitar uma viagem às cegas. Mostramos-lhe o que ela rende de facto — {{cur}}/h e {{cur}}/{{unit}}, trânsito incluído."
     },
     "step2": {
-      "title": "Configure o scanner",
-      "desc": "Autorize as notificações abaixo. A acessibilidade e a sobreposição a outras apps ser-lhe-ão pedidas no primeiro arranque do scanner."
+      "title": "Quatro definições, uma só vez"
     },
     "step2_ios": {
       "title": "Três definições, uma só vez",
@@ -567,10 +566,10 @@
         "step4Sub": "Aceite ou recusada — é o que preenche as suas estatísticas"
       },
       "android": {
-        "step1": "Ative o scanner",
-        "step1Sub": "A partir do início do Strive",
+        "step1": "Fique online",
+        "step1Sub": "A bolha aparece por cima das suas apps",
         "step2": "Toque na bolha",
-        "step2Sub": "Quando a oferta aparecer",
+        "step2Sub": "Assim que a oferta aparecer na Uber, Bolt ou Heetch",
         "step3": "Leia o veredicto",
         "step3Sub": "{{cur}}/h e {{cur}}/{{unit}} reais, trânsito incluído",
         "step4": "Marque a viagem",
@@ -587,7 +586,7 @@
       "notifErrorBody": "Não foi possível terminar a ativação. Verifique a sua ligação e tente de novo.",
       "shortcutT": "O atalho",
       "shortcutS": "É ele que faz tudo: a captura, a análise, o veredicto. Já está configurado, basta adicioná-lo.",
-      "notifS_android": "É por elas que chega o veredicto, com os botões Aceite e Recusada. Sem esta definição, uma análise bem-sucedida pode não lhe mostrar nada.",
+      "notifS_android": "É assim que o Strive o avisa: um scan sem estar online, uma sessão aberta sem viagens.",
       "confirmCta": "Já o adicionei",
       "confirmed": "Confirmou que o adicionou",
       "urgentT": "Notificações urgentes",
@@ -692,9 +691,25 @@
       "diS": "Toque em Aceite ou Recusada diretamente na Dynamic Island.",
       "notifT": "A partir da notificação",
       "notifS_ios": "Sem Dynamic Island, puxe a notificação para baixo: aparecem os dois botões.",
-      "notifS_android": "Os botões Aceite e Recusada estão diretamente na notificação de resultado.",
       "historyT": "Ou mais tarde, no Histórico",
-      "historyS": "As viagens sem resposta ficam marcadas como «Pendente» até que decida."
+      "historyS": "As viagens sem resposta ficam marcadas como «Pendente» até que decida.",
+      "bubbleT": "No cartão da bolha",
+      "bubbleS": "Toque em Aceite ou Recusada enquanto o veredicto aparece, sem sair da sua app TVDE."
+    },
+    "androidInstall": {
+      "overlayT": "Sobrepor a outras apps",
+      "overlayS": "É isto que permite à bolha flutuar por cima da Uber, da Bolt e da Heetch.",
+      "overlayCta": "Permitir a sobreposição",
+      "overlayDone": "Sobreposição permitida",
+      "accessT": "Acessibilidade do Strive",
+      "accessS": "Lê a oferta no ecrã — preço, distância, moradas — quando toca na bolha, e em nenhum outro momento. O Strive só a utiliza para calcular o veredicto.",
+      "accessCta": "Ativar a acessibilidade",
+      "accessDone": "Acessibilidade ativada",
+      "accessLocked": "Permita primeiro a sobreposição",
+      "batteryT": "Bateria sem restrições",
+      "batteryS": "Sem esta definição, alguns telemóveis fecham a bolha ao fim de poucos minutos. Nas informações da app: Bateria › Sem restrições.",
+      "batteryCta": "Abrir as informações da app",
+      "batteryDone": "Bateria sem restrições"
     }
   },
   "help": {
@@ -1335,6 +1350,7 @@
     "networkRetry": "Verifique a sua ligação e repita",
     "bubbleErrorCapture": "Captura ilegível",
     "bubbleErrorNetwork": "Erro de rede",
+    "remindersChannel": "Lembretes",
     "analyzing": "A analisar…",
     "goPlus": "Passe a Plus para ver",
     "sessionRunning": "Sessão em curso",
@@ -1344,6 +1360,7 @@
     "ride": "Viagem",
     "earningsCaps": "GANHOS",
     "perHourCaps": "/HORA",
+    "accepted": "Aceite",
     "declined": "Recusada",
     "taken": "Aceite",
     "noSession": "Sem sessão",

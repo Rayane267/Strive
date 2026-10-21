@@ -10,7 +10,6 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -319,14 +318,19 @@ const SupportTicketsScreen = () => {
 
       {/* Compose modal */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={composeOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setComposeOpen(false)}
       >
         <Pressable style={styles.overlay} onPress={() => setComposeOpen(false)}>
+          {/* `padding` aussi sur Android : la modale est bord à bord
+              (navigationBarTranslucent), Android ne la redimensionne plus
+              sous le clavier. */}
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             style={{ width: '100%' }}
           >
             <Pressable

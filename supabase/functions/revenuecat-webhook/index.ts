@@ -56,6 +56,14 @@ interface RevenueCatPayload {
   api_version?: string;
 }
 
+// Google Play nomme un abonnement « id:plan de base » (`strive_plus_monthly:mensuel`),
+// l'App Store « id » tout court. `subscription_products` ne connaît que l'id nu :
+// sans ce retrait, un achat Android tombait sur « Unknown product » et le
+// chauffeur payait sans passer Plus.
+function baseProductId(productId: string): string {
+  return productId.split(':')[0];
+}
+
 // Mapping event → status pour les events non-couverts par la RPC
 function statusForEvent(eventType: string, _cancelReason?: string): string | null {
   switch (eventType) {
@@ -155,7 +163,7 @@ async function grantFromRevenueCat(userId: string, eventId: string | null): Prom
     const { error } = await supabase.rpc('apply_revenuecat_event', {
       p_user_id: userId,
       p_event_type: 'INITIAL_PURCHASE',
-      p_product_id: best.productId,
+      p_product_id: baseProductId(best.productId),
       p_expires_at: new Date(best.expires).toISOString(),
       p_status: 'active',
       // event_id dérivé : un TRANSFER peut viser plusieurs comptes, et la table
@@ -255,7 +263,7 @@ serve(async (req: Request) => {
   const { error } = await supabase.rpc('apply_revenuecat_event', {
     p_user_id: userId,
     p_event_type: event.type,
-    p_product_id: event.product_id,
+    p_product_id: baseProductId(event.product_id),
     p_expires_at: expiresAt,
     p_status: statusForEvent(event.type, event.cancel_reason),
     // Déduplication : RC rejoue les webhooks sans 200 → la RPC ignore les

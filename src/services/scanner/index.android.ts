@@ -23,6 +23,8 @@ export const scannerService: ScannerService = {
 
   isRunning: () => ScanBridge.isScannerRunning(),
 
+  ensureRunning: () => ScanBridge.ensureScanner(),
+
   showVerdict: (level: number) => ScanBridge.showVerdict(level),
 
   updateDuration: (minutes: number) => ScanBridge.updateDuration(minutes),
@@ -86,6 +88,8 @@ export const scannerService: ScannerService = {
   openOverlayPermissionSettings: () => ScanBridge.openOverlayPermissionSettings(),
 
   openAccessibilitySettings: () => ScanBridge.openAccessibilitySettings(),
+
+  openBatterySettings: () => ScanBridge.openBatterySettings?.(),
 
   requestMediaProjectionPermission: () => ScanBridge.requestMediaProjectionPermission(),
 

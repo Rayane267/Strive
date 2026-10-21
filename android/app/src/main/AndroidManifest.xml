@@ -5,6 +5,8 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+  <!-- Reposer les rappels programmés après un redémarrage (LocalNotifications). -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
   <!-- Localisation : retirée avec les signalements pour la 1.0.6 (cf.
        ROAD_REPORTS_ENABLED). À remettre avec eux, en COARSE + FINE, jamais
        en arrière-plan. @rnmapbox/maps la déclare d'office : ôtée ici, la
@@ -27,9 +29,12 @@
       </intent-filter>
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/>
     </service>
-    <receiver android:name=".scanner.RideDecisionReceiver" android:exported="false">
+    <receiver android:name=".scanner.LocalNotificationReceiver" android:exported="false"/>
+    <!-- exported : le système envoie BOOT_COMPLETED et MY_PACKAGE_REPLACED, diffusions protégées qu'aucune app ne peut forger. -->
+    <receiver android:name=".scanner.BootReceiver" android:exported="true">
       <intent-filter>
-        <action android:name="com.strive.app.RIDE_DECISION"/>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
       </intent-filter>
     </receiver>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>

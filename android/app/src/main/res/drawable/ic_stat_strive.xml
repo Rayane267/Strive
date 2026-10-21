@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône des notifications : les trois capsules du logo, en blanc. Android
+     n'en garde que la silhouette et la teinte lui-même ; le PNG du logo, une
+     tuile pleine, n'y donnait qu'un carré blanc.
+     Géométrie de ios/Strive/Splash/StriveLogoShape.swift (canevas 192, capsules
+     84 × 24 en escalier), recadrée sur le bloc : origine décalée de 36. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,12H102A12,12 0,0 1,102 36H42A12,12 0,0 1,42 12Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,48H90A12,12 0,0 1,90 72H30A12,12 0,0 1,30 48Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M18,84H78A12,12 0,0 1,78 108H18A12,12 0,0 1,18 84Z" />
+</vector>

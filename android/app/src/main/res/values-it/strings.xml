@@ -13,8 +13,13 @@
   <string name="scanner_notif_online">online</string>
   <string name="scanner_ride_accept">✅ Corsa accettata</string>
   <string name="scanner_ride_decline">❌ Rifiutata</string>
+  <string name="scanner_ride_taken">Accettata</string>
+  <string name="scanner_ride_declined">Rifiutata</string>
+  <string name="scanner_ride_accepted">Accettata</string>
   <string name="scanner_quota_reached">Quota raggiunta</string>
   <string name="scanner_quota_reached_free">Quota raggiunta · Passa a Plus</string>
   <string name="scanner_error_capture">Schermata illeggibile</string>
   <string name="scanner_error_network">Errore di rete</string>
+  <string name="scanner_error_timeout">Analisi interrotta — riavvia la scansione.</string>
+  <string name="notif_channel_reminders">Promemoria</string>
 </resources>

@@ -532,8 +532,7 @@
       "desc": "No vuelvas a aceptar un viaje a ciegas. Te mostramos lo que deja de verdad — {{cur}}/h y {{cur}}/{{unit}}, tráfico incluido."
     },
     "step2": {
-      "title": "Configura el escáner",
-      "desc": "Autoriza las notificaciones abajo. La accesibilidad y la superposición sobre otras apps se te pedirán la primera vez que inicies el escáner."
+      "title": "Cuatro ajustes, una sola vez"
     },
     "step2_ios": {
       "title": "Tres ajustes, una sola vez",
@@ -567,10 +566,10 @@
         "step4Sub": "Aceptado o rechazado — es lo que llena tus estadísticas"
       },
       "android": {
-        "step1": "Activa el escáner",
-        "step1Sub": "Desde el inicio de Strive",
+        "step1": "Ponte en línea",
+        "step1Sub": "La burbuja aparece sobre tus apps",
         "step2": "Toca la burbuja",
-        "step2Sub": "Cuando aparezca la oferta",
+        "step2Sub": "En cuanto aparezca la oferta en Uber, Bolt o Heetch",
         "step3": "Lee el veredicto",
         "step3Sub": "{{cur}}/h y {{cur}}/{{unit}} reales, tráfico incluido",
         "step4": "Marca el viaje",
@@ -587,7 +586,7 @@
       "notifErrorBody": "No se ha podido terminar la activación. Comprueba tu conexión e inténtalo de nuevo.",
       "shortcutT": "El atajo",
       "shortcutS": "Él lo hace todo: la captura, el análisis, el veredicto. Ya está configurado, solo hay que añadirlo.",
-      "notifS_android": "Es por ellas que llega el veredicto, con los botones Aceptado y Rechazado. Sin este ajuste, un escaneo correcto puede no mostrarte nada.",
+      "notifS_android": "Así te avisa Strive: un escaneo sin estar en línea, una sesión abierta sin viajes.",
       "confirmCta": "Ya lo he añadido",
       "confirmed": "Has confirmado que lo añadiste",
       "urgentT": "Notificaciones urgentes",
@@ -692,9 +691,25 @@
       "diS": "Pulsa Aceptado o Rechazado directamente en la Dynamic Island.",
       "notifT": "Desde la notificación",
       "notifS_ios": "Sin Dynamic Island, desliza la notificación hacia abajo: aparecen los dos botones.",
-      "notifS_android": "Los botones Aceptado y Rechazado están directamente en la notificación de resultado.",
       "historyT": "O más tarde, en el Historial",
-      "historyS": "Los viajes sin respuesta se quedan marcados como «Pendiente» hasta que decidas."
+      "historyS": "Los viajes sin respuesta se quedan marcados como «Pendiente» hasta que decidas.",
+      "bubbleT": "En la tarjeta de la burbuja",
+      "bubbleS": "Toca Aceptada o Rechazada mientras se muestra el veredicto, sin salir de tu app VTC."
+    },
+    "androidInstall": {
+      "overlayT": "Mostrar sobre otras apps",
+      "overlayS": "Es lo que permite que la burbuja flote sobre Uber, Bolt y Heetch.",
+      "overlayCta": "Permitir la superposición",
+      "overlayDone": "Superposición permitida",
+      "accessT": "Accesibilidad de Strive",
+      "accessS": "Lee la oferta en pantalla —precio, distancia, direcciones— cuando tocas la burbuja, y en ningún otro momento. Strive solo la usa para calcular el veredicto.",
+      "accessCta": "Activar la accesibilidad",
+      "accessDone": "Accesibilidad activada",
+      "accessLocked": "Permite primero la superposición",
+      "batteryT": "Batería sin restricciones",
+      "batteryS": "Sin este ajuste, algunos teléfonos cierran la burbuja al cabo de unos minutos. En la información de la app: Batería › Sin restricciones.",
+      "batteryCta": "Abrir la información de la app",
+      "batteryDone": "Batería sin restricciones"
     }
   },
   "help": {
@@ -1335,6 +1350,7 @@
     "networkRetry": "Comprueba tu conexión y vuelve a escanear",
     "bubbleErrorCapture": "Captura ilegible",
     "bubbleErrorNetwork": "Error de red",
+    "remindersChannel": "Recordatorios",
     "analyzing": "Analizando…",
     "goPlus": "Pasa a Plus para verlo",
     "sessionRunning": "Sesión en curso",
@@ -1344,6 +1360,7 @@
     "ride": "Viaje",
     "earningsCaps": "GANANCIAS",
     "perHourCaps": "/HORA",
+    "accepted": "Aceptada",
     "declined": "Rechazada",
     "taken": "Aceptada",
     "noSession": "Sin sesión",

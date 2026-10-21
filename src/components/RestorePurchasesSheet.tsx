@@ -91,7 +91,7 @@ const RestorePurchasesSheet = ({
     : t('subscription.restoreNoneSub', "Aucun abonnement actif n'a été trouvé sur ce compte.");
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal statusBarTranslucent navigationBarTranslucent visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: anim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />

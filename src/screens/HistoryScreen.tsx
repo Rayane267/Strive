@@ -893,6 +893,8 @@ const HistoryScreen = () => {
 
       {/* ── CALENDAR MODAL (Plus only) ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={modalVisible}
         transparent
         animationType="fade"

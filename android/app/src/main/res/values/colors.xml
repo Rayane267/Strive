@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="appBackground">#0A120E</color>
-    <!-- Fond de l'adaptive icon (Android 8+). Teinte dark Strive. -->
-    <color name="ic_launcher_background">#0A120E</color>
+    <!-- Fond de l'adaptive icon (Android 8+) : le vert de l'icône iOS. -->
+    <color name="ic_launcher_background">#1C2E24</color>
 </resources>

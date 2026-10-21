@@ -894,6 +894,8 @@ const AnalyticsScreen = () => {
 
         {/* ── CALENDAR MODAL ── */}
         <Modal
+          statusBarTranslucent
+          navigationBarTranslucent
           visible={modalVisible}
           transparent
           animationType="fade"

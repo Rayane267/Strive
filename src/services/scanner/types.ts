@@ -87,6 +87,8 @@ export interface PermissionsStatus {
   needsMediaProjection: boolean;
   /** true si le token MediaProjection a été accordé pour cette session */
   mediaProjectionGranted: boolean;
+  /** Android : batterie « Non restreinte » (hors optimisations). */
+  batteryUnrestricted?: boolean;
 }
 
 export interface ScannerService {
@@ -222,6 +224,11 @@ export interface ScannerService {
   openOverlayPermissionSettings(): void;
   /** Ouvre les paramètres d'accessibilité */
   openAccessibilitySettings(): void;
+  /** Android : ouvre la fiche de l'app (Batterie › Non restreinte). */
+  openBatterySettings?(): void;
+  /** Android : relance la bulle si la session est en ligne et que le chauffeur
+   *  ne l'a pas coupée lui-même. Rend vrai si elle tourne. */
+  ensureRunning?(): Promise<boolean>;
   /**
    * Lance le dialog système de capture d'écran (MediaProjection).
    * Nécessaire uniquement sur Android < 11.

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
   Linking,
   Alert,
   Platform,
@@ -84,6 +85,13 @@ const SHINE_ROTATE_DEG = 12;
 /// apparaîtrait ou disparaîtrait en plein milieu de la carte.
 const shineOverhang = (height: number) =>
   Math.abs(Math.sin((SHINE_ROTATE_DEG * Math.PI) / 180)) * height;
+
+/// Android : la modale de suppression est bord à bord (navigationBarTranslucent),
+/// Android ne la redimensionne plus sous le clavier et les boutons passaient
+/// dessous. iOS garde exactement la `View` d'origine, sans prop ajoutée.
+const DeleteOverlay = Platform.OS === 'android' ? KeyboardAvoidingView : View;
+const DELETE_OVERLAY_PROPS =
+  Platform.OS === 'android' ? { behavior: 'padding' as const } : {};
 
 type MenuItem = {
   icon: string;
@@ -356,6 +364,7 @@ const ProfileScreen = () => {
       const { ScanBridge } = NativeModules;
       ScanBridge?.setSessionOnline?.(false);
       if (Platform.OS === 'ios') ScanBridge?.stopLiveActivity?.();
+      if (Platform.OS === 'android') ScanBridge?.stopScanner?.()?.catch?.(() => {});
     } catch {}
 
     // Et la file de décisions, qui survivait elle aussi : le chauffeur suivant
@@ -922,6 +931,8 @@ const ProfileScreen = () => {
 
       {/* ── LOGOUT MODAL ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="fade"
         transparent
         visible={isLogoutModalVisible}
@@ -954,12 +965,14 @@ const ProfileScreen = () => {
 
       {/* ── DELETE ACCOUNT MODAL ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="fade"
         transparent
         visible={isDeleteModalVisible}
         onRequestClose={() => { setIsDeleteModalVisible(false); setDeleteConfirmation(''); }}
       >
-        <View style={styles.modalOverlay}>
+        <DeleteOverlay style={styles.modalOverlay} {...DELETE_OVERLAY_PROPS}>
           <View style={styles.modalCard}>
             <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
               <Feather name="alert-triangle" size={26} color={colors.danger} />
@@ -1000,7 +1013,7 @@ const ProfileScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </DeleteOverlay>
       </Modal>
     </SafeAreaView>
   );

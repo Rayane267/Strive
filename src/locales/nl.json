@@ -532,8 +532,7 @@
       "desc": "Aanvaard nooit meer een rit in het blinde. We tonen je wat hij echt opbrengt — {{cur}}/u en {{cur}}/{{unit}}, verkeer inbegrepen."
     },
     "step2": {
-      "title": "Stel de scanner in",
-      "desc": "Geef hieronder toestemming voor meldingen. De toegankelijkheid en het tonen boven andere apps worden gevraagd bij de eerste start van de scanner."
+      "title": "Vier instellingen, één keer"
     },
     "step2_ios": {
       "title": "Drie instellingen, één keer",
@@ -567,10 +566,10 @@
         "step4Sub": "Aanvaard of geweigerd — dat vult je statistieken"
       },
       "android": {
-        "step1": "Schakel de scanner in",
-        "step1Sub": "Vanaf het startscherm van Strive",
+        "step1": "Ga online",
+        "step1Sub": "De bubbel verschijnt boven je apps",
         "step2": "Tik op de bubbel",
-        "step2Sub": "Wanneer de aanbieding verschijnt",
+        "step2Sub": "Zodra de aanbieding verschijnt in Uber, Bolt of Heetch",
         "step3": "Lees het oordeel",
         "step3Sub": "Echte {{cur}}/u en {{cur}}/{{unit}}, verkeer inbegrepen",
         "step4": "Markeer de rit",
@@ -587,7 +586,7 @@
       "notifErrorBody": "De activering kon niet worden voltooid. Controleer je verbinding en probeer het opnieuw.",
       "shortcutT": "De opdracht",
       "shortcutS": "Die doet alles: de opname, de analyse, het oordeel. Ze is al ingesteld, je hoeft ze alleen toe te voegen.",
-      "notifS_android": "Via meldingen komt het oordeel binnen, met de knoppen Aanvaard en Geweigerd. Zonder die instelling kan een geslaagde scan je niets tonen.",
+      "notifS_android": "Zo waarschuwt Strive je: een scan terwijl je niet online bent, een sessie die openblijft zonder ritten.",
       "confirmCta": "Ik heb ze toegevoegd",
       "confirmed": "Je hebt de toevoeging bevestigd",
       "urgentT": "Urgente meldingen",
@@ -692,9 +691,25 @@
       "diS": "Tik op Aanvaard of Geweigerd rechtstreeks in de Dynamic Island.",
       "notifT": "Vanuit de melding",
       "notifS_ios": "Zonder Dynamic Island trek je de melding naar beneden: beide knoppen verschijnen.",
-      "notifS_android": "De knoppen Aanvaard en Geweigerd staan rechtstreeks op de resultaatmelding.",
       "historyT": "Of later, in de Geschiedenis",
-      "historyS": "Ritten zonder antwoord blijven daar als «In afwachting» staan tot je beslist."
+      "historyS": "Ritten zonder antwoord blijven daar als «In afwachting» staan tot je beslist.",
+      "bubbleT": "Op de kaart van de bubbel",
+      "bubbleS": "Tik op Aangenomen of Geweigerd zolang het oordeel zichtbaar is, zonder je VVB-app te verlaten."
+    },
+    "androidInstall": {
+      "overlayT": "Weergeven boven andere apps",
+      "overlayS": "Hiermee zweeft de bubbel boven Uber, Bolt en Heetch.",
+      "overlayCta": "Weergave toestaan",
+      "overlayDone": "Weergave toegestaan",
+      "accessT": "Toegankelijkheid van Strive",
+      "accessS": "Die leest de aanbieding op je scherm — prijs, afstand, adressen — wanneer je op de bubbel tikt, en op geen enkel ander moment. Strive gebruikt het alleen om het oordeel te berekenen.",
+      "accessCta": "Toegankelijkheid aanzetten",
+      "accessDone": "Toegankelijkheid aan",
+      "accessLocked": "Sta eerst de weergave toe",
+      "batteryT": "Batterij zonder beperking",
+      "batteryS": "Zonder deze instelling sluiten sommige telefoons de bubbel na een paar minuten af. In de app-info: Batterij › Onbeperkt.",
+      "batteryCta": "App-info openen",
+      "batteryDone": "Batterij zonder beperking"
     }
   },
   "help": {
@@ -1335,6 +1350,7 @@
     "networkRetry": "Controleer je verbinding en scan opnieuw",
     "bubbleErrorCapture": "Onleesbare schermafbeelding",
     "bubbleErrorNetwork": "Netwerkfout",
+    "remindersChannel": "Herinneringen",
     "analyzing": "Analyseren…",
     "goPlus": "Ga naar Plus om te zien",
     "sessionRunning": "Sessie bezig",
@@ -1344,6 +1360,7 @@
     "ride": "Rit",
     "earningsCaps": "VERDIENSTEN",
     "perHourCaps": "/UUR",
+    "accepted": "Geaccepteerd",
     "declined": "Geweigerd",
     "taken": "Aangenomen",
     "noSession": "Geen sessie",

@@ -53,15 +53,18 @@ describe('markRatingPrompted', () => {
 });
 
 describe('openStoreForRating', () => {
-  it('opens the store URL when it can be opened', async () => {
-    mockCanOpenURL.mockResolvedValue(true);
+  it('opens the store URL without asking canOpenURL first', async () => {
+    mockOpenURL.mockResolvedValue(undefined);
     await openStoreForRating();
+    expect(mockCanOpenURL).not.toHaveBeenCalled();
     expect(mockOpenURL).toHaveBeenCalledWith('market://details?id=com.striveapp.app');
   });
 
-  it('does not open anything when the URL is not supported', async () => {
-    mockCanOpenURL.mockResolvedValue(false);
+  it('falls back to the web listing when no store app opens the link', async () => {
+    mockOpenURL.mockRejectedValueOnce(new Error('no activity')).mockResolvedValue(undefined);
     await openStoreForRating();
-    expect(mockOpenURL).not.toHaveBeenCalled();
+    expect(mockOpenURL).toHaveBeenLastCalledWith(
+      'https://play.google.com/store/apps/details?id=com.striveapp.app',
+    );
   });
 });

@@ -13,7 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ScanBridgeModule(private val reactContext: ReactApplicationContext)
-    : ReactContextBaseJavaModule(reactContext), ActivityEventListener {
+    : ReactContextBaseJavaModule(reactContext), ActivityEventListener, LifecycleEventListener {
 
     override fun getName() = "ScanBridge"
 
@@ -64,6 +64,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             return
         }
 
+        FloatingBubbleService.setUserStopped(ctx, false)
         val intent = Intent(ctx, FloatingBubbleService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(intent)
@@ -76,6 +77,8 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun stopScanner(promise: Promise) {
         val ctx = reactContext.applicationContext
+        // Arrêt voulu (bouton, hors ligne, déconnexion) : pas de relance seule.
+        FloatingBubbleService.setUserStopped(ctx, true)
         ctx.stopService(Intent(ctx, FloatingBubbleService::class.java))
         promise.resolve(null)
     }
@@ -113,13 +116,31 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         // Android < 11 a besoin d'un token MediaProjection pour capturer l'écran
         val needsMediaProjection = Build.VERSION.SDK_INT < Build.VERSION_CODES.R
         val mediaProjectionGranted = StriveAccessibilityService.mediaProjection != null
+        // « Non restreinte » dans la fiche de l'app = exemptée des optimisations
+        // de batterie, que Samsung ou Xiaomi appliquent jusqu'à couper la bulle.
+        val batteryUnrestricted = (ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+            .isIgnoringBatteryOptimizations(ctx.packageName)
 
         Arguments.createMap().apply {
             putBoolean("overlay", overlayOk)
             putBoolean("accessibility", accessibilityOk)
             putBoolean("needsMediaProjection", needsMediaProjection)
             putBoolean("mediaProjectionGranted", mediaProjectionGranted)
+            putBoolean("batteryUnrestricted", batteryUnrestricted)
         }.also { promise.resolve(it) }
+    }
+
+    /** Fiche de l'app, d'où « Batterie › Non restreinte » se règle sur tous les
+     *  constructeurs. Pas la fenêtre de demande directe : elle exige une
+     *  permission que Google Play réserve à quelques catégories d'apps. */
+    @ReactMethod
+    fun openBatterySettings() {
+        val ctx = reactContext.applicationContext
+        ctx.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${ctx.packageName}"))
+                .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        )
     }
 
     @ReactMethod
@@ -230,6 +251,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun setPreferences(includePickup: Boolean) {
         FloatingBubbleService.includePickup = includePickup
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Seuils verdict utilisateur synchronisés au natif (utilisés pendant TomTom). */
@@ -237,6 +259,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     fun setThresholds(minHourlyRate: Double, minKmRate: Double) {
         FloatingBubbleService.minHourlyRate = minHourlyRate
         FloatingBubbleService.minKmRate = minKmRate
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Affichage du prix net de carburant dans la bulle. `fuelCostPerKm` arrive
@@ -247,6 +270,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     fun setFuelDeduction(enabled: Boolean, fuelCostPerKm: Double) {
         FloatingBubbleService.deductFuel = enabled
         FloatingBubbleService.fuelCostPerKm = fuelCostPerKm
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Langue de l'app (fr/en) pour les strings natives : la bulle et les
@@ -255,6 +279,18 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun setAppLanguage(lang: String) {
         FloatingBubbleService.setAppLanguage(reactContext, lang)
+    }
+
+    /** Notification locale programmée. Mirror iOS : même signature, mêmes
+     *  identifiants texte (cf. LocalNotifications). */
+    @ReactMethod
+    fun scheduleLocalNotification(identifier: String, title: String, body: String, delaySeconds: Double) {
+        LocalNotifications.schedule(reactContext, identifier, title, body, delaySeconds)
+    }
+
+    @ReactMethod
+    fun cancelLocalNotification(identifier: String) {
+        LocalNotifications.cancel(reactContext, identifier)
     }
 
     /** Le marché : le PAYS pour le géocodage et le parser, la DEVISE pour tout
@@ -374,20 +410,14 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
         )
     }
 
-    /** Retire la notification de résultat quand la décision a été prise DANS
-     *  l'app : elle restait sinon affichée avec ses deux boutons sur une course
-     *  déjà tranchée. Pendant de `clearLiveActivityResult` côté iOS, et même
-     *  garde — sans effet si la notification affichée porte sur une AUTRE
-     *  course, c'est-à-dire un scan plus récent. */
+    /** Retire la carte de résultat quand la décision a été prise DANS l'app :
+     *  elle restait sinon affichée avec ses deux boutons sur une course déjà
+     *  tranchée. Pendant de `clearLiveActivityResult` côté iOS, et même garde —
+     *  la carte d'un scan plus récent n'est pas touchée. */
     @ReactMethod
     fun clearRideResult(rideId: String) {
         if (rideId.isEmpty()) return
-        val ctx = reactContext.applicationContext
-        val prefs = ctx.getSharedPreferences(SCANS_PREFS, Context.MODE_PRIVATE)
-        if (prefs.getString(LAST_NOTIF_RIDE_KEY, null) != rideId) return
-        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
-            .cancel(FloatingBubbleService.RESULT_NOTIF_ID)
-        prefs.edit().remove(LAST_NOTIF_RIDE_KEY).apply()
+        FloatingBubbleService.instance?.clearShownRide(rideId)
     }
 
     /** Vidange du buffer de scans vers le JS — appelée à l'abonnement
@@ -478,6 +508,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     fun setQuotaReached(reached: Boolean, isFree: Boolean) {
         FloatingBubbleService.quotaReached = reached
         FloatingBubbleService.isFreeTier = isFree
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Session active (chauffeur « en ligne »). Si false, la bulle bloque le
@@ -486,6 +517,18 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun setSessionOnline(online: Boolean) {
         FloatingBubbleService.sessionOnline = online
+        if (online) FloatingBubbleService.markActive(reactContext)
+        FloatingBubbleService.saveState(reactContext)
+        // Le chronomètre de la notification suit l'état en ligne.
+        FloatingBubbleService.instance?.refreshForegroundNotification()
+    }
+
+    /** Relance la bulle si la session est en ligne et que le chauffeur ne l'a
+     *  pas coupée lui-même. Rend vrai si elle tourne. Appelée par le Dashboard à
+     *  l'ouverture et à chaque retour dans l'app. */
+    @ReactMethod
+    fun ensureScanner(promise: Promise) {
+        promise.resolve(FloatingBubbleService.ensureRunning(reactContext))
     }
 
     /** Compteur de scans du jour (autoritatif, poussé par le JS) + limite, pour
@@ -529,6 +572,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             FloatingBubbleService.scanCountToday =
                 maxOf(FloatingBubbleService.scanCountToday, countToday)
         }
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Limite du palier GRATUIT, pour le plafond d'appareil. Le COMPTEUR associé
@@ -538,6 +582,7 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     @ReactMethod
     fun setDeviceQuotaLimit(freeLimit: Int) {
         FloatingBubbleService.deviceFreeLimit = freeLimit
+        FloatingBubbleService.saveState(reactContext)
     }
 
     /** Compteur d'appareil redescendu du serveur (`device_scan_usage`), pour
@@ -560,6 +605,15 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
         private var moduleInstance: ScanBridgeModule? = null
+
+        /** Non privé : la relance automatique de la bulle le vérifie aussi. */
+        fun isAccessibilityServiceEnabled(ctx: android.content.Context): Boolean {
+            val enabled = Settings.Secure.getString(
+                ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            val target = "${ctx.packageName}/com.strive.scanner.StriveAccessibilityService"
+            return enabled.split(':').any { it.equals(target, ignoreCase = true) }
+        }
 
         /** Buffer des décisions Accepter/Refuser (survit à un process RN mort). */
         const val DECISIONS_PREFS = "strive_ride_decisions"
@@ -586,10 +640,6 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
             kept.put(JSONObject().put("rideId", rideId).put("status", status))
             prefs.edit().putString(DECISIONS_KEY, kept.toString()).apply()
         }
-
-        /** Course visée par la notification de résultat actuellement affichée.
-         *  Sert à ne l'annuler que si la décision porte bien sur elle. */
-        const val LAST_NOTIF_RIDE_KEY = "lastNotifRideId"
 
         /** Journal durable des scans. Contient TOUT scan produit, remis au JS ou
          *  non, et n'est purgé qu'entrée par entrée via `ackScan` — une fois la
@@ -838,15 +888,20 @@ class ScanBridgeModule(private val reactContext: ReactApplicationContext)
     init {
         moduleInstance = this
         reactContext.addActivityEventListener(this)
+        reactContext.addLifecycleEventListener(this)
     }
 
-    private fun isAccessibilityServiceEnabled(ctx: android.content.Context): Boolean {
-        val enabled = Settings.Secure.getString(
-            ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-        val target = "${ctx.packageName}/com.strive.scanner.StriveAccessibilityService"
-        return enabled.split(':').any { it.equals(target, ignoreCase = true) }
+    /** Retour au premier plan : rejoue le journal des scans non acquittés. Mirror
+     *  iOS (`appDidBecomeActive` → `handleShareExtensionResult`) : une course
+     *  dont l'écriture a échoué n'attendait que le remontage du Dashboard ou un
+     *  redémarrage de l'app. Sans auditeur JS l'événement se perd, pas l'entrée. */
+    override fun onHostResume() {
+        drainPendingScans()
     }
+
+    override fun onHostPause() {}
+
+    override fun onHostDestroy() {}
 
     @ReactMethod fun addListener(eventName: String) {}
     @ReactMethod fun removeListeners(count: Int) {}

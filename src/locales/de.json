@@ -532,8 +532,7 @@
       "desc": "Nimm keine Fahrt mehr blind an. Wir zeigen dir, was sie wirklich bringt – {{cur}}/Std. und {{cur}}/{{unit}}, Verkehr inklusive."
     },
     "step2": {
-      "title": "Richte den Scanner ein",
-      "desc": "Erlaube unten die Mitteilungen. Bedienungshilfen und Anzeige über anderen Apps werden beim ersten Start des Scanners abgefragt."
+      "title": "Vier Einstellungen, ein einziges Mal"
     },
     "step2_ios": {
       "title": "Drei Einstellungen, ein einziges Mal",
@@ -567,10 +566,10 @@
         "step4Sub": "Angenommen oder abgelehnt – das füllt deine Statistik"
       },
       "android": {
-        "step1": "Aktiviere den Scanner",
-        "step1Sub": "Vom Startbildschirm von Strive aus",
+        "step1": "Geh online",
+        "step1Sub": "Die Blase erscheint über deinen Apps",
         "step2": "Tippe auf die Blase",
-        "step2Sub": "Wenn das Angebot erscheint",
+        "step2Sub": "Sobald das Angebot in Uber, Bolt oder Heetch erscheint",
         "step3": "Lies das Urteil",
         "step3Sub": "Echte {{cur}}/Std. und {{cur}}/{{unit}}, Verkehr inklusive",
         "step4": "Markiere die Fahrt",
@@ -587,7 +586,7 @@
       "notifErrorBody": "Die Aktivierung konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuch es erneut.",
       "shortcutT": "Der Kurzbefehl",
       "shortcutS": "Er macht alles: die Aufnahme, die Auswertung, das Urteil. Er ist schon eingerichtet, du musst ihn nur hinzufügen.",
-      "notifS_android": "Über sie kommt das Urteil an, mit den Knöpfen Angenommen und Abgelehnt. Ohne diese Einstellung kann ein gelungener Scan dir nichts zeigen.",
+      "notifS_android": "So warnt dich Strive: ein Scan, obwohl du nicht online bist, eine Sitzung, die ohne Fahrt offen bleibt.",
       "confirmCta": "Ich habe ihn hinzugefügt",
       "confirmed": "Du hast das Hinzufügen bestätigt",
       "urgentT": "Dringende Mitteilungen",
@@ -692,9 +691,25 @@
       "diS": "Tippe direkt in der Dynamic Island auf Angenommen oder Abgelehnt.",
       "notifT": "Über die Mitteilung",
       "notifS_ios": "Ohne Dynamic Island ziehst du die Mitteilung nach unten: beide Knöpfe erscheinen.",
-      "notifS_android": "Die Knöpfe Angenommen und Abgelehnt stehen direkt auf der Ergebnis-Mitteilung.",
       "historyT": "Oder später, im Verlauf",
-      "historyS": "Fahrten ohne Antwort bleiben dort als «Offen» markiert, bis du entscheidest."
+      "historyS": "Fahrten ohne Antwort bleiben dort als «Offen» markiert, bis du entscheidest.",
+      "bubbleT": "Auf der Karte der Blase",
+      "bubbleS": "Tippe auf Angenommen oder Abgelehnt, solange das Urteil angezeigt wird, ohne deine VTC-App zu verlassen."
+    },
+    "androidInstall": {
+      "overlayT": "Über anderen Apps einblenden",
+      "overlayS": "Damit schwebt die Blase über Uber, Bolt und Heetch.",
+      "overlayCta": "Einblenden erlauben",
+      "overlayDone": "Einblenden erlaubt",
+      "accessT": "Strive-Bedienungshilfe",
+      "accessS": "Sie liest das angezeigte Angebot – Preis, Strecke, Adressen –, wenn du auf die Blase tippst, und zu keinem anderen Zeitpunkt. Strive nutzt sie nur, um das Urteil zu berechnen.",
+      "accessCta": "Bedienungshilfe aktivieren",
+      "accessDone": "Bedienungshilfe aktiv",
+      "accessLocked": "Erst das Einblenden erlauben",
+      "batteryT": "Akku ohne Einschränkung",
+      "batteryS": "Ohne diese Einstellung beenden manche Handys die Blase nach wenigen Minuten. In den App-Infos: Akku › Nicht eingeschränkt.",
+      "batteryCta": "App-Infos öffnen",
+      "batteryDone": "Akku ohne Einschränkung"
     }
   },
   "help": {
@@ -1335,6 +1350,7 @@
     "networkRetry": "Verbindung prüfen und erneut scannen",
     "bubbleErrorCapture": "Screenshot unlesbar",
     "bubbleErrorNetwork": "Netzwerkfehler",
+    "remindersChannel": "Erinnerungen",
     "analyzing": "Analyse…",
     "goPlus": "Plus holen, um zu sehen",
     "sessionRunning": "Sitzung läuft",
@@ -1344,6 +1360,7 @@
     "ride": "Fahrt",
     "earningsCaps": "EINNAHMEN",
     "perHourCaps": "/STUNDE",
+    "accepted": "Angenommen",
     "declined": "Abgelehnt",
     "taken": "Angenommen",
     "noSession": "Keine Sitzung",

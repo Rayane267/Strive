@@ -1,5 +1,5 @@
 /**
- * Géométrie de la capsule d'onglets iOS.
+ * Géométrie de la capsule d'onglets (Android ; iOS avant la barre native).
  *
  * Partagée parce que `useBottomTabBarHeight` ne la connaît pas : seule la barre
  * par défaut de React Navigation remonte sa hauteur, et la capsule est dessinée

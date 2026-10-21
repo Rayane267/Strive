@@ -532,8 +532,7 @@
       "desc": "N'acceptez plus une course à l'aveugle. On vous montre ce qu'elle rapporte vraiment — {{cur}}/h et {{cur}}/{{unit}}, trafic compris."
     },
     "step2": {
-      "title": "Configurez le scanner",
-      "desc": "Autorisez les notifications ci-dessous. L'accessibilité et l'affichage par-dessus les autres apps vous seront demandés au premier lancement du scanner."
+      "title": "Quatre réglages, une seule fois"
     },
     "step2_ios": {
       "title": "Trois réglages, une seule fois",
@@ -567,10 +566,10 @@
         "step4Sub": "Prise ou refusée — c'est ce qui remplit vos stats"
       },
       "android": {
-        "step1": "Activez le scanner",
-        "step1Sub": "Depuis l'accueil de Strive",
-        "step2": "Tapez sur la bulle",
-        "step2Sub": "Quand l'offre s'affiche",
+        "step1": "Passez en ligne",
+        "step1Sub": "La bulle apparaît par-dessus vos apps",
+        "step2": "Touchez la bulle",
+        "step2Sub": "Dès que l'offre s'affiche dans Uber, Bolt ou Heetch",
         "step3": "Lisez le verdict",
         "step3Sub": "{{cur}}/h et {{cur}}/{{unit}} réels, trafic inclus",
         "step4": "Indiquez la course",
@@ -587,7 +586,7 @@
       "notifErrorBody": "Impossible de finir l'activation. Vérifiez votre connexion et réessayez.",
       "shortcutT": "Le raccourci",
       "shortcutS": "C'est lui qui fait tout : la capture, l'analyse, le verdict. Déjà réglé, il n'y a qu'à l'ajouter.",
-      "notifS_android": "C'est par elles que le verdict arrive, avec les boutons Prise et Refusée. Sans ce réglage, un scan réussi peut ne rien vous montrer.",
+      "notifS_android": "C'est par elles que Strive vous prévient : un scan lancé sans être en ligne, une session restée ouverte sans course.",
       "confirmCta": "Je l'ai ajouté",
       "confirmed": "Vous avez confirmé l'ajout",
       "urgentT": "Notifications urgentes",
@@ -692,9 +691,25 @@
       "diS": "Tapez Prise ou Refusée directement dans la Dynamic Island.",
       "notifT": "Depuis la notification",
       "notifS_ios": "Sans Dynamic Island, tirez la notification vers le bas : les deux boutons apparaissent.",
-      "notifS_android": "Les boutons Prise et Refusée sont directement sur la notification de résultat.",
       "historyT": "Ou plus tard, dans l'Historique",
-      "historyS": "Les courses sans réponse y restent marquées « En attente » jusqu'à ce que vous tranchiez."
+      "historyS": "Les courses sans réponse y restent marquées « En attente » jusqu'à ce que vous tranchiez.",
+      "bubbleT": "Sur la carte de la bulle",
+      "bubbleS": "Touchez Prise ou Refusée pendant que le verdict s'affiche, sans quitter votre app VTC."
+    },
+    "androidInstall": {
+      "overlayT": "Affichage par-dessus les autres apps",
+      "overlayS": "C'est ce qui permet à la bulle de flotter au-dessus d'Uber, Bolt et Heetch.",
+      "overlayCta": "Autoriser l'affichage",
+      "overlayDone": "Affichage autorisé",
+      "accessT": "Accessibilité Strive",
+      "accessS": "C'est elle qui lit l'offre affichée — prix, distance, adresses — quand vous touchez la bulle, et à aucun autre moment. Strive ne s'en sert que pour calculer le verdict.",
+      "accessCta": "Activer l'accessibilité",
+      "accessDone": "Accessibilité activée",
+      "accessLocked": "Autorisez d'abord l'affichage",
+      "batteryT": "Batterie sans restriction",
+      "batteryS": "Sans ce réglage, certains téléphones coupent la bulle au bout de quelques minutes. Dans la fiche de l'app : Batterie › Non restreinte.",
+      "batteryCta": "Ouvrir la fiche de l'app",
+      "batteryDone": "Batterie sans restriction"
     }
   },
   "help": {
@@ -1327,6 +1342,7 @@
     "networkRetry": "Vérifiez votre connexion et relancez",
     "bubbleErrorCapture": "Capture illisible",
     "bubbleErrorNetwork": "Erreur réseau",
+    "remindersChannel": "Rappels",
     "analyzing": "Analyse…",
     "goPlus": "Passe Plus pour voir",
     "sessionRunning": "Session en cours",
@@ -1336,6 +1352,7 @@
     "ride": "Course",
     "earningsCaps": "GAINS",
     "perHourCaps": "/HEURE",
+    "accepted": "Acceptée",
     "declined": "Refusée",
     "taken": "Prise",
     "noSession": "Aucune session",

@@ -3,3 +3,4 @@
 #import <React/RCTEventEmitter.h>
 #import <React/RCTBridge.h>
 #import <React/RCTBundleURLProvider.h>
+#import <React/RCTLinkingManager.h>

@@ -1692,6 +1692,12 @@ const DashboardScreen = () => {
           });
         }
         if (ScanBridge?.setSessionOnline) ScanBridge.setSessionOnline(true);
+        // Android : la bulle est le scanner, elle arrive avec la session comme
+        // le raccourci est prêt sur iOS. Sans les autorisations, l'icône du
+        // haut reste le chemin vers l'écran qui les demande.
+        if (Platform.OS === 'android') {
+          scannerService.start().then(() => setScannerActive(true)).catch(() => {});
+        }
         scheduleInactivityReminder();
       } else {
         if (currentSessionId) {
@@ -1706,6 +1712,11 @@ const DashboardScreen = () => {
         if (Platform.OS === 'ios' && ScanBridge) {
           ScanBridge.stopLiveActivity();
           if (ScanBridge.setSessionOnline) ScanBridge.setSessionOnline(false);
+        }
+        if (Platform.OS === 'android') {
+          ScanBridge?.setSessionOnline?.(false);
+          scannerService.stop().catch(() => {});
+          setScannerActive(false);
         }
       }
       await supabase.from('profiles').update({ is_online: newStatus }).eq('id', user.id);
@@ -1981,6 +1992,26 @@ const DashboardScreen = () => {
     // `drainRideDecisions` est stable (useCallback sans dépendance) : le
     // listener n'est pas reposé à chaque rendu.
   }, [drainRideDecisions]);
+
+  // Android : la bulle vit hors du JS — Android peut la tuer, une mise à jour
+  // ou un redémarrage l'arrêtent. Tant que le chauffeur est en ligne, elle est
+  // relancée au montage, à chaque retour dans l'app et dès que la session est
+  // connue en ligne ; coupée à la main, elle le reste (`ensureRunning`). Hors
+  // ligne, l'icône du scanner suit seulement son état réel.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sync = () => {
+      const check = isOnlineRef.current && scannerService.ensureRunning
+        ? scannerService.ensureRunning()
+        : scannerService.isRunning();
+      check.then(setScannerActive).catch(() => {});
+    };
+    sync();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') sync();
+    });
+    return () => sub.remove();
+  }, [isOnline]);
 
   const acceptedCount = rides.filter(r => r.status === 'ACCEPTED').length;
 
@@ -2425,6 +2456,8 @@ const DashboardScreen = () => {
 
       {/* ── PRICE CHECK CONFIRMATION MODAL ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={!!confirmModal}
         transparent
         animationType="fade"
@@ -2469,6 +2502,8 @@ const DashboardScreen = () => {
 
       {/* ── PRICE CORRECTION MODAL ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={!!priceModal}
         transparent
         animationType="fade"
@@ -2524,6 +2559,8 @@ const DashboardScreen = () => {
 
       {/* ── RATING MODAL ── */}
       <Modal
+        statusBarTranslucent
+        navigationBarTranslucent
         visible={ratingModal}
         transparent
         animationType="fade"
