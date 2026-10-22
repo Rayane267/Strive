@@ -274,11 +274,12 @@ object TomTomService {
      */
     private fun resolveNear(address: String, current: GeocodeHit?, anchor: Coords, screenKm: Double): GeocodeHit? {
         if (current != null && plausible(straightKm(anchor, current.coords), screenKm)) return current
+        val query = placeHead(address) ?: address
         val radiusKm = screenKm * 1.1 + 2
         var place: GeocodeHit? = null
         var street: GeocodeHit? = null
-        val tPlace = Thread { place = lookup(BASE_PLACE_SEARCH, address, anchor, radiusKm) }
-        val tStreet = Thread { street = lookup(BASE_SEARCH, address, anchor, radiusKm) }
+        val tPlace = Thread { place = lookup(BASE_PLACE_SEARCH, query, anchor, radiusKm) }
+        val tStreet = Thread { street = lookup(BASE_SEARCH, query, anchor, radiusKm) }
         tPlace.start(); tStreet.start()
         tPlace.join(); tStreet.join()
         return listOfNotNull(place, street)
@@ -330,13 +331,36 @@ object TomTomService {
         "rua", "travessa", "praça", "praca", "estrada", "alameda",
     )
 
+    private val STREET_WORDS_PATTERN =
+        """(?<!\p{L})(?:""" + STREET_WORDS.joinToString("|") { Regex.escape(it) } + """)(?!\p{L})"""
+
     /** Un numéro en tête d'un segment (« 5 Rue… », « 1 des Fauvettes ») ou un mot
      *  de voie. Pas « Terminal 1 » ni « Hall 2 » : le numéro y suit le nom. */
     private val STREET_REGEX = Regex(
-        """(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|(?<!\p{L})(?:""" +
-            STREET_WORDS.joinToString("|") { Regex.escape(it) } + """)(?!\p{L})""",
+        """(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|""" + STREET_WORDS_PATTERN,
         RegexOption.IGNORE_CASE
     )
+
+    private val STREET_WORD_REGEX = Regex(STREET_WORDS_PATTERN, RegexOption.IGNORE_CASE)
+
+    /**
+     * « Terminal 2E, Arrivées Minute - Sortie 5, 6, 7 ou 8, 95711, Le Mesnil-Amelot »
+     * → « Terminal 2E, 95711, Le Mesnil-Amelot ». Uber détaille le point de
+     * rendez-vous d'un terminal (niveau, sorties) : ni `/geocode` ni la recherche
+     * de lieux ne trouvent la forme longue, la courte donne le terminal
+     * (scan_debug #130–#134). null s'il n'y a rien à retirer, ou si la partie
+     * retirée nomme une voie : « Bâtiment B, 12 rue X, 75001, Paris » garde sa rue.
+     * Mirror Swift.
+     */
+    private fun placeHead(address: String): String? {
+        val segments = address.split(",").map { it.trim() }
+        if (segments.size < 4 || segments[0].isEmpty()) return null
+        val postal = segments[segments.size - 2]
+        if (!Regex("""\d{4,5}""").matches(postal)) return null
+        val dropped = segments.subList(1, segments.size - 2).joinToString(", ")
+        if (STREET_WORD_REGEX.containsMatchIn(dropped)) return null
+        return "${segments[0]}, $postal, ${segments.last()}"
+    }
 
     /**
      * Ni numéro de rue ni mot de voie : un LIEU — site touristique, gare,
@@ -350,9 +374,11 @@ object TomTomService {
 
     private fun geocodeBestVariant(address: String): GeocodeOutcome {
         // Un lieu se cherche d'abord en recherche de lieux ; `/geocode` reste le
-        // filet s'il n'y est pas.
-        if (looksLikePlace(address)) {
-            lookup(BASE_PLACE_SEARCH, address)?.takeIf { it.score >= MIN_SCORE }
+        // filet s'il n'y est pas. La forme courte d'abord : c'est celle que TomTom
+        // connaît.
+        for (candidate in listOfNotNull(placeHead(address), address)) {
+            if (!looksLikePlace(candidate)) continue
+            lookup(BASE_PLACE_SEARCH, candidate)?.takeIf { it.score >= MIN_SCORE }
                 ?.let { return GeocodeOutcome.Hit(it) }
         }
         val variants = buildAddressVariants(address)
@@ -389,6 +415,7 @@ object TomTomService {
         val result = linkedSetOf<String>()
         val trimmed = address.trim()
         result.add(trimmed)
+        placeHead(trimmed)?.let { result.add(it) }
         // Strip trailing ", France/Belgique/Suisse/Luxembourg"
         val stripped = trimmed.replace(
             Regex(""",\s*(France|Belgique|Suisse|Luxembourg|Deutschland|España|Italia|Portugal|Ireland|Nederland)\s*$""", RegexOption.IGNORE_CASE),

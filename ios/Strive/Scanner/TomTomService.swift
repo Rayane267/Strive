@@ -268,6 +268,7 @@ final class TomTomService {
     _ address: String, current: GeocodeHit?, anchor: Coords, screenKm: Double
   ) -> GeocodeHit? {
     if let c = current, Self.plausible(Self.straightKm(anchor, c.coords), screen: screenKm) { return c }
+    let query = Self.placeHead(address) ?? address
     let radiusKm = screenKm * 1.1 + 2
     var found: [GeocodeHit] = []
     let lock = NSLock()
@@ -275,7 +276,7 @@ final class TomTomService {
     for base in [Self.basePlaceSearch, Self.baseSearch] {
       group.enter()
       DispatchQueue.global(qos: .userInitiated).async {
-        if let h = self.lookup(base, address, near: anchor, radiusKm: radiusKm) {
+        if let h = self.lookup(base, query, near: anchor, radiusKm: radiusKm) {
           lock.lock(); found.append(h); lock.unlock()
         }
         group.leave()
@@ -331,15 +332,41 @@ final class TomTomService {
     "rua", "travessa", "praça", "praca", "estrada", "alameda",
   ]
 
+  private static let streetWordsPattern: String = {
+    let words = streetWords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+    return #"(?<!\p{L})(?:"# + words + #")(?!\p{L})"#
+  }()
+
   /// Un numéro en tête d'un segment (« 5 Rue… », « 1 des Fauvettes ») ou un mot
   /// de voie. Pas « Terminal 1 » ni « Hall 2 » : le numéro y suit le nom.
-  private static let streetRegex: NSRegularExpression? = {
-    let words = streetWords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-    return try? NSRegularExpression(
-      pattern: #"(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|(?<!\p{L})(?:"# + words + #")(?!\p{L})"#,
-      options: .caseInsensitive
-    )
-  }()
+  private static let streetRegex = try? NSRegularExpression(
+    pattern: #"(?:^|,)\s*\d{1,4}\s*(?:bis|ter)?,?\s+\p{L}|"# + streetWordsPattern,
+    options: .caseInsensitive
+  )
+
+  private static let streetWordRegex = try? NSRegularExpression(
+    pattern: streetWordsPattern, options: .caseInsensitive
+  )
+
+  /// « Terminal 2E, Arrivées Minute - Sortie 5, 6, 7 ou 8, 95711, Le Mesnil-Amelot »
+  /// → « Terminal 2E, 95711, Le Mesnil-Amelot ». Uber détaille le point de
+  /// rendez-vous d'un terminal (niveau, sorties) : ni `/geocode` ni la recherche
+  /// de lieux ne trouvent la forme longue, la courte donne le terminal
+  /// (scan_debug #130–#134). nil s'il n'y a rien à retirer, ou si la partie
+  /// retirée nomme une voie : « Bâtiment B, 12 rue X, 75001, Paris » garde sa rue.
+  private static func placeHead(_ address: String) -> String? {
+    let segments = address.components(separatedBy: ",")
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    guard segments.count >= 4, !segments[0].isEmpty else { return nil }
+    let postal = segments[segments.count - 2]
+    guard postal.range(of: #"^\d{4,5}$"#, options: .regularExpression) != nil else { return nil }
+    let dropped = segments[1..<(segments.count - 2)].joined(separator: ", ")
+    if let re = streetWordRegex,
+       re.firstMatch(in: dropped, range: NSRange(dropped.startIndex..., in: dropped)) != nil {
+      return nil
+    }
+    return "\(segments[0]), \(postal), \(segments[segments.count - 1])"
+  }
 
   /// Ni numéro de rue ni mot de voie : un LIEU — site touristique, gare,
   /// aéroport, hôtel. `/geocode` ne connaît que les rues : il garde les mots
@@ -354,10 +381,13 @@ final class TomTomService {
 
   private func geocodeBestVariant(_ address: String) -> GeocodeOutcome {
     // Un lieu se cherche d'abord en recherche de lieux ; `/geocode` reste le
-    // filet s'il n'y est pas.
-    if Self.looksLikePlace(address),
-       let hit = lookup(Self.basePlaceSearch, address), hit.score >= Self.minScore {
-      return .hit(hit)
+    // filet s'il n'y est pas. La forme courte d'abord : c'est celle que TomTom
+    // connaît.
+    for candidate in [Self.placeHead(address), address].compactMap({ $0 })
+    where Self.looksLikePlace(candidate) {
+      if let hit = lookup(Self.basePlaceSearch, candidate), hit.score >= Self.minScore {
+        return .hit(hit)
+      }
     }
     var best: GeocodeHit?
     var unreachable: String?
@@ -391,6 +421,7 @@ final class TomTomService {
 
     let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     add(trimmed)
+    if let head = Self.placeHead(trimmed) { add(head) }
 
     // Strip trailing ", France/Belgique/etc."
     let stripPattern = #",\s*(France|Belgique|Suisse|Luxembourg|Deutschland|España|Italia|Portugal|Ireland|Nederland)\s*$"#
