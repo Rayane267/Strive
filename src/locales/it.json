@@ -288,7 +288,12 @@
       "title": "Attività in tempo reale",
       "message": "Per vedere il risultato delle scansioni in tempo reale, attiva le Attività in tempo reale in Impostazioni → Strive."
     },
-    "home": "Home"
+    "home": "Home",
+    "workCountryRequired": {
+      "title": "Paese di lavoro",
+      "message": "Indica il tuo paese di lavoro.",
+      "action": "Indica"
+    }
   },
   "shop": {
     "title": "Negozio",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Imposta i tuoi con Plus",
     "pushBlocked": "Bloccate nelle impostazioni del telefono — tocca per riattivarle",
     "country": "Paese e valuta",
-    "countrySub": "Determina la tua valuta, i tuoi contributi e la tua soglia di redditività.",
+    "countrySub": "Determina la tua valuta e la ricerca degli indirizzi.",
     "countryChange": "Non è il mio paese?",
     "workCountry": "Paese di lavoro",
+    "workCountryUnset": "Da indicare",
     "currency": "La tua valuta",
     "currencySub": "Quella che leggerai a ogni corsa."
   },
@@ -1113,6 +1119,10 @@
     "demo": {
       "title": "Una corsa, un verdetto",
       "desc": "Strive legge l'offerta e calcola quanto rende davvero. Tocca la scheda per vedere altre corse."
+    },
+    "country": {
+      "title": "Il tuo paese di lavoro",
+      "desc": "Dove fai le tue corse: determina la tua valuta e la ricerca degli indirizzi. Potrai cambiarlo in seguito nel tuo profilo."
     },
     "platforms": {
       "title": "Su quali app guidi?",

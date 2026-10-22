@@ -288,7 +288,12 @@
       "title": "Live activiteiten",
       "message": "Om het scanresultaat in realtime te zien, schakel Live activiteiten in bij Instellingen → Strive."
     },
-    "home": "Start"
+    "home": "Start",
+    "workCountryRequired": {
+      "title": "Werkland",
+      "message": "Geef je werkland op.",
+      "action": "Opgeven"
+    }
   },
   "shop": {
     "title": "Winkel",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Stel de jouwe in met Plus",
     "pushBlocked": "Geblokkeerd in de telefooninstellingen — tik om ze opnieuw in te schakelen",
     "country": "Land en munt",
-    "countrySub": "Bepaalt je munt, je bijdragen en je rendabiliteitsdrempel.",
+    "countrySub": "Het bepaalt je munt en het zoeken van adressen.",
     "countryChange": "Niet mijn land?",
     "workCountry": "Werkland",
+    "workCountryUnset": "Niet ingesteld",
     "currency": "Je munt",
     "currencySub": "Die je bij elke rit zult lezen."
   },
@@ -1113,6 +1119,10 @@
     "demo": {
       "title": "Eén rit, één oordeel",
       "desc": "Strive leest de aanbieding en berekent wat ze echt opbrengt. Tik op de kaart om andere ritten te zien."
+    },
+    "country": {
+      "title": "Je werkland",
+      "desc": "Waar je rijdt: het bepaalt je munt en het zoeken van adressen. Je kunt het later wijzigen in je profiel."
     },
     "platforms": {
       "title": "Op welke apps rijd je?",

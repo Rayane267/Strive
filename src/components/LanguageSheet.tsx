@@ -22,15 +22,12 @@ import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
-import { supabase } from '../services/supabase';
 import { scannerService } from '../services/scanner';
 import {
   MARKETS,
   LANGUAGE_NAMES,
   CURRENCY_CODE,
-  countryForCurrency,
   type CountryCode,
-  type Currency,
 } from '../utils/market';
 import { SUPPORTED, STORE_LANGUAGE_KEY, deviceLanguage } from '../i18n';
 
@@ -46,17 +43,15 @@ import { SUPPORTED, STORE_LANGUAGE_KEY, deviceLanguage } from '../i18n';
  * C'est la valeur par défaut à l'installation, et rien ne permettait d'y revenir
  * une fois une langue choisie à la main.
  *
- * ── DEUX TEMPS : LA LANGUE, PUIS LE PAYS ───────────────────────────────────
+ * ── LA LANGUE OU LE PAYS, JAMAIS L'UN À LA SUITE DE L'AUTRE ────────────────
  * La langue ne dit pas le pays, et c'est le pays qui porte la devise, l'unité de
  * distance et le régime de cotisations. `fr` ne sépare pas la France de la
- * Belgique ni de la Suisse ; `nl` ne sépare pas les Pays-Bas de la Belgique ;
- * `pt` et `es` débordent largement l'Europe. Deviner l'un depuis l'autre,
- * c'était calculer le seuil de rentabilité d'un chauffeur bruxellois avec les
- * cotisations françaises.
+ * Belgique ni de la Suisse ; `pt` et `es` débordent largement l'Europe.
  *
- * La seconde étape ne se saute donc pas après un changement de langue : c'est
- * le seul moment où le chauffeur a une raison de se poser la question, et il
- * voit la devise qu'il va lire partout ensuite.
+ * La feuille enchaînait langue → devise → « Ce n'est pas mon pays ? » : changer
+ * de langue faisait passer par la devise, et le pays restait caché derrière.
+ * Deux lignes du profil maintenant, deux réglages : « Langue » ne touche qu'à
+ * la langue, « Pays de travail » porte le pays ET sa devise.
  */
 
 const DURATION = 260;
@@ -64,16 +59,16 @@ const DURATION = 260;
 const LanguageSheet = ({
   visible,
   onClose,
-  initialStep = 'lang',
+  mode = 'lang',
 }: {
   visible: boolean;
   onClose: () => void;
   /**
-   * `country` : ouverte depuis la ligne « Pays de travail » du profil, droit
-   * sur la liste des pays. Le pays où l'on roule n'a rien à voir avec la langue
+   * `lang` depuis la ligne « Langue » du profil, `country` depuis la ligne
+   * « Pays de travail ». Le pays où l'on roule n'a rien à voir avec la langue
    * qu'on lit : un chauffeur portugais à Paris garde son app en portugais.
    */
-  initialStep?: 'lang' | 'country';
+  mode?: 'lang' | 'country';
 }) => {
   const { t, i18n } = useTranslation();
   const { user, profile, refreshProfile } = useAuth();
@@ -84,20 +79,12 @@ const LanguageSheet = ({
   // Suivre l'appareil signifie « aucun choix stocké » : l'état ne se lit donc
   // pas dans i18n, qui affiche toujours une langue concrète.
   const [followsDevice, setFollowsDevice] = React.useState(false);
-  /**
-   * `lang` puis `market`. `country` est un DÉTOUR, pas une étape : on n'y va que
-   * si le chauffeur dit que le pays affiché sous sa devise n'est pas le sien.
-   */
-  const [step, setStep] = React.useState<'lang' | 'market' | 'country'>('lang');
   const [savingCountry, setSavingCountry] = React.useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    // Rouvrir la feuille repart de l'étape demandée : la langue depuis la ligne
-    // « Langue », la liste des pays depuis la ligne « Pays de travail ».
-    setStep(initialStep);
     AsyncStorage.getItem(STORE_LANGUAGE_KEY).then(v => setFollowsDevice(!v));
-  }, [visible, initialStep]);
+  }, [visible]);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -119,7 +106,7 @@ const LanguageSheet = ({
       await AsyncStorage.setItem(STORE_LANGUAGE_KEY, lang);
       if (lang !== i18n.language) await i18n.changeLanguage(lang);
     }
-    setStep('market');
+    onClose();
   };
 
   /**
@@ -130,63 +117,6 @@ const LanguageSheet = ({
   /** « France », « Portugal »… dans la langue de l'app. */
   const countryName = (code: CountryCode) => t(`countries.${code.toLowerCase()}`, code);
 
-  /**
-   * Les devises proposées, avec les pays qu'elles recouvrent.
-   *
-   * Dérivée de `MARKETS` et non listée à la main : ajouter un marché ajoute sa
-   * devise ici, ou le range sous celle qui existe déjà, sans rien à retoucher.
-   */
-  const currencies = React.useMemo(() => {
-    const byCurrency = new Map<Currency, CountryCode[]>();
-    for (const code of Object.keys(MARKETS) as CountryCode[]) {
-      const cur = MARKETS[code].currency;
-      byCurrency.set(cur, [...(byCurrency.get(cur) ?? []), code]);
-    }
-    return [...byCurrency.entries()];
-  }, []);
-
-  /**
-   * Une devise choisie s'applique tout de suite — aucune question de plus.
-   *
-   * Le pays est DÉDUIT (`countryForCurrency` : région de l'appareil, puis
-   * langue), et il porte trois choses qu'une devise ne dit pas — le géocodage
-   * des adresses, la source du prix du carburant et le plancher de rentabilité.
-   * L'euro couvrant quatre pays, cette déduction peut tomber à côté.
-   *
-   * D'où le pays écrit SOUS chaque devise, et « Ce n'est pas mon pays ? » qui
-   * mène à la liste complète. La déduction reste le chemin court parce qu'elle
-   * est juste presque toujours ; elle n'est simplement plus muette, et c'est ce
-   * silence-là qui était le vrai défaut : un chiffre faux qu'on voit se corrige,
-   * un chiffre faux qu'on ne voit pas se propage.
-   *
-   * Le régime de cotisations, lui, reste demandé en clair à l'onboarding —
-   * c'est le chauffeur qui le connaît, pas son fuseau.
-   */
-  /**
-   * Le pays qu'une devise donnera — le RÉGLAGE D'ABORD, la déduction ensuite.
-   *
-   * `countryForCurrency` seul suffisait tant que la feuille ne montrait rien :
-   * il déduit de la région de l'appareil, puis de la langue. Mais un chauffeur
-   * belge dont le téléphone est configuré en France a `profiles.country = 'BE'`
-   * et se voyait proposer « France » sous l'euro — sa propre devise, déjà
-   * sélectionnée. Un tap dessus pour vérifier, et il passait en France : seuils
-   * remis de 15 €/h à 25 €/h et adresses géocodées dans le mauvais pays, pour
-   * avoir touché la ligne qui décrivait sa situation actuelle.
-   *
-   * Un réglage explicite prime sur une détection — c'est la règle que `getMarket`
-   * applique déjà. Elle valait aussi ici.
-   */
-  const countryFor = (currency: Currency): CountryCode => {
-    const stored = profile?.country as CountryCode | undefined;
-    if (stored && MARKETS[stored]?.currency === currency) return stored;
-    return countryForCurrency(currency, i18n.language);
-  };
-
-  const pickCurrency = (currency: Currency) => {
-    hapticLight();
-    applyCountry(countryFor(currency));
-  };
-
   const applyCountry = async (country: CountryCode) => {
     hapticLight();
     if (!user?.id || country === profile?.country) {
@@ -195,41 +125,16 @@ const LanguageSheet = ({
     }
     setSavingCountry(true);
     try {
+      // Les seuils ne bougent PAS (décision du 2026-10-22). Ils étaient remis
+      // au plancher du nouveau pays : un nouveau chauffeur qui renseignait son
+      // pays à sa première mise en ligne perdait ceux qu'il venait de régler à
+      // l'onboarding. Il les rajuste lui-même dans Préférences s'il change
+      // vraiment de marché.
       await updateProfile(user.id, { country });
-
-      // ── LES SEUILS REPARTENT SUR LE PLANCHER DU NOUVEAU MARCHÉ ────────────
-      //
-      // `min_hourly_rate` et `min_km_rate` sont des NOMBRES NUS : la colonne ne
-      // porte pas de devise. Un chauffeur qui avait réglé 25 €/h et passe à la
-      // livre se retrouvait avec « 25 £/h » — sa barre montait de 15 % sans
-      // qu'il ait rien demandé, et rien ne le lui disait. Le kilométrique était
-      // pire encore : 1,10 €/km s'affichait 1,77 £/mi, l'unité ayant changé en
-      // plus de la monnaie.
-      //
-      // ON NE CONVERTIT PAS, ALORS QU'ON POURRAIT. `fxService` existe, et
-      // 25 €/h donnerait bien 21 £/h — mais ce serait le mauvais chiffre. Un
-      // seuil de rentabilité n'est pas un montant qu'on transporte d'un pays à
-      // l'autre : il dit ce qu'une course doit rapporter POUR QUE LA JOURNÉE
-      // TIENNE, et ça dépend du marché, pas du taux de change. 25 €/h est le
-      // plancher français ; le plancher britannique est à 16 £/h, pas à 21.
-      //
-      // On repose donc les seuils sur le plancher du marché d'arrivée, celui
-      // que l'onboarding aurait proposé. Le chauffeur les retrouve dans
-      // Préférences et les rajuste s'il le souhaite : un chiffre juste qu'il
-      // peut changer vaut mieux qu'un chiffre faux qu'il ne voit pas.
-      const floor = MARKETS[country].thresholds;
-      await supabase
-        .from('preferences')
-        .update({ min_hourly_rate: floor.hourly, min_km_rate: floor.distance })
-        .eq('id', user.id);
-
       await refreshProfile?.();
       // Le natif géocode avec ce pays : sans ce rappel, le prochain scan
       // chercherait encore l'adresse dans l'ancien.
       scannerService.setMarket?.(country, MARKETS[country].currency);
-      // Et il verdicte avec ces seuils-là : la bulle et la Live Activity
-      // garderaient sinon l'ancienne barre jusqu'au prochain focus du Dashboard.
-      scannerService.setThresholds?.(floor.hourly, floor.distance);
     } catch (error: any) {
       // On ferme quand même : réessayer est un geste, pas une impasse.
       //
@@ -275,7 +180,7 @@ const LanguageSheet = ({
             </Pressable>
           </View>
 
-          {step === 'lang' ? (
+          {mode === 'lang' ? (
             <>
               <Text style={styles.title}>{t('preferences.language', 'Langue')}</Text>
               <Text style={styles.subtitle}>
@@ -308,70 +213,13 @@ const LanguageSheet = ({
                 <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
               </ScrollView>
             </>
-          ) : step === 'market' ? (
-            <>
-              <Text style={styles.title}>{t('preferences.currency', 'Votre devise')}</Text>
-              <Text style={styles.subtitle}>
-                {t('preferences.currencySub', 'Celle que vous lirez sur chaque course.')}
-              </Text>
-
-              <ScrollView
-                style={styles.optionsScroll}
-                contentContainerStyle={styles.options}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* LES DEVISES, et rien d'autre. Un euro est un euro : entre la
-                    France, la Belgique, l'Espagne et le Portugal, l'affichage,
-                    l'unité de distance et le carburant saisi à la main sont
-                    identiques. Demander le pays par-dessus, c'était poser une
-                    question dont le chauffeur ne voyait pas l'objet. */}
-                {currencies.map(([currency, countries]) => {
-                  const m = MARKETS[countries[0]];
-                  const iso = CURRENCY_CODE[currency];
-                  return (
-                    <Option
-                      key={currency}
-                      // « CHF CHF » n'aurait aucun sens : quand le symbole EST
-                      // le code, on ne l'écrit qu'une fois.
-                      label={m.symbol === iso ? iso : `${m.symbol}  ${iso}`}
-                      // LE PAYS DÉDUIT, ÉCRIT. C'est lui qui part au géocodage,
-                      // qui choisit la source du prix du carburant et qui pose le
-                      // plancher de rentabilité — trois choses fausses d'un coup
-                      // si la déduction tombe à côté. Elle était muette : un
-                      // chauffeur de Porto au téléphone configuré en France
-                      // obtenait « France » sans qu'aucun écran ne le lui dise,
-                      // et ses adresses étaient géocodées à 1 500 km.
-                      sub={countryName(countryFor(currency))}
-                      selected={
-                        !!profile?.country &&
-                        MARKETS[profile.country as CountryCode]?.currency === currency
-                      }
-                      disabled={savingCountry}
-                      onPress={() => pickCurrency(currency)}
-                    />
-                  );
-                })}
-                {/* Un tap pour qui voit le bon pays — l'immense majorité —, deux
-                    pour les autres. Poser la question du pays à tout le monde
-                    coûterait un écran de plus à chacun pour une erreur qui en
-                    touche une minorité ; ne pas la poser du tout laissait cette
-                    minorité dans le faux sans recours. */}
-                <Option
-                  label={t('preferences.countryChange', "Ce n'est pas mon pays ?")}
-                  muted
-                  disabled={savingCountry}
-                  onPress={() => { hapticLight(); setStep('country'); }}
-                />
-                <Option label={t('common.cancel', 'Annuler')} muted onPress={onClose} />
-              </ScrollView>
-            </>
           ) : (
             <>
               <Text style={styles.title}>{t('preferences.country', 'Pays et devise')}</Text>
               <Text style={styles.subtitle}>
                 {t(
                   'preferences.countrySub',
-                  'Il fixe votre devise, vos cotisations et votre seuil de rentabilité.',
+                  'Il fixe votre devise et la recherche des adresses.',
                 )}
               </Text>
 
@@ -380,11 +228,9 @@ const LanguageSheet = ({
                 contentContainerStyle={styles.options}
                 showsVerticalScrollIndicator={false}
               >
-                {/* LES SIX PAYS, et pas seulement ceux de la devise affichée.
-                    Filtrer sur la monnaie supposerait que le chauffeur s'est au
-                    moins trompé du bon côté — or celui qui arrive ici est
-                    précisément celui dont la déduction est fausse. Le pays est
-                    de toute façon la réponse complète : il porte la devise. */}
+                {/* Le pays est la réponse complète : il porte la devise, écrite
+                    dessous. « CHF CHF » n'aurait aucun sens : quand le symbole
+                    EST le code, on ne l'écrit qu'une fois. */}
                 {(Object.keys(MARKETS) as CountryCode[]).map(code => {
                   const m = MARKETS[code];
                   const iso = CURRENCY_CODE[m.currency];
@@ -399,26 +245,12 @@ const LanguageSheet = ({
                     />
                   );
                 })}
-                {/* Retour à la devise, pas fermeture : on est venu d'ici par un
-                    détour, et un « Annuler » qui referme tout obligerait à
-                    rouvrir la feuille et à repasser par la langue. Ouverte
-                    directement sur les pays (profil), il n'y a pas de devise
-                    où revenir : là, c'est « Annuler ». */}
-                {initialStep === 'country' ? (
-                  <Option
-                    label={t('common.cancel', 'Annuler')}
-                    muted
-                    disabled={savingCountry}
-                    onPress={onClose}
-                  />
-                ) : (
-                  <Option
-                    label={t('common.back', 'Retour')}
-                    muted
-                    disabled={savingCountry}
-                    onPress={() => { hapticLight(); setStep('market'); }}
-                  />
-                )}
+                <Option
+                  label={t('common.cancel', 'Annuler')}
+                  muted
+                  disabled={savingCountry}
+                  onPress={onClose}
+                />
               </ScrollView>
             </>
           )}

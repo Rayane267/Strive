@@ -288,7 +288,12 @@
       "title": "Live Activities",
       "message": "To see scan results in real time, turn on Live Activities in Settings → Strive."
     },
-    "home": "Home"
+    "home": "Home",
+    "workCountryRequired": {
+      "title": "Work country",
+      "message": "Please set your work country.",
+      "action": "Set it"
+    }
   },
   "shop": {
     "title": "Shop",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Set your own with Plus",
     "pushBlocked": "Blocked in your phone settings — tap to re-enable",
     "country": "Country and currency",
-    "countrySub": "It sets your currency, your contributions and your profitability threshold.",
+    "countrySub": "It sets your currency and how addresses are searched.",
     "countryChange": "Not my country?",
     "workCountry": "Work country",
+    "workCountryUnset": "Not set",
     "currency": "Your currency",
     "currencySub": "The one you'll read on every ride."
   },
@@ -1105,6 +1111,10 @@
     "demo": {
       "title": "One ride, one verdict",
       "desc": "Strive reads the offer and works out what it actually pays. Tap the card to see other rides."
+    },
+    "country": {
+      "title": "Your work country",
+      "desc": "Where you drive: it sets your currency and how addresses are searched. You can change it later in your profile."
     },
     "platforms": {
       "title": "Which apps do you drive for?",

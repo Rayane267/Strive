@@ -56,7 +56,7 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { cacheRides } from '../services/offlineService';
 import { computeFuelCost, fetchFuelPrice } from '../services/fuelService';
 import { useMarket } from '../hooks/useMarket';
-import { formatMoney, hourlyUnit, type Currency } from '../utils/market';
+import { formatMoney, hourlyUnit, isSupportedCountry, type Currency } from '../utils/market';
 import { getFxRates, inCurrency, normalizeRides } from '../services/fxService';
 import { useFxRates } from '../hooks/useFxRates';
 import { registerPushToken, setupNotificationListeners, offerPushOptIn } from '../services/notificationService';
@@ -64,6 +64,7 @@ import SafeGradient from '../components/SafeGradient';
 import OrbitRing from '../components/OrbitRing';
 import DashboardRideCard from '../components/DashboardRideCard';
 import BrandLoader from '../components/BrandLoader';
+import LanguageSheet from '../components/LanguageSheet';
 import {
   scheduleInactivityReminder,
   cancelInactivityReminder,
@@ -288,6 +289,7 @@ const DashboardScreen = () => {
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [countrySheetVisible, setCountrySheetVisible] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const lastScanTimeRef = useRef<number>(Date.now());
   const [priceModal, setPriceModal] = useState<{ rideId: string; input: string } | null>(null);
@@ -463,7 +465,14 @@ const DashboardScreen = () => {
     // décide de ce que l'écran verrouillé et la Dynamic Island affichent — un
     // verdict en euros sous une app qui parle en livres, c'est la mauvaise
     // monnaie au moment précis où le chauffeur décide.
-    scannerService.setMarket?.(market.country, market.currency);
+    //
+    // Le pays ENREGISTRÉ seulement, jamais celui que `market` devine de la
+    // région du téléphone tant que le profil n'en a pas : le natif restreint
+    // alors TomTom à ce pays, et un pays faux rend introuvable toute adresse
+    // juste (scan_debug #128, Suresnes → Villenoy, compte FR, scanné pendant
+    // l'onboarding). Vide, le natif cherche dans les treize pays couverts.
+    const stored = profile?.country;
+    scannerService.setMarket?.(isSupportedCountry(stored) ? stored.toUpperCase() : '', market.currency);
     // Sync timezone du téléphone vers profile (reset quota au midnight local).
     // Écriture UNIQUEMENT si la valeur a changé : l'appel était inconditionnel et
     // repartait à chaque montage du Dashboard, pour un fuseau qui ne bouge
@@ -476,7 +485,7 @@ const DashboardScreen = () => {
         }
       } catch {}
     }
-  }, [user?.id, i18n.language, profile?.timezone, market.country, market.currency]);
+  }, [user?.id, i18n.language, profile?.timezone, profile?.country, market.currency]);
 
   // ── Propage préférences + seuils à la bulle native ──────────────────────
   useEffect(() => {
@@ -1639,6 +1648,24 @@ const DashboardScreen = () => {
 
   const handleToggleOnline = async () => {
     if (!user || isSyncing) return;
+    // Pas en ligne sans pays de travail : c'est lui qui borne la recherche des
+    // adresses et fixe la devise. L'onboarding le demande ; ceci est le filet
+    // d'un compte qui n'a pas fini son onboarding. La mise hors ligne, elle,
+    // n'est jamais bloquée.
+    if (!isOnline && !isSupportedCountry(profile?.country)) {
+      Alert.alert(
+        t('dashboard.workCountryRequired.title', 'Pays de travail'),
+        t('dashboard.workCountryRequired.message', 'Veuillez renseigner votre pays de travail.'),
+        [
+          { text: t('common.cancel', 'Annuler'), style: 'cancel' },
+          {
+            text: t('dashboard.workCountryRequired.action', 'Renseigner'),
+            onPress: () => setCountrySheetVisible(true),
+          },
+        ],
+      );
+      return;
+    }
     hapticMedium();
     setIsSyncing(true);
     const newStatus = !isOnline;
@@ -2598,6 +2625,12 @@ const DashboardScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <LanguageSheet
+        visible={countrySheetVisible}
+        mode="country"
+        onClose={() => setCountrySheetVisible(false)}
+      />
 
     </SafeAreaView>
   );

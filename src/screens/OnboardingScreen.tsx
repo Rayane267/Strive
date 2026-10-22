@@ -48,6 +48,10 @@ import {
   getMarket,
   formatMoney,
   hourlyUnit,
+  isSupportedCountry,
+  MARKETS,
+  CURRENCY_CODE,
+  type CountryCode,
   type SocialRegime,
 } from '../utils/market';
 import {
@@ -126,8 +130,16 @@ const COSTS_CHOICES: (number | null)[] = [0, 400, 700, 1000, 1400, null];
  * le plus : celui qui n'a encore rien reçu. Quatre questions au lieu de cinq,
  * c'est vingt pour cent de chemin en moins jusqu'au chiffre qui justifie le
  * formulaire.
+ *
+ * « country » juste après la démonstration (2026-10-22) : le pays fixe la
+ * devise des questions suivantes et les régimes proposés, il doit donc les
+ * précéder. Il était deviné de la région du téléphone et figé sans rien
+ * demander — scan_debug #128.
  */
-const STEPS = ['demo', 'hours', 'goal', 'costs', 'status', 'computing', 'result'] as const;
+const STEPS = ['demo', 'country', 'hours', 'goal', 'costs', 'status', 'computing', 'result'] as const;
+
+/** Les pays couverts, dans l'ordre de `MARKETS`. */
+const COUNTRY_CODES = Object.keys(MARKETS) as CountryCode[];
 
 /// Les quatre étapes annoncées pendant le calcul — ce sont EXACTEMENT celles de
 /// `deriveThreshold`, dans l'ordre où il les exécute. Rien d'inventé : annoncer
@@ -360,6 +372,14 @@ const OnboardingScreen = ({
    * ligne, toujours une seule.
    */
   const [regimeIndex, setRegimeIndex] = useState<number | null>(null);
+  /**
+   * Pays de travail. Pré-rempli seulement s'il est déjà ENREGISTRÉ (onboarding
+   * rejoué) : comme les autres réponses, rien n'est pré-coché par déduction.
+   */
+  const storedCountry = profile?.country;
+  const [country, setCountry] = useState<CountryCode | null>(
+    isSupportedCountry(storedCountry) ? (storedCountry.toUpperCase() as CountryCode) : null,
+  );
 
   /** Champ en saisie libre, ou null si tout est sur des pastilles. */
   // Les deux mesures qui pilotent la hauteur des réponses (cf.
@@ -368,10 +388,10 @@ const OnboardingScreen = ({
   const [viewportH, setViewportH] = useState(0);
   const [headH, setHeadH] = useState(0);
 
-  // Pays d'activité : le profil d'abord, la région de l'appareil ensuite. C'est
-  // lui qui porte la devise, l'unité de distance, le plancher de rentabilité et
-  // les régimes proposés deux écrans plus loin.
-  const market = getMarket(profile?.country);
+  // Pays d'activité : celui choisi à l'écran `country` ; avant ce choix (la
+  // démonstration), la région de l'appareil. C'est lui qui porte la devise,
+  // l'unité de distance, le plancher de rentabilité et les régimes proposés.
+  const market = getMarket(country);
   const money = (n: number) => formatMoney(n, market);
   /** Plancher de rentabilité du marché — 25 €/h en France, 22 £/h au UK. */
   const floorHourly = market.thresholds.hourly;
@@ -407,6 +427,7 @@ const OnboardingScreen = ({
     // Rien à répondre : on regarde. L'écran n'existe que pour donner une raison
     // aux quatre questions qui suivent.
     demo: true,
+    country: country !== null,
     hours: weeklyHours !== null,
     goal: monthlyGoal !== null,
     costs: fixedCosts !== null,
@@ -733,17 +754,13 @@ const OnboardingScreen = ({
             : {}),
         });
 
-        // Le pays est FIGÉ ici, au moment où les réponses sont données.
-        //
-        // Il a servi à choisir les régimes proposés, le plancher et la devise de
-        // cet écran : le laisser dépendre de la région du téléphone ensuite ferait
-        // qu'un chauffeur en vacances relirait son seuil avec les cotisations
-        // d'un autre pays. Ce qu'il a répondu et ce avec quoi on le calcule
-        // doivent rester la même chose.
-        await supabase
-          .from('profiles')
-          .update({ country: market.country })
-          .eq('id', user.id);
+        // Le pays CHOISI à l'écran `country`, modifiable ensuite dans « Pays de
+        // travail ». Il était deviné de la région du téléphone et écrit sans
+        // rien demander : le compte de scan_debug #128 avait ainsi un pays que
+        // personne n'avait choisi.
+        if (country) {
+          await supabase.from('profiles').update({ country }).eq('id', user.id);
+        }
       }
     } catch (e) {
       // On laisse passer l'utilisateur, mais pas l'échec : c'est le seul endroit
@@ -978,6 +995,28 @@ const OnboardingScreen = ({
             <ScanPreview />
           </View>
         );
+
+      case 'country':
+        // Les six pays, avec la devise que chacun donne. La valeur manipulée est
+        // l'index dans `COUNTRY_CODES`, comme pour les régimes.
+        return renderOptionList({
+          choices: COUNTRY_CODES.map((_, i) => i),
+          value: country ? COUNTRY_CODES.indexOf(country) : null,
+          onPick: i => {
+            if (i === null) return;
+            const next = COUNTRY_CODES[i];
+            // Les régimes sont ceux du pays : changé au retour en arrière, le
+            // régime déjà choisi désignerait une ligne d'un autre pays.
+            if (next !== country) setRegimeIndex(null);
+            setCountry(next);
+          },
+          labelFor: i => t(`countries.${COUNTRY_CODES[i].toLowerCase()}`, COUNTRY_CODES[i]),
+          subFor: i => {
+            const m = MARKETS[COUNTRY_CODES[i]];
+            const iso = CURRENCY_CODE[m.currency];
+            return m.symbol === iso ? iso : `${m.symbol}  ${iso}`;
+          },
+        });
 
       case 'hours':
         return renderOptionList({

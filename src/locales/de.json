@@ -288,7 +288,12 @@
       "title": "Live-Aktivitäten",
       "message": "Um das Scan-Ergebnis in Echtzeit zu sehen, aktiviere die Live-Aktivitäten unter Einstellungen → Strive."
     },
-    "home": "Start"
+    "home": "Start",
+    "workCountryRequired": {
+      "title": "Arbeitsland",
+      "message": "Bitte gib dein Arbeitsland an.",
+      "action": "Angeben"
+    }
   },
   "shop": {
     "title": "Shop",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Setze deine eigenen mit Plus",
     "pushBlocked": "In den Telefoneinstellungen blockiert – tippe, um sie wieder zu aktivieren",
     "country": "Land und Währung",
-    "countrySub": "Bestimmt deine Währung, deine Beiträge und deine Rentabilitätsschwelle.",
+    "countrySub": "Es legt deine Währung und die Adresssuche fest.",
     "countryChange": "Nicht mein Land?",
     "workCountry": "Arbeitsland",
+    "workCountryUnset": "Nicht angegeben",
     "currency": "Deine Währung",
     "currencySub": "Die, die du bei jeder Fahrt liest."
   },
@@ -1113,6 +1119,10 @@
     "demo": {
       "title": "Eine Fahrt, ein Urteil",
       "desc": "Strive liest das Angebot und berechnet, was es wirklich bringt. Tippe auf die Karte, um andere Fahrten zu sehen."
+    },
+    "country": {
+      "title": "Dein Arbeitsland",
+      "desc": "Wo du fährst: Es legt deine Währung und die Adresssuche fest. Du kannst es später in deinem Profil ändern."
     },
     "platforms": {
       "title": "Auf welchen Apps fährst du?",

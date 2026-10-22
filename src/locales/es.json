@@ -288,7 +288,12 @@
       "title": "Actividades en vivo",
       "message": "Para ver el resultado de los escaneos en tiempo real, activa las Actividades en vivo en Ajustes → Strive."
     },
-    "home": "Inicio"
+    "home": "Inicio",
+    "workCountryRequired": {
+      "title": "País de trabajo",
+      "message": "Indica tu país de trabajo.",
+      "action": "Indicar"
+    }
   },
   "shop": {
     "title": "Tienda",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Fija los tuyos con Plus",
     "pushBlocked": "Bloqueadas en los ajustes del teléfono — pulsa para reactivarlas",
     "country": "País y moneda",
-    "countrySub": "Define tu moneda, tus cotizaciones y tu umbral de rentabilidad.",
+    "countrySub": "Define tu moneda y la búsqueda de direcciones.",
     "countryChange": "¿No es mi país?",
     "workCountry": "País de trabajo",
+    "workCountryUnset": "Sin indicar",
     "currency": "Tu moneda",
     "currencySub": "La que verás en cada viaje."
   },
@@ -1113,6 +1119,10 @@
     "demo": {
       "title": "Un viaje, un veredicto",
       "desc": "Strive lee la oferta y calcula lo que deja de verdad. Toca la tarjeta para ver otros viajes."
+    },
+    "country": {
+      "title": "Tu país de trabajo",
+      "desc": "Donde haces tus viajes: define tu moneda y la búsqueda de direcciones. Podrás cambiarlo después en tu perfil."
     },
     "platforms": {
       "title": "¿En qué apps conduces?",

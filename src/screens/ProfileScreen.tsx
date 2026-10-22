@@ -30,7 +30,7 @@ import LanguageSheet from '../components/LanguageSheet';
 import ManageSubscriptionSheet from '../components/ManageSubscriptionSheet';
 import { colors } from '../theme/colors';
 import { useMarket } from '../hooks/useMarket';
-import { LANGUAGE_NAMES, dateLocale, decimalSeparator } from '../utils/market';
+import { LANGUAGE_NAMES, dateLocale, decimalSeparator, isSupportedCountry } from '../utils/market';
 import { normalizeRides } from '../services/fxService';
 import { radius } from '../theme/radius';
 import { space } from '../theme/spacing';
@@ -804,7 +804,11 @@ const ProfileScreen = () => {
             icon: 'map-marker-outline',
             iconLib: 'mc',
             title: t('preferences.workCountry', 'Pays de travail'),
-            value: t(`countries.${market.country.toLowerCase()}`, market.country),
+            // Vide tant qu'il n'est pas choisi : afficher le pays deviné ferait
+            // croire qu'il l'est déjà.
+            value: isSupportedCountry(profile?.country)
+              ? t(`countries.${profile.country.toLowerCase()}`, profile.country)
+              : t('preferences.workCountryUnset', 'À renseigner'),
             onPress: () => setCountrySheetVisible(true),
           },
           // Un interrupteur qui ne peut pas s'allumer n'est pas un interrupteur.
@@ -935,7 +939,7 @@ const ProfileScreen = () => {
       <LanguageSheet visible={langSheetVisible} onClose={() => setLangSheetVisible(false)} />
       <LanguageSheet
         visible={countrySheetVisible}
-        initialStep="country"
+        mode="country"
         onClose={() => setCountrySheetVisible(false)}
       />
 

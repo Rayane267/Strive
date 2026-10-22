@@ -288,7 +288,12 @@
       "title": "Atividades ao vivo",
       "message": "Para ver o resultado das análises em tempo real, ative as Atividades ao vivo em Definições → Strive."
     },
-    "home": "Início"
+    "home": "Início",
+    "workCountryRequired": {
+      "title": "País de trabalho",
+      "message": "Indique o seu país de trabalho.",
+      "action": "Indicar"
+    }
   },
   "shop": {
     "title": "Loja",
@@ -455,9 +460,10 @@
     "thresholdLockCta": "Defina os seus com o Plus",
     "pushBlocked": "Bloqueadas nas definições do telemóvel — toque para as reativar",
     "country": "País e moeda",
-    "countrySub": "Define a sua moeda, as suas contribuições e o seu limiar de rentabilidade.",
+    "countrySub": "Define a sua moeda e a pesquisa de moradas.",
     "countryChange": "Não é o meu país?",
     "workCountry": "País de trabalho",
+    "workCountryUnset": "Por indicar",
     "currency": "A sua moeda",
     "currencySub": "A que verá em cada viagem."
   },
@@ -1113,6 +1119,10 @@
     "demo": {
       "title": "Uma viagem, um veredicto",
       "desc": "O Strive lê a oferta e calcula o que ela rende de facto. Toque no cartão para ver outras viagens."
+    },
+    "country": {
+      "title": "O seu país de trabalho",
+      "desc": "Onde faz as suas viagens: define a sua moeda e a pesquisa de moradas. Poderá alterá-lo depois no seu perfil."
     },
     "platforms": {
       "title": "Em que apps conduz?",
